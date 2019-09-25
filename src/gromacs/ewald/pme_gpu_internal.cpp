@@ -133,6 +133,11 @@ void pme_gpu_synchronize(const PmeGpu* pmeGpu)
 void pme_gpu_alloc_energy_virial(PmeGpu* pmeGpu)
 {
     const size_t energyAndVirialSize = c_virialAndEnergyCount * sizeof(float);
+
+    GMX_ASSERT(
+            pmeGpu->common->ngrids == 1 || pmeGpu->common->ngrids == 2,
+            "Only one (normal Coulomb PME) or two (FEP coulomb PME) PME grids can be used on GPU");
+
     for (int gridIndex = 0; gridIndex < pmeGpu->common->ngrids; gridIndex++)
     {
         allocateDeviceBuffer(&pmeGpu->kernelParams->constants.d_virialAndEnergy[gridIndex],
@@ -162,6 +167,12 @@ void pme_gpu_clear_energy_virial(const PmeGpu* pmeGpu)
 
 void pme_gpu_realloc_and_copy_bspline_values(PmeGpu* pmeGpu, const int gridIndex)
 {
+    GMX_ASSERT(
+            pmeGpu->common->ngrids == 1 || pmeGpu->common->ngrids == 2,
+            "Only one (normal Coulomb PME) or two (FEP coulomb PME) PME grids can be used on GPU");
+    GMX_ASSERT(gridIndex < pmeGpu->common->ngrids,
+               "Invalid combination of gridIndex and number of grids");
+
     const int splineValuesOffset[DIM] = { 0, pmeGpu->kernelParams->grid.realGridSize[XX],
                                           pmeGpu->kernelParams->grid.realGridSize[XX]
                                                   + pmeGpu->kernelParams->grid.realGridSize[YY] };
@@ -321,7 +332,8 @@ void pme_gpu_free_grid_indices(const PmeGpu* pmeGpu)
 
 void pme_gpu_realloc_grids(PmeGpu* pmeGpu)
 {
-    auto*     kernelParamsPtr = pmeGpu->kernelParams.get();
+    auto* kernelParamsPtr = pmeGpu->kernelParams.get();
+
     const int newRealGridSize = kernelParamsPtr->grid.realGridSizePadded[XX]
                                 * kernelParamsPtr->grid.realGridSizePadded[YY]
                                 * kernelParamsPtr->grid.realGridSizePadded[ZZ];
@@ -544,9 +556,13 @@ void pme_gpu_destroy_3dfft(const PmeGpu* pmeGpu)
     pmeGpu->archSpecific->fftSetup.resize(0);
 }
 
-void pme_gpu_getEnergyAndVirial(const gmx_pme_t& pme, PmeOutput* output)
+void pme_gpu_getEnergyAndVirial(const gmx_pme_t& pme, const float lambda, PmeOutput* output)
 {
     const PmeGpu* pmeGpu = pme.gpu;
+
+    GMX_ASSERT(lambda == 1.0 || pmeGpu->common->ngrids == 2,
+               "Invalid combination of lambda and number of grids");
+
     for (int gridIndex = 0; gridIndex < pmeGpu->common->ngrids; gridIndex++)
     {
         for (int j = 0; j < c_virialAndEnergyCount; j++)
@@ -567,6 +583,10 @@ void pme_gpu_getEnergyAndVirial(const gmx_pme_t& pme, PmeOutput* output)
     float        scale = 1.0;
     for (int gridIndex = 0; gridIndex < pmeGpu->common->ngrids; gridIndex++)
     {
+        if (pmeGpu->common->ngrids == 2)
+        {
+            scale = gridIndex == 0 ? (1.0 - lambda) : lambda;
+        }
         j = 0;
         output->coulombVirial_[XX][XX] +=
                 scale * 0.25F * pmeGpu->staging.h_virialAndEnergy[gridIndex][j++];
@@ -588,6 +608,12 @@ void pme_gpu_getEnergyAndVirial(const gmx_pme_t& pme, PmeOutput* output)
                 scale * 0.25F * pmeGpu->staging.h_virialAndEnergy[gridIndex][j++];
         output->coulombEnergy_ += scale * 0.5F * pmeGpu->staging.h_virialAndEnergy[gridIndex][j];
     }
+    if (pmeGpu->common->ngrids > 1)
+    {
+        output->coulombDvdl_ = 0.5F
+                               * (pmeGpu->staging.h_virialAndEnergy[FEPSTATEB][j]
+                                  - pmeGpu->staging.h_virialAndEnergy[FEPSTATEA][j]);
+    }
 }
 
 /*! \brief Sets the force-related members in \p output
@@ -604,7 +630,7 @@ static void pme_gpu_getForceOutput(PmeGpu* pmeGpu, PmeOutput* output)
     }
 }
 
-PmeOutput pme_gpu_getOutput(const gmx_pme_t& pme, const bool computeEnergyAndVirial)
+PmeOutput pme_gpu_getOutput(const gmx_pme_t& pme, const bool computeEnergyAndVirial, const real lambdaQ)
 {
     PmeGpu* pmeGpu = pme.gpu;
 
@@ -616,7 +642,7 @@ PmeOutput pme_gpu_getOutput(const gmx_pme_t& pme, const bool computeEnergyAndVir
     {
         if (pme_gpu_settings(pmeGpu).performGPUSolve)
         {
-            pme_gpu_getEnergyAndVirial(pme, &output);
+            pme_gpu_getEnergyAndVirial(pme, lambdaQ, &output);
         }
         else
         {
@@ -658,9 +684,13 @@ void pme_gpu_update_input_box(PmeGpu gmx_unused* pmeGpu, const matrix gmx_unused
 static void pme_gpu_reinit_grids(PmeGpu* pmeGpu)
 {
     auto* kernelParamsPtr = pme_gpu_get_kernel_params_base_ptr(pmeGpu);
+
+    GMX_ASSERT(
+            pmeGpu->common->ngrids == 1 || pmeGpu->common->ngrids == 2,
+            "Only one (normal Coulomb PME) or two (FEP coulomb PME) PME grids can be used on GPU");
+
     kernelParamsPtr->grid.ewaldFactor =
             (M_PI * M_PI) / (pmeGpu->common->ewaldcoeff_q * pmeGpu->common->ewaldcoeff_q);
-
     /* The grid size variants */
     for (int i = 0; i < DIM; i++)
     {
@@ -681,7 +711,6 @@ static void pme_gpu_reinit_grids(PmeGpu* pmeGpu)
         kernelParamsPtr->grid.realGridSizePadded[ZZ] =
                 (kernelParamsPtr->grid.realGridSize[ZZ] / 2 + 1) * 2;
     }
-
     /* GPU FFT: n real elements correspond to (n / 2 + 1) complex elements in minor dimension */
     kernelParamsPtr->grid.complexGridSize[ZZ] /= 2;
     kernelParamsPtr->grid.complexGridSize[ZZ]++;
@@ -713,7 +742,7 @@ static void pme_gpu_copy_common_data_from(const gmx_pme_t* pme)
     /* TODO: Consider refactoring the CPU PME code to use the same structure,
      * so that this function becomes 2 lines */
     PmeGpu* pmeGpu               = pme->gpu;
-    pmeGpu->common->ngrids       = pme->ngrids;
+    pmeGpu->common->ngrids       = pme->bFEP_q ? 2 : 1;
     pmeGpu->common->epsilon_r    = pme->epsilon_r;
     pmeGpu->common->ewaldcoeff_q = pme->ewaldcoeff_q;
     pmeGpu->common->nk[XX]       = pme->nkx;
@@ -970,32 +999,64 @@ std::pair<int, int> inline pmeGpuCreateGrid(const PmeGpu* pmeGpu, int blockCount
  * \param[in]  pmeGpu                   The PME GPU structure.
  * \param[in]  threadsPerAtom           Controls whether we should use order or order*order threads per atom
  * \param[in]  writeSplinesToGlobal     bool controlling if we should write spline data to global memory
+ * \param[in]  numGrids                 Number of grids to use. numGrids == 2 if Coulomb is perturbed.
  *
  * \return Pointer to CUDA kernel
  */
-static auto selectSplineAndSpreadKernelPtr(const PmeGpu* pmeGpu, ThreadsPerAtom threadsPerAtom, bool writeSplinesToGlobal)
+static auto selectSplineAndSpreadKernelPtr(const PmeGpu*  pmeGpu,
+                                           ThreadsPerAtom threadsPerAtom,
+                                           bool           writeSplinesToGlobal,
+                                           const int      numGrids)
 {
     PmeGpuProgramImpl::PmeKernelHandle kernelPtr = nullptr;
     if (writeSplinesToGlobal)
     {
         if (threadsPerAtom == ThreadsPerAtom::Order)
         {
-            kernelPtr = pmeGpu->programHandle_->impl_->splineAndSpreadKernelWriteSplinesThPerAtom4;
+            if (numGrids == 2)
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->splineAndSpreadKernelWriteSplinesThPerAtom4Dual;
+            }
+            else
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->splineAndSpreadKernelWriteSplinesThPerAtom4Single;
+            }
         }
         else
         {
-            kernelPtr = pmeGpu->programHandle_->impl_->splineAndSpreadKernelWriteSplines;
+            if (numGrids == 2)
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->splineAndSpreadKernelWriteSplinesDual;
+            }
+            else
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->splineAndSpreadKernelWriteSplinesSingle;
+            }
         }
     }
     else
     {
         if (threadsPerAtom == ThreadsPerAtom::Order)
         {
-            kernelPtr = pmeGpu->programHandle_->impl_->splineAndSpreadKernelThPerAtom4;
+            if (numGrids == 2)
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->splineAndSpreadKernelThPerAtom4Dual;
+            }
+            else
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->splineAndSpreadKernelThPerAtom4Single;
+            }
         }
         else
         {
-            kernelPtr = pmeGpu->programHandle_->impl_->splineAndSpreadKernel;
+            if (numGrids == 2)
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->splineAndSpreadKernelDual;
+            }
+            else
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->splineAndSpreadKernelSingle;
+            }
         }
     }
 
@@ -1008,12 +1069,14 @@ static auto selectSplineAndSpreadKernelPtr(const PmeGpu* pmeGpu, ThreadsPerAtom 
  * \param[in]  pmeGpu                   The PME GPU structure.
  * \param[in]  threadsPerAtom           Controls whether we should use order or order*order threads per atom
  * \param[in]  writeSplinesToGlobal     bool controlling if we should write spline data to global memory
+ * \param[in]  numGrids                 Number of grids to use. numGrids == 2 if Coulomb is perturbed.
  *
  * \return Pointer to CUDA kernel
  */
 static auto selectSplineKernelPtr(const PmeGpu*  pmeGpu,
                                   ThreadsPerAtom threadsPerAtom,
-                                  bool gmx_unused writeSplinesToGlobal)
+                                  bool gmx_unused writeSplinesToGlobal,
+                                  const int       numGrids)
 {
     PmeGpuProgramImpl::PmeKernelHandle kernelPtr = nullptr;
     GMX_ASSERT(
@@ -1022,11 +1085,25 @@ static auto selectSplineKernelPtr(const PmeGpu*  pmeGpu,
 
     if (threadsPerAtom == ThreadsPerAtom::Order)
     {
-        kernelPtr = pmeGpu->programHandle_->impl_->splineKernelThPerAtom4;
+        if (numGrids == 2)
+        {
+            kernelPtr = pmeGpu->programHandle_->impl_->splineKernelThPerAtom4Dual;
+        }
+        else
+        {
+            kernelPtr = pmeGpu->programHandle_->impl_->splineKernelThPerAtom4Single;
+        }
     }
     else
     {
-        kernelPtr = pmeGpu->programHandle_->impl_->splineKernel;
+        if (numGrids == 2)
+        {
+            kernelPtr = pmeGpu->programHandle_->impl_->splineKernelDual;
+        }
+        else
+        {
+            kernelPtr = pmeGpu->programHandle_->impl_->splineKernelSingle;
+        }
     }
     return kernelPtr;
 }
@@ -1037,21 +1114,38 @@ static auto selectSplineKernelPtr(const PmeGpu*  pmeGpu,
  * \param[in]  pmeGpu                   The PME GPU structure.
  * \param[in]  threadsPerAtom           Controls whether we should use order or order*order threads per atom
  * \param[in]  writeSplinesToGlobal     bool controlling if we should write spline data to global memory
+ * \param[in]  numGrids                 Number of grids to use. numGrids == 2 if Coulomb is perturbed.
  *
  * \return Pointer to CUDA kernel
  */
-static auto selectSpreadKernelPtr(const PmeGpu* pmeGpu, ThreadsPerAtom threadsPerAtom, bool writeSplinesToGlobal)
+static auto selectSpreadKernelPtr(const PmeGpu*  pmeGpu,
+                                  ThreadsPerAtom threadsPerAtom,
+                                  bool           writeSplinesToGlobal,
+                                  const int      numGrids)
 {
     PmeGpuProgramImpl::PmeKernelHandle kernelPtr = nullptr;
     if (writeSplinesToGlobal)
     {
         if (threadsPerAtom == ThreadsPerAtom::Order)
         {
-            kernelPtr = pmeGpu->programHandle_->impl_->spreadKernelThPerAtom4;
+            if (numGrids == 2)
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->spreadKernelThPerAtom4Dual;
+            }
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->spreadKernelThPerAtom4Single;
+            }
         }
         else
         {
-            kernelPtr = pmeGpu->programHandle_->impl_->spreadKernel;
+            if (numGrids == 2)
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->spreadKernelDual;
+            }
+            else
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->spreadKernelSingle;
+            }
         }
     }
     else
@@ -1060,11 +1154,25 @@ static auto selectSpreadKernelPtr(const PmeGpu* pmeGpu, ThreadsPerAtom threadsPe
            using the spline and spread Kernel */
         if (threadsPerAtom == ThreadsPerAtom::Order)
         {
-            kernelPtr = pmeGpu->programHandle_->impl_->splineAndSpreadKernelThPerAtom4;
+            if (numGrids == 2)
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->splineAndSpreadKernelThPerAtom4Dual;
+            }
+            else
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->splineAndSpreadKernelThPerAtom4Single;
+            }
         }
         else
         {
-            kernelPtr = pmeGpu->programHandle_->impl_->splineAndSpreadKernel;
+            if (numGrids == 2)
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->splineAndSpreadKernelDual;
+            }
+            else
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->splineAndSpreadKernelSingle;
+            }
         }
     }
     return kernelPtr;
@@ -1072,13 +1180,18 @@ static auto selectSpreadKernelPtr(const PmeGpu* pmeGpu, ThreadsPerAtom threadsPe
 
 void pme_gpu_spread(const PmeGpu*         pmeGpu,
                     GpuEventSynchronizer* xReadyOnDevice,
-                    real*                 h_grid,
+                    real**                h_grids,
                     bool                  computeSplines,
-                    bool                  spreadCharges)
+                    bool                  spreadCharges,
+                    const real            lambda)
 {
+    GMX_ASSERT(
+            pmeGpu->common->ngrids == 1 || pmeGpu->common->ngrids == 2,
+            "Only one (normal Coulomb PME) or two (FEP coulomb PME) PME grids can be used on GPU");
+
     GMX_ASSERT(computeSplines || spreadCharges,
                "PME spline/spread kernel has invalid input (nothing to do)");
-    const auto* kernelParamsPtr = pmeGpu->kernelParams.get();
+    auto* kernelParamsPtr = pmeGpu->kernelParams.get();
     GMX_ASSERT(kernelParamsPtr->atoms.nAtoms > 0, "No atom data in PME GPU spread");
 
     const size_t blockSize = pmeGpu->programHandle_->impl_->spreadWorkGroupSize;
@@ -1119,6 +1232,15 @@ void pme_gpu_spread(const PmeGpu*         pmeGpu,
     const int blockCount = pmeGpu->nAtomsAlloc / atomsPerBlock;
     auto      dimGrid    = pmeGpuCreateGrid(pmeGpu, blockCount);
 
+    if (pmeGpu->common->ngrids == 1)
+    {
+        kernelParamsPtr->current.scale = 1.0;
+    }
+    else
+    {
+        kernelParamsPtr->current.scale = 1.0 - lambda;
+    }
+
     KernelLaunchConfig config;
     config.blockSize[0] = order;
     config.blockSize[1] = (pmeGpu->settings.threadsPerAtom == ThreadsPerAtom::Order ? 1 : order);
@@ -1134,20 +1256,22 @@ void pme_gpu_spread(const PmeGpu*         pmeGpu,
         {
             timingId  = gtPME_SPLINEANDSPREAD;
             kernelPtr = selectSplineAndSpreadKernelPtr(pmeGpu, pmeGpu->settings.threadsPerAtom,
-                                                       writeGlobal || (!recalculateSplines));
+                                                       writeGlobal || (!recalculateSplines),
+                                                       pmeGpu->common->ngrids);
         }
         else
         {
             timingId  = gtPME_SPLINE;
             kernelPtr = selectSplineKernelPtr(pmeGpu, pmeGpu->settings.threadsPerAtom,
-                                              writeGlobal || (!recalculateSplines));
+                                              writeGlobal || (!recalculateSplines),
+                                              pmeGpu->common->ngrids);
         }
     }
     else
     {
         timingId  = gtPME_SPREAD;
         kernelPtr = selectSpreadKernelPtr(pmeGpu, pmeGpu->settings.threadsPerAtom,
-                                          writeGlobal || (!recalculateSplines));
+                                          writeGlobal || (!recalculateSplines), pmeGpu->common->ngrids);
     }
 
 
@@ -1159,9 +1283,10 @@ void pme_gpu_spread(const PmeGpu*         pmeGpu,
     const auto kernelArgs = prepareGpuKernelArguments(
             kernelPtr, config, kernelParamsPtr, &kernelParamsPtr->atoms.d_theta,
             &kernelParamsPtr->atoms.d_dtheta, &kernelParamsPtr->atoms.d_gridlineIndices,
-            &kernelParamsPtr->grid.d_realGrid[0], &kernelParamsPtr->grid.d_fractShiftsTable,
-            &kernelParamsPtr->grid.d_gridlineIndicesTable,
-            &kernelParamsPtr->atoms.d_coefficients[0], &kernelParamsPtr->atoms.d_coordinates);
+            &kernelParamsPtr->grid.d_realGrid[FEPSTATEA], &kernelParamsPtr->grid.d_realGrid[FEPSTATEB],
+            &kernelParamsPtr->grid.d_fractShiftsTable, &kernelParamsPtr->grid.d_gridlineIndicesTable,
+            &kernelParamsPtr->atoms.d_coefficients[FEPSTATEA],
+            &kernelParamsPtr->atoms.d_coefficients[FEPSTATEB], &kernelParamsPtr->atoms.d_coordinates);
 #endif
 
     launchGpuKernel(kernelPtr, config, pmeGpu->archSpecific->pmeStream_, timingEvent,
@@ -1172,9 +1297,11 @@ void pme_gpu_spread(const PmeGpu*         pmeGpu,
     const bool copyBackGrid = spreadCharges && (!settings.performGPUFFT || settings.copyAllOutputs);
     if (copyBackGrid)
     {
-        /* Only grid 0 should be copied back. */
-        const int gridIndex = 0;
-        pme_gpu_copy_output_spread_grid(pmeGpu, h_grid, gridIndex);
+        for (int gridIndex = 0; gridIndex < pmeGpu->common->ngrids; gridIndex++)
+        {
+            float* h_grid = h_grids[gridIndex];
+            pme_gpu_copy_output_spread_grid(pmeGpu, h_grid, gridIndex);
+        }
     }
     const bool copyBackAtomData =
             computeSplines && (!settings.performGPUGather || settings.copyAllOutputs);
@@ -1190,6 +1317,12 @@ void pme_gpu_solve(const PmeGpu* pmeGpu,
                    GridOrdering  gridOrdering,
                    bool          computeEnergyAndVirial)
 {
+    GMX_ASSERT(
+            pmeGpu->common->ngrids == 1 || pmeGpu->common->ngrids == 2,
+            "Only one (normal Coulomb PME) or two (FEP coulomb PME) PME grids can be used on GPU");
+    GMX_ASSERT(gridIndex < pmeGpu->common->ngrids,
+               "Invalid combination of gridIndex and number of grids");
+
     const auto& settings               = pmeGpu->settings;
     const bool  copyInputAndOutputGrid = !settings.performGPUFFT || settings.copyAllOutputs;
 
@@ -1254,13 +1387,29 @@ void pme_gpu_solve(const PmeGpu* pmeGpu,
     PmeGpuProgramImpl::PmeKernelHandle kernelPtr = nullptr;
     if (gridOrdering == GridOrdering::YZX)
     {
-        kernelPtr = computeEnergyAndVirial ? pmeGpu->programHandle_->impl_->solveYZXEnergyKernel
-                                           : pmeGpu->programHandle_->impl_->solveYZXKernel;
+        if (gridIndex == 0)
+        {
+            kernelPtr = computeEnergyAndVirial ? pmeGpu->programHandle_->impl_->solveYZXEnergyKernelA
+                                               : pmeGpu->programHandle_->impl_->solveYZXKernelA;
+        }
+        else
+        {
+            kernelPtr = computeEnergyAndVirial ? pmeGpu->programHandle_->impl_->solveYZXEnergyKernelB
+                                               : pmeGpu->programHandle_->impl_->solveYZXKernelB;
+        }
     }
     else if (gridOrdering == GridOrdering::XYZ)
     {
-        kernelPtr = computeEnergyAndVirial ? pmeGpu->programHandle_->impl_->solveXYZEnergyKernel
-                                           : pmeGpu->programHandle_->impl_->solveXYZKernel;
+        if (gridIndex == 0)
+        {
+            kernelPtr = computeEnergyAndVirial ? pmeGpu->programHandle_->impl_->solveXYZEnergyKernelA
+                                               : pmeGpu->programHandle_->impl_->solveXYZKernelA;
+        }
+        else
+        {
+            kernelPtr = computeEnergyAndVirial ? pmeGpu->programHandle_->impl_->solveXYZEnergyKernelB
+                                               : pmeGpu->programHandle_->impl_->solveXYZKernelB;
+        }
     }
 
     pme_gpu_start_timing(pmeGpu, timingId);
@@ -1299,10 +1448,14 @@ void pme_gpu_solve(const PmeGpu* pmeGpu,
  * \param[in]  pmeGpu                   The PME GPU structure.
  * \param[in]  threadsPerAtom           Controls whether we should use order or order*order threads per atom
  * \param[in]  readSplinesFromGlobal    bool controlling if we should write spline data to global memory
+ * \param[in]  numGrids                 Number of grids to use. numGrids == 2 if Coulomb is perturbed.
  *
  * \return Pointer to CUDA kernel
  */
-inline auto selectGatherKernelPtr(const PmeGpu* pmeGpu, ThreadsPerAtom threadsPerAtom, bool readSplinesFromGlobal)
+inline auto selectGatherKernelPtr(const PmeGpu*  pmeGpu,
+                                  ThreadsPerAtom threadsPerAtom,
+                                  bool           readSplinesFromGlobal,
+                                  const int      numGrids)
 
 {
     PmeGpuProgramImpl::PmeKernelHandle kernelPtr = nullptr;
@@ -1311,35 +1464,68 @@ inline auto selectGatherKernelPtr(const PmeGpu* pmeGpu, ThreadsPerAtom threadsPe
     {
         if (threadsPerAtom == ThreadsPerAtom::Order)
         {
-            kernelPtr = pmeGpu->programHandle_->impl_->gatherKernelReadSplinesThPerAtom4;
+            if (numGrids == 2)
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->gatherKernelReadSplinesThPerAtom4Dual;
+            }
+            else
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->gatherKernelReadSplinesThPerAtom4Single;
+            }
         }
         else
         {
-            kernelPtr = pmeGpu->programHandle_->impl_->gatherKernelReadSplines;
+            if (numGrids == 2)
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->gatherKernelReadSplinesDual;
+            }
+            else
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->gatherKernelReadSplinesSingle;
+            }
         }
     }
     else
     {
         if (threadsPerAtom == ThreadsPerAtom::Order)
         {
-            kernelPtr = pmeGpu->programHandle_->impl_->gatherKernelThPerAtom4;
+            if (numGrids == 2)
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->gatherKernelThPerAtom4Dual;
+            }
+            else
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->gatherKernelThPerAtom4Single;
+            }
         }
         else
         {
-            kernelPtr = pmeGpu->programHandle_->impl_->gatherKernel;
+            if (numGrids == 2)
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->gatherKernelDual;
+            }
+            else
+            {
+                kernelPtr = pmeGpu->programHandle_->impl_->gatherKernelSingle;
+            }
         }
     }
     return kernelPtr;
 }
 
-
-void pme_gpu_gather(PmeGpu* pmeGpu, const float* h_grid)
+void pme_gpu_gather(PmeGpu* pmeGpu, real** h_grids, const float lambda)
 {
+    GMX_ASSERT(
+            pmeGpu->common->ngrids == 1 || pmeGpu->common->ngrids == 2,
+            "Only one (normal Coulomb PME) or two (FEP coulomb PME) PME grids can be used on GPU");
+
     const auto& settings = pmeGpu->settings;
+
     if (!settings.performGPUFFT || settings.copyAllOutputs)
     {
         for (int gridIndex = 0; gridIndex < pmeGpu->common->ngrids; gridIndex++)
         {
+            float* h_grid = const_cast<float*>(h_grids[gridIndex]);
             pme_gpu_copy_input_gather_grid(pmeGpu, h_grid, gridIndex);
         }
     }
@@ -1379,22 +1565,33 @@ void pme_gpu_gather(PmeGpu* pmeGpu, const float* h_grid)
 
     // TODO test different cache configs
 
-    int                                timingId  = gtPME_GATHER;
-    PmeGpuProgramImpl::PmeKernelHandle kernelPtr = selectGatherKernelPtr(
-            pmeGpu, pmeGpu->settings.threadsPerAtom, readGlobal || (!recalculateSplines));
+    int                                timingId = gtPME_GATHER;
+    PmeGpuProgramImpl::PmeKernelHandle kernelPtr =
+            selectGatherKernelPtr(pmeGpu, pmeGpu->settings.threadsPerAtom,
+                                  readGlobal || (!recalculateSplines), pmeGpu->common->ngrids);
     // TODO design kernel selection getters and make PmeGpu a friend of PmeGpuProgramImpl
 
     pme_gpu_start_timing(pmeGpu, timingId);
-    auto*       timingEvent     = pme_gpu_fetch_timing_event(pmeGpu, timingId);
-    const auto* kernelParamsPtr = pmeGpu->kernelParams.get();
+    auto* timingEvent     = pme_gpu_fetch_timing_event(pmeGpu, timingId);
+    auto* kernelParamsPtr = pmeGpu->kernelParams.get();
+    if (pmeGpu->common->ngrids == 1)
+    {
+        kernelParamsPtr->current.scale = 1.0;
+    }
+    else
+    {
+        kernelParamsPtr->current.scale = 1.0 - lambda;
+    }
+
 #if c_canEmbedBuffers
     const auto kernelArgs = prepareGpuKernelArguments(kernelPtr, config, kernelParamsPtr);
 #else
     const auto kernelArgs = prepareGpuKernelArguments(
-            kernelPtr, config, kernelParamsPtr, &kernelParamsPtr->atoms.d_coefficients[0],
-            &kernelParamsPtr->grid.d_realGrid[0], &kernelParamsPtr->atoms.d_theta,
-            &kernelParamsPtr->atoms.d_dtheta, &kernelParamsPtr->atoms.d_gridlineIndices,
-            &kernelParamsPtr->atoms.d_forces);
+            kernelPtr, config, kernelParamsPtr, &kernelParamsPtr->atoms.d_coefficients[FEPSTATEA],
+            &kernelParamsPtr->atoms.d_coefficients[FEPSTATEB],
+            &kernelParamsPtr->grid.d_realGrid[FEPSTATEA], &kernelParamsPtr->grid.d_realGrid[FEPSTATEB],
+            &kernelParamsPtr->atoms.d_theta, &kernelParamsPtr->atoms.d_dtheta,
+            &kernelParamsPtr->atoms.d_gridlineIndices, &kernelParamsPtr->atoms.d_forces);
 #endif
     launchGpuKernel(kernelPtr, config, pmeGpu->archSpecific->pmeStream_, timingEvent, "PME gather",
                     kernelArgs);

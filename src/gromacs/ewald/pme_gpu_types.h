@@ -201,6 +201,9 @@ struct PmeGpuDynamicParams
     float recipBox[DIM][DIM];
     /*! \brief The unit cell volume for solving. */
     float boxVolume;
+
+    /*! \brief The current coefficient scaling value. */
+    float scale;
 };
 
 /*! \internal \brief

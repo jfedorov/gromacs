@@ -179,7 +179,7 @@ bool pme_gpu_supports_hardware(const gmx_hw_info_t gmx_unused& hwinfo, std::stri
     return addMessageIfNotSupported(errorReasons, error);
 }
 
-bool pme_gpu_supports_input(const t_inputrec& ir, const gmx_mtop_t& mtop, std::string* error)
+bool pme_gpu_supports_input(const t_inputrec& ir, std::string* error)
 {
     std::list<std::string> errorReasons;
     if (!EEL_PME(ir.coulombtype))
@@ -189,14 +189,6 @@ bool pme_gpu_supports_input(const t_inputrec& ir, const gmx_mtop_t& mtop, std::s
     if (ir.pme_order != 4)
     {
         errorReasons.emplace_back("interpolation orders other than 4");
-    }
-    if (ir.efep != efepNO)
-    {
-        if (gmx_mtop_has_perturbed_charges(mtop))
-        {
-            errorReasons.emplace_back(
-                    "free energy calculations with perturbed charges (multiple grids)");
-        }
     }
     if (EVDW_PME(ir.vdwtype))
     {
@@ -228,10 +220,6 @@ static bool pme_gpu_check_restrictions(const gmx_pme_t* pme, std::string* error)
     if (pme->pme_order != 4)
     {
         errorReasons.emplace_back("interpolation orders other than 4");
-    }
-    if (pme->bFEP)
-    {
-        errorReasons.emplace_back("free energy calculations (multiple grids)");
     }
     if (pme->doLJ)
     {
