@@ -82,6 +82,11 @@ static_assert(sizeof(DeviceBuffer<int>) == 8,
 #    define HIDE_FROM_OPENCL_COMPILER(x) char8
 #endif
 
+#ifndef NUMFEPSTATES
+//! Number of FEP states.
+#    define NUMFEPSTATES 2
+#endif
+
 /* What follows is all the PME GPU function arguments,
  * sorted into several device-side structures depending on the update rate.
  * This is GPU agnostic (float3 replaced by float[3], etc.).
@@ -158,10 +163,10 @@ struct PmeGpuAtomParams
      * but reallocation happens only at DD.
      */
     HIDE_FROM_OPENCL_COMPILER(DeviceBuffer<gmx::RVec>) d_coordinates;
-    /*! \brief Global GPU memory array handle with input atom charges.
+    /*! \brief Global GPU memory array handle with input atom charges in states A and B.
      * The charges only need to be reallocated and copied to the GPU at DD step.
      */
-    HIDE_FROM_OPENCL_COMPILER(DeviceBuffer<float>) d_coefficients;
+    HIDE_FROM_OPENCL_COMPILER(DeviceBuffer<float>) d_coefficients[NUMFEPSTATES];
     /*! \brief Global GPU memory array handle with input/output rvec atom forces.
      * The forces change and need to be copied from (and possibly to) the GPU for every PME
      * computation, but reallocation happens only at DD.

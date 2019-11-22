@@ -211,13 +211,14 @@ __launch_bounds__(c_spreadMaxThreadsPerBlock) CLANG_DISABLE_OPTIMIZATION_ATTRIBU
     if (c_useAtomDataPrefetch)
     {
         __shared__ float sm_coefficients[atomsPerBlock];
-        pme_gpu_stage_atom_data<float, atomsPerBlock, 1>(sm_coefficients, kernelParams.atoms.d_coefficients);
+        pme_gpu_stage_atom_data<float, atomsPerBlock, 1>(sm_coefficients,
+                                                         kernelParams.atoms.d_coefficients[0]);
         __syncthreads();
         atomCharge = sm_coefficients[atomIndexLocal];
     }
     else
     {
-        atomCharge = kernelParams.atoms.d_coefficients[atomIndexGlobal];
+        atomCharge = kernelParams.atoms.d_coefficients[0][atomIndexGlobal];
     }
 
     if (computeSplines)

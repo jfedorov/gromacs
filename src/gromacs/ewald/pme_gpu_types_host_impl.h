@@ -62,6 +62,11 @@
 
 #include "pme_gpu_3dfft.h"
 
+#ifndef NUMFEPSTATES
+//! Number of FEP states.
+#    define NUMFEPSTATES 2
+#endif
+
 class GpuParallel3dFft;
 
 /*! \internal \brief
@@ -141,9 +146,9 @@ struct PmeGpuSpecific
     /*! \brief Both the kernelParams.atoms.theta and kernelParams.atoms.dtheta float element count (reserved) */
     int splineDataSizeAlloc = 0;
     /*! \brief The kernelParams.atoms.coefficients float element count (actual) */
-    int coefficientsSize = 0;
+    int coefficientsSize[NUMFEPSTATES] = { 0, 0 };
     /*! \brief The kernelParams.atoms.coefficients float element count (reserved) */
-    int coefficientsSizeAlloc = 0;
+    int coefficientsSizeAlloc[NUMFEPSTATES] = { 0, 0 };
     /*! \brief The kernelParams.grid.splineValuesArray float element count (actual) */
     int splineValuesSize = 0;
     /*! \brief The kernelParams.grid.splineValuesArray float element count (reserved) */

@@ -937,7 +937,7 @@ void gmx_pme_reinit(struct gmx_pme_t** pmedata,
          */
         if (!pme_src->gpu && pme_src->nnodes == 1)
         {
-            gmx_pme_reinit_atoms(*pmedata, pme_src->atc[0].numAtoms(), nullptr);
+            gmx_pme_reinit_atoms(*pmedata, pme_src->atc[0].numAtoms(), nullptr, nullptr);
         }
         // TODO this is mostly passing around current values
     }
@@ -1701,11 +1701,13 @@ void gmx_pme_destroy(gmx_pme_t* pme)
     delete pme;
 }
 
-void gmx_pme_reinit_atoms(gmx_pme_t* pme, const int numAtoms, const real* charges)
+void gmx_pme_reinit_atoms(gmx_pme_t* pme, const int numAtoms, const real* chargesA, const real* chargesB)
 {
     if (pme->gpu != nullptr)
     {
-        pme_gpu_reinit_atoms(pme->gpu, numAtoms, charges);
+        GMX_ASSERT(!pme->bFEP_q || chargesB != nullptr,
+                   "B state charges must be specified if running Coulomb FEP on the GPU");
+        pme_gpu_reinit_atoms(pme->gpu, numAtoms, chargesA, pme->bFEP_q ? chargesB : nullptr);
     }
     else
     {

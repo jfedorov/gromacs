@@ -187,11 +187,13 @@ bool pme_gpu_stream_query(const PmeGpu* pmeGpu);
  *
  * \param[in] pmeGpu            The PME GPU structure.
  * \param[in] h_coefficients    The input atom charges/coefficients.
+ * \param[in] gridIndex         The index of the grid to use. 0 is Coulomb (unperturbed or two
+ *                              interpolated perturbed states) and 1 is perturbed Coulomb.
  *
  * Does not need to be done for every PME computation, only whenever the local charges change.
  * (So, in the beginning of the run, or on DD step).
  */
-void pme_gpu_realloc_and_copy_input_coefficients(PmeGpu* pmeGpu, const float* h_coefficients);
+void pme_gpu_realloc_and_copy_input_coefficients(const PmeGpu* pmeGpu, const float* h_coefficients, int gridIndex);
 
 /*! \libinternal \brief
  * Frees the charges/coefficients on the GPU.
@@ -509,14 +511,16 @@ GPU_FUNC_QUALIFIER void pme_gpu_destroy(PmeGpu* GPU_FUNC_ARGUMENT(pmeGpu)) GPU_F
  *
  * \param[in] pmeGpu    The PME GPU structure.
  * \param[in] nAtoms    The number of particles.
- * \param[in] charges   The pointer to the host-side array of particle charges.
+ * \param[in] chargesA  The pointer to the host-side array of particle charges in the unperturbed state or FEP state A.
+ * \param[in] chargesB  The pointer to the host-side array of particle charges in FEP state B.
  *
  * This is a function that should only be called in the beginning of the run and on domain
  * decomposition. Should be called before the pme_gpu_set_io_ranges.
  */
 GPU_FUNC_QUALIFIER void pme_gpu_reinit_atoms(PmeGpu*     GPU_FUNC_ARGUMENT(pmeGpu),
                                              int         GPU_FUNC_ARGUMENT(nAtoms),
-                                             const real* GPU_FUNC_ARGUMENT(charges)) GPU_FUNC_TERM;
+                                             const real* GPU_FUNC_ARGUMENT(chargesA),
+                                             const real* GPU_FUNC_ARGUMENT(chargesB)) GPU_FUNC_TERM;
 
 /*! \brief \libinternal
  * The PME GPU reinitialization function that is called both at the end of any PME computation and on any load balancing.

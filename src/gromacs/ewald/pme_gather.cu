@@ -230,7 +230,7 @@ __launch_bounds__(c_gatherMaxThreadsPerBlock, c_gatherMinBlocksPerMP) __global__
         void pme_gather_kernel(const PmeGpuCudaKernelParams kernelParams)
 {
     /* Global memory pointers */
-    const float* __restrict__ gm_coefficients = kernelParams.atoms.d_coefficients;
+    const float* __restrict__ gm_coefficients = kernelParams.atoms.d_coefficients[0];
     const float* __restrict__ gm_grid         = kernelParams.grid.d_realGrid;
     float* __restrict__ gm_forces             = kernelParams.atoms.d_forces;
 

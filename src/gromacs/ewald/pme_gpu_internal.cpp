@@ -224,16 +224,18 @@ void pme_gpu_copy_output_forces(PmeGpu* pmeGpu)
                          pmeGpu->settings.transferKind, nullptr);
 }
 
-void pme_gpu_realloc_and_copy_input_coefficients(PmeGpu* pmeGpu, const float* h_coefficients)
+void pme_gpu_realloc_and_copy_input_coefficients(const PmeGpu* pmeGpu,
+                                                 const float*  h_coefficients,
+                                                 const int     gridIndex)
 {
     GMX_ASSERT(h_coefficients, "Bad host-side charge buffer in PME GPU");
     const size_t newCoefficientsSize = pmeGpu->nAtomsAlloc;
     GMX_ASSERT(newCoefficientsSize > 0, "Bad number of atoms in PME GPU");
-    reallocateDeviceBuffer(&pmeGpu->kernelParams->atoms.d_coefficients, newCoefficientsSize,
-                           &pmeGpu->archSpecific->coefficientsSize,
-                           &pmeGpu->archSpecific->coefficientsSizeAlloc,
+    reallocateDeviceBuffer(&pmeGpu->kernelParams->atoms.d_coefficients[gridIndex],
+                           newCoefficientsSize, &pmeGpu->archSpecific->coefficientsSize[gridIndex],
+                           &pmeGpu->archSpecific->coefficientsSizeAlloc[gridIndex],
                            pmeGpu->archSpecific->deviceContext_);
-    copyToDeviceBuffer(&pmeGpu->kernelParams->atoms.d_coefficients,
+    copyToDeviceBuffer(&pmeGpu->kernelParams->atoms.d_coefficients[gridIndex],
                        const_cast<float*>(h_coefficients), 0, pmeGpu->kernelParams->atoms.nAtoms,
                        pmeGpu->archSpecific->pmeStream_, pmeGpu->settings.transferKind, nullptr);
 
@@ -241,14 +243,17 @@ void pme_gpu_realloc_and_copy_input_coefficients(PmeGpu* pmeGpu, const float* h_
     const size_t paddingCount = pmeGpu->nAtomsAlloc - paddingIndex;
     if (paddingCount > 0)
     {
-        clearDeviceBufferAsync(&pmeGpu->kernelParams->atoms.d_coefficients, paddingIndex,
+        clearDeviceBufferAsync(&pmeGpu->kernelParams->atoms.d_coefficients[gridIndex], paddingIndex,
                                paddingCount, pmeGpu->archSpecific->pmeStream_);
     }
 }
 
 void pme_gpu_free_coefficients(const PmeGpu* pmeGpu)
 {
-    freeDeviceBuffer(&pmeGpu->kernelParams->atoms.d_coefficients);
+    for (int gridIndex = 0; gridIndex < pmeGpu->common->ngrids; gridIndex++)
+    {
+        freeDeviceBuffer(&pmeGpu->kernelParams->atoms.d_coefficients[gridIndex]);
+    }
 }
 
 void pme_gpu_realloc_spline_data(PmeGpu* pmeGpu)
@@ -817,7 +822,7 @@ void pme_gpu_destroy(PmeGpu* pmeGpu)
     delete pmeGpu;
 }
 
-void pme_gpu_reinit_atoms(PmeGpu* pmeGpu, const int nAtoms, const real* charges)
+void pme_gpu_reinit_atoms(PmeGpu* pmeGpu, const int nAtoms, const real* chargesA, const real* chargesB)
 {
     auto* kernelParamsPtr         = pme_gpu_get_kernel_params_base_ptr(pmeGpu);
     kernelParamsPtr->atoms.nAtoms = nAtoms;
@@ -830,8 +835,25 @@ void pme_gpu_reinit_atoms(PmeGpu* pmeGpu, const int nAtoms, const real* charges)
     GMX_RELEASE_ASSERT(false, "Only single precision supported");
     GMX_UNUSED_VALUE(charges);
 #else
-    pme_gpu_realloc_and_copy_input_coefficients(pmeGpu, reinterpret_cast<const float*>(charges));
+    int gridIndex = 0;
     /* Could also be checked for haveToRealloc, but the copy always needs to be performed */
+    pme_gpu_realloc_and_copy_input_coefficients(pmeGpu, reinterpret_cast<const float*>(chargesA), gridIndex);
+    gridIndex++;
+    if (chargesB != nullptr)
+    {
+        pme_gpu_realloc_and_copy_input_coefficients(
+                pmeGpu, reinterpret_cast<const float*>(chargesB), gridIndex);
+    }
+    else
+    {
+        /* Fill the second set of coefficients with chargesA as well to be able to avoid
+         * conditionals in the GPU kernels */
+        /* FIXME: This should be avoided by making a separate templated version of the
+         * relevant kernel(s) (probably only pme_gather_kernel). That would require a
+         * reduction of the current number of templated parameters of that kernel. */
+        pme_gpu_realloc_and_copy_input_coefficients(
+                pmeGpu, reinterpret_cast<const float*>(chargesA), gridIndex);
+    }
 #endif
 
     if (haveToRealloc)
@@ -1085,8 +1107,8 @@ void pme_gpu_spread(const PmeGpu*         pmeGpu,
             kernelPtr, config, kernelParamsPtr, &kernelParamsPtr->atoms.d_theta,
             &kernelParamsPtr->atoms.d_dtheta, &kernelParamsPtr->atoms.d_gridlineIndices,
             &kernelParamsPtr->grid.d_realGrid, &kernelParamsPtr->grid.d_fractShiftsTable,
-            &kernelParamsPtr->grid.d_gridlineIndicesTable, &kernelParamsPtr->atoms.d_coefficients,
-            &kernelParamsPtr->atoms.d_coordinates);
+            &kernelParamsPtr->grid.d_gridlineIndicesTable,
+            &kernelParamsPtr->atoms.d_coefficients[0], &kernelParamsPtr->atoms.d_coordinates);
 #endif
 
     launchGpuKernel(kernelPtr, config, pmeGpu->archSpecific->pmeStream_, timingEvent,
@@ -1305,7 +1327,7 @@ void pme_gpu_gather(PmeGpu* pmeGpu, const float* h_grid)
     const auto kernelArgs = prepareGpuKernelArguments(kernelPtr, config, kernelParamsPtr);
 #else
     const auto kernelArgs = prepareGpuKernelArguments(
-            kernelPtr, config, kernelParamsPtr, &kernelParamsPtr->atoms.d_coefficients,
+            kernelPtr, config, kernelParamsPtr, &kernelParamsPtr->atoms.d_coefficients[0],
             &kernelParamsPtr->grid.d_realGrid, &kernelParamsPtr->atoms.d_theta,
             &kernelParamsPtr->atoms.d_dtheta, &kernelParamsPtr->atoms.d_gridlineIndices,
             &kernelParamsPtr->atoms.d_forces);
