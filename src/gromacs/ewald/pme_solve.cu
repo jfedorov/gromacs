@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2016,2017,2018,2019, by the GROMACS development team, led by
+ * Copyright (c) 2016,2017,2018,2019,2020, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -81,13 +81,13 @@ __launch_bounds__(c_solveMaxThreadsPerBlock) CLANG_DISABLE_OPTIMIZATION_ATTRIBUT
 
     /* Global memory pointers */
     const float* __restrict__ gm_splineValueMajor =
-            kernelParams.grid.d_splineModuli + kernelParams.grid.splineValuesOffset[majorDim];
+            kernelParams.grid.d_splineModuli[0] + kernelParams.grid.splineValuesOffset[majorDim];
     const float* __restrict__ gm_splineValueMiddle =
-            kernelParams.grid.d_splineModuli + kernelParams.grid.splineValuesOffset[middleDim];
+            kernelParams.grid.d_splineModuli[0] + kernelParams.grid.splineValuesOffset[middleDim];
     const float* __restrict__ gm_splineValueMinor =
-            kernelParams.grid.d_splineModuli + kernelParams.grid.splineValuesOffset[minorDim];
-    float* __restrict__ gm_virialAndEnergy = kernelParams.constants.d_virialAndEnergy;
-    float2* __restrict__ gm_grid           = (float2*)kernelParams.grid.d_fourierGrid;
+            kernelParams.grid.d_splineModuli[0] + kernelParams.grid.splineValuesOffset[minorDim];
+    float* __restrict__ gm_virialAndEnergy = kernelParams.constants.d_virialAndEnergy[0];
+    float2* __restrict__ gm_grid           = (float2*)kernelParams.grid.d_fourierGrid[0];
 
     /* Various grid sizes and indices */
     const int localOffsetMinor = 0, localOffsetMajor = 0, localOffsetMiddle = 0; // unused

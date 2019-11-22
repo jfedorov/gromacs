@@ -333,7 +333,7 @@ void pmePerformSplineAndSpread(gmx_pme_t* pme,
         {
             // no synchronization needed as x is transferred in the PME stream
             GpuEventSynchronizer* xReadyOnDevice = nullptr;
-            pme_gpu_spread(pme->gpu, xReadyOnDevice, gridIndex, fftgrid, computeSplines, spreadCharges);
+            pme_gpu_spread(pme->gpu, xReadyOnDevice, fftgrid, computeSplines, spreadCharges);
         }
         break;
 
@@ -400,7 +400,7 @@ void pmePerformSolve(const gmx_pme_t*  pme,
             switch (method)
             {
                 case PmeSolveAlgorithm::Coulomb:
-                    pme_gpu_solve(pme->gpu, h_grid, gridOrdering, computeEnergyAndVirial);
+                    pme_gpu_solve(pme->gpu, 0, h_grid, gridOrdering, computeEnergyAndVirial);
                     break;
 
                 default: GMX_THROW(InternalError("Test not implemented for this mode"));

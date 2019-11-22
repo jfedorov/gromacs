@@ -133,8 +133,10 @@ void pme_gpu_clear_energy_virial(const PmeGpu* pmeGpu);
  * Reallocates and copies the pre-computed B-spline values to the GPU.
  *
  * \param[in,out] pmeGpu             The PME GPU structure.
+ * \param[in]     gridIndex          The index of the grid to use. 0 is Coulomb (unperturbed or two
+ *                                   interpolated perturbed states) and 1 is perturbed Coulomb.
  */
-void pme_gpu_realloc_and_copy_bspline_values(PmeGpu* pmeGpu);
+void pme_gpu_realloc_and_copy_bspline_values(PmeGpu* pmeGpu, int gridIndex);
 
 /*! \libinternal \brief
  * Frees the pre-computed B-spline values on the GPU (and the transfer CPU buffers).
@@ -269,18 +271,21 @@ void pme_gpu_free_fract_shifts(const PmeGpu* pmeGpu);
 /*! \libinternal \brief
  * Copies the input real-space grid from the host to the GPU.
  *
- * \param[in] pmeGpu   The PME GPU structure.
- * \param[in] h_grid   The host-side grid buffer.
+ * \param[in] pmeGpu    The PME GPU structure.
+ * \param[in] h_grid    The host-side grid buffer.
+ * \param[in] gridIndex The index of the grid to use. 0 is Coulomb (unperturbed or two
+ *                      interpolated perturbed states) and 1 is perturbed Coulomb.
  */
-void pme_gpu_copy_input_gather_grid(const PmeGpu* pmeGpu, float* h_grid);
-
+void pme_gpu_copy_input_gather_grid(const PmeGpu* pmeGpu, const float* h_grid, int gridIndex);
 /*! \libinternal \brief
  * Copies the output real-space grid from the GPU to the host.
  *
- * \param[in] pmeGpu   The PME GPU structure.
- * \param[out] h_grid  The host-side grid buffer.
+ * \param[in] pmeGpu    The PME GPU structure.
+ * \param[out] h_grid   The host-side grid buffer.
+ * \param[in] gridIndex The index of the device grid to copy from. 0 is Coulomb (unperturbed or two
+ *                      interpolated perturbed states) and 1 is perturbed Coulomb.
  */
-void pme_gpu_copy_output_spread_grid(const PmeGpu* pmeGpu, float* h_grid);
+void pme_gpu_copy_output_spread_grid(const PmeGpu* pmeGpu, float* h_grid, int gridIndex);
 
 /*! \libinternal \brief
  * Copies the spread output spline data and gridline indices from the GPU to the host.
@@ -325,7 +330,6 @@ void pme_gpu_destroy_3dfft(const PmeGpu* pmeGpu);
  * \param[in]  pmeGpu          The PME GPU structure.
  * \param[in]  xReadyOnDevice  Event synchronizer indicating that the coordinates are ready in the device memory;
  *                             can be nullptr when invoked on a separate PME rank or from PME tests.
- * \param[in]  gridIndex       Index of the PME grid - unused, assumed to be 0.
  * \param[out] h_grid          The host-side grid buffer (used only if the result of the spread is expected on the host,
  *                             e.g. testing or host-side FFT)
  * \param[in]  computeSplines  Should the computation of spline parameters and gridline indices be performed.
@@ -333,7 +337,6 @@ void pme_gpu_destroy_3dfft(const PmeGpu* pmeGpu);
  */
 GPU_FUNC_QUALIFIER void pme_gpu_spread(const PmeGpu*         GPU_FUNC_ARGUMENT(pmeGpu),
                                        GpuEventSynchronizer* GPU_FUNC_ARGUMENT(xReadyOnDevice),
-                                       int                   GPU_FUNC_ARGUMENT(gridIndex),
                                        real*                 GPU_FUNC_ARGUMENT(h_grid),
                                        bool                  GPU_FUNC_ARGUMENT(computeSplines),
                                        bool GPU_FUNC_ARGUMENT(spreadCharges)) GPU_FUNC_TERM;
@@ -351,11 +354,14 @@ void pme_gpu_3dfft(const PmeGpu* pmeGpu, enum gmx_fft_direction direction, int g
  * A GPU Fourier space solving function.
  *
  * \param[in]     pmeGpu                  The PME GPU structure.
+ * \param[in]     gridIndex               Index of the PME grid. 0 is normal Coulomb or in FEP state A (or interpolated from state A and B)
+ *                                        and 1 is Coulomb in state B.
  * \param[in,out] h_grid                  The host-side input and output Fourier grid buffer (used only with testing or host-side FFT)
  * \param[in]     gridOrdering            Specifies the dimenion ordering of the complex grid. TODO: store this information?
  * \param[in]     computeEnergyAndVirial  Tells if the energy and virial computation should be performed.
  */
 GPU_FUNC_QUALIFIER void pme_gpu_solve(const PmeGpu* GPU_FUNC_ARGUMENT(pmeGpu),
+                                      int           GPU_FUNC_ARGUMENT(gridIndex),
                                       t_complex*    GPU_FUNC_ARGUMENT(h_grid),
                                       GridOrdering  GPU_FUNC_ARGUMENT(gridOrdering),
                                       bool GPU_FUNC_ARGUMENT(computeEnergyAndVirial)) GPU_FUNC_TERM;

@@ -205,7 +205,7 @@ void pme_gpu_launch_spread(gmx_pme_t* pme, GpuEventSynchronizer* xReadyOnDevice,
     const bool spreadCharges  = true;
     wallcycle_start_nocount(wcycle, ewcLAUNCH_GPU);
     wallcycle_sub_start_nocount(wcycle, ewcsLAUNCH_GPU_PME);
-    pme_gpu_spread(pmeGpu, xReadyOnDevice, gridIndex, fftgrid, computeSplines, spreadCharges);
+    pme_gpu_spread(pmeGpu, xReadyOnDevice, fftgrid, computeSplines, spreadCharges);
     wallcycle_sub_stop(wcycle, ewcsLAUNCH_GPU_PME);
     wallcycle_stop(wcycle, ewcLAUNCH_GPU);
 }
@@ -237,7 +237,7 @@ void pme_gpu_launch_complex_transforms(gmx_pme_t* pme, gmx_wallcycle* wcycle, co
             const auto gridOrdering = settings.useDecomposition ? GridOrdering::YZX : GridOrdering::XYZ;
             wallcycle_start_nocount(wcycle, ewcLAUNCH_GPU);
             wallcycle_sub_start_nocount(wcycle, ewcsLAUNCH_GPU_PME);
-            pme_gpu_solve(pmeGpu, cfftgrid, gridOrdering, computeEnergyAndVirial);
+            pme_gpu_solve(pmeGpu, 0, cfftgrid, gridOrdering, computeEnergyAndVirial);
             wallcycle_sub_stop(wcycle, ewcsLAUNCH_GPU_PME);
             wallcycle_stop(wcycle, ewcLAUNCH_GPU);
         }

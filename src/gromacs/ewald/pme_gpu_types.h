@@ -104,7 +104,7 @@ struct PmeGpuConstParams
     float elFactor;
     /*! \brief Virial and energy GPU array. Size is c_virialAndEnergyCount (7) floats.
      * The element order is virxx, viryy, virzz, virxy, virxz, viryz, energy. */
-    HIDE_FROM_OPENCL_COMPILER(DeviceBuffer<float>) d_virialAndEnergy;
+    HIDE_FROM_OPENCL_COMPILER(DeviceBuffer<float>) d_virialAndEnergy[NUMFEPSTATES];
 };
 
 /*! \internal \brief
@@ -135,14 +135,14 @@ struct PmeGpuGridParams
 
     /* Grid arrays */
     /*! \brief Real space grid. */
-    HIDE_FROM_OPENCL_COMPILER(DeviceBuffer<float>) d_realGrid;
+    HIDE_FROM_OPENCL_COMPILER(DeviceBuffer<float>) d_realGrid[NUMFEPSTATES];
     /*! \brief Complex grid - used in FFT/solve. If inplace cu/clFFT is used, then it is the same handle as realGrid. */
-    HIDE_FROM_OPENCL_COMPILER(DeviceBuffer<float>) d_fourierGrid;
+    HIDE_FROM_OPENCL_COMPILER(DeviceBuffer<float>) d_fourierGrid[NUMFEPSTATES];
 
     /*! \brief Grid spline values as in pme->bsp_mod
      * (laid out sequentially (XXX....XYYY......YZZZ.....Z))
      */
-    HIDE_FROM_OPENCL_COMPILER(DeviceBuffer<float>) d_splineModuli;
+    HIDE_FROM_OPENCL_COMPILER(DeviceBuffer<float>) d_splineModuli[NUMFEPSTATES];
     /*! \brief Fractional shifts lookup table as in pme->fshx/fshy/fshz, laid out sequentially (XXX....XYYY......YZZZ.....Z) */
     HIDE_FROM_OPENCL_COMPILER(DeviceBuffer<float>) d_fractShiftsTable;
     /*! \brief Gridline indices lookup table

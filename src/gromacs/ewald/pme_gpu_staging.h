@@ -54,6 +54,11 @@
 #include "gromacs/gpu_utils/hostallocator.h"
 #include "gromacs/math/vectypes.h"
 
+#ifndef NSTATES
+//! Number of FEP states.
+#    define NSTATES 2
+#endif
+
 /*! \internal \brief
  * The PME GPU intermediate buffers structure, included in the main PME GPU structure by value.
  * Buffers are managed by the PME GPU module.
@@ -64,9 +69,9 @@ struct PmeGpuStaging
     gmx::PaddedHostVector<gmx::RVec> h_forces;
 
     /*! \brief Virial and energy intermediate host-side buffer. Size is PME_GPU_VIRIAL_AND_ENERGY_COUNT. */
-    float* h_virialAndEnergy;
+    float* h_virialAndEnergy[NSTATES];
     /*! \brief B-spline values intermediate host-side buffer. */
-    float* h_splineModuli;
+    float* h_splineModuli[NSTATES];
 
     /*! \brief Pointer to the host memory with B-spline values. Only used for host-side gather, or unit tests */
     float* h_theta;

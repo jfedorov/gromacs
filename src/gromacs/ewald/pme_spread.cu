@@ -75,7 +75,7 @@ __device__ __forceinline__ void spread_charges(const PmeGpuCudaKernelParams kern
                                                const float* __restrict__ sm_theta)
 {
     /* Global memory pointer to the output grid */
-    float* __restrict__ gm_grid = kernelParams.grid.d_realGrid;
+    float* __restrict__ gm_grid = kernelParams.grid.d_realGrid[0];
 
     // Number of atoms processed by a single warp in spread and gather
     const int threadsPerAtomValue = (threadsPerAtom == ThreadsPerAtom::Order) ? order : order * order;
