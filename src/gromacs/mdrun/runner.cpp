@@ -929,6 +929,9 @@ int Mdrunner::mdrunner()
     mdModules_->subscribeToSimulationSetupNotifications();
     const auto& mdModulesNotifier = mdModules_->notifier().simulationSetupNotifications_;
 
+    // And notify MdModules of existing logger
+    mdModulesNotifier.notify(mdlog);
+
     if (inputrec->internalParameters != nullptr)
     {
         mdModulesNotifier.notify(*inputrec->internalParameters);

@@ -47,9 +47,12 @@
 #include <string>
 #include <vector>
 
+#include "gromacs/math/arrayrefwithpadding.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/utility/mdmodulenotification-impl.h"
 
 struct t_commrec;
+struct gmx_mtop_t;
 enum class PbcType : int;
 
 namespace gmx
@@ -58,6 +61,7 @@ namespace gmx
 class KeyValueTreeObject;
 class KeyValueTreeObjectBuilder;
 class LocalAtomSetManager;
+class MDLogger;
 class IndexGroupsAndNames;
 class SeparatePmeRanksPermitted;
 struct MdModulesCheckpointReadingDataOnMaster;
@@ -117,6 +121,23 @@ struct SimulationTimeStep
     const double delta_t;
 };
 
+/*! \libinternal \brief Provides coordinates and simulation box.
+ */
+struct CoordinatesAndBoxPreprocessed
+{
+    ArrayRefWithPadding<RVec> coordinates_;
+    matrix                    box_;
+    PbcType                   pbc_;
+};
+
+/*! \libinternal \brief Mdrun input filename.
+ */
+struct MdRunInputFilename
+{
+    //! The name of the run input file (.tpr) as output by grompp
+    std::string mdRunFilename_;
+};
+
 /*! \libinternal
  * \brief Collection of callbacks to MDModules at differnt run-times.
  *
@@ -165,16 +186,27 @@ struct SimulationTimeStep
 struct MdModulesNotifier
 {
     /*! \brief Pre-processing callback functions.
-     *
+     * const CoordinatesAndBoxPreprocessed Allows modules to access coordinates,
+     *                                box and pbc during grompp
+     * const MDLogger& Allows MdModule to use standard logging class for messages output
      * EnergyCalculationFrequencyErrors* allows modules to check if they match
      *                                   their required calculation frequency
      *                                   and add their error message if needed
      *                                   to the collected error messages
+     * gmx_mtop_t * Allows modules to modify the topology during pre-processing
      * IndexGroupsAndNames provides modules with atom indices and their names
      * KeyValueTreeObjectBuilder enables writing of module internal data to
      *                           .tpr files.
+     * MdRunInputFilename Allows modules to know .tpr filename which will be
+     *                    generated during grompp
      */
-    registerMdModuleNotification<EnergyCalculationFrequencyErrors*, const IndexGroupsAndNames&, KeyValueTreeObjectBuilder>::type preProcessingNotifications_;
+    registerMdModuleNotification<const CoordinatesAndBoxPreprocessed,
+                                 const MDLogger&,
+                                 EnergyCalculationFrequencyErrors*,
+                                 gmx_mtop_t*,
+                                 IndexGroupsAndNames,
+                                 KeyValueTreeObjectBuilder,
+                                 MdRunInputFilename>::type preProcessingNotifications_;
 
     /*! \brief Checkpointing callback functions.
      *
@@ -198,6 +230,7 @@ struct MdModulesNotifier
      *                           wrote to .tpr files
      * LocalAtomSetManager* enables modules to add atom indices to local atom sets
      *                      to be managed
+     * const MDLogger& Allows MdModule to use standard logging class for messages output
      * MdModulesEnergyOutputToDensityFittingRequestChecker* enables modules to
      *                      report if they want to write their energy output
      *                      to the density fitting field in the energy files
@@ -213,6 +246,7 @@ struct MdModulesNotifier
      */
     registerMdModuleNotification<const KeyValueTreeObject&,
                                  LocalAtomSetManager*,
+                                 const MDLogger&,
                                  MdModulesEnergyOutputToDensityFittingRequestChecker*,
                                  SeparatePmeRanksPermitted*,
                                  const PbcType&,
