@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2016,2017,2018,2019, by the GROMACS development team, led by
+ * Copyright (c) 2016,2017,2018,2019,2020, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -70,7 +70,11 @@ ThreadAffinityTestHelper::ThreadAffinityTestHelper()
     snew(cr_, 1);
     cr_->nnodes = gmx_node_num();
     cr_->nodeid = gmx_node_rank();
-    cr_->duty   = DUTY_PP;
+    // TODO: This is needed for [SIM]MASTER(cr) to work
+    //       Should get cleaned up once thread affinity works with communicators rather than the full cr
+    cr_->sizeOfDefaultCommunicator   = gmx_node_num();
+    cr_->nodeIdOfDefaultCommunicator = gmx_node_rank();
+    cr_->duty                        = DUTY_PP;
 #if GMX_MPI
     cr_->mpi_comm_mysim = MPI_COMM_WORLD;
 #endif
