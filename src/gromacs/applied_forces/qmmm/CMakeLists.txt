@@ -1,7 +1,7 @@
 #
 # This file is part of the GROMACS molecular simulation package.
 #
-# Copyright (c) 2015,2016,2019,2020, by the GROMACS development team, led by
+# Copyright (c) 2020, by the GROMACS development team, led by
 # Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
 # and including many others, as listed in the AUTHORS file in the
 # top-level source directory and at http://www.gromacs.org.
@@ -33,12 +33,12 @@
 # the research papers on the package. Check out http://www.gromacs.org.
 
 gmx_add_libgromacs_sources(
-    electricfield.cpp
+    qmmm.cpp
+    qmmmoptions.cpp
+    qmmminputgenerator.cpp
+    qmmmtopologypreprocessor.cpp
+    qmmmforceprovider.cpp
     )
-
-add_subdirectory(awh)
-add_subdirectory(densityfitting)
-add_subdirectory(qmmm)
 
 if (BUILD_TESTING)
     add_subdirectory(tests)
