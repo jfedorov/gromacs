@@ -115,37 +115,20 @@ bool useLjCombRule(int vdwType)
  */
 static void init_ewald_coulomb_force_table(const EwaldCorrectionTables& tables,
                                            cl_nbparam_t*                nbp,
-                                           const DeviceContext&         deviceContext)
+                                           const DeviceContext&         deviceContext,
+                                           const DeviceStream&          deviceStream)
 {
-    cl_mem coul_tab;
-
-    cl_int cl_error;
-
     if (nbp->coulomb_tab_climg2d != nullptr)
     {
         freeDeviceBuffer(&(nbp->coulomb_tab_climg2d));
     }
 
-    /* Switched from using textures to using buffers */
-    // TODO: decide which alternative is most efficient - textures or buffers.
-    /*
-       cl_image_format array_format;
+    DeviceBuffer<real> coulomb_tab;
 
-       array_format.image_channel_data_type = CL_FLOAT;
-       array_format.image_channel_order     = CL_R;
+    initParamLookupTable(&coulomb_tab, nullptr, tables.tableF.data(), tables.tableF.size(),
+                         deviceContext, deviceStream);
 
-       coul_tab = clCreateImage2D(deviceContext.context(), CL_MEM_READ_WRITE |
-       CL_MEM_COPY_HOST_PTR, &array_format, tabsize, 1, 0, ftmp, &cl_error);
-     */
-
-    coul_tab = clCreateBuffer(deviceContext.context(),
-                              CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_COPY_HOST_PTR,
-                              tables.tableF.size() * sizeof(cl_float),
-                              const_cast<real*>(tables.tableF.data()), &cl_error);
-    GMX_RELEASE_ASSERT(cl_error == CL_SUCCESS,
-                       ("clCreateBuffer failed: " + ocl_get_error_string(cl_error)).c_str());
-
-    nbp->coulomb_tab_climg2d = coul_tab;
+    nbp->coulomb_tab_climg2d = coulomb_tab;
     nbp->coulomb_tab_scale   = tables.scale;
 }
 
@@ -292,7 +275,8 @@ static void init_nbparam(cl_nbparam_t*                   nbp,
                          const interaction_const_t*      ic,
                          const PairlistParams&           listParams,
                          const nbnxn_atomdata_t::Params& nbatParams,
-                         const DeviceContext&            deviceContext)
+                         const DeviceContext&            deviceContext,
+                         const DeviceStream&             deviceStream)
 {
     cl_int cl_error;
 
@@ -316,7 +300,7 @@ static void init_nbparam(cl_nbparam_t*                   nbp,
     if (nbp->eeltype == eelOclEWALD_TAB || nbp->eeltype == eelOclEWALD_TAB_TWIN)
     {
         GMX_RELEASE_ASSERT(ic->coulombEwaldTables, "Need valid Coulomb Ewald correction tables");
-        init_ewald_coulomb_force_table(*ic->coulombEwaldTables, nbp, deviceContext);
+        init_ewald_coulomb_force_table(*ic->coulombEwaldTables, nbp, deviceContext, deviceStream);
     }
     else
     // TODO: improvement needed.
@@ -357,11 +341,10 @@ static void init_nbparam(cl_nbparam_t*                   nbp,
            CL_MEM_COPY_HOST_PTR, &array_format, nnbfp, 1, 0, nbat->nbfp, &cl_error);
          */
 
-        nbp->nbfp_climg2d = clCreateBuffer(
-                deviceContext.context(), CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_COPY_HOST_PTR,
-                nnbfp * sizeof(cl_float), const_cast<float*>(nbatParams.nbfp.data()), &cl_error);
-        GMX_RELEASE_ASSERT(cl_error == CL_SUCCESS,
-                           ("clCreateBuffer failed: " + ocl_get_error_string(cl_error)).c_str());
+        /* set up LJ parameter lookup table */
+        DeviceBuffer<real> nbfp;
+        initParamLookupTable(&nbfp, nullptr, nbatParams.nbfp.data(), nnbfp, deviceContext, deviceStream);
+        nbp->nbfp_climg2d = nbfp;
 
         if (ic->vdwtype == evdwPME)
         {
@@ -369,27 +352,10 @@ static void init_nbparam(cl_nbparam_t*                   nbp,
             // TODO: decide which alternative is most efficient - textures or buffers.
             /*  nbp->nbfp_comb_climg2d = clCreateImage2D(deviceContext.context(), CL_MEM_READ_WRITE |
                CL_MEM_COPY_HOST_PTR, &array_format, nnbfp_comb, 1, 0, nbat->nbfp_comb, &cl_error);*/
-            nbp->nbfp_comb_climg2d =
-                    clCreateBuffer(deviceContext.context(),
-                                   CL_MEM_READ_ONLY | CL_MEM_HOST_WRITE_ONLY | CL_MEM_COPY_HOST_PTR,
-                                   nnbfp_comb * sizeof(cl_float),
-                                   const_cast<float*>(nbatParams.nbfp_comb.data()), &cl_error);
-            GMX_RELEASE_ASSERT(cl_error == CL_SUCCESS,
-                               ("clCreateBuffer failed: " + ocl_get_error_string(cl_error)).c_str());
-        }
-        else
-        {
-            // TODO: improvement needed.
-            // The image2d is created here even if vdwtype is not evdwPME because the OpenCL kernels
-            // don't accept nullptr values for image2D parameters.
-            /* Switched from using textures to using buffers */
-            // TODO: decide which alternative is most efficient - textures or buffers.
-            /* nbp->nbfp_comb_climg2d = clCreateImage2D(deviceContext.context(),
-               CL_MEM_READ_WRITE, &array_format, 1, 1, 0, nullptr, &cl_error);*/
-            nbp->nbfp_comb_climg2d = clCreateBuffer(deviceContext.context(), CL_MEM_READ_ONLY,
-                                                    sizeof(cl_float), nullptr, &cl_error);
-            GMX_RELEASE_ASSERT(cl_error == CL_SUCCESS,
-                               ("clCreateBuffer failed: " + ocl_get_error_string(cl_error)).c_str());
+            DeviceBuffer<float> nbfp_comb;
+            initParamLookupTable(&nbfp_comb, nullptr, nbatParams.nbfp_comb.data(), nnbfp_comb,
+                                 deviceContext, deviceStream);
+            nbp->nbfp_comb_climg2d = nbfp_comb;
         }
     }
 }
@@ -409,7 +375,8 @@ void gpu_pme_loadbal_update_param(const nonbonded_verlet_t* nbv, const interacti
     nbp->eeltype = nbnxn_gpu_pick_ewald_kernel_type(*ic);
 
     GMX_RELEASE_ASSERT(ic->coulombEwaldTables, "Need valid Coulomb Ewald correction tables");
-    init_ewald_coulomb_force_table(*ic->coulombEwaldTables, nbp, *nb->deviceContext_);
+    init_ewald_coulomb_force_table(*ic->coulombEwaldTables, nbp, *nb->deviceContext_,
+                                   nb->deviceStreams[InteractionLocality::Local]);
 }
 
 /*! \brief Initializes the pair list data structure.
@@ -547,10 +514,11 @@ static void nbnxn_ocl_init_const(cl_atomdata_t*                  atomData,
                                  const interaction_const_t*      ic,
                                  const PairlistParams&           listParams,
                                  const nbnxn_atomdata_t::Params& nbatParams,
-                                 const DeviceContext&            deviceContext)
+                                 const DeviceContext&            deviceContext,
+                                 const DeviceStream&             deviceStream)
 {
     init_atomdata_first(atomData, nbatParams.numTypes, deviceContext);
-    init_nbparam(nbParams, ic, listParams, nbatParams, deviceContext);
+    init_nbparam(nbParams, ic, listParams, nbatParams, deviceContext, deviceStream);
 }
 
 
@@ -607,7 +575,8 @@ NbnxmGpu* gpu_init(const DeviceContext&       deviceContext,
         init_timings(nb->timings);
     }
 
-    nbnxn_ocl_init_const(nb->atdat, nb->nbparam, ic, listParams, nbat->params(), *nb->deviceContext_);
+    nbnxn_ocl_init_const(nb->atdat, nb->nbparam, ic, listParams, nbat->params(),
+                         *nb->deviceContext_, nb->deviceStreams[InteractionLocality::Local]);
 
     /* Enable LJ param manual prefetch for AMD or Intel or if we request through env. var.
      * TODO: decide about NVIDIA

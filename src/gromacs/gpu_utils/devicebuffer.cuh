@@ -45,11 +45,13 @@
  *  \inlibraryapi
  */
 
+#include "gromacs/gpu_utils/cuda_arch_utils.cuh"
 #include "gromacs/gpu_utils/device_context.h"
 #include "gromacs/gpu_utils/devicebuffer_datatype.h"
 #include "gromacs/gpu_utils/gpu_utils.h" //only for GpuApiCallBehavior
 #include "gromacs/gpu_utils/gputraits.cuh"
 #include "gromacs/utility/gmxassert.h"
+#include "gromacs/utility/stringutil.h"
 
 /*! \brief
  * Allocates a device-side buffer.
@@ -229,6 +231,80 @@ static bool checkDeviceBuffer(DeviceBuffer<T> buffer, gmx_unused int requiredSiz
 {
     GMX_ASSERT(buffer != nullptr, "The device pointer is nullptr");
     return buffer != nullptr;
+}
+
+//! Device texture wrapper.
+using DeviceTexture = cudaTextureObject_t;
+
+/*! \brief Create a texture object for an array of type ValueType.
+ *
+ * Creates the device buffer, copies data and binds texture object for an array of type ValueType.
+ *
+ * \tparam      ValueType      Raw data type.
+ *
+ * \param[out]  deviceBuffer   Device buffer to store data in.
+ * \param[out]  deviceTexture  Device texture object to initialize.
+ * \param[in]   hostBuffer     Host buffer to get date from
+ * \param[in]   numValues      Number of elements in the buffer.
+ * \param[in]   deviceContext  GPU device context.
+ * \param[in]   deviceStream   GPU stream to perform data copy in.
+ */
+template<typename ValueType>
+void initParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer,
+                          DeviceTexture*           deviceTexture,
+                          const ValueType*         hostBuffer,
+                          int                      numValues,
+                          const DeviceContext&     deviceContext,
+                          const DeviceStream&      deviceStream)
+{
+    GMX_RELEASE_ASSERT(deviceStream.isValid(), "Stream should be valid.");
+    allocateDeviceBuffer(deviceBuffer, numValues, deviceContext);
+    copyToDeviceBuffer(deviceBuffer, hostBuffer, 0, numValues, deviceStream,
+                       GpuApiCallBehavior::Sync, nullptr);
+
+    if (!c_disableCudaTextures)
+    {
+        cudaError_t      stat;
+        cudaResourceDesc rd;
+        cudaTextureDesc  td;
+
+        memset(&rd, 0, sizeof(rd));
+        rd.resType                = cudaResourceTypeLinear;
+        rd.res.linear.devPtr      = *deviceBuffer;
+        rd.res.linear.desc        = cudaCreateChannelDesc<ValueType>();
+        rd.res.linear.sizeInBytes = numValues * sizeof(*hostBuffer);
+
+        memset(&td, 0, sizeof(td));
+        td.readMode = cudaReadModeElementType;
+        stat        = cudaCreateTextureObject(deviceTexture, &rd, &td, nullptr);
+        GMX_RELEASE_ASSERT(stat == cudaSuccess,
+                           gmx::formatString("cudaCreateTextureObject failed (CUDA error: %s).",
+                                             cudaGetErrorName(stat))
+                                   .c_str());
+    }
+}
+
+/*! \brief Unbind the texture and release the CUDA texture object.
+ *
+ * \tparam         ValueType      Raw data type
+ *
+ * \param[in,out]  deviceBuffer   Device buffer to store data in.
+ * \param[in,out]  deviceTexture  Device texture object to unbind.
+ */
+template<typename ValueType>
+void destroyParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer, DeviceTexture& deviceTexture)
+{
+    if (!c_disableCudaTextures && deviceTexture && deviceBuffer)
+    {
+        cudaError_t stat = cudaDestroyTextureObject(deviceTexture);
+        GMX_RELEASE_ASSERT(
+                stat == cudaSuccess,
+                gmx::formatString(
+                        "cudaDestroyTextureObject on texture object failed (CUDA error: %s).",
+                        cudaGetErrorName(stat))
+                        .c_str());
+    }
+    freeDeviceBuffer(deviceBuffer);
 }
 
 #endif
