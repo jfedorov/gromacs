@@ -51,32 +51,34 @@
 
 #include "energyelement.h"
 #include "freeenergyperturbationelement.h"
+#include "signallers.h"
 #include "statepropagatordata.h"
+#include "trajectoryelement.h"
 
 namespace gmx
 {
 template<ConstraintVariable variable>
-ConstraintsElement<variable>::ConstraintsElement(Constraints*                   constr,
-                                                 StatePropagatorData*           statePropagatorData,
-                                                 EnergyElement*                 energyElement,
-                                                 FreeEnergyPerturbationElement* freeEnergyPerturbationElement,
-                                                 bool                           isMaster,
-                                                 FILE*                          fplog,
-                                                 const t_inputrec*              inputrec,
-                                                 const t_mdatoms*               mdAtoms) :
+ConstraintsElement<variable>::ConstraintsElement(Constraints*      constr,
+                                                 bool              isMaster,
+                                                 FILE*             fplog,
+                                                 const t_inputrec* inputrec,
+                                                 const t_mdatoms*  mdAtoms) :
     nextVirialCalculationStep_(-1),
     nextEnergyWritingStep_(-1),
     nextLogWritingStep_(-1),
     isMasterRank_(isMaster),
-    statePropagatorData_(statePropagatorData),
-    energyElement_(energyElement),
-    freeEnergyPerturbationElement_(freeEnergyPerturbationElement),
+    statePropagatorData_(nullptr),
+    energyElement_(nullptr),
+    freeEnergyPerturbationElement_(nullptr),
     constr_(constr),
     fplog_(fplog),
     inputrec_(inputrec),
     mdAtoms_(mdAtoms)
 {
-    GMX_ASSERT(constr_, "Constraint element created but constr == nullptr");
+    if (not constr_)
+    {
+        GMX_THROW(ElementNotNeededException("ConstraintsElement not needed if constr == nullptr."));
+    }
 }
 
 template<ConstraintVariable variable>
@@ -204,6 +206,187 @@ SignallerCallbackPtr ConstraintsElement<variable>::registerLoggingCallback()
 {
     return std::make_unique<SignallerCallback>(
             [this](Step step, Time /*unused*/) { nextLogWritingStep_ = step; });
+}
+
+ConstraintsElementBuilder::ConstraintsElementBuilder(Constraints*      constr,
+                                                     bool              isMaster,
+                                                     FILE*             fplog,
+                                                     const t_inputrec* inputrec,
+                                                     const t_mdatoms*  mdAtoms)
+{
+    try
+    {
+        // NOLINTNEXTLINE(modernize-make-unique): make_unique does not work with private constructor
+        positionConstraints_ = std::unique_ptr<ConstraintsElement<ConstraintVariable::Positions>>(
+                new ConstraintsElement<ConstraintVariable::Positions>(constr, isMaster, fplog,
+                                                                      inputrec, mdAtoms));
+    }
+    catch (ElementNotNeededException&)
+    {
+        positionConstraints_ = nullptr;
+    }
+    if (inputrec->eI == eiVV)
+    {
+        try
+        {
+            // NOLINTNEXTLINE(modernize-make-unique): make_unique does not work with private constructor
+            velocityConstraints_ = std::unique_ptr<ConstraintsElement<ConstraintVariable::Velocities>>(
+                    new ConstraintsElement<ConstraintVariable::Velocities>(constr, isMaster, fplog,
+                                                                           inputrec, mdAtoms));
+        }
+        catch (ElementNotNeededException&)
+        {
+            velocityConstraints_ = nullptr;
+        }
+    }
+    // Element being nullptr is a valid state, nullptr (element is not built)
+    // needs to be handled by the caller of build().
+    registrationPossible_ = true;
+}
+
+void ConstraintsElementBuilder::setStatePropagatorData(StatePropagatorData* statePropagatorData)
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Tried to set StatePropagatorData after ConstraintsElement was built.");
+    if (positionConstraints_)
+    {
+        positionConstraints_->statePropagatorData_ = statePropagatorData;
+    }
+    if (velocityConstraints_)
+    {
+        velocityConstraints_->statePropagatorData_ = statePropagatorData;
+    }
+}
+
+void ConstraintsElementBuilder::setEnergyElement(EnergyElement* energyElement)
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Tried to set EnergyElement after ConstraintsElement was built.");
+    if (positionConstraints_)
+    {
+        positionConstraints_->energyElement_ = energyElement;
+    }
+    if (velocityConstraints_)
+    {
+        velocityConstraints_->energyElement_ = energyElement;
+    }
+}
+
+void ConstraintsElementBuilder::setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement)
+{
+    GMX_RELEASE_ASSERT(
+            registrationPossible_,
+            "Tried to set FreeEnergyPerturbationElement after ConstraintsElement was built.");
+    if (positionConstraints_)
+    {
+        positionConstraints_->freeEnergyPerturbationElement_ = freeEnergyPerturbationElement;
+    }
+    if (velocityConstraints_)
+    {
+        velocityConstraints_->freeEnergyPerturbationElement_ = freeEnergyPerturbationElement;
+    }
+}
+
+void ConstraintsElementBuilder::registerWithEnergySignaller(SignallerBuilder<EnergySignaller>* signallerBuilder)
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Tried to set EnergySignaller after ConstraintsElement was built.");
+    if (positionConstraints_)
+    {
+        signallerBuilder->registerSignallerClient(compat::make_not_null(positionConstraints_.get()));
+    }
+    if (velocityConstraints_)
+    {
+        signallerBuilder->registerSignallerClient(compat::make_not_null(velocityConstraints_.get()));
+    }
+    registeredWithEnergySignaller_ = true;
+}
+
+void ConstraintsElementBuilder::registerWithTrajectorySignaller(TrajectoryElementBuilder* signallerBuilder)
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Tried to set TrajectorySignaller after ConstraintsElement was built.");
+    if (positionConstraints_)
+    {
+        signallerBuilder->registerSignallerClient(compat::make_not_null(positionConstraints_.get()));
+    }
+    if (velocityConstraints_)
+    {
+        signallerBuilder->registerSignallerClient(compat::make_not_null(velocityConstraints_.get()));
+    }
+    registeredWithTrajectorySignaller_ = true;
+}
+
+void ConstraintsElementBuilder::registerWithLoggingSignaller(SignallerBuilder<LoggingSignaller>* signallerBuilder)
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Tried to set LoggingSignaller after ConstraintsElement was built.");
+    if (positionConstraints_)
+    {
+        signallerBuilder->registerSignallerClient(compat::make_not_null(positionConstraints_.get()));
+    }
+    if (velocityConstraints_)
+    {
+        signallerBuilder->registerSignallerClient(compat::make_not_null(velocityConstraints_.get()));
+    }
+    registeredWithLoggingSignaller_ = true;
+}
+
+template<>
+std::unique_ptr<ConstraintsElement<ConstraintVariable::Positions>> ConstraintsElementBuilder::build()
+{
+    if (positionConstraints_)
+    {
+        GMX_RELEASE_ASSERT(positionConstraints_->statePropagatorData_,
+                           "Tried to build ConstraintsElement before setting StatePropagatorData.");
+        GMX_RELEASE_ASSERT(positionConstraints_->energyElement_,
+                           "Tried to build ConstraintsElement before setting EnergyElement.");
+        GMX_RELEASE_ASSERT(
+                registeredWithEnergySignaller_,
+                "Tried to build ConstraintsElement before registering with EnergySignaller.");
+        GMX_RELEASE_ASSERT(
+                registeredWithTrajectorySignaller_,
+                "Tried to build ConstraintsElement before registering with TrajectorySignaller.");
+        GMX_RELEASE_ASSERT(
+                registeredWithLoggingSignaller_,
+                "Tried to build ConstraintsElement before registering with LoggingSignaller.");
+    }
+    // Not accepting any registrations anymore
+    registrationPossible_ = false;
+    return std::move(positionConstraints_);
+}
+
+template<>
+std::unique_ptr<ConstraintsElement<ConstraintVariable::Velocities>> ConstraintsElementBuilder::build()
+{
+    if (velocityConstraints_)
+    {
+        GMX_RELEASE_ASSERT(velocityConstraints_->statePropagatorData_,
+                           "Tried to build ConstraintsElement before setting StatePropagatorData.");
+        GMX_RELEASE_ASSERT(velocityConstraints_->energyElement_,
+                           "Tried to build ConstraintsElement before setting EnergyElement.");
+        GMX_RELEASE_ASSERT(
+                registeredWithEnergySignaller_,
+                "Tried to build ConstraintsElement before registering with EnergySignaller.");
+        GMX_RELEASE_ASSERT(
+                registeredWithTrajectorySignaller_,
+                "Tried to build ConstraintsElement before registering with TrajectorySignaller.");
+        GMX_RELEASE_ASSERT(
+                registeredWithLoggingSignaller_,
+                "Tried to build ConstraintsElement before registering with LoggingSignaller.");
+    }
+    // Not accepting any registrations anymore
+    registrationPossible_ = false;
+    return std::move(velocityConstraints_);
+}
+
+ConstraintsElementBuilder::~ConstraintsElementBuilder()
+{
+    // If elements were built, but not consumed, we risk dangling pointers
+    GMX_RELEASE_ASSERT(!positionConstraints_,
+                       "Position constraint element was constructed, but not used.");
+    GMX_RELEASE_ASSERT(!velocityConstraints_,
+                       "Velocity constraint element was constructed, but not used.");
 }
 
 //! Explicit template initialization

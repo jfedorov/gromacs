@@ -52,6 +52,7 @@ class Constraints;
 class EnergyElement;
 class FreeEnergyPerturbationElement;
 class StatePropagatorData;
+class TrajectoryElementBuilder;
 
 /*! \libinternal
  * \ingroup module_modularsimulator
@@ -72,16 +73,6 @@ class ConstraintsElement final :
     public ILoggingSignallerClient
 {
 public:
-    //! Constructor
-    ConstraintsElement(Constraints*                   constr,
-                       StatePropagatorData*           statePropagatorData,
-                       EnergyElement*                 energyElement,
-                       FreeEnergyPerturbationElement* freeEnergyPerturbationElement,
-                       bool                           isMaster,
-                       FILE*                          fplog,
-                       const t_inputrec*              inputrec,
-                       const t_mdatoms*               mdAtoms);
-
     /*! \brief Register constraining function for step / time
      *
      * Under LF, this is expected to be run once, constraining positions and velocities
@@ -103,7 +94,17 @@ public:
     //! No element teardown needed
     void elementTeardown() override {}
 
+    //! Allow builder to do its job
+    friend class ConstraintsElementBuilder;
+
 private:
+    //! Constructor
+    ConstraintsElement(Constraints*      constr,
+                       bool              isMaster,
+                       FILE*             fplog,
+                       const t_inputrec* inputrec,
+                       const t_mdatoms*  mdAtoms);
+
     //! The actual constraining computation
     void apply(Step step, bool calculateVirial, bool writeLog, bool writeEnergy);
 
@@ -142,6 +143,55 @@ private:
     const t_mdatoms* mdAtoms_;
 };
 
+/*! \libinternal
+ * \ingroup module_modularsimulator
+ * \brief Builder for the constraints element
+ */
+class ConstraintsElementBuilder
+{
+public:
+    //! Constructor, forwarding arguments to ConstraintsElement constructor
+    explicit ConstraintsElementBuilder(Constraints*      constr,
+                                       bool              isMaster,
+                                       FILE*             fplog,
+                                       const t_inputrec* inputrec,
+                                       const t_mdatoms*  mdAtoms);
+
+    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
+    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
+    //! Set pointer to EnergyElement valid throughout the simulation (required)
+    void setEnergyElement(EnergyElement* energyElement);
+    //! Set pointer to FreeEnergyPerturbationElement valid throughout the simulation (optional)
+    void setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement);
+
+    //! Register element with EnergySignaller (required)
+    void registerWithEnergySignaller(SignallerBuilder<EnergySignaller>* signallerBuilder);
+    //! Register element with TrajectorySignaller (required)
+    void registerWithTrajectorySignaller(TrajectoryElementBuilder* signallerBuilder);
+    //! Register element with LoggingSignaller (required)
+    void registerWithLoggingSignaller(SignallerBuilder<LoggingSignaller>* signallerBuilder);
+
+    //! Return ConstraintsElement
+    template<ConstraintVariable variable>
+    std::unique_ptr<ConstraintsElement<variable>> build();
+
+    //! Destructor, make sure we didn't connect an element which won't exist anymore
+    ~ConstraintsElementBuilder();
+
+private:
+    //! The position constraining element to be built
+    std::unique_ptr<ConstraintsElement<ConstraintVariable::Positions>> positionConstraints_ = nullptr;
+    //! The velocity constraining element to be built
+    std::unique_ptr<ConstraintsElement<ConstraintVariable::Velocities>> velocityConstraints_ = nullptr;
+    //! Whether we have an element that we can use for registration
+    bool registrationPossible_ = false;
+    //! Whether we have registered the element with the energy signaller
+    bool registeredWithEnergySignaller_ = false;
+    //! Whether we have registered the element with the trajectory signaller
+    bool registeredWithTrajectorySignaller_ = false;
+    //! Whether we have registered the element with the logging signaller
+    bool registeredWithLoggingSignaller_ = false;
+};
 } // namespace gmx
 
 #endif // GMX_MODULARSIMULATOR_CONSTRAINTELEMENT_H

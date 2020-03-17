@@ -566,6 +566,23 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
         FreeEnergyPerturbationElement*             freeEnergyPerturbationElementPtr,
         bool                                       hasReadEkinState)
 {
+    /*
+     * Build module builders
+     */
+    ConstraintsElementBuilder constraintsElementBuilder(constr, MASTER(cr), fplog, inputrec,
+                                                        mdAtoms->mdatoms());
+
+    /*
+     * Connect builders
+     */
+    // Constraint element
+    constraintsElementBuilder.setStatePropagatorData(statePropagatorDataPtr);
+    constraintsElementBuilder.setEnergyElement(energyElementPtr);
+    constraintsElementBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementPtr);
+    constraintsElementBuilder.registerWithEnergySignaller(energySignallerBuilder);
+    constraintsElementBuilder.registerWithTrajectorySignaller(trajectoryElementBuilder);
+    constraintsElementBuilder.registerWithLoggingSignaller(loggingSignallerBuilder);
+
     auto forceElement =
             buildForces(neighborSearchSignallerBuilder, energySignallerBuilder,
                         statePropagatorDataPtr, energyElementPtr, freeEnergyPerturbationElementPtr);
@@ -625,18 +642,9 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
             checkpointClients->emplace_back(prBarostat.get());
         }
         addToCallListAndMove(std::move(propagator), elementCallList, elementsOwnershipList);
-        if (constr)
-        {
-            auto constraintElement = std::make_unique<ConstraintsElement<ConstraintVariable::Positions>>(
-                    constr, statePropagatorDataPtr, energyElementPtr, freeEnergyPerturbationElementPtr,
-                    MASTER(cr), fplog, inputrec, mdAtoms->mdatoms());
-            auto constraintElementPtr = compat::make_not_null(constraintElement.get());
-            energySignallerBuilder->registerSignallerClient(constraintElementPtr);
-            trajectoryElementBuilder->registerSignallerClient(constraintElementPtr);
-            loggingSignallerBuilder->registerSignallerClient(constraintElementPtr);
 
-            addToCallListAndMove(std::move(constraintElement), elementCallList, elementsOwnershipList);
-        }
+        addToCallListAndMove(constraintsElementBuilder.build<ConstraintVariable::Positions>(),
+                             elementCallList, elementsOwnershipList);
 
         addToCallListAndMove(std::move(computeGlobalsElement), elementCallList, elementsOwnershipList);
         addToCallList(energyElementPtr, elementCallList); // we have the energies at time t here!
@@ -682,19 +690,10 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
             checkpointClients->emplace_back(prBarostat.get());
         }
         addToCallListAndMove(std::move(propagatorVelocities), elementCallList, elementsOwnershipList);
-        if (constr)
-        {
-            auto constraintElement = std::make_unique<ConstraintsElement<ConstraintVariable::Velocities>>(
-                    constr, statePropagatorDataPtr, energyElementPtr, freeEnergyPerturbationElementPtr,
-                    MASTER(cr), fplog, inputrec, mdAtoms->mdatoms());
-            energySignallerBuilder->registerSignallerClient(compat::make_not_null(constraintElement.get()));
-            trajectoryElementBuilder->registerSignallerClient(
-                    compat::make_not_null(constraintElement.get()));
-            loggingSignallerBuilder->registerSignallerClient(
-                    compat::make_not_null(constraintElement.get()));
 
-            addToCallListAndMove(std::move(constraintElement), elementCallList, elementsOwnershipList);
-        }
+        addToCallListAndMove(constraintsElementBuilder.build<ConstraintVariable::Velocities>(),
+                             elementCallList, elementsOwnershipList);
+
         addToCallList(compat::make_not_null(computeGlobalsElement.get()), elementCallList);
         addToCallList(statePropagatorDataPtr, elementCallList); // we have a full microstate at time t here!
         if (inputrec->etc == etcVRESCALE)
@@ -715,19 +714,10 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
         }
         addToCallListAndMove(std::move(propagatorVelocitiesAndPositions), elementCallList,
                              elementsOwnershipList);
-        if (constr)
-        {
-            auto constraintElement = std::make_unique<ConstraintsElement<ConstraintVariable::Positions>>(
-                    constr, statePropagatorDataPtr, energyElementPtr, freeEnergyPerturbationElementPtr,
-                    MASTER(cr), fplog, inputrec, mdAtoms->mdatoms());
-            energySignallerBuilder->registerSignallerClient(compat::make_not_null(constraintElement.get()));
-            trajectoryElementBuilder->registerSignallerClient(
-                    compat::make_not_null(constraintElement.get()));
-            loggingSignallerBuilder->registerSignallerClient(
-                    compat::make_not_null(constraintElement.get()));
 
-            addToCallListAndMove(std::move(constraintElement), elementCallList, elementsOwnershipList);
-        }
+        addToCallListAndMove(constraintsElementBuilder.build<ConstraintVariable::Positions>(),
+                             elementCallList, elementsOwnershipList);
+
         addToCallListAndMove(std::move(computeGlobalsElement), elementCallList, elementsOwnershipList);
         addToCallList(energyElementPtr, elementCallList); // we have the energies at time t here!
         if (prBarostat)
