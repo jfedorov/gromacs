@@ -532,28 +532,6 @@ void ModularSimulator::constructElementsAndSignallers()
     elementsOwnershipList_.emplace_back(std::move(energyElement));
 }
 
-std::unique_ptr<ISimulatorElement>
-ModularSimulator::buildForces(SignallerBuilder<NeighborSearchSignaller>* neighborSearchSignallerBuilder,
-                              SignallerBuilder<EnergySignaller>*         energySignallerBuilder,
-                              StatePropagatorData*                       statePropagatorDataPtr,
-                              EnergyElement*                             energyElementPtr,
-                              FreeEnergyPerturbationElement* freeEnergyPerturbationElement)
-{
-    const bool isVerbose    = mdrunOptions.verbose;
-    const bool isDynamicBox = inputrecDynamicBox(inputrec);
-
-    auto forceElement = std::make_unique<ForceElement>(
-            statePropagatorDataPtr, energyElementPtr, freeEnergyPerturbationElement, isVerbose,
-            isDynamicBox, fplog, cr, inputrec, mdAtoms, nrnb, fr, fcd, wcycle, runScheduleWork, vsite,
-            imdSession, pull_work, constr, &topologyHolder_->globalTopology(), enforcedRotation);
-    topologyHolder_->registerClient(forceElement.get());
-    neighborSearchSignallerBuilder->registerSignallerClient(compat::make_not_null(forceElement.get()));
-    energySignallerBuilder->registerSignallerClient(compat::make_not_null(forceElement.get()));
-
-    // std::move *should* not be needed with c++-14, but clang-3.6 still requires it
-    return std::move(forceElement);
-}
-
 std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
         SignallerBuilder<NeighborSearchSignaller>* neighborSearchSignallerBuilder,
         SignallerBuilder<EnergySignaller>*         energySignallerBuilder,
@@ -572,6 +550,12 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
     ConstraintsElementBuilder constraintsElementBuilder(constr, MASTER(cr), fplog, inputrec,
                                                         mdAtoms->mdatoms());
 
+    const bool          isVerbose    = mdrunOptions.verbose;
+    const bool          isDynamicBox = inputrecDynamicBox(inputrec);
+    ForceElementBuilder forceElementBuilder(isVerbose, isDynamicBox, fplog, cr, inputrec, mdAtoms,
+                                            nrnb, fr, fcd, wcycle, runScheduleWork, vsite, imdSession,
+                                            pull_work, constr, top_global, enforcedRotation);
+
     /*
      * Connect builders
      */
@@ -583,9 +567,13 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
     constraintsElementBuilder.registerWithTrajectorySignaller(trajectoryElementBuilder);
     constraintsElementBuilder.registerWithLoggingSignaller(loggingSignallerBuilder);
 
-    auto forceElement =
-            buildForces(neighborSearchSignallerBuilder, energySignallerBuilder,
-                        statePropagatorDataPtr, energyElementPtr, freeEnergyPerturbationElementPtr);
+    // Force element
+    forceElementBuilder.setStatePropagatorData(statePropagatorDataPtr);
+    forceElementBuilder.setEnergyElement(energyElementPtr);
+    forceElementBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementPtr);
+    forceElementBuilder.registerWithNeighborSearchSignaller(neighborSearchSignallerBuilder);
+    forceElementBuilder.registerWithEnergySignaller(energySignallerBuilder);
+    forceElementBuilder.registerWithTopologyHolder(topologyHolder_.get());
 
     // list of elements owned by the simulator composite object
     std::vector<std::unique_ptr<ISimulatorElement>> elementsOwnershipList;
@@ -611,7 +599,7 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
         auto propagator = std::make_unique<Propagator<IntegrationStep::LeapFrog>>(
                 inputrec->delta_t, statePropagatorDataPtr, mdAtoms, wcycle);
 
-        addToCallListAndMove(std::move(forceElement), elementCallList, elementsOwnershipList);
+        addToCallListAndMove(forceElementBuilder.build(), elementCallList, elementsOwnershipList);
         addToCallList(statePropagatorDataPtr, elementCallList); // we have a full microstate at time t here!
         if (inputrec->etc == etcVRESCALE)
         {
@@ -674,7 +662,7 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
                 std::make_unique<Propagator<IntegrationStep::VelocityVerletPositionsAndVelocities>>(
                         inputrec->delta_t, statePropagatorDataPtr, mdAtoms, wcycle);
 
-        addToCallListAndMove(std::move(forceElement), elementCallList, elementsOwnershipList);
+        addToCallListAndMove(forceElementBuilder.build(), elementCallList, elementsOwnershipList);
 
         std::unique_ptr<ParrinelloRahmanBarostat> prBarostat = nullptr;
         if (inputrec->epc == epcPARRINELLORAHMAN)

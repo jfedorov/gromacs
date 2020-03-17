@@ -160,14 +160,6 @@ private:
                     FreeEnergyPerturbationElement*             freeEnergyPerturbationElementPtr,
                     bool                                       hasReadEkinState);
 
-    //! Build the force element - can be normal forces or shell / flex constraints
-    std::unique_ptr<ISimulatorElement>
-    buildForces(SignallerBuilder<NeighborSearchSignaller>* neighborSearchSignallerBuilder,
-                SignallerBuilder<EnergySignaller>*         energySignallerBuilder,
-                StatePropagatorData*                       statePropagatorDataPtr,
-                EnergyElement*                             energyElementPtr,
-                FreeEnergyPerturbationElement*             freeEnergyPerturbationElement);
-
     /*! \brief Add run functions to the task queue
      *
      * This function calls PME load balancing and domain decomposition first,

@@ -85,28 +85,6 @@ class ForceElement final :
     public IEnergySignallerClient
 {
 public:
-    //! Constructor
-    ForceElement(StatePropagatorData*           statePropagatorData,
-                 EnergyElement*                 energyElement,
-                 FreeEnergyPerturbationElement* freeEnergyPerturbationElement,
-                 bool                           isVerbose,
-                 bool                           isDynamicBox,
-                 FILE*                          fplog,
-                 const t_commrec*               cr,
-                 const t_inputrec*              inputrec,
-                 const MDAtoms*                 mdAtoms,
-                 t_nrnb*                        nrnb,
-                 t_forcerec*                    fr,
-                 t_fcdata*                      fcd,
-                 gmx_wallcycle*                 wcycle,
-                 MdrunScheduleWorkload*         runScheduleWork,
-                 gmx_vsite_t*                   vsite,
-                 ImdSession*                    imdSession,
-                 pull_t*                        pull_work,
-                 Constraints*                   constr,
-                 const gmx_mtop_t*              globalTopology,
-                 gmx_enfrot*                    enforcedRotation);
-
     /*! \brief Register force calculation for step / time
      *
      * @param step                 The step number
@@ -120,7 +98,29 @@ public:
     //! Print some final output
     void elementTeardown() override;
 
+    //! Allow builder to do its job
+    friend class ForceElementBuilder;
+
 private:
+    //! Constructor
+    ForceElement(bool                   isVerbose,
+                 bool                   isDynamicBox,
+                 FILE*                  fplog,
+                 const t_commrec*       cr,
+                 const t_inputrec*      inputrec,
+                 const MDAtoms*         mdAtoms,
+                 t_nrnb*                nrnb,
+                 t_forcerec*            fr,
+                 t_fcdata*              fcd,
+                 gmx_wallcycle*         wcycle,
+                 MdrunScheduleWorkload* runScheduleWork,
+                 gmx_vsite_t*           vsite,
+                 ImdSession*            imdSession,
+                 pull_t*                pull_work,
+                 Constraints*           constr,
+                 const gmx_mtop_t*      globalTopology,
+                 gmx_enfrot*            enforcedRotation);
+
     //! ITopologyHolderClient implementation
     void setTopology(const gmx_localtop_t* top) override;
     //! INeighborSearchSignallerClient implementation
@@ -202,6 +202,55 @@ private:
     //! Handles enforced rotation.
     gmx_enfrot* enforcedRotation_;
 };
+
+/*! \libinternal
+ * \ingroup module_modularsimulator
+ * \brief Builder for the force element
+ */
+class ForceElementBuilder
+{
+public:
+    //! Constructor, forwarding arguments to ForceElement constructor
+    template<typename... Args>
+    explicit ForceElementBuilder(Args&&... args);
+
+    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
+    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
+    //! Set pointer to EnergyElement valid throughout the simulation (required)
+    void setEnergyElement(EnergyElement* energyElement);
+    //! Set pointer to FreeEnergyPerturbationElement valid throughout the simulation (optional)
+    void setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement);
+
+    //! Register element with EnergySignaller (required)
+    void registerWithEnergySignaller(SignallerBuilder<EnergySignaller>* signallerBuilder);
+    //! Register element with NeighborSearchSignaller (required)
+    void registerWithNeighborSearchSignaller(SignallerBuilder<NeighborSearchSignaller>* signallerBuilder);
+    //! Register element with TopologyHolder (required)
+    void registerWithTopologyHolder(TopologyHolder* topologyHolder);
+
+    //! Return ForceElement
+    std::unique_ptr<ForceElement> build();
+
+    //! Destructor, make sure we didn't connect an element which won't exist anymore
+    ~ForceElementBuilder();
+
+private:
+    //! The element to be built
+    std::unique_ptr<ForceElement> forceElement_ = nullptr;
+    //! Whether we have registered the element with the energy signaller
+    bool registeredWithEnergySignaller_ = false;
+    //! Whether we have registered the element with the neighbor search signaller
+    bool registeredWithNeighborSearchSignaller_ = false;
+    //! Whether we have registered the element with the neighbor search signaller
+    bool registeredWithTopologyHolder_ = false;
+};
+
+template<typename... Args>
+ForceElementBuilder::ForceElementBuilder(Args&&... args)
+{
+    // NOLINTNEXTLINE(modernize-make-unique): make_unique does not work with private constructor
+    forceElement_ = std::unique_ptr<ForceElement>(new ForceElement(std::forward<Args>(args)...));
+}
 
 } // namespace gmx
 

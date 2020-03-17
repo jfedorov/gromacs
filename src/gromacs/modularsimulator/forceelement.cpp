@@ -56,6 +56,7 @@
 
 #include "energyelement.h"
 #include "freeenergyperturbationelement.h"
+#include "signallers.h"
 #include "statepropagatordata.h"
 
 struct gmx_edsam;
@@ -65,26 +66,23 @@ class history_t;
 
 namespace gmx
 {
-ForceElement::ForceElement(StatePropagatorData*           statePropagatorData,
-                           EnergyElement*                 energyElement,
-                           FreeEnergyPerturbationElement* freeEnergyPerturbationElement,
-                           bool                           isVerbose,
-                           bool                           isDynamicBox,
-                           FILE*                          fplog,
-                           const t_commrec*               cr,
-                           const t_inputrec*              inputrec,
-                           const MDAtoms*                 mdAtoms,
-                           t_nrnb*                        nrnb,
-                           t_forcerec*                    fr,
-                           t_fcdata*                      fcd,
-                           gmx_wallcycle*                 wcycle,
-                           MdrunScheduleWorkload*         runScheduleWork,
-                           gmx_vsite_t*                   vsite,
-                           ImdSession*                    imdSession,
-                           pull_t*                        pull_work,
-                           Constraints*                   constr,
-                           const gmx_mtop_t*              globalTopology,
-                           gmx_enfrot*                    enforcedRotation) :
+ForceElement::ForceElement(bool                   isVerbose,
+                           bool                   isDynamicBox,
+                           FILE*                  fplog,
+                           const t_commrec*       cr,
+                           const t_inputrec*      inputrec,
+                           const MDAtoms*         mdAtoms,
+                           t_nrnb*                nrnb,
+                           t_forcerec*            fr,
+                           t_fcdata*              fcd,
+                           gmx_wallcycle*         wcycle,
+                           MdrunScheduleWorkload* runScheduleWork,
+                           gmx_vsite_t*           vsite,
+                           ImdSession*            imdSession,
+                           pull_t*                pull_work,
+                           Constraints*           constr,
+                           const gmx_mtop_t*      globalTopology,
+                           gmx_enfrot*            enforcedRotation) :
     shellfc_(init_shell_flexcon(fplog,
                                 globalTopology,
                                 constr ? constr->numFlexibleConstraints() : 0,
@@ -95,9 +93,9 @@ ForceElement::ForceElement(StatePropagatorData*           statePropagatorData,
     nextEnergyCalculationStep_(-1),
     nextVirialCalculationStep_(-1),
     nextFreeEnergyCalculationStep_(-1),
-    statePropagatorData_(statePropagatorData),
-    energyElement_(energyElement),
-    freeEnergyPerturbationElement_(freeEnergyPerturbationElement),
+    statePropagatorData_(nullptr),
+    energyElement_(nullptr),
+    freeEnergyPerturbationElement_(nullptr),
     localTopology_(nullptr),
     isDynamicBox_(isDynamicBox),
     isVerbose_(isVerbose),
@@ -249,4 +247,70 @@ SignallerCallbackPtr ForceElement::registerEnergyCallback(EnergySignallerEvent e
     }
     return nullptr;
 }
+
+void ForceElementBuilder::setStatePropagatorData(StatePropagatorData* statePropagatorData)
+{
+    GMX_RELEASE_ASSERT(forceElement_,
+                       "Tried to set StatePropagatorData without available ForceElement.");
+    forceElement_->statePropagatorData_ = statePropagatorData;
+}
+
+void ForceElementBuilder::setEnergyElement(EnergyElement* energyElement)
+{
+    GMX_RELEASE_ASSERT(forceElement_, "Tried to set EnergyElement without available ForceElement.");
+    forceElement_->energyElement_ = energyElement;
+}
+
+void ForceElementBuilder::setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement)
+{
+    GMX_RELEASE_ASSERT(
+            forceElement_,
+            "Tried to set FreeEnergyPerturbationElement without available ForceElement.");
+    forceElement_->freeEnergyPerturbationElement_ = freeEnergyPerturbationElement;
+}
+
+void ForceElementBuilder::registerWithEnergySignaller(SignallerBuilder<EnergySignaller>* signallerBuilder)
+{
+    GMX_RELEASE_ASSERT(forceElement_, "Tried to set EnergySignaller after ForceElement was built.");
+    signallerBuilder->registerSignallerClient(compat::make_not_null(forceElement_.get()));
+    registeredWithEnergySignaller_ = true;
+}
+
+void ForceElementBuilder::registerWithNeighborSearchSignaller(SignallerBuilder<NeighborSearchSignaller>* signallerBuilder)
+{
+    GMX_RELEASE_ASSERT(forceElement_,
+                       "Tried to set NeighborSearchSignaller after ForceElement was built.");
+    signallerBuilder->registerSignallerClient(compat::make_not_null(forceElement_.get()));
+    registeredWithNeighborSearchSignaller_ = true;
+}
+
+void ForceElementBuilder::registerWithTopologyHolder(TopologyHolder* topologyHolder)
+{
+    GMX_RELEASE_ASSERT(forceElement_, "Tried to set TopologyHolder after ForceElement was built.");
+    topologyHolder->registerClient(forceElement_.get());
+    registeredWithTopologyHolder_ = true;
+}
+
+std::unique_ptr<ForceElement> ForceElementBuilder::build()
+{
+    GMX_RELEASE_ASSERT(forceElement_, "Called build() without available ForceElement.");
+    GMX_RELEASE_ASSERT(forceElement_->statePropagatorData_,
+                       "Tried to build ForceElement before setting StatePropagatorData.");
+    GMX_RELEASE_ASSERT(forceElement_->energyElement_,
+                       "Tried to build ForceElement before setting EnergyElement.");
+    GMX_RELEASE_ASSERT(registeredWithEnergySignaller_,
+                       "Tried to build ForceElement before registering with EnergySignaller.");
+    GMX_RELEASE_ASSERT(registeredWithNeighborSearchSignaller_,
+                       "Tried to build ForceElement before registering with LoggingSignaller.");
+    GMX_RELEASE_ASSERT(registeredWithTopologyHolder_,
+                       "Tried to build ForceElement before registering with TopologyHolder.");
+    return std::move(forceElement_);
+}
+
+ForceElementBuilder::~ForceElementBuilder()
+{
+    // If the element was built, but not consumed, we risk dangling pointers
+    GMX_ASSERT(!forceElement_, "Force element was constructed, but not used.");
+}
+
 } // namespace gmx
