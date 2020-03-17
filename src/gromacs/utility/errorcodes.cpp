@@ -75,6 +75,8 @@ const char* const error_names[] = {
     "Range checking error (possible bug)",
     "Communication (parallel processing) problem",
 
+    "Modular simulator: Attempted to construct unneeded element",
+
     "Unknown error",
 };
 

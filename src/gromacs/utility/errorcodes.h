@@ -96,6 +96,9 @@ enum ErrorCode
     eeParallelConsistency,
     //!\}
 
+    //! Exception thrown if an unused element is built in modular simulator
+    eeUnusedElement,
+
     //! Unknown error detected.
     eeUnknownError,
 };

@@ -565,6 +565,23 @@ public:
 };
 
 /*! \brief
+ * Exception class thrown if an unused element is built.
+ *
+ * \inpublicapi
+ */
+class ElementNotNeededException final : public GromacsException
+{
+public:
+    //! \copydoc FileIOError::FileIOError()
+    explicit ElementNotNeededException(const ExceptionInitializer& details) :
+        GromacsException(details)
+    {
+    }
+
+    int errorCode() const override;
+};
+
+/*! \brief
  * Macro for throwing an exception.
  *
  * \param[in] e    Exception object to throw.

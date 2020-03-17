@@ -170,6 +170,50 @@ to trajectory at the end of this step. The energy element can then
 register an energy calculation during that step, being ready to write
 to trajectory when requested.
 
+### Building modules
+
+Elements, signallers, and other parts of the modular simulator are
+built using two types of input:
+* *Data provided by ISimulator:* This is information which is set
+  up before the modular simulator (which implements the ISimulator
+  interface) is created. The modular simulator either owns this data
+  or holds a pointer to data structure owned by runner, which also
+  owns the simulator itself.
+* *Pointers or callbacks to other modules:* This represents 
+  dependencies between the different modules of the simulator.
+  Examples include pointers to objects holding data modules need to
+  access (such as the StatePropagatorData which owns positions, 
+  velocities, forces and the box), or the different callbacks that
+  allow modules to communicate to their clients that a specific event
+  happened (such as the Signallers which inform their clients of
+  special steps).
+
+While the first type of data can be expected to be unequivocally
+available at setup time, the dependencies between modules can only
+be fully resolved once all modules are built. Requiring all 
+dependencies to be fulfilled in the constructor of the modules
+forces a specific build order, which makes the code harder to 
+maintain and which can potentially be limiting in writing new modules.
+Allowing for new dependencies to be added after build time is
+error-prone (how do elements handle new dependencies added mid-run?)
+and clutters the interface of the modules.
+
+The construction of elements is therefore handled by builders. In
+general, these builders should follow three rules:
+* *Only take data provided by ISimulator as input:* This allows the
+  builder to be constructed in any order.
+* *Allow to connect modules-to-be-built:* By interfacing with other
+  builders, the builders allow for connections between modules to
+  be defined before the module objects are available.
+* *Build fully-connected modules:* Having all dependencies satisfied
+  when the module is built allows to do sanity checks at build time,
+  and keeping interfaces slim.
+
+This approach also allows to separate the building of modules in 
+three distinct phases, *(i)* building the module builders, *(ii)*
+define connections between the modules, *(iii)* construct the elements
+and order them in the call list.
+
 ### Sequence diagrams
 
 #### Pre-loop
