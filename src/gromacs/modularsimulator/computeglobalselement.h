@@ -59,6 +59,7 @@ namespace gmx
 class FreeEnergyPerturbationElement;
 class MDAtoms;
 class MDLogger;
+class TrajectoryElementBuilder;
 
 //! \addtogroup module_modularsimulator
 //! \{
@@ -103,24 +104,6 @@ class ComputeGlobalsElement final :
     public ITopologyHolderClient
 {
 public:
-    //! Constructor
-    ComputeGlobalsElement(StatePropagatorData*           statePropagatorData,
-                          EnergyElement*                 energyElement,
-                          FreeEnergyPerturbationElement* freeEnergyPerturbationElement,
-                          SimulationSignals*             signals,
-                          int                            nstglobalcomm,
-                          FILE*                          fplog,
-                          const MDLogger&                mdlog,
-                          t_commrec*                     cr,
-                          const t_inputrec*              inputrec,
-                          const MDAtoms*                 mdAtoms,
-                          t_nrnb*                        nrnb,
-                          gmx_wallcycle*                 wcycle,
-                          t_forcerec*                    fr,
-                          const gmx_mtop_t*              global_top,
-                          Constraints*                   constr,
-                          bool                           hasReadEkinState);
-
     //! Destructor
     ~ComputeGlobalsElement() override;
 
@@ -139,13 +122,28 @@ public:
      */
     void scheduleTask(Step step, Time time, const RegisterRunFunctionPtr& registerRunFunction) override;
 
-    //! Get callback to request checking of bonded interactions
-    CheckBondedInteractionsCallbackPtr getCheckNumberOfBondedInteractionsCallback();
-
     //! No element teardown needed
     void elementTeardown() override {}
 
+    //! Allow builder to do its job
+    friend class ComputeGlobalsElementBuilder;
+
 private:
+    //! Constructor
+    ComputeGlobalsElement(SimulationSignals* signals,
+                          int                nstglobalcomm,
+                          FILE*              fplog,
+                          const MDLogger&    mdlog,
+                          t_commrec*         cr,
+                          const t_inputrec*  inputrec,
+                          const MDAtoms*     mdAtoms,
+                          t_nrnb*            nrnb,
+                          gmx_wallcycle*     wcycle,
+                          t_forcerec*        fr,
+                          const gmx_mtop_t*  global_top,
+                          Constraints*       constr,
+                          bool               hasReadEkinState);
+
     //! ITopologyClient implementation
     void setTopology(const gmx_localtop_t* top) override;
     //! IEnergySignallerClient implementation
@@ -244,6 +242,75 @@ private:
     //! Parameters for force calculations.
     t_forcerec* fr_;
 };
+
+/*! \libinternal
+ * \ingroup module_modularsimulator
+ * \brief Builder for the compute globals element
+ */
+class ComputeGlobalsElementBuilder
+{
+public:
+    //! Constructor, forwarding arguments to ComputeGlobalsElement constructor
+    template<typename... Args>
+    explicit ComputeGlobalsElementBuilder(int integratorAlgorithm, Args&&... args);
+
+    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
+    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
+    //! Set pointer to EnergyElement valid throughout the simulation (required)
+    void setEnergyElement(EnergyElement* energyElement);
+    //! Set pointer to FreeEnergyPerturbationElement valid throughout the simulation (optional)
+    void setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement);
+
+    //! Register element with EnergySignaller (required)
+    void registerWithEnergySignaller(SignallerBuilder<EnergySignaller>* signallerBuilder);
+    //! Register element with TrajectorySignaller (required)
+    void registerWithTrajectorySignaller(TrajectoryElementBuilder* signallerBuilder);
+    //! Register element with TopologyHolder (required)
+    void registerWithTopologyHolder(TopologyHolder* topologyHolder);
+
+    //! Get callback to request checking of bonded interactions
+    CheckBondedInteractionsCallbackPtr getCheckNumberOfBondedInteractionsCallback();
+
+    //! Return ComputeGlobalsElement
+    template<ComputeGlobalsAlgorithm algorithm>
+    std::unique_ptr<ComputeGlobalsElement<algorithm>> build();
+
+    //! Destructor, make sure we didn't connect an element which won't exist anymore
+    ~ComputeGlobalsElementBuilder();
+
+private:
+    //! The element to be built
+    //!{
+    std::unique_ptr<ComputeGlobalsElement<ComputeGlobalsAlgorithm::LeapFrog>> elementLeapFrog_ = nullptr;
+    std::unique_ptr<ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet>> elementVelocityVerlet_ =
+            nullptr;
+    //!}
+    //! Whether we have registered the element with the energy signaller
+    bool registeredWithEnergySignaller_ = false;
+    //! Whether we have registered the element with the trajectory signaller
+    bool registeredWithTrajectorySignaller_ = false;
+    //! Whether we have registered the element with the topology holder
+    bool registeredWithTopologyHolder_ = false;
+};
+
+template<typename... Args>
+ComputeGlobalsElementBuilder::ComputeGlobalsElementBuilder(const int integratorAlgorithm, Args&&... args)
+{
+    if (integratorAlgorithm == eiMD)
+    {
+        // NOLINTNEXTLINE(modernize-make-unique): make_unique does not work with private constructor
+        elementLeapFrog_ = std::unique_ptr<ComputeGlobalsElement<ComputeGlobalsAlgorithm::LeapFrog>>(
+                new ComputeGlobalsElement<ComputeGlobalsAlgorithm::LeapFrog>(std::forward<Args>(args)...));
+    }
+    else if (integratorAlgorithm == eiVV)
+    {
+        elementVelocityVerlet_ =
+                // NOLINTNEXTLINE(modernize-make-unique): make_unique does not work with private constructor
+                std::unique_ptr<ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet>>(
+                        new ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet>(
+                                std::forward<Args>(args)...));
+    }
+}
 
 //! \}
 } // namespace gmx

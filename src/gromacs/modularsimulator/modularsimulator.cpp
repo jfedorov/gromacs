@@ -562,6 +562,10 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
                                             nrnb, fr, fcd, wcycle, runScheduleWork, vsite, imdSession,
                                             pull_work, constr, top_global, enforcedRotation);
 
+    ComputeGlobalsElementBuilder computeGlobalsElementBuilder(
+            inputrec->eI, &signals_, nstglobalcomm_, fplog, mdlog, cr, inputrec, mdAtoms, nrnb,
+            wcycle, fr, top_global, constr, hasReadEkinState);
+
     /*
      * Connect builders
      */
@@ -581,27 +585,23 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
     forceElementBuilder.registerWithEnergySignaller(energySignallerBuilder);
     forceElementBuilder.registerWithTopologyHolder(topologyHolder_.get());
 
+    // Compute-globals element
+    computeGlobalsElementBuilder.setStatePropagatorData(statePropagatorDataPtr);
+    computeGlobalsElementBuilder.setEnergyElement(energyElementPtr);
+    computeGlobalsElementBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementPtr);
+    computeGlobalsElementBuilder.registerWithTopologyHolder(topologyHolder_.get());
+    computeGlobalsElementBuilder.registerWithEnergySignaller(energySignallerBuilder);
+    computeGlobalsElementBuilder.registerWithTrajectorySignaller(trajectoryElementBuilder);
+    *checkBondedInteractionsCallback =
+            computeGlobalsElementBuilder.getCheckNumberOfBondedInteractionsCallback();
+
     // list of elements owned by the simulator composite object
     std::vector<std::unique_ptr<ISimulatorElement>> elementsOwnershipList;
     // call list of the simulator composite object
     std::vector<compat::not_null<ISimulatorElement*>> elementCallList;
 
-    std::function<void()> needToCheckNumberOfBondedInteractions;
     if (inputrec->eI == eiMD)
     {
-        auto computeGlobalsElement =
-                std::make_unique<ComputeGlobalsElement<ComputeGlobalsAlgorithm::LeapFrog>>(
-                        statePropagatorDataPtr, energyElementPtr, freeEnergyPerturbationElementPtr,
-                        &signals_, nstglobalcomm_, fplog, mdlog, cr, inputrec, mdAtoms, nrnb,
-                        wcycle, fr, &topologyHolder_->globalTopology(), constr, hasReadEkinState);
-        topologyHolder_->registerClient(computeGlobalsElement.get());
-        energySignallerBuilder->registerSignallerClient(compat::make_not_null(computeGlobalsElement.get()));
-        trajectoryElementBuilder->registerSignallerClient(
-                compat::make_not_null(computeGlobalsElement.get()));
-
-        *checkBondedInteractionsCallback =
-                computeGlobalsElement->getCheckNumberOfBondedInteractionsCallback();
-
         auto propagator = std::make_unique<Propagator<IntegrationStep::LeapFrog>>(
                 inputrec->delta_t, statePropagatorDataPtr, mdAtoms, wcycle);
 
@@ -640,7 +640,8 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
         addToCallListAndMove(constraintsElementBuilder.build<ConstraintVariable::Positions>(),
                              elementCallList, elementsOwnershipList);
 
-        addToCallListAndMove(std::move(computeGlobalsElement), elementCallList, elementsOwnershipList);
+        addToCallListAndMove(computeGlobalsElementBuilder.build<ComputeGlobalsAlgorithm::LeapFrog>(),
+                             elementCallList, elementsOwnershipList);
         addToCallList(energyElementPtr, elementCallList); // we have the energies at time t here!
         if (prBarostat)
         {
@@ -649,19 +650,6 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
     }
     else if (inputrec->eI == eiVV)
     {
-        auto computeGlobalsElement =
-                std::make_unique<ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet>>(
-                        statePropagatorDataPtr, energyElementPtr, freeEnergyPerturbationElementPtr,
-                        &signals_, nstglobalcomm_, fplog, mdlog, cr, inputrec, mdAtoms, nrnb,
-                        wcycle, fr, &topologyHolder_->globalTopology(), constr, hasReadEkinState);
-        topologyHolder_->registerClient(computeGlobalsElement.get());
-        energySignallerBuilder->registerSignallerClient(compat::make_not_null(computeGlobalsElement.get()));
-        trajectoryElementBuilder->registerSignallerClient(
-                compat::make_not_null(computeGlobalsElement.get()));
-
-        *checkBondedInteractionsCallback =
-                computeGlobalsElement->getCheckNumberOfBondedInteractionsCallback();
-
         auto propagatorVelocities = std::make_unique<Propagator<IntegrationStep::VelocitiesOnly>>(
                 inputrec->delta_t * 0.5, statePropagatorDataPtr, mdAtoms, wcycle);
         auto propagatorVelocitiesAndPositions =
@@ -688,7 +676,9 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
         addToCallListAndMove(constraintsElementBuilder.build<ConstraintVariable::Velocities>(),
                              elementCallList, elementsOwnershipList);
 
-        addToCallList(compat::make_not_null(computeGlobalsElement.get()), elementCallList);
+        auto computeGlobalsElement =
+                computeGlobalsElementBuilder.build<ComputeGlobalsAlgorithm::VelocityVerlet>();
+        addToCallList(computeGlobalsElement.get(), elementCallList);
         addToCallList(statePropagatorDataPtr, elementCallList); // we have a full microstate at time t here!
         if (inputrec->etc == etcVRESCALE)
         {

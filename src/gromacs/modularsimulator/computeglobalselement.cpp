@@ -56,14 +56,13 @@
 #include "gromacs/topology/topology.h"
 
 #include "freeenergyperturbationelement.h"
+#include "signallers.h"
+#include "trajectoryelement.h"
 
 namespace gmx
 {
 template<ComputeGlobalsAlgorithm algorithm>
-ComputeGlobalsElement<algorithm>::ComputeGlobalsElement(StatePropagatorData* statePropagatorData,
-                                                        EnergyElement*       energyElement,
-                                                        FreeEnergyPerturbationElement* freeEnergyPerturbationElement,
-                                                        SimulationSignals* signals,
+ComputeGlobalsElement<algorithm>::ComputeGlobalsElement(SimulationSignals* signals,
                                                         int                nstglobalcomm,
                                                         FILE*              fplog,
                                                         const MDLogger&    mdlog,
@@ -88,10 +87,10 @@ ComputeGlobalsElement<algorithm>::ComputeGlobalsElement(StatePropagatorData* sta
     hasReadEkinState_(hasReadEkinState),
     totalNumberOfBondedInteractions_(0),
     shouldCheckNumberOfBondedInteractions_(false),
-    statePropagatorData_(statePropagatorData),
-    energyElement_(energyElement),
+    statePropagatorData_(nullptr),
+    energyElement_(nullptr),
     localTopology_(nullptr),
-    freeEnergyPerturbationElement_(freeEnergyPerturbationElement),
+    freeEnergyPerturbationElement_(nullptr),
     vcm_(global_top->groups, *inputrec),
     signals_(signals),
     fplog_(fplog),
@@ -268,7 +267,7 @@ void ComputeGlobalsElement<algorithm>::scheduleTask(Step step,
 }
 
 template<ComputeGlobalsAlgorithm algorithm>
-void ComputeGlobalsElement<algorithm>::compute(gmx::Step            step,
+void ComputeGlobalsElement<algorithm>::compute(Step                 step,
                                                unsigned int         flags,
                                                SimulationSignaller* signaller,
                                                bool                 useLastBox,
@@ -298,13 +297,6 @@ void ComputeGlobalsElement<algorithm>::compute(gmx::Step            step,
         process_and_stopcm_grp(fplog_, &vcm_, *mdAtoms_->mdatoms(), x, v);
         inc_nrnb(nrnb_, eNR_STOPCM, mdAtoms_->mdatoms()->homenr);
     }
-}
-
-template<ComputeGlobalsAlgorithm algorithm>
-CheckBondedInteractionsCallbackPtr ComputeGlobalsElement<algorithm>::getCheckNumberOfBondedInteractionsCallback()
-{
-    return std::make_unique<CheckBondedInteractionsCallback>(
-            [this]() { needToCheckNumberOfBondedInteractions(); });
 }
 
 template<ComputeGlobalsAlgorithm algorithm>
@@ -344,6 +336,168 @@ SignallerCallbackPtr ComputeGlobalsElement<algorithm>::registerTrajectorySignall
                 [this](Step step, Time /*unused*/) { energyReductionStep_ = step; });
     }
     return nullptr;
+}
+
+void ComputeGlobalsElementBuilder::setStatePropagatorData(StatePropagatorData* statePropagatorData)
+{
+    GMX_RELEASE_ASSERT(elementLeapFrog_ || elementVelocityVerlet_,
+                       "Tried to set StatePropagatorData after ComputeGlobalsElement was built.");
+    if (elementLeapFrog_)
+    {
+        elementLeapFrog_->statePropagatorData_ = statePropagatorData;
+    }
+    if (elementVelocityVerlet_)
+    {
+        elementVelocityVerlet_->statePropagatorData_ = statePropagatorData;
+    }
+}
+
+void ComputeGlobalsElementBuilder::setEnergyElement(EnergyElement* energyElement)
+{
+    GMX_RELEASE_ASSERT(elementLeapFrog_ || elementVelocityVerlet_,
+                       "Tried to set EnergyElement after ComputeGlobalsElement was built.");
+    if (elementLeapFrog_)
+    {
+        elementLeapFrog_->energyElement_ = energyElement;
+    }
+    if (elementVelocityVerlet_)
+    {
+        elementVelocityVerlet_->energyElement_ = energyElement;
+    }
+}
+
+void ComputeGlobalsElementBuilder::setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement)
+{
+    GMX_RELEASE_ASSERT(
+            elementLeapFrog_ || elementVelocityVerlet_,
+            "Tried to set FreeEnergyPerturbationElement after ComputeGlobalsElement was built");
+    if (elementLeapFrog_)
+    {
+        elementLeapFrog_->freeEnergyPerturbationElement_ = freeEnergyPerturbationElement;
+    }
+    if (elementVelocityVerlet_)
+    {
+        elementVelocityVerlet_->freeEnergyPerturbationElement_ = freeEnergyPerturbationElement;
+    }
+}
+
+void ComputeGlobalsElementBuilder::registerWithEnergySignaller(SignallerBuilder<EnergySignaller>* signallerBuilder)
+{
+    GMX_RELEASE_ASSERT(
+            elementLeapFrog_ || elementVelocityVerlet_,
+            "Tried to register with EnergySignaller after ComputeGlobalsElement was built.");
+    if (elementLeapFrog_)
+    {
+        signallerBuilder->registerSignallerClient(compat::make_not_null(elementLeapFrog_.get()));
+    }
+    if (elementVelocityVerlet_)
+    {
+        signallerBuilder->registerSignallerClient(compat::make_not_null(elementVelocityVerlet_.get()));
+    }
+    registeredWithEnergySignaller_ = true;
+}
+
+void ComputeGlobalsElementBuilder::registerWithTrajectorySignaller(TrajectoryElementBuilder* signallerBuilder)
+{
+    GMX_RELEASE_ASSERT(
+            elementLeapFrog_ || elementVelocityVerlet_,
+            "Tried to register with TrajectoryElement after ComputeGlobalsElement was built.");
+    if (elementLeapFrog_)
+    {
+        signallerBuilder->registerSignallerClient(compat::make_not_null(elementLeapFrog_.get()));
+    }
+    if (elementVelocityVerlet_)
+    {
+        signallerBuilder->registerSignallerClient(compat::make_not_null(elementVelocityVerlet_.get()));
+    }
+    registeredWithTrajectorySignaller_ = true;
+}
+
+void ComputeGlobalsElementBuilder::registerWithTopologyHolder(TopologyHolder* topologyHolder)
+{
+    GMX_RELEASE_ASSERT(
+            elementLeapFrog_ || elementVelocityVerlet_,
+            "Tried to register with TopologyHolder after ComputeGlobalsElement was built.");
+    if (elementLeapFrog_)
+    {
+        topologyHolder->registerClient(elementLeapFrog_.get());
+    }
+    if (elementVelocityVerlet_)
+    {
+        topologyHolder->registerClient(elementVelocityVerlet_.get());
+    }
+    registeredWithTopologyHolder_ = true;
+}
+
+CheckBondedInteractionsCallbackPtr ComputeGlobalsElementBuilder::getCheckNumberOfBondedInteractionsCallback()
+{
+    GMX_RELEASE_ASSERT(elementLeapFrog_ || elementVelocityVerlet_,
+                       "Tried to get callback after ComputeGlobalsElement was built.");
+    if (elementLeapFrog_)
+    {
+        auto elementPtr = elementLeapFrog_.get();
+        return std::make_unique<CheckBondedInteractionsCallback>(
+                [elementPtr]() { elementPtr->needToCheckNumberOfBondedInteractions(); });
+    }
+    else if (elementVelocityVerlet_)
+    {
+        auto elementPtr = elementVelocityVerlet_.get();
+        return std::make_unique<CheckBondedInteractionsCallback>(
+                [elementPtr]() { elementPtr->needToCheckNumberOfBondedInteractions(); });
+    }
+    else
+    {
+        GMX_THROW(InternalError("No ComputeGlobalsElementBuilder available."));
+    }
+}
+
+template<>
+std::unique_ptr<ComputeGlobalsElement<ComputeGlobalsAlgorithm::LeapFrog>> ComputeGlobalsElementBuilder::build()
+{
+    GMX_RELEASE_ASSERT(elementLeapFrog_, "Called build() without available ComputeGlobalsElement.");
+    GMX_RELEASE_ASSERT(elementLeapFrog_->statePropagatorData_,
+                       "Tried to build ComputeGlobalsElement before setting StatePropagatorData.");
+    GMX_RELEASE_ASSERT(elementLeapFrog_->energyElement_,
+                       "Tried to build ComputeGlobalsElement before setting EnergyElement.");
+    GMX_RELEASE_ASSERT(
+            registeredWithEnergySignaller_,
+            "Tried to build ComputeGlobalsElement before registering with EnergySignaller.");
+    GMX_RELEASE_ASSERT(registeredWithTrajectorySignaller_,
+                       "Tried to build ComputeGlobalsElement before registering with "
+                       "TrajectorySignaller.");
+    GMX_RELEASE_ASSERT(
+            registeredWithTopologyHolder_,
+            "Tried to build ComputeGlobalsElement before registering with LoggingSignaller.");
+    return std::move(elementLeapFrog_);
+}
+
+template<>
+std::unique_ptr<ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet>>
+ComputeGlobalsElementBuilder::build()
+{
+    GMX_RELEASE_ASSERT(elementVelocityVerlet_,
+                       "Called build() without available ComputeGlobalsElement.");
+    GMX_RELEASE_ASSERT(elementVelocityVerlet_->statePropagatorData_,
+                       "Tried to build ComputeGlobalsElement before setting StatePropagatorData.");
+    GMX_RELEASE_ASSERT(elementVelocityVerlet_->energyElement_,
+                       "Tried to build ComputeGlobalsElement before setting EnergyElement.");
+    GMX_RELEASE_ASSERT(
+            registeredWithEnergySignaller_,
+            "Tried to build ComputeGlobalsElement before registering with EnergySignaller.");
+    GMX_RELEASE_ASSERT(registeredWithTrajectorySignaller_,
+                       "Tried to build ComputeGlobalsElement before registering with "
+                       "TrajectorySignaller.");
+    GMX_RELEASE_ASSERT(
+            registeredWithTopologyHolder_,
+            "Tried to build ComputeGlobalsElement before registering with LoggingSignaller.");
+    return std::move(elementVelocityVerlet_);
+}
+
+ComputeGlobalsElementBuilder::~ComputeGlobalsElementBuilder()
+{
+    // If an element was built, but not consumed, we risk dangling pointers
+    GMX_ASSERT(!elementLeapFrog_, "Leap-frog element was constructed, but not used.");
+    GMX_ASSERT(!elementVelocityVerlet_, "Velocity-verlet element was constructed, but not used.");
 }
 
 //! Explicit template instantiation
