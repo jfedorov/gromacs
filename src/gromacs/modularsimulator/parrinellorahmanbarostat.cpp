@@ -54,41 +54,43 @@
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/pbcutil/boxutilities.h"
 
+#include "checkpointhelper.h"
 #include "energyelement.h"
+#include "signallers.h"
 #include "statepropagatordata.h"
 
 namespace gmx
 {
 
-ParrinelloRahmanBarostat::ParrinelloRahmanBarostat(int                   nstpcouple,
-                                                   int                   offset,
-                                                   real                  couplingTimeStep,
-                                                   Step                  initStep,
-                                                   ArrayRef<rvec>        scalingTensor,
-                                                   PropagatorCallbackPtr propagatorCallback,
-                                                   StatePropagatorData*  statePropagatorData,
-                                                   EnergyElement*        energyElement,
-                                                   FILE*                 fplog,
-                                                   const t_inputrec*     inputrec,
-                                                   const MDAtoms*        mdAtoms,
-                                                   const t_state*        globalState,
-                                                   t_commrec*            cr,
-                                                   bool                  isRestart) :
+ParrinelloRahmanBarostat::ParrinelloRahmanBarostat(int               nstpcouple,
+                                                   real              couplingTimeStep,
+                                                   Step              initStep,
+                                                   FILE*             fplog,
+                                                   const t_inputrec* inputrec,
+                                                   const MDAtoms*    mdAtoms,
+                                                   const t_state*    globalState,
+                                                   t_commrec*        cr,
+                                                   bool              isRestart) :
     nstpcouple_(nstpcouple),
-    offset_(offset),
+    offset_(),
     couplingTimeStep_(couplingTimeStep),
     initStep_(initStep),
-    scalingTensor_(scalingTensor),
-    propagatorCallback_(std::move(propagatorCallback)),
-    statePropagatorData_(statePropagatorData),
-    energyElement_(energyElement),
+    propagatorCallback_(nullptr),
+    mu_{ { 0 } },
+    boxRel_{ { 0 } },
+    boxVelocity_{ { 0 } },
+    statePropagatorData_(nullptr),
+    energyElement_(nullptr),
     fplog_(fplog),
     inputrec_(inputrec),
     mdAtoms_(mdAtoms)
 {
-    clear_mat(mu_);
-    clear_mat(boxRel_);
-    clear_mat(boxVelocity_);
+    if (inputrec->epc != epcPARRINELLORAHMAN)
+    {
+        GMX_THROW(
+                ElementNotNeededException("ParrinelloRahmanBarostat is not needed without "
+                                          "Parrinello-Rahman pressure control."));
+    }
 
     // TODO: This is only needed to restore the thermostatIntegral_ from cpt. Remove this when
     //       switching to purely client-based checkpointing.
@@ -107,9 +109,9 @@ ParrinelloRahmanBarostat::ParrinelloRahmanBarostat(int                   nstpcou
     }
 }
 
-void ParrinelloRahmanBarostat::scheduleTask(gmx::Step step,
-                                            gmx::Time gmx_unused               time,
-                                            const gmx::RegisterRunFunctionPtr& registerRunFunction)
+void ParrinelloRahmanBarostat::scheduleTask(Step step,
+                                            Time gmx_unused               time,
+                                            const RegisterRunFunctionPtr& registerRunFunction)
 {
     const bool scaleOnNextStep = do_per_step(step + nstpcouple_ + offset_ + 1, nstpcouple_);
     const bool scaleOnThisStep = do_per_step(step + nstpcouple_ + offset_, nstpcouple_);
@@ -200,6 +202,68 @@ void ParrinelloRahmanBarostat::writeCheckpoint(t_state* localState, t_state gmx_
     copy_mat(boxVelocity_, localState->boxv);
     copy_mat(boxRel_, localState->box_rel);
     localState->flags |= (1U << estBOXV) | (1U << estBOX_REL);
+}
+
+void ParrinelloRahmanBarostatBuilder::setStatePropagatorData(StatePropagatorData* statePropagatorData)
+{
+    GMX_RELEASE_ASSERT(
+            registrationPossible_,
+            "Tried to set StatePropagatorData after ParrinelloRahmanBarostat was built.");
+    if (prBarostat_)
+    {
+        prBarostat_->statePropagatorData_ = statePropagatorData;
+    }
+}
+
+void ParrinelloRahmanBarostatBuilder::setEnergyElement(EnergyElement* energyElement)
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Tried to set EnergyElement after ParrinelloRahmanBarostat was built.");
+    if (prBarostat_)
+    {
+        prBarostat_->energyElement_ = energyElement;
+    }
+}
+
+void ParrinelloRahmanBarostatBuilder::registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder)
+{
+    GMX_RELEASE_ASSERT(
+            registrationPossible_,
+            "Tried to register to CheckpointHelper after ParrinelloRahmanBarostat was built.");
+    if (prBarostat_)
+    {
+        checkpointHelperBuilder->registerClient(compat::make_not_null(prBarostat_.get()));
+    }
+    registeredWithCheckpointHelper_ = true;
+}
+
+std::unique_ptr<ParrinelloRahmanBarostat> ParrinelloRahmanBarostatBuilder::build(int offset)
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Called build() without available ParrinelloRahmanBarostat.");
+    if (prBarostat_)
+    {
+        GMX_RELEASE_ASSERT(
+                prBarostat_->statePropagatorData_,
+                "Tried to build ParrinelloRahmanBarostat before setting StatePropagatorData.");
+        GMX_RELEASE_ASSERT(prBarostat_->energyElement_,
+                           "Tried to build ParrinelloRahmanBarostat before setting EnergyElement.");
+        GMX_RELEASE_ASSERT(registeredWithCheckpointHelper_,
+                           "Tried to build ParrinelloRahmanBarostat before registering with "
+                           "CheckpointHelper.");
+        GMX_RELEASE_ASSERT(
+                registeredWithPropagator_,
+                "Tried to build ParrinelloRahmanBarostat before registering with a propagator.");
+        prBarostat_->offset_ = offset;
+    }
+    registrationPossible_ = false;
+    return std::move(prBarostat_);
+}
+
+ParrinelloRahmanBarostatBuilder::~ParrinelloRahmanBarostatBuilder()
+{
+    // If the element was built, but not consumed, we risk dangling pointers
+    GMX_RELEASE_ASSERT(!prBarostat_, "ParrinelloRahmanBarostat was constructed, but not used.");
 }
 
 

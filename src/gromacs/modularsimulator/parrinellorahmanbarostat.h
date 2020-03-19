@@ -43,6 +43,7 @@
 #define GMX_MODULARSIMULATOR_PARRINELLORAHMANBAROSTAT_H
 
 #include "gromacs/math/vectypes.h"
+#include "gromacs/utility/exceptions.h"
 
 #include "modularsimulatorinterfaces.h"
 #include "propagator.h"
@@ -52,6 +53,7 @@ struct t_commrec;
 
 namespace gmx
 {
+class CheckpointHelperBuilder;
 class EnergyElement;
 class MDAtoms;
 class StatePropagatorData;
@@ -69,22 +71,6 @@ class StatePropagatorData;
 class ParrinelloRahmanBarostat final : public ISimulatorElement, public ICheckpointHelperClient
 {
 public:
-    //! Constructor
-    ParrinelloRahmanBarostat(int                   nstpcouple,
-                             int                   offset,
-                             real                  couplingTimeStep,
-                             Step                  initStep,
-                             ArrayRef<rvec>        scalingTensor,
-                             PropagatorCallbackPtr propagatorCallback,
-                             StatePropagatorData*  statePropagatorData,
-                             EnergyElement*        energyElement,
-                             FILE*                 fplog,
-                             const t_inputrec*     inputrec,
-                             const MDAtoms*        mdAtoms,
-                             const t_state*        globalState,
-                             t_commrec*            cr,
-                             bool                  isRestart);
-
     /*! \brief Register run function for step / time
      *
      * @param step                 The step number
@@ -101,11 +87,25 @@ public:
     //! Getter for the box velocities
     const rvec* boxVelocities() const;
 
+    //! Allow builder to do its job
+    friend class ParrinelloRahmanBarostatBuilder;
+
 private:
+    //! Constructor
+    ParrinelloRahmanBarostat(int               nstpcouple,
+                             real              couplingTimeStep,
+                             Step              initStep,
+                             FILE*             fplog,
+                             const t_inputrec* inputrec,
+                             const MDAtoms*    mdAtoms,
+                             const t_state*    globalState,
+                             t_commrec*        cr,
+                             bool              isRestart);
+
     //! The frequency at which the barostat is applied
     const int nstpcouple_;
     //! If != 0, offset the step at which the barostat is applied
-    const int offset_;
+    int offset_;
     //! The coupling time step - simulation time step x nstcouple_
     const real couplingTimeStep_;
     //! The first step of the simulation
@@ -144,6 +144,83 @@ private:
     //! Atom parameters for this domain.
     const MDAtoms* mdAtoms_;
 };
+
+/*! \libinternal
+ * \ingroup module_modularsimulator
+ * \brief Builder for the Parrinello-Rahman barostat element
+ */
+class ParrinelloRahmanBarostatBuilder
+{
+public:
+    //! Constructor, forwarding arguments to ParrinelloRahmanBarostat constructor
+    template<typename... Args>
+    explicit ParrinelloRahmanBarostatBuilder(Args&&... args);
+
+    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
+    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
+    //! Set pointer to EnergyElement valid throughout the simulation (required)
+    void setEnergyElement(EnergyElement* energyElement);
+
+    //! Register element with CheckpointHelper (required)
+    void registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder);
+
+    //! Set propagator
+    template<IntegrationStep integrationStep>
+    void setPropagator(Propagator<integrationStep>* propagator);
+
+    /*! \brief Return ParrinelloRahmanBarostat
+     *
+     * @param offset  Offset the step at which the barostat is applied
+     */
+    std::unique_ptr<ParrinelloRahmanBarostat> build(int offset);
+
+    //! Destructor, make sure we didn't connect an element which won't exist anymore
+    ~ParrinelloRahmanBarostatBuilder();
+
+private:
+    //! The element to be built
+    std::unique_ptr<ParrinelloRahmanBarostat> prBarostat_ = nullptr;
+    //! Whether we have an element that we can move
+    bool registrationPossible_ = false;
+    //! Whether we have registered the element with the checkpoint helper
+    bool registeredWithCheckpointHelper_ = false;
+    //! Whether we have registered the element with a propagator
+    bool registeredWithPropagator_ = false;
+};
+
+template<typename... Args>
+ParrinelloRahmanBarostatBuilder::ParrinelloRahmanBarostatBuilder(Args&&... args)
+{
+    try
+    {
+        // NOLINTNEXTLINE(modernize-make-unique): make_unique does not work with private constructor
+        prBarostat_ = std::unique_ptr<ParrinelloRahmanBarostat>(
+                new ParrinelloRahmanBarostat(std::forward<Args>(args)...));
+    }
+    catch (ElementNotNeededException&)
+    {
+        prBarostat_ = nullptr;
+    }
+    // Element being nullptr is a valid state, nullptr (element is not built)
+    // needs to be handled by the caller of build().
+    registrationPossible_ = true;
+}
+
+template<IntegrationStep integrationStep>
+void ParrinelloRahmanBarostatBuilder::setPropagator(Propagator<integrationStep>* propagator)
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Tried to set propagator after Parrinello-Rahman barostat was built.");
+    GMX_RELEASE_ASSERT(!registeredWithPropagator_,
+                       "Tried to set propagator of Parrinello-Rahman barostat more than once.");
+
+    if (prBarostat_)
+    {
+        prBarostat_->scalingTensor_      = propagator->viewOnPRScalingMatrix();
+        prBarostat_->propagatorCallback_ = propagator->prScalingCallback();
+    }
+    registeredWithPropagator_ = true;
+}
 
 } // namespace gmx
 

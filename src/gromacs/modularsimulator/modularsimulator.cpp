@@ -566,6 +566,10 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
             inputrec->eI, &signals_, nstglobalcomm_, fplog, mdlog, cr, inputrec, mdAtoms, nrnb,
             wcycle, fr, top_global, constr, hasReadEkinState);
 
+    ParrinelloRahmanBarostatBuilder parrinelloRahmanBarostatBuilder(
+            inputrec->nstpcouple, inputrec->delta_t * inputrec->nstpcouple, inputrec->init_step,
+            fplog, inputrec, mdAtoms, state_global, cr, inputrec->bContinuation);
+
     /*
      * Connect builders
      */
@@ -595,6 +599,11 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
     *checkBondedInteractionsCallback =
             computeGlobalsElementBuilder.getCheckNumberOfBondedInteractionsCallback();
 
+    // Parrinello-Rahman barostat
+    parrinelloRahmanBarostatBuilder.setStatePropagatorData(statePropagatorDataPtr);
+    parrinelloRahmanBarostatBuilder.setEnergyElement(energyElementPtr);
+    parrinelloRahmanBarostatBuilder.registerWithCheckpointHelper(checkpointHelperBuilder);
+
     // list of elements owned by the simulator composite object
     std::vector<std::unique_ptr<ISimulatorElement>> elementsOwnershipList;
     // call list of the simulator composite object
@@ -604,6 +613,7 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
     {
         auto propagator = std::make_unique<Propagator<IntegrationStep::LeapFrog>>(
                 inputrec->delta_t, statePropagatorDataPtr, mdAtoms, wcycle);
+        parrinelloRahmanBarostatBuilder.setPropagator(propagator.get());
 
         addToCallListAndMove(forceElementBuilder.build(), elementCallList, elementsOwnershipList);
         addToCallList(statePropagatorDataPtr, elementCallList); // we have a full microstate at time t here!
@@ -622,19 +632,6 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
             addToCallListAndMove(std::move(thermostat), elementCallList, elementsOwnershipList);
         }
 
-        std::unique_ptr<ParrinelloRahmanBarostat> prBarostat = nullptr;
-        if (inputrec->epc == epcPARRINELLORAHMAN)
-        {
-            // Building the PR barostat here since it needs access to the propagator
-            // and we want to be able to move the propagator object
-            prBarostat = std::make_unique<ParrinelloRahmanBarostat>(
-                    inputrec->nstpcouple, -1, inputrec->delta_t * inputrec->nstpcouple,
-                    inputrec->init_step, propagator->viewOnPRScalingMatrix(),
-                    propagator->prScalingCallback(), statePropagatorDataPtr, energyElementPtr,
-                    fplog, inputrec, mdAtoms, state_global, cr, inputrec->bContinuation);
-            energyElementPtr->setParrinelloRahamnBarostat(prBarostat.get());
-            checkpointHelperBuilder->registerClient(compat::make_not_null(prBarostat.get()));
-        }
         addToCallListAndMove(std::move(propagator), elementCallList, elementsOwnershipList);
 
         addToCallListAndMove(constraintsElementBuilder.build<ConstraintVariable::Positions>(),
@@ -643,10 +640,10 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
         addToCallListAndMove(computeGlobalsElementBuilder.build<ComputeGlobalsAlgorithm::LeapFrog>(),
                              elementCallList, elementsOwnershipList);
         addToCallList(energyElementPtr, elementCallList); // we have the energies at time t here!
-        if (prBarostat)
-        {
-            addToCallListAndMove(std::move(prBarostat), elementCallList, elementsOwnershipList);
-        }
+
+        auto parrinelloRahmanBarostat = parrinelloRahmanBarostatBuilder.build(-1);
+        energyElementPtr->setParrinelloRahmanBarostat(parrinelloRahmanBarostat.get());
+        addToCallListAndMove(std::move(parrinelloRahmanBarostat), elementCallList, elementsOwnershipList);
     }
     else if (inputrec->eI == eiVV)
     {
@@ -655,22 +652,10 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
         auto propagatorVelocitiesAndPositions =
                 std::make_unique<Propagator<IntegrationStep::VelocityVerletPositionsAndVelocities>>(
                         inputrec->delta_t, statePropagatorDataPtr, mdAtoms, wcycle);
+        parrinelloRahmanBarostatBuilder.setPropagator(propagatorVelocities.get());
 
         addToCallListAndMove(forceElementBuilder.build(), elementCallList, elementsOwnershipList);
 
-        std::unique_ptr<ParrinelloRahmanBarostat> prBarostat = nullptr;
-        if (inputrec->epc == epcPARRINELLORAHMAN)
-        {
-            // Building the PR barostat here since it needs access to the propagator
-            // and we want to be able to move the propagator object
-            prBarostat = std::make_unique<ParrinelloRahmanBarostat>(
-                    inputrec->nstpcouple, -1, inputrec->delta_t * inputrec->nstpcouple,
-                    inputrec->init_step, propagatorVelocities->viewOnPRScalingMatrix(),
-                    propagatorVelocities->prScalingCallback(), statePropagatorDataPtr, energyElementPtr,
-                    fplog, inputrec, mdAtoms, state_global, cr, inputrec->bContinuation);
-            energyElementPtr->setParrinelloRahamnBarostat(prBarostat.get());
-            checkpointHelperBuilder->registerClient(compat::make_not_null(prBarostat.get()));
-        }
         addToCallListAndMove(std::move(propagatorVelocities), elementCallList, elementsOwnershipList);
 
         addToCallListAndMove(constraintsElementBuilder.build<ConstraintVariable::Velocities>(),
@@ -704,10 +689,10 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
 
         addToCallListAndMove(std::move(computeGlobalsElement), elementCallList, elementsOwnershipList);
         addToCallList(energyElementPtr, elementCallList); // we have the energies at time t here!
-        if (prBarostat)
-        {
-            addToCallListAndMove(std::move(prBarostat), elementCallList, elementsOwnershipList);
-        }
+
+        auto parrinelloRahmanBarostat = parrinelloRahmanBarostatBuilder.build(-1);
+        energyElementPtr->setParrinelloRahmanBarostat(parrinelloRahmanBarostat.get());
+        addToCallListAndMove(std::move(parrinelloRahmanBarostat), elementCallList, elementsOwnershipList);
     }
     else
     {

@@ -431,7 +431,7 @@ void EnergyElement::setVRescaleThermostat(const gmx::VRescaleThermostat* vRescal
     }
 }
 
-void EnergyElement::setParrinelloRahamnBarostat(const gmx::ParrinelloRahmanBarostat* parrinelloRahmanBarostat)
+void EnergyElement::setParrinelloRahmanBarostat(const gmx::ParrinelloRahmanBarostat* parrinelloRahmanBarostat)
 {
     parrinelloRahmanBarostat_ = parrinelloRahmanBarostat;
     if (parrinelloRahmanBarostat_)
