@@ -570,6 +570,11 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
             inputrec->nstpcouple, inputrec->delta_t * inputrec->nstpcouple, inputrec->init_step,
             fplog, inputrec, mdAtoms, state_global, cr, inputrec->bContinuation);
 
+    VRescaleThermostatBuilder vRescaleThermostatBuilder(
+            inputrec->nsttcouple, inputrec->ld_seed, inputrec->opts.ngtc,
+            inputrec->delta_t * inputrec->nsttcouple, inputrec->opts.ref_t, inputrec->opts.tau_t,
+            inputrec->opts.nrdf, state_global, cr, inputrec->bContinuation, inputrec->etc);
+
     /*
      * Connect builders
      */
@@ -604,6 +609,10 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
     parrinelloRahmanBarostatBuilder.setEnergyElement(energyElementPtr);
     parrinelloRahmanBarostatBuilder.registerWithCheckpointHelper(checkpointHelperBuilder);
 
+    // v-rescale thermostat
+    vRescaleThermostatBuilder.setEnergyElement(energyElementPtr);
+    vRescaleThermostatBuilder.registerWithCheckpointHelper(checkpointHelperBuilder);
+
     // list of elements owned by the simulator composite object
     std::vector<std::unique_ptr<ISimulatorElement>> elementsOwnershipList;
     // call list of the simulator composite object
@@ -614,23 +623,14 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
         auto propagator = std::make_unique<Propagator<IntegrationStep::LeapFrog>>(
                 inputrec->delta_t, statePropagatorDataPtr, mdAtoms, wcycle);
         parrinelloRahmanBarostatBuilder.setPropagator(propagator.get());
+        vRescaleThermostatBuilder.setPropagator(propagator.get());
 
         addToCallListAndMove(forceElementBuilder.build(), elementCallList, elementsOwnershipList);
         addToCallList(statePropagatorDataPtr, elementCallList); // we have a full microstate at time t here!
-        if (inputrec->etc == etcVRESCALE)
-        {
-            // TODO: With increased complexity of the propagator, this will need further development,
-            //       e.g. using propagators templated for velocity propagation policies and a builder
-            propagator->setNumVelocityScalingVariables(inputrec->opts.ngtc);
-            auto thermostat = std::make_unique<VRescaleThermostat>(
-                    inputrec->nsttcouple, -1, false, inputrec->ld_seed, inputrec->opts.ngtc,
-                    inputrec->delta_t * inputrec->nsttcouple, inputrec->opts.ref_t, inputrec->opts.tau_t,
-                    inputrec->opts.nrdf, energyElementPtr, propagator->viewOnVelocityScaling(),
-                    propagator->velocityScalingCallback(), state_global, cr, inputrec->bContinuation);
-            checkpointHelperBuilder->registerClient(compat::make_not_null(thermostat.get()));
-            energyElementPtr->setVRescaleThermostat(thermostat.get());
-            addToCallListAndMove(std::move(thermostat), elementCallList, elementsOwnershipList);
-        }
+
+        auto thermostat = vRescaleThermostatBuilder.build(-1, false);
+        energyElementPtr->setVRescaleThermostat(thermostat.get());
+        addToCallListAndMove(std::move(thermostat), elementCallList, elementsOwnershipList);
 
         addToCallListAndMove(std::move(propagator), elementCallList, elementsOwnershipList);
 
@@ -653,6 +653,7 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
                 std::make_unique<Propagator<IntegrationStep::VelocityVerletPositionsAndVelocities>>(
                         inputrec->delta_t, statePropagatorDataPtr, mdAtoms, wcycle);
         parrinelloRahmanBarostatBuilder.setPropagator(propagatorVelocities.get());
+        vRescaleThermostatBuilder.setPropagator(propagatorVelocitiesAndPositions.get());
 
         addToCallListAndMove(forceElementBuilder.build(), elementCallList, elementsOwnershipList);
 
@@ -665,22 +666,11 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
                 computeGlobalsElementBuilder.build<ComputeGlobalsAlgorithm::VelocityVerlet>();
         addToCallList(computeGlobalsElement.get(), elementCallList);
         addToCallList(statePropagatorDataPtr, elementCallList); // we have a full microstate at time t here!
-        if (inputrec->etc == etcVRESCALE)
-        {
-            // TODO: With increased complexity of the propagator, this will need further development,
-            //       e.g. using propagators templated for velocity propagation policies and a builder
-            propagatorVelocitiesAndPositions->setNumVelocityScalingVariables(inputrec->opts.ngtc);
-            auto thermostat = std::make_unique<VRescaleThermostat>(
-                    inputrec->nsttcouple, 0, true, inputrec->ld_seed, inputrec->opts.ngtc,
-                    inputrec->delta_t * inputrec->nsttcouple, inputrec->opts.ref_t,
-                    inputrec->opts.tau_t, inputrec->opts.nrdf, energyElementPtr,
-                    propagatorVelocitiesAndPositions->viewOnVelocityScaling(),
-                    propagatorVelocitiesAndPositions->velocityScalingCallback(), state_global, cr,
-                    inputrec->bContinuation);
-            checkpointHelperBuilder->registerClient(compat::make_not_null(thermostat.get()));
-            energyElementPtr->setVRescaleThermostat(thermostat.get());
-            addToCallListAndMove(std::move(thermostat), elementCallList, elementsOwnershipList);
-        }
+
+        auto thermostat = vRescaleThermostatBuilder.build(0, true);
+        energyElementPtr->setVRescaleThermostat(thermostat.get());
+        addToCallListAndMove(std::move(thermostat), elementCallList, elementsOwnershipList);
+
         addToCallListAndMove(std::move(propagatorVelocitiesAndPositions), elementCallList,
                              elementsOwnershipList);
 

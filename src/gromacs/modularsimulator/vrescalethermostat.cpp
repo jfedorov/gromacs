@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -53,27 +53,25 @@
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/utility/fatalerror.h"
 
+#include "checkpointhelper.h"
+
 namespace gmx
 {
 
-VRescaleThermostat::VRescaleThermostat(int                   nstcouple,
-                                       int                   offset,
-                                       bool                  useFullStepKE,
-                                       int64_t               seed,
-                                       int                   numTemperatureGroups,
-                                       double                couplingTimeStep,
-                                       const real*           referenceTemperature,
-                                       const real*           couplingTime,
-                                       const real*           numDegreesOfFreedom,
-                                       EnergyElement*        energyElement,
-                                       ArrayRef<real>        lambdaView,
-                                       PropagatorCallbackPtr propagatorCallback,
-                                       const t_state*        globalState,
-                                       t_commrec*            cr,
-                                       bool                  isRestart) :
+VRescaleThermostat::VRescaleThermostat(int            nstcouple,
+                                       int64_t        seed,
+                                       int            numTemperatureGroups,
+                                       double         couplingTimeStep,
+                                       const real*    referenceTemperature,
+                                       const real*    couplingTime,
+                                       const real*    numDegreesOfFreedom,
+                                       const t_state* globalState,
+                                       t_commrec*     cr,
+                                       bool           isRestart,
+                                       int            inputThermostatType) :
     nstcouple_(nstcouple),
-    offset_(offset),
-    useFullStepKE_(useFullStepKE),
+    offset_(),
+    useFullStepKE_(),
     seed_(seed),
     numTemperatureGroups_(numTemperatureGroups),
     couplingTimeStep_(couplingTimeStep),
@@ -81,10 +79,14 @@ VRescaleThermostat::VRescaleThermostat(int                   nstcouple,
     couplingTime_(couplingTime, couplingTime + numTemperatureGroups),
     numDegreesOfFreedom_(numDegreesOfFreedom, numDegreesOfFreedom + numTemperatureGroups),
     thermostatIntegral_(numTemperatureGroups, 0.0),
-    energyElement_(energyElement),
-    lambda_(lambdaView),
-    propagatorCallback_(std::move(propagatorCallback))
+    energyElement_(nullptr),
+    propagatorCallback_(nullptr)
 {
+    if (inputThermostatType != etcVRESCALE)
+    {
+        GMX_THROW(ElementNotNeededException(
+                "VRescaleThermostat is not needed without v-rescale temperature control."));
+    }
     // TODO: This is only needed to restore the thermostatIntegral_ from cpt. Remove this when
     //       switching to purely client-based checkpointing.
     if (isRestart)
@@ -183,6 +185,54 @@ void VRescaleThermostat::writeCheckpoint(t_state* localState, t_state gmx_unused
 const std::vector<double>& VRescaleThermostat::thermostatIntegral() const
 {
     return thermostatIntegral_;
+}
+
+void VRescaleThermostatBuilder::setEnergyElement(EnergyElement* energyElement)
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Tried to set EnergyElement after VRescaleThermostat was built.");
+    if (vrThermostat_)
+    {
+        vrThermostat_->energyElement_ = energyElement;
+    }
+}
+
+void VRescaleThermostatBuilder::registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder)
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Tried to register to CheckpointHelper after VRescaleThermostat was built.");
+    if (vrThermostat_)
+    {
+        checkpointHelperBuilder->registerClient(compat::make_not_null(vrThermostat_.get()));
+    }
+    registeredWithCheckpointHelper_ = true;
+}
+
+std::unique_ptr<VRescaleThermostat> VRescaleThermostatBuilder::build(int offset, bool useFullStepKE)
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Called build() without available VRescaleThermostat.");
+    if (vrThermostat_)
+    {
+        GMX_RELEASE_ASSERT(vrThermostat_->energyElement_,
+                           "Tried to build VRescaleThermostat before setting EnergyElement.");
+        GMX_RELEASE_ASSERT(registeredWithCheckpointHelper_,
+                           "Tried to build VRescaleThermostat before registering with "
+                           "CheckpointHelper.");
+        GMX_RELEASE_ASSERT(
+                registeredWithPropagator_,
+                "Tried to build VRescaleThermostat before registering with a propagator.");
+        vrThermostat_->offset_        = offset;
+        vrThermostat_->useFullStepKE_ = useFullStepKE;
+    }
+    registrationPossible_ = false;
+    return std::move(vrThermostat_);
+}
+
+VRescaleThermostatBuilder::~VRescaleThermostatBuilder()
+{
+    // If the element was built, but not consumed, we risk dangling pointers
+    GMX_RELEASE_ASSERT(!vrThermostat_, "VRescaleThermostat was constructed, but not used.");
 }
 
 } // namespace gmx
