@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -93,19 +93,6 @@ class TrajectoryElement;
 class CheckpointHelper final : public ILastStepSignallerClient, public ISimulatorElement
 {
 public:
-    //! Constructor
-    CheckpointHelper(std::vector<ICheckpointHelperClient*> clients,
-                     std::unique_ptr<CheckpointHandler>    checkpointHandler,
-                     int                                   initStep,
-                     TrajectoryElement*                    trajectoryElement,
-                     int                                   globalNumAtoms,
-                     FILE*                                 fplog,
-                     t_commrec*                            cr,
-                     ObservablesHistory*                   observablesHistory,
-                     gmx_walltime_accounting*              walltime_accounting,
-                     t_state*                              state_global,
-                     bool                                  writeFinalCheckpoint);
-
     /*! \brief Run checkpointing
      *
      * Sets signal and / or performs checkpointing at neighbor searching steps
@@ -132,7 +119,20 @@ public:
     //! No element teardown needed
     void elementTeardown() override {}
 
+    //! Allow builder to do its job
+    friend class CheckpointHelperBuilder;
+
 private:
+    //! Constructor
+    CheckpointHelper(int                      initStep,
+                     int                      globalNumAtoms,
+                     FILE*                    fplog,
+                     t_commrec*               cr,
+                     ObservablesHistory*      observablesHistory,
+                     gmx_walltime_accounting* walltime_accounting,
+                     t_state*                 state_global,
+                     bool                     writeFinalCheckpoint);
+
     //! List of checkpoint clients
     std::vector<ICheckpointHelperClient*> clients_;
 
@@ -175,6 +175,47 @@ private:
     //! Full simulation state (only non-nullptr on master rank).
     t_state* state_global_;
 };
+
+/*! \libinternal
+ * \ingroup module_modularsimulator
+ * \brief Builder for the checkpoint helper
+ */
+class CheckpointHelperBuilder
+{
+public:
+    //! Constructor, forwarding arguments to CheckpointHelper constructor
+    template<typename... Args>
+    explicit CheckpointHelperBuilder(Args&&... args);
+
+    //! Register checkpointing client
+    void registerClient(compat::not_null<ICheckpointHelperClient*> client);
+    //! Set pointer to TrajectoryElement valid throughout the simulation (required)
+    void setTrajectoryElement(TrajectoryElement* trajectoryElement);
+    //! Register element with LastStepSignaller (required)
+    void registerWithLastStepSignaller(SignallerBuilder<LastStepSignaller>* signallerBuilder);
+    //! Set CheckpointHandler
+    void setCheckpointHandler(std::unique_ptr<CheckpointHandler> checkpointHandler);
+
+    //! Return CheckpointHelper
+    std::unique_ptr<CheckpointHelper> build();
+
+    //! Destructor, make sure we didn't connect an element which won't exist anymore
+    ~CheckpointHelperBuilder();
+
+private:
+    //! The element to be built
+    std::unique_ptr<CheckpointHelper> checkpointHelper_ = nullptr;
+    //! Whether we have registered the element with the last step signaller
+    bool registeredWithLastStepSignaller_ = false;
+};
+
+template<typename... Args>
+CheckpointHelperBuilder::CheckpointHelperBuilder(Args&&... args)
+{
+    checkpointHelper_ =
+            // NOLINTNEXTLINE(modernize-make-unique): make_unique does not work with private constructor
+            std::unique_ptr<CheckpointHelper>(new CheckpointHelper(std::forward<Args>(args)...));
+}
 
 } // namespace gmx
 

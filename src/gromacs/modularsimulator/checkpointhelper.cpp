@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -48,28 +48,25 @@
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/state.h"
 
+#include "signallers.h"
 #include "trajectoryelement.h"
 
 namespace gmx
 {
-CheckpointHelper::CheckpointHelper(std::vector<ICheckpointHelperClient*> clients,
-                                   std::unique_ptr<CheckpointHandler>    checkpointHandler,
-                                   int                                   initStep,
-                                   TrajectoryElement*                    trajectoryElement,
-                                   int                                   globalNumAtoms,
-                                   FILE*                                 fplog,
-                                   t_commrec*                            cr,
-                                   ObservablesHistory*                   observablesHistory,
-                                   gmx_walltime_accounting*              walltime_accounting,
-                                   t_state*                              state_global,
-                                   bool                                  writeFinalCheckpoint) :
-    clients_(std::move(clients)),
-    checkpointHandler_(std::move(checkpointHandler)),
+CheckpointHelper::CheckpointHelper(int                      initStep,
+                                   int                      globalNumAtoms,
+                                   FILE*                    fplog,
+                                   t_commrec*               cr,
+                                   ObservablesHistory*      observablesHistory,
+                                   gmx_walltime_accounting* walltime_accounting,
+                                   t_state*                 state_global,
+                                   bool                     writeFinalCheckpoint) :
+    checkpointHandler_(nullptr),
     initStep_(initStep),
     lastStep_(-1),
     globalNumAtoms_(globalNumAtoms),
     writeFinalCheckpoint_(writeFinalCheckpoint),
-    trajectoryElement_(trajectoryElement),
+    trajectoryElement_(nullptr),
     localState_(nullptr),
     fplog_(fplog),
     cr_(cr),
@@ -77,10 +74,6 @@ CheckpointHelper::CheckpointHelper(std::vector<ICheckpointHelperClient*> clients
     walltime_accounting_(walltime_accounting),
     state_global_(state_global)
 {
-    // Get rid of nullptr in clients list
-    clients_.erase(std::remove_if(clients_.begin(), clients_.end(),
-                                  [](ICheckpointHelperClient* ptr) { return ptr == nullptr; }),
-                   clients_.end());
     if (DOMAINDECOMP(cr))
     {
         localState_ = std::make_unique<t_state>();
@@ -135,6 +128,54 @@ SignallerCallbackPtr CheckpointHelper::registerLastStepCallback()
 {
     return std::make_unique<SignallerCallback>(
             [this](Step step, Time gmx_unused time) { this->lastStep_ = step; });
+}
+
+void CheckpointHelperBuilder::registerClient(compat::not_null<ICheckpointHelperClient*> client)
+{
+    GMX_RELEASE_ASSERT(checkpointHelper_,
+                       "Tried to register client after CheckpointHelper was built.");
+    checkpointHelper_->clients_.emplace_back(client);
+}
+
+void CheckpointHelperBuilder::setTrajectoryElement(TrajectoryElement* trajectoryElement)
+{
+    GMX_RELEASE_ASSERT(checkpointHelper_,
+                       "Tried to set TrajectoryElement after CheckpointHelper was built.");
+    checkpointHelper_->trajectoryElement_ = trajectoryElement;
+}
+
+void CheckpointHelperBuilder::registerWithLastStepSignaller(SignallerBuilder<LastStepSignaller>* signallerBuilder)
+{
+    GMX_RELEASE_ASSERT(checkpointHelper_,
+                       "Tried to set CheckpointHandler after CheckpointHelper was built.");
+    signallerBuilder->registerSignallerClient(compat::make_not_null(checkpointHelper_.get()));
+    registeredWithLastStepSignaller_ = true;
+}
+
+void CheckpointHelperBuilder::setCheckpointHandler(std::unique_ptr<CheckpointHandler> checkpointHandler)
+{
+    GMX_RELEASE_ASSERT(checkpointHelper_,
+                       "Tried to set CheckpointHandler after CheckpointHelper was built.");
+    checkpointHelper_->checkpointHandler_ = std::move(checkpointHandler);
+}
+
+std::unique_ptr<CheckpointHelper> CheckpointHelperBuilder::build()
+{
+    GMX_RELEASE_ASSERT(checkpointHelper_, "Called build() without available CheckpointHelper.");
+    GMX_RELEASE_ASSERT(checkpointHelper_->trajectoryElement_,
+                       "Tried to build CheckpointHelper before setting TrajectoryElement.");
+    GMX_RELEASE_ASSERT(checkpointHelper_->checkpointHandler_,
+                       "Tried to build CheckpointHelper before setting CheckpointHandler.");
+    GMX_RELEASE_ASSERT(
+            registeredWithLastStepSignaller_,
+            "Tried to build CheckpointHelper before registering with LastStepSignaller.");
+    return std::move(checkpointHelper_);
+}
+
+CheckpointHelperBuilder::~CheckpointHelperBuilder()
+{
+    // If the helper was built, but not consumed, we risk dangling pointers
+    GMX_ASSERT(!checkpointHelper_, "CheckpointHelper was constructed, but not used.");
 }
 
 } // namespace gmx

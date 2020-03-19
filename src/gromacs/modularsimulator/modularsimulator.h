@@ -153,7 +153,7 @@ private:
                     SignallerBuilder<EnergySignaller>*         energySignallerBuilder,
                     SignallerBuilder<LoggingSignaller>*        loggingSignallerBuilder,
                     TrajectoryElementBuilder*                  trajectoryElementBuilder,
-                    std::vector<ICheckpointHelperClient*>*     checkpointClients,
+                    CheckpointHelperBuilder*                   checkpointHelperBuilder,
                     CheckBondedInteractionsCallbackPtr*        checkBondedInteractionsCallback,
                     compat::not_null<StatePropagatorData*>     statePropagatorDataPtr,
                     compat::not_null<EnergyElement*>           energyElementPtr,

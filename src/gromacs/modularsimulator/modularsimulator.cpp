@@ -356,11 +356,25 @@ void ModularSimulator::constructElementsAndSignallers()
         restore_ekinstate_from_state(cr, ekind, &state_global->ekinstate);
     }
 
+    // Build the topology holder
+    topologyHolder_ =
+            std::make_unique<TopologyHolder>(*top_global, cr, inputrec, fr, mdAtoms, constr, vsite);
+
+    // Multisim is currently disabled
+    const bool simulationsShareState = false;
+
+    // Builder for the checkpoint helper
+    CheckpointHelperBuilder checkpointHelperBuilder(inputrec->init_step, top_global->natoms, fplog,
+                                                    cr, observablesHistory, walltime_accounting,
+                                                    state_global, mdrunOptions.writeConfout);
+    checkpointHelperBuilder.setCheckpointHandler(std::make_unique<CheckpointHandler>(
+            compat::make_not_null<SimulationSignal*>(&signals_[eglsCHKPT]), simulationsShareState,
+            inputrec->nstlist == 0, MASTER(cr), mdrunOptions.writeConfout,
+            mdrunOptions.checkpointOptions.period));
+
     /*
      * Build data structures
      */
-    topologyHolder_ =
-            std::make_unique<TopologyHolder>(*top_global, cr, inputrec, fr, mdAtoms, constr, vsite);
 
     std::unique_ptr<FreeEnergyPerturbationElement> freeEnergyPerturbationElement    = nullptr;
     FreeEnergyPerturbationElement*                 freeEnergyPerturbationElementPtr = nullptr;
@@ -369,6 +383,7 @@ void ModularSimulator::constructElementsAndSignallers()
         freeEnergyPerturbationElement =
                 std::make_unique<FreeEnergyPerturbationElement>(fplog, inputrec, mdAtoms);
         freeEnergyPerturbationElementPtr = freeEnergyPerturbationElement.get();
+        checkpointHelperBuilder.registerClient(compat::make_not_null(freeEnergyPerturbationElement.get()));
     }
 
     auto statePropagatorData = std::make_unique<StatePropagatorData>(
@@ -377,18 +392,19 @@ void ModularSimulator::constructElementsAndSignallers()
             freeEnergyPerturbationElementPtr, topologyHolder_.get(), fr->bMolPBC,
             mdrunOptions.writeConfout, opt2fn("-c", nfile, fnm), inputrec, mdAtoms->mdatoms());
     auto statePropagatorDataPtr = compat::make_not_null(statePropagatorData.get());
+    checkpointHelperBuilder.registerClient(statePropagatorDataPtr);
 
     auto energyElement = std::make_unique<EnergyElement>(
             statePropagatorDataPtr, freeEnergyPerturbationElementPtr, top_global, inputrec, mdAtoms,
             enerd, ekind, constr, fplog, fcd, mdModulesNotifier, MASTER(cr), observablesHistory,
             startingBehavior);
     auto energyElementPtr = compat::make_not_null(energyElement.get());
+    checkpointHelperBuilder.registerClient(energyElementPtr);
 
     /*
      * Build stop handler
      */
-    const bool simulationsShareState = false;
-    stopHandler_                     = stopHandlerBuilder->getStopHandlerMD(
+    stopHandler_ = stopHandlerBuilder->getStopHandlerMD(
             compat::not_null<SimulationSignal*>(&signals_[eglsSTOPCOND]), simulationsShareState,
             MASTER(cr), inputrec->nstlist, mdrunOptions.reproducible, nstglobalcomm_,
             mdrunOptions.maximumHoursToRun, inputrec->nstlist == 0, fplog, stophandlerCurrentStep_,
@@ -418,20 +434,19 @@ void ModularSimulator::constructElementsAndSignallers()
     neighborSearchSignallerBuilder.registerSignallerClient(compat::make_not_null(signalHelper_.get()));
     lastStepSignallerBuilder.registerSignallerClient(compat::make_not_null(signalHelper_.get()));
 
+    checkpointHelperBuilder.registerWithLastStepSignaller(&lastStepSignallerBuilder);
+
     /*
      * Build integrator - this takes care of force calculation, propagation,
      * constraining, and of the place the statePropagatorData and the energy element
      * have a full timestep state.
      */
-    // TODO: Make a CheckpointHelperBuilder
-    std::vector<ICheckpointHelperClient*> checkpointClients = { statePropagatorDataPtr, energyElementPtr,
-                                                                freeEnergyPerturbationElementPtr };
     CheckBondedInteractionsCallbackPtr checkBondedInteractionsCallback = nullptr;
-    auto                               integrator =
-            buildIntegrator(&neighborSearchSignallerBuilder, &energySignallerBuilder,
-                            &loggingSignallerBuilder, &trajectoryElementBuilder, &checkpointClients,
-                            &checkBondedInteractionsCallback, statePropagatorDataPtr,
-                            energyElementPtr, freeEnergyPerturbationElementPtr, hasReadEkinState);
+    auto integrator = buildIntegrator(&neighborSearchSignallerBuilder, &energySignallerBuilder,
+                                      &loggingSignallerBuilder, &trajectoryElementBuilder,
+                                      &checkpointHelperBuilder, &checkBondedInteractionsCallback,
+                                      statePropagatorDataPtr, energyElementPtr,
+                                      freeEnergyPerturbationElementPtr, hasReadEkinState);
 
     /*
      * Build infrastructure elements
@@ -480,17 +495,8 @@ void ModularSimulator::constructElementsAndSignallers()
             top_global, oenv, wcycle, startingBehavior, simulationsShareState);
     loggingSignallerBuilder.registerSignallerClient(compat::make_not_null(trajectoryElement.get()));
 
-    // Add checkpoint helper here since we need a pointer to the trajectory element and
-    // need to register it with the lastStepSignallerBuilder
-    auto checkpointHandler = std::make_unique<CheckpointHandler>(
-            compat::make_not_null<SimulationSignal*>(&signals_[eglsCHKPT]), simulationsShareState,
-            inputrec->nstlist == 0, MASTER(cr), mdrunOptions.writeConfout,
-            mdrunOptions.checkpointOptions.period);
-    checkpointHelper_ = std::make_unique<CheckpointHelper>(
-            std::move(checkpointClients), std::move(checkpointHandler), inputrec->init_step,
-            trajectoryElement.get(), top_global->natoms, fplog, cr, observablesHistory,
-            walltime_accounting, state_global, mdrunOptions.writeConfout);
-    lastStepSignallerBuilder.registerSignallerClient(compat::make_not_null(checkpointHelper_.get()));
+    checkpointHelperBuilder.setTrajectoryElement(trajectoryElement.get());
+    checkpointHelper_ = checkpointHelperBuilder.build();
 
     lastStepSignallerBuilder.registerSignallerClient(compat::make_not_null(trajectoryElement.get()));
     auto loggingSignaller =
@@ -537,7 +543,7 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
         SignallerBuilder<EnergySignaller>*         energySignallerBuilder,
         SignallerBuilder<LoggingSignaller>*        loggingSignallerBuilder,
         TrajectoryElementBuilder*                  trajectoryElementBuilder,
-        std::vector<ICheckpointHelperClient*>*     checkpointClients,
+        CheckpointHelperBuilder*                   checkpointHelperBuilder,
         CheckBondedInteractionsCallbackPtr*        checkBondedInteractionsCallback,
         compat::not_null<StatePropagatorData*>     statePropagatorDataPtr,
         compat::not_null<EnergyElement*>           energyElementPtr,
@@ -611,7 +617,7 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
                     inputrec->delta_t * inputrec->nsttcouple, inputrec->opts.ref_t, inputrec->opts.tau_t,
                     inputrec->opts.nrdf, energyElementPtr, propagator->viewOnVelocityScaling(),
                     propagator->velocityScalingCallback(), state_global, cr, inputrec->bContinuation);
-            checkpointClients->emplace_back(thermostat.get());
+            checkpointHelperBuilder->registerClient(compat::make_not_null(thermostat.get()));
             energyElementPtr->setVRescaleThermostat(thermostat.get());
             addToCallListAndMove(std::move(thermostat), elementCallList, elementsOwnershipList);
         }
@@ -627,7 +633,7 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
                     propagator->prScalingCallback(), statePropagatorDataPtr, energyElementPtr,
                     fplog, inputrec, mdAtoms, state_global, cr, inputrec->bContinuation);
             energyElementPtr->setParrinelloRahamnBarostat(prBarostat.get());
-            checkpointClients->emplace_back(prBarostat.get());
+            checkpointHelperBuilder->registerClient(compat::make_not_null(prBarostat.get()));
         }
         addToCallListAndMove(std::move(propagator), elementCallList, elementsOwnershipList);
 
@@ -675,7 +681,7 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
                     propagatorVelocities->prScalingCallback(), statePropagatorDataPtr, energyElementPtr,
                     fplog, inputrec, mdAtoms, state_global, cr, inputrec->bContinuation);
             energyElementPtr->setParrinelloRahamnBarostat(prBarostat.get());
-            checkpointClients->emplace_back(prBarostat.get());
+            checkpointHelperBuilder->registerClient(compat::make_not_null(prBarostat.get()));
         }
         addToCallListAndMove(std::move(propagatorVelocities), elementCallList, elementsOwnershipList);
 
@@ -696,7 +702,7 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
                     propagatorVelocitiesAndPositions->viewOnVelocityScaling(),
                     propagatorVelocitiesAndPositions->velocityScalingCallback(), state_global, cr,
                     inputrec->bContinuation);
-            checkpointClients->emplace_back(thermostat.get());
+            checkpointHelperBuilder->registerClient(compat::make_not_null(thermostat.get()));
             energyElementPtr->setVRescaleThermostat(thermostat.get());
             addToCallListAndMove(std::move(thermostat), elementCallList, elementsOwnershipList);
         }
