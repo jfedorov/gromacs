@@ -215,13 +215,14 @@ void ParrinelloRahmanBarostatBuilder::setStatePropagatorData(StatePropagatorData
     }
 }
 
-void ParrinelloRahmanBarostatBuilder::setEnergyElement(EnergyElement* energyElement)
+void ParrinelloRahmanBarostatBuilder::setEnergyElementBuilder(EnergyElementBuilder* energyElementBuilder)
 {
     GMX_RELEASE_ASSERT(registrationPossible_,
                        "Tried to set EnergyElement after ParrinelloRahmanBarostat was built.");
     if (prBarostat_)
     {
-        prBarostat_->energyElement_ = energyElement;
+        prBarostat_->energyElement_ = energyElementBuilder->getPointer();
+        energyElementBuilder->setParrinelloRahmanBarostat(prBarostat_.get());
     }
 }
 

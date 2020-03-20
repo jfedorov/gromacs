@@ -360,6 +360,15 @@ void ModularSimulator::constructElementsAndSignallers()
     topologyHolder_ =
             std::make_unique<TopologyHolder>(*top_global, cr, inputrec, fr, mdAtoms, constr, vsite);
 
+    /*
+     * Create simulator builders
+     */
+    SignallerBuilder<NeighborSearchSignaller> neighborSearchSignallerBuilder;
+    SignallerBuilder<LastStepSignaller>       lastStepSignallerBuilder;
+    SignallerBuilder<LoggingSignaller>        loggingSignallerBuilder;
+    SignallerBuilder<EnergySignaller>         energySignallerBuilder;
+    TrajectoryElementBuilder                  trajectoryElementBuilder;
+
     // Multisim is currently disabled
     const bool simulationsShareState = false;
 
@@ -372,6 +381,22 @@ void ModularSimulator::constructElementsAndSignallers()
             inputrec->nstlist == 0, MASTER(cr), mdrunOptions.writeConfout,
             mdrunOptions.checkpointOptions.period));
 
+    // Energy element builder
+    EnergyElementBuilder energyElementBuilder(inputrec, mdAtoms, enerd, ekind, constr, fplog, fcd,
+                                              mdModulesNotifier, MASTER(cr), observablesHistory,
+                                              startingBehavior);
+
+    /*
+     * Connect simulator builders
+     */
+    // Energy element
+    energyElementBuilder.registerWithEnergySignaller(&energySignallerBuilder);
+    energyElementBuilder.registerWithTrajectoryElement(&trajectoryElementBuilder);
+    energyElementBuilder.registerWithCheckpointHelper(&checkpointHelperBuilder);
+    energyElementBuilder.setTopologyHolder(topologyHolder_.get());
+
+    // Checkpoint helper
+    checkpointHelperBuilder.registerWithLastStepSignaller(&lastStepSignallerBuilder);
     /*
      * Build data structures
      */
@@ -394,12 +419,8 @@ void ModularSimulator::constructElementsAndSignallers()
     auto statePropagatorDataPtr = compat::make_not_null(statePropagatorData.get());
     checkpointHelperBuilder.registerClient(statePropagatorDataPtr);
 
-    auto energyElement = std::make_unique<EnergyElement>(
-            statePropagatorDataPtr, freeEnergyPerturbationElementPtr, top_global, inputrec, mdAtoms,
-            enerd, ekind, constr, fplog, fcd, mdModulesNotifier, MASTER(cr), observablesHistory,
-            startingBehavior);
-    auto energyElementPtr = compat::make_not_null(energyElement.get());
-    checkpointHelperBuilder.registerClient(energyElementPtr);
+    energyElementBuilder.setStatePropagatorData(statePropagatorDataPtr);
+    energyElementBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementPtr);
 
     /*
      * Build stop handler
@@ -411,30 +432,15 @@ void ModularSimulator::constructElementsAndSignallers()
             stophandlerIsNSStep_, walltime_accounting);
 
     /*
-     * Create simulator builders
-     */
-    SignallerBuilder<NeighborSearchSignaller> neighborSearchSignallerBuilder;
-    SignallerBuilder<LastStepSignaller>       lastStepSignallerBuilder;
-    SignallerBuilder<LoggingSignaller>        loggingSignallerBuilder;
-    SignallerBuilder<EnergySignaller>         energySignallerBuilder;
-    TrajectoryElementBuilder                  trajectoryElementBuilder;
-
-    /*
      * Register data structures to signallers
      */
     trajectoryElementBuilder.registerWriterClient(statePropagatorDataPtr);
     trajectoryElementBuilder.registerSignallerClient(statePropagatorDataPtr);
     lastStepSignallerBuilder.registerSignallerClient(statePropagatorDataPtr);
 
-    trajectoryElementBuilder.registerWriterClient(energyElementPtr);
-    trajectoryElementBuilder.registerSignallerClient(energyElementPtr);
-    energySignallerBuilder.registerSignallerClient(energyElementPtr);
-
     // Register the simulator itself to the neighbor search / last step signaller
     neighborSearchSignallerBuilder.registerSignallerClient(compat::make_not_null(signalHelper_.get()));
     lastStepSignallerBuilder.registerSignallerClient(compat::make_not_null(signalHelper_.get()));
-
-    checkpointHelperBuilder.registerWithLastStepSignaller(&lastStepSignallerBuilder);
 
     /*
      * Build integrator - this takes care of force calculation, propagation,
@@ -445,7 +451,7 @@ void ModularSimulator::constructElementsAndSignallers()
     auto integrator = buildIntegrator(&neighborSearchSignallerBuilder, &energySignallerBuilder,
                                       &loggingSignallerBuilder, &trajectoryElementBuilder,
                                       &checkpointHelperBuilder, &checkBondedInteractionsCallback,
-                                      statePropagatorDataPtr, energyElementPtr,
+                                      statePropagatorDataPtr, &energyElementBuilder,
                                       freeEnergyPerturbationElementPtr, hasReadEkinState);
 
     /*
@@ -535,7 +541,6 @@ void ModularSimulator::constructElementsAndSignallers()
     // globals so that we reset the right velocities
     // TODO: Avoid this by getting rid of the need of resetting velocities in vv
     elementsOwnershipList_.emplace_back(std::move(statePropagatorData));
-    elementsOwnershipList_.emplace_back(std::move(energyElement));
 }
 
 std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
@@ -546,7 +551,7 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
         CheckpointHelperBuilder*                   checkpointHelperBuilder,
         CheckBondedInteractionsCallbackPtr*        checkBondedInteractionsCallback,
         compat::not_null<StatePropagatorData*>     statePropagatorDataPtr,
-        compat::not_null<EnergyElement*>           energyElementPtr,
+        EnergyElementBuilder*                      energyElementBuilder,
         FreeEnergyPerturbationElement*             freeEnergyPerturbationElementPtr,
         bool                                       hasReadEkinState)
 {
@@ -580,7 +585,7 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
      */
     // Constraint element
     constraintsElementBuilder.setStatePropagatorData(statePropagatorDataPtr);
-    constraintsElementBuilder.setEnergyElement(energyElementPtr);
+    constraintsElementBuilder.setEnergyElement(energyElementBuilder->getPointer());
     constraintsElementBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementPtr);
     constraintsElementBuilder.registerWithEnergySignaller(energySignallerBuilder);
     constraintsElementBuilder.registerWithTrajectorySignaller(trajectoryElementBuilder);
@@ -588,7 +593,7 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
 
     // Force element
     forceElementBuilder.setStatePropagatorData(statePropagatorDataPtr);
-    forceElementBuilder.setEnergyElement(energyElementPtr);
+    forceElementBuilder.setEnergyElement(energyElementBuilder->getPointer());
     forceElementBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementPtr);
     forceElementBuilder.registerWithNeighborSearchSignaller(neighborSearchSignallerBuilder);
     forceElementBuilder.registerWithEnergySignaller(energySignallerBuilder);
@@ -596,7 +601,7 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
 
     // Compute-globals element
     computeGlobalsElementBuilder.setStatePropagatorData(statePropagatorDataPtr);
-    computeGlobalsElementBuilder.setEnergyElement(energyElementPtr);
+    computeGlobalsElementBuilder.setEnergyElement(energyElementBuilder->getPointer());
     computeGlobalsElementBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementPtr);
     computeGlobalsElementBuilder.registerWithTopologyHolder(topologyHolder_.get());
     computeGlobalsElementBuilder.registerWithEnergySignaller(energySignallerBuilder);
@@ -606,11 +611,11 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
 
     // Parrinello-Rahman barostat
     parrinelloRahmanBarostatBuilder.setStatePropagatorData(statePropagatorDataPtr);
-    parrinelloRahmanBarostatBuilder.setEnergyElement(energyElementPtr);
+    parrinelloRahmanBarostatBuilder.setEnergyElementBuilder(energyElementBuilder);
     parrinelloRahmanBarostatBuilder.registerWithCheckpointHelper(checkpointHelperBuilder);
 
     // v-rescale thermostat
-    vRescaleThermostatBuilder.setEnergyElement(energyElementPtr);
+    vRescaleThermostatBuilder.setEnergyElementBuilder(energyElementBuilder);
     vRescaleThermostatBuilder.registerWithCheckpointHelper(checkpointHelperBuilder);
 
     // list of elements owned by the simulator composite object
@@ -628,9 +633,8 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
         addToCallListAndMove(forceElementBuilder.build(), elementCallList, elementsOwnershipList);
         addToCallList(statePropagatorDataPtr, elementCallList); // we have a full microstate at time t here!
 
-        auto thermostat = vRescaleThermostatBuilder.build(-1, false);
-        energyElementPtr->setVRescaleThermostat(thermostat.get());
-        addToCallListAndMove(std::move(thermostat), elementCallList, elementsOwnershipList);
+        addToCallListAndMove(vRescaleThermostatBuilder.build(-1, false), elementCallList,
+                             elementsOwnershipList);
 
         addToCallListAndMove(propagatorBuilder.build(), elementCallList, elementsOwnershipList);
 
@@ -639,11 +643,12 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
 
         addToCallListAndMove(computeGlobalsElementBuilder.build<ComputeGlobalsAlgorithm::LeapFrog>(),
                              elementCallList, elementsOwnershipList);
-        addToCallList(energyElementPtr, elementCallList); // we have the energies at time t here!
 
-        auto parrinelloRahmanBarostat = parrinelloRahmanBarostatBuilder.build(-1);
-        energyElementPtr->setParrinelloRahmanBarostat(parrinelloRahmanBarostat.get());
-        addToCallListAndMove(std::move(parrinelloRahmanBarostat), elementCallList, elementsOwnershipList);
+        addToCallListAndMove(energyElementBuilder->build(), elementCallList,
+                             elementsOwnershipList); // we have the energies at time t here!
+
+        addToCallListAndMove(parrinelloRahmanBarostatBuilder.build(-1), elementCallList,
+                             elementsOwnershipList);
     }
     else if (inputrec->eI == eiVV)
     {
@@ -669,9 +674,8 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
         addToCallList(computeGlobalsElement.get(), elementCallList);
         addToCallList(statePropagatorDataPtr, elementCallList); // we have a full microstate at time t here!
 
-        auto thermostat = vRescaleThermostatBuilder.build(0, true);
-        energyElementPtr->setVRescaleThermostat(thermostat.get());
-        addToCallListAndMove(std::move(thermostat), elementCallList, elementsOwnershipList);
+        addToCallListAndMove(vRescaleThermostatBuilder.build(0, true), elementCallList,
+                             elementsOwnershipList);
 
         addToCallListAndMove(velocityAndPositionPropagatorBuilder.build(), elementCallList,
                              elementsOwnershipList);
@@ -680,11 +684,11 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
                              elementCallList, elementsOwnershipList);
 
         addToCallListAndMove(std::move(computeGlobalsElement), elementCallList, elementsOwnershipList);
-        addToCallList(energyElementPtr, elementCallList); // we have the energies at time t here!
+        addToCallListAndMove(energyElementBuilder->build(), elementCallList,
+                             elementsOwnershipList); // we have the energies at time t here!
 
-        auto parrinelloRahmanBarostat = parrinelloRahmanBarostatBuilder.build(-1);
-        energyElementPtr->setParrinelloRahmanBarostat(parrinelloRahmanBarostat.get());
-        addToCallListAndMove(std::move(parrinelloRahmanBarostat), elementCallList, elementsOwnershipList);
+        addToCallListAndMove(parrinelloRahmanBarostatBuilder.build(-1), elementCallList,
+                             elementsOwnershipList);
     }
     else
     {

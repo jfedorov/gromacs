@@ -60,6 +60,7 @@ namespace gmx
 {
 class DomDecHelper;
 class EnergyElement;
+class EnergyElementBuilder;
 class EnergySignaller;
 class FreeEnergyPerturbationElement;
 class LoggingSignaller;
@@ -156,7 +157,7 @@ private:
                     CheckpointHelperBuilder*                   checkpointHelperBuilder,
                     CheckBondedInteractionsCallbackPtr*        checkBondedInteractionsCallback,
                     compat::not_null<StatePropagatorData*>     statePropagatorDataPtr,
-                    compat::not_null<EnergyElement*>           energyElementPtr,
+                    EnergyElementBuilder*                      energyElementBuilder,
                     FreeEnergyPerturbationElement*             freeEnergyPerturbationElementPtr,
                     bool                                       hasReadEkinState);
 

@@ -39,10 +39,11 @@
  * \ingroup module_modularsimulator
  */
 
-#ifndef GMX_ENERGYELEMENT_MICROSTATE_H
-#define GMX_ENERGYELEMENT_MICROSTATE_H
+#ifndef GMX_MODULARSIMULATOR_ENERGYELEMENT_H
+#define GMX_MODULARSIMULATOR_ENERGYELEMENT_H
 
 #include "gromacs/math/vectypes.h"
+#include "gromacs/mdlib/energyoutput.h"
 #include "gromacs/mdtypes/state.h"
 
 #include "modularsimulatorinterfaces.h"
@@ -58,12 +59,14 @@ struct SimulationGroups;
 namespace gmx
 {
 enum class StartingBehavior;
+class CheckpointHelperBuilder;
 class Constraints;
-class EnergyOutput;
 class FreeEnergyPerturbationElement;
 class MDAtoms;
 class ParrinelloRahmanBarostat;
 class StatePropagatorData;
+class TopologyHolder;
+class TrajectoryElementBuilder;
 class VRescaleThermostat;
 struct MdModulesNotifier;
 
@@ -96,22 +99,6 @@ class EnergyElement final :
     public ICheckpointHelperClient
 {
 public:
-    //! Constructor
-    EnergyElement(StatePropagatorData*           statePropagatorData,
-                  FreeEnergyPerturbationElement* freeEnergyPerturbationElement,
-                  const gmx_mtop_t*              globalTopology,
-                  const t_inputrec*              inputrec,
-                  const MDAtoms*                 mdAtoms,
-                  gmx_enerdata_t*                enerd,
-                  gmx_ekindata_t*                ekind,
-                  const Constraints*             constr,
-                  FILE*                          fplog,
-                  t_fcdata*                      fcd,
-                  const MdModulesNotifier&       mdModulesNotifier,
-                  bool                           isMasterRank,
-                  ObservablesHistory*            observablesHistory,
-                  StartingBehavior               startingBehavior);
-
     /*! \brief Register run function for step / time
      *
      * This needs to be called when the energies are at a full time step.
@@ -198,22 +185,6 @@ public:
      */
     bool* needToSumEkinhOld();
 
-    /*! \brief set vrescale thermostat
-     *
-     * This allows to set a pointer to the vrescale thermostat used to
-     * print the thermostat integral.
-     * TODO: This should be made obsolete my a more modular energy element
-     */
-    void setVRescaleThermostat(const VRescaleThermostat* vRescaleThermostat);
-
-    /*! \brief set Parrinello-Rahman barostat
-     *
-     * This allows to set a pointer to the Parrinello-Rahman barostat used to
-     * print the box velocities.
-     * TODO: This should be made obsolete my a more modular energy element
-     */
-    void setParrinelloRahmanBarostat(const ParrinelloRahmanBarostat* parrinelloRahmanBarostat);
-
     /*! \brief Initialize energy history
      *
      * Kept as a static function to allow usage from legacy code
@@ -223,7 +194,23 @@ public:
                                         ObservablesHistory* observablesHistory,
                                         EnergyOutput*       energyOutput);
 
+    //! Allow builder to do its job
+    friend class EnergyElementBuilder;
+
 private:
+    //! Constructor
+    EnergyElement(const t_inputrec*        inputrec,
+                  const MDAtoms*           mdAtoms,
+                  gmx_enerdata_t*          enerd,
+                  gmx_ekindata_t*          ekind,
+                  const Constraints*       constr,
+                  FILE*                    fplog,
+                  t_fcdata*                fcd,
+                  const MdModulesNotifier& mdModulesNotifier,
+                  bool                     isMasterRank,
+                  ObservablesHistory*      observablesHistory,
+                  StartingBehavior         startingBehavior);
+
     /*! \brief Setup (needs file pointer)
      *
      * ITrajectoryWriterClient implementation.
@@ -339,6 +326,75 @@ private:
     ObservablesHistory* observablesHistory_;
 };
 
+/*! \libinternal
+ * \ingroup module_modularsimulator
+ * \brief Builder for the energy element
+ */
+class EnergyElementBuilder
+{
+public:
+    //! Constructor, forwarding arguments to EnergyElement constructor
+    template<typename... Args>
+    explicit EnergyElementBuilder(Args&&... args);
+
+    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
+    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
+    //! Set pointer to FreeEnergyPerturbationElement valid throughout the simulation (optional)
+    void setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement);
+    //! Set pointer to TopologyHolder (required)
+    void setTopologyHolder(TopologyHolder* topologyHolder);
+
+    //! Register element with EnergySignaller (required)
+    void registerWithEnergySignaller(SignallerBuilder<EnergySignaller>* signallerBuilder);
+    //! Register element with TrajectoryElement (required)
+    void registerWithTrajectoryElement(TrajectoryElementBuilder* trajectoryElementBuilder);
+
+    //! Register element with CheckpointHelper (required)
+    void registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder);
+
+    /*! \brief Set v-rescale thermostat
+     *
+     * This allows to set a pointer to the vrescale thermostat used to
+     * print the thermostat integral.
+     * TODO: This should be made obsolete by a more modular energy element
+     */
+    void setVRescaleThermostat(const VRescaleThermostat* vRescaleThermostat);
+
+    /*! \brief Set Parrinello-Rahman barostat
+     *
+     * This allows to set a pointer to the Parrinello-Rahman barostat used to
+     * print the box velocities.
+     * TODO: This should be made obsolete by a more modular energy element
+     */
+    void setParrinelloRahmanBarostat(const ParrinelloRahmanBarostat* parrinelloRahmanBarostat);
+
+    //! Get (non-owning) pointer before element is built
+    EnergyElement* getPointer();
+
+    //! Return EnergyElement
+    std::unique_ptr<EnergyElement> build();
+
+    //! Destructor, make sure we didn't connect an element which won't exist anymore
+    ~EnergyElementBuilder();
+
+private:
+    //! The element to be built
+    std::unique_ptr<EnergyElement> energyElement_ = nullptr;
+    //! Whether we have registered the element with the energy signaller
+    bool registeredWithEnergySignaller_ = false;
+    //! Whether we have registered the element with the neighbor search signaller
+    bool registeredWithTrajectoryElement_ = false;
+    //! Whether we have registered the element with the checkpoint helper
+    bool registeredWithCheckpointHelper_ = false;
+};
+
+template<typename... Args>
+EnergyElementBuilder::EnergyElementBuilder(Args&&... args)
+{
+    // NOLINTNEXTLINE(modernize-make-unique): make_unique does not work with private constructor
+    energyElement_ = std::unique_ptr<EnergyElement>(new EnergyElement(std::forward<Args>(args)...));
+}
+
 } // namespace gmx
 
-#endif // GMX_ENERGYELEMENT_MICROSTATE_H
+#endif // GMX_MODULARSIMULATOR_ENERGYELEMENT_H

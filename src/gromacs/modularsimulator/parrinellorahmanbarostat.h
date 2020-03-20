@@ -55,6 +55,7 @@ namespace gmx
 {
 class CheckpointHelperBuilder;
 class EnergyElement;
+class EnergyElementBuilder;
 class MDAtoms;
 class StatePropagatorData;
 
@@ -159,7 +160,7 @@ public:
     //! Set pointer to StatePropagatorData valid throughout the simulation (required)
     void setStatePropagatorData(StatePropagatorData* statePropagatorData);
     //! Set pointer to EnergyElement valid throughout the simulation (required)
-    void setEnergyElement(EnergyElement* energyElement);
+    void setEnergyElementBuilder(EnergyElementBuilder* energyElementBuilder);
 
     //! Register element with CheckpointHelper (required)
     void registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder);

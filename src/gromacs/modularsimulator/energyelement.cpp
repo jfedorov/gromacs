@@ -61,9 +61,12 @@
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/topology/topology.h"
 
+#include "checkpointhelper.h"
 #include "freeenergyperturbationelement.h"
 #include "parrinellorahmanbarostat.h"
+#include "signallers.h"
 #include "statepropagatordata.h"
+#include "trajectoryelement.h"
 #include "vrescalethermostat.h"
 
 struct pull_t;
@@ -73,36 +76,38 @@ namespace gmx
 {
 class Awh;
 
-EnergyElement::EnergyElement(StatePropagatorData*           statePropagatorData,
-                             FreeEnergyPerturbationElement* freeEnergyPerturbationElement,
-                             const gmx_mtop_t*              globalTopology,
-                             const t_inputrec*              inputrec,
-                             const MDAtoms*                 mdAtoms,
-                             gmx_enerdata_t*                enerd,
-                             gmx_ekindata_t*                ekind,
-                             const Constraints*             constr,
-                             FILE*                          fplog,
-                             t_fcdata*                      fcd,
-                             const MdModulesNotifier&       mdModulesNotifier,
-                             bool                           isMasterRank,
-                             ObservablesHistory*            observablesHistory,
-                             StartingBehavior               startingBehavior) :
+EnergyElement::EnergyElement(const t_inputrec*        inputrec,
+                             const MDAtoms*           mdAtoms,
+                             gmx_enerdata_t*          enerd,
+                             gmx_ekindata_t*          ekind,
+                             const Constraints*       constr,
+                             FILE*                    fplog,
+                             t_fcdata*                fcd,
+                             const MdModulesNotifier& mdModulesNotifier,
+                             bool                     isMasterRank,
+                             ObservablesHistory*      observablesHistory,
+                             StartingBehavior         startingBehavior) :
     isMasterRank_(isMasterRank),
     energyWritingStep_(-1),
     energyCalculationStep_(-1),
     freeEnergyCalculationStep_(-1),
+    forceVirial_{ { 0 } },
+    shakeVirial_{ { 0 } },
+    totalVirial_{ { 0 } },
+    pressure_{ { 0 } },
+    muTot_{ 0 },
     forceVirialStep_(-1),
     shakeVirialStep_(-1),
     totalVirialStep_(-1),
     pressureStep_(-1),
     needToSumEkinhOld_(false),
     startingBehavior_(startingBehavior),
-    statePropagatorData_(statePropagatorData),
-    freeEnergyPerturbationElement_(freeEnergyPerturbationElement),
+    statePropagatorData_(nullptr),
+    freeEnergyPerturbationElement_(nullptr),
     vRescaleThermostat_(nullptr),
     parrinelloRahmanBarostat_(nullptr),
     inputrec_(inputrec),
-    top_global_(globalTopology),
+    top_global_(nullptr),
     mdAtoms_(mdAtoms),
     enerd_(enerd),
     ekind_(ekind),
@@ -110,15 +115,9 @@ EnergyElement::EnergyElement(StatePropagatorData*           statePropagatorData,
     fplog_(fplog),
     fcd_(fcd),
     mdModulesNotifier_(mdModulesNotifier),
-    groups_(&globalTopology->groups),
+    groups_(nullptr),
     observablesHistory_(observablesHistory)
 {
-    clear_mat(forceVirial_);
-    clear_mat(shakeVirial_);
-    clear_mat(totalVirial_);
-    clear_mat(pressure_);
-    clear_rvec(muTot_);
-
     if (freeEnergyPerturbationElement_)
     {
         dummyLegacyState_.flags = (1U << estFEPSTATE);
@@ -203,7 +202,7 @@ ITrajectoryWriterCallbackPtr EnergyElement::registerTrajectoryWriterCallback(Tra
     return nullptr;
 }
 
-SignallerCallbackPtr EnergyElement::registerTrajectorySignallerCallback(gmx::TrajectoryEvent event)
+SignallerCallbackPtr EnergyElement::registerTrajectorySignallerCallback(TrajectoryEvent event)
 {
     if (event == TrajectoryEvent::EnergyWritingStep && isMasterRank_)
     {
@@ -422,22 +421,101 @@ void EnergyElement::initializeEnergyHistory(StartingBehavior    startingBehavior
     energyOutput->fillEnergyHistory(observablesHistory->energyHistory.get());
 }
 
-void EnergyElement::setVRescaleThermostat(const gmx::VRescaleThermostat* vRescaleThermostat)
+void EnergyElementBuilder::setVRescaleThermostat(const VRescaleThermostat* vRescaleThermostat)
 {
-    vRescaleThermostat_ = vRescaleThermostat;
-    if (vRescaleThermostat_)
+    GMX_RELEASE_ASSERT(energyElement_,
+                       "Tried to set VRescaleThermostat after EnergyElement was built.");
+    energyElement_->vRescaleThermostat_ = vRescaleThermostat;
+    if (energyElement_->vRescaleThermostat_)
     {
-        dummyLegacyState_.flags |= (1U << estTHERM_INT);
+        energyElement_->dummyLegacyState_.flags |= (1U << estTHERM_INT);
     }
 }
 
-void EnergyElement::setParrinelloRahmanBarostat(const gmx::ParrinelloRahmanBarostat* parrinelloRahmanBarostat)
+void EnergyElementBuilder::setParrinelloRahmanBarostat(const ParrinelloRahmanBarostat* parrinelloRahmanBarostat)
 {
-    parrinelloRahmanBarostat_ = parrinelloRahmanBarostat;
-    if (parrinelloRahmanBarostat_)
+    GMX_RELEASE_ASSERT(energyElement_,
+                       "Tried to set ParrinelloRahmanBarostat after EnergyElement was built.");
+    energyElement_->parrinelloRahmanBarostat_ = parrinelloRahmanBarostat;
+    if (energyElement_->parrinelloRahmanBarostat_)
     {
-        dummyLegacyState_.flags |= (1U << estBOX) | (1U << estBOXV);
+        energyElement_->dummyLegacyState_.flags |= (1U << estBOX) | (1U << estBOXV);
     }
+}
+
+void EnergyElementBuilder::setStatePropagatorData(StatePropagatorData* statePropagatorData)
+{
+    GMX_RELEASE_ASSERT(energyElement_,
+                       "Tried to set StatePropagatorData after EnergyElement was built.");
+    energyElement_->statePropagatorData_ = statePropagatorData;
+}
+
+void EnergyElementBuilder::setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement)
+{
+    GMX_RELEASE_ASSERT(energyElement_,
+                       "Tried to set FreeEnergyPerturbationElement after EnergyElement was built.");
+    energyElement_->freeEnergyPerturbationElement_ = freeEnergyPerturbationElement;
+}
+
+void EnergyElementBuilder::setTopologyHolder(TopologyHolder* topologyHolder)
+{
+    GMX_RELEASE_ASSERT(energyElement_,
+                       "Tried to set TopologyHolder after EnergyElement was built.");
+    energyElement_->top_global_ = &topologyHolder->globalTopology();
+    energyElement_->groups_     = &topologyHolder->globalTopology().groups;
+}
+
+EnergyElement* EnergyElementBuilder::getPointer()
+{
+    GMX_RELEASE_ASSERT(energyElement_, "Called getPointer() without available EnergyElement.");
+    return energyElement_.get();
+}
+
+void EnergyElementBuilder::registerWithEnergySignaller(SignallerBuilder<EnergySignaller>* signallerBuilder)
+{
+    GMX_RELEASE_ASSERT(energyElement_,
+                       "Tried to register to EnergySignaller after EnergyElement was built.");
+    signallerBuilder->registerSignallerClient(compat::make_not_null(energyElement_.get()));
+    registeredWithEnergySignaller_ = true;
+}
+
+void EnergyElementBuilder::registerWithTrajectoryElement(TrajectoryElementBuilder* trajectoryElementBuilder)
+{
+    GMX_RELEASE_ASSERT(energyElement_,
+                       "Tried to register to TrajectoryElement after EnergyElement was built.");
+    trajectoryElementBuilder->registerWriterClient(compat::make_not_null(energyElement_.get()));
+    trajectoryElementBuilder->registerSignallerClient(compat::make_not_null(energyElement_.get()));
+    registeredWithTrajectoryElement_ = true;
+}
+
+void EnergyElementBuilder::registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder)
+{
+    GMX_RELEASE_ASSERT(energyElement_,
+                       "Tried to register to CheckpointHelper after EnergyElement was built.");
+    checkpointHelperBuilder->registerClient(compat::make_not_null(energyElement_.get()));
+    registeredWithCheckpointHelper_ = true;
+}
+
+std::unique_ptr<EnergyElement> EnergyElementBuilder::build()
+{
+    GMX_RELEASE_ASSERT(energyElement_, "Called build() without available EnergyElement.");
+    GMX_RELEASE_ASSERT(energyElement_->statePropagatorData_,
+                       "Tried to build EnergyElement before setting StatePropagatorData.");
+    GMX_RELEASE_ASSERT(energyElement_->top_global_,
+                       "Tried to build EnergyElement before setting TopologyHolder.");
+    GMX_RELEASE_ASSERT(registeredWithEnergySignaller_,
+                       "Tried to build EnergyElement before registering with EnergySignaller.");
+    GMX_RELEASE_ASSERT(registeredWithCheckpointHelper_,
+                       "Tried to build EnergyElement before registering with CheckpointHelper.");
+    GMX_RELEASE_ASSERT(registeredWithTrajectoryElement_,
+                       "Tried to build EnergyElement before registering with TrajectoryElement.");
+    return std::move(energyElement_);
+}
+
+EnergyElementBuilder::~EnergyElementBuilder()
+{
+    // If elements were built, but not consumed, we risk dangling pointers
+    GMX_ASSERT(!energyElement_, "EnergyElement was constructed, but not used.");
 }
 
 } // namespace gmx

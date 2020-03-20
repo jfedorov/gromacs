@@ -54,6 +54,7 @@
 #include "gromacs/utility/fatalerror.h"
 
 #include "checkpointhelper.h"
+#include "energyelement.h"
 
 namespace gmx
 {
@@ -187,13 +188,14 @@ const std::vector<double>& VRescaleThermostat::thermostatIntegral() const
     return thermostatIntegral_;
 }
 
-void VRescaleThermostatBuilder::setEnergyElement(EnergyElement* energyElement)
+void VRescaleThermostatBuilder::setEnergyElementBuilder(EnergyElementBuilder* energyElementBuilder)
 {
     GMX_RELEASE_ASSERT(registrationPossible_,
                        "Tried to set EnergyElement after VRescaleThermostat was built.");
     if (vrThermostat_)
     {
-        vrThermostat_->energyElement_ = energyElement;
+        vrThermostat_->energyElement_ = energyElementBuilder->getPointer();
+        energyElementBuilder->setVRescaleThermostat(vrThermostat_.get());
     }
 }
 

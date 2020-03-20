@@ -43,8 +43,8 @@
 #define GMX_MODULARSIMULATOR_VRESCALETHERMOSTAT_H
 
 #include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/exceptions.h"
 
-#include "energyelement.h"
 #include "modularsimulatorinterfaces.h"
 #include "propagator.h"
 
@@ -53,6 +53,8 @@ struct t_commrec;
 namespace gmx
 {
 class CheckpointHelperBuilder;
+class EnergyElement;
+class EnergyElementBuilder;
 
 /*! \libinternal
  * \ingroup module_modularsimulator
@@ -146,7 +148,7 @@ public:
     explicit VRescaleThermostatBuilder(Args&&... args);
 
     //! Set pointer to EnergyElement valid throughout the simulation (required)
-    void setEnergyElement(EnergyElement* energyElement);
+    void setEnergyElementBuilder(EnergyElementBuilder* energyElementBuilder);
 
     //! Register element with CheckpointHelper (required)
     void registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder);
