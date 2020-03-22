@@ -437,21 +437,18 @@ void Propagator<IntegrationStep::VelocityVerletPositionsAndVelocities>::run()
 }
 
 template<IntegrationStep algorithm>
-Propagator<algorithm>::Propagator(double               timestep,
-                                  StatePropagatorData* statePropagatorData,
-                                  const MDAtoms*       mdAtoms,
-                                  gmx_wallcycle*       wcycle) :
+Propagator<algorithm>::Propagator(double timestep, const MDAtoms* mdAtoms, gmx_wallcycle* wcycle) :
     timestep_(timestep),
-    statePropagatorData_(statePropagatorData),
+    statePropagatorData_(nullptr),
     doSingleVelocityScaling(false),
     doGroupVelocityScaling(false),
     scalingStepVelocity_(-1),
+    diagPR{ 0 },
+    matrixPR{ { 0 } },
     scalingStepPR_(-1),
     mdAtoms_(mdAtoms),
     wcycle_(wcycle)
 {
-    clear_rvec(diagPR);
-    clear_mat(matrixPR);
 }
 
 template<IntegrationStep algorithm>
@@ -512,64 +509,103 @@ void Propagator<algorithm>::scheduleTask(Step gmx_unused step,
 }
 
 template<IntegrationStep algorithm>
-void Propagator<algorithm>::setNumVelocityScalingVariables(int numVelocityScalingVariables)
+void PropagatorBuilder<algorithm>::setNumVelocityScalingVariables(int numVelocityScalingVariables)
 {
+    GMX_RELEASE_ASSERT(propagator_,
+                       "Tried to set number of scaling variables after Propagator was built.");
     if (algorithm == IntegrationStep::PositionsOnly)
     {
         gmx_fatal(FARGS, "Velocity scaling not implemented for IntegrationStep::PositionsOnly.");
     }
-    GMX_ASSERT(velocityScaling_.empty(),
-               "Number of velocity scaling variables cannot be changed once set.");
+    GMX_RELEASE_ASSERT(propagator_->velocityScaling_.empty(),
+                       "Number of velocity scaling variables cannot be changed once set.");
 
-    velocityScaling_.resize(numVelocityScalingVariables, 1.);
-    doSingleVelocityScaling = numVelocityScalingVariables == 1;
-    doGroupVelocityScaling  = numVelocityScalingVariables > 1;
+    propagator_->velocityScaling_.resize(numVelocityScalingVariables, 1.);
+    propagator_->doSingleVelocityScaling = (numVelocityScalingVariables == 1);
+    propagator_->doGroupVelocityScaling  = (numVelocityScalingVariables > 1);
 }
 
 template<IntegrationStep algorithm>
-ArrayRef<real> Propagator<algorithm>::viewOnVelocityScaling()
+ArrayRef<real> PropagatorBuilder<algorithm>::viewOnVelocityScaling()
 {
+    GMX_RELEASE_ASSERT(propagator_,
+                       "Tried to get view on velocity scaling after Propagator was built.");
     if (algorithm == IntegrationStep::PositionsOnly)
     {
         gmx_fatal(FARGS, "Velocity scaling not implemented for IntegrationStep::PositionsOnly.");
     }
-    GMX_ASSERT(!velocityScaling_.empty(), "Number of velocity scaling variables not set.");
+    GMX_RELEASE_ASSERT(!propagator_->velocityScaling_.empty(),
+                       "Number of velocity scaling variables not set.");
 
-    return velocityScaling_;
+    return propagator_->velocityScaling_;
 }
 
 template<IntegrationStep algorithm>
-std::unique_ptr<std::function<void(Step)>> Propagator<algorithm>::velocityScalingCallback()
+std::unique_ptr<std::function<void(Step)>> PropagatorBuilder<algorithm>::velocityScalingCallback()
 {
+    GMX_RELEASE_ASSERT(propagator_,
+                       "Tried to get velocity scaling callback after Propagator was built.");
     if (algorithm == IntegrationStep::PositionsOnly)
     {
         gmx_fatal(FARGS, "Velocity scaling not implemented for IntegrationStep::PositionsOnly.");
     }
 
-    return std::make_unique<PropagatorCallback>([this](Step step) { scalingStepVelocity_ = step; });
+    auto elementPtr = propagator_.get();
+    return std::make_unique<PropagatorCallback>(
+            [elementPtr](Step step) { elementPtr->scalingStepVelocity_ = step; });
 }
 
 template<IntegrationStep algorithm>
-ArrayRef<rvec> Propagator<algorithm>::viewOnPRScalingMatrix()
+ArrayRef<rvec> PropagatorBuilder<algorithm>::viewOnPRScalingMatrix()
 {
+    GMX_RELEASE_ASSERT(
+            propagator_,
+            "Tried to get view on Parrinello-Rahman scaling after Propagator was built.");
     GMX_RELEASE_ASSERT(
             algorithm != IntegrationStep::PositionsOnly,
             "Parrinello-Rahman scaling not implemented for IntegrationStep::PositionsOnly.");
 
-    clear_mat(matrixPR);
+    clear_mat(propagator_->matrixPR);
     // gcc-5 needs this to be explicit (all other tested compilers would be ok
-    // with simply returning matrixPR)
-    return ArrayRef<rvec>(matrixPR);
+    // with simply returning element_->matrixPR)
+    return ArrayRef<rvec>(propagator_->matrixPR);
 }
 
 template<IntegrationStep algorithm>
-PropagatorCallbackPtr Propagator<algorithm>::prScalingCallback()
+PropagatorCallbackPtr PropagatorBuilder<algorithm>::prScalingCallback()
 {
+    GMX_RELEASE_ASSERT(propagator_,
+                       "Tried to get Parrinello-Rahman callback after Propagator was built.");
     GMX_RELEASE_ASSERT(
             algorithm != IntegrationStep::PositionsOnly,
             "Parrinello-Rahman scaling not implemented for IntegrationStep::PositionsOnly.");
 
-    return std::make_unique<PropagatorCallback>([this](Step step) { scalingStepPR_ = step; });
+    auto elementPtr = propagator_.get();
+    return std::make_unique<PropagatorCallback>(
+            [elementPtr](Step step) { elementPtr->scalingStepPR_ = step; });
+}
+
+template<IntegrationStep algorithm>
+void PropagatorBuilder<algorithm>::setStatePropagatorData(StatePropagatorData* statePropagatorData)
+{
+    GMX_RELEASE_ASSERT(propagator_, "Tried to set StatePropagatorData after Propagator was built.");
+    propagator_->statePropagatorData_ = statePropagatorData;
+}
+
+template<IntegrationStep algorithm>
+std::unique_ptr<Propagator<algorithm>> PropagatorBuilder<algorithm>::build()
+{
+    GMX_RELEASE_ASSERT(propagator_, "Called build() without available Propagator.");
+    GMX_RELEASE_ASSERT(propagator_->statePropagatorData_,
+                       "Tried to build Propagator before setting StatePropagatorData.");
+    return std::move(propagator_);
+}
+
+template<IntegrationStep algorithm>
+PropagatorBuilder<algorithm>::~PropagatorBuilder()
+{
+    // If the propagator was built, but not consumed, we risk dangling pointers
+    GMX_RELEASE_ASSERT(!propagator_, "Propagator was constructed, but not used.");
 }
 
 //! Explicit template initialization
@@ -578,6 +614,10 @@ template class Propagator<IntegrationStep::PositionsOnly>;
 template class Propagator<IntegrationStep::VelocitiesOnly>;
 template class Propagator<IntegrationStep::LeapFrog>;
 template class Propagator<IntegrationStep::VelocityVerletPositionsAndVelocities>;
+template class PropagatorBuilder<IntegrationStep::PositionsOnly>;
+template class PropagatorBuilder<IntegrationStep::VelocitiesOnly>;
+template class PropagatorBuilder<IntegrationStep::LeapFrog>;
+template class PropagatorBuilder<IntegrationStep::VelocityVerletPositionsAndVelocities>;
 //! @}
 
 } // namespace gmx

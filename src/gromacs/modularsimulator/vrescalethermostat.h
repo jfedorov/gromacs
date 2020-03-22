@@ -153,7 +153,7 @@ public:
 
     //! Set propagator
     template<IntegrationStep integrationStep>
-    void setPropagator(Propagator<integrationStep>* propagator);
+    void setPropagatorBuilder(PropagatorBuilder<integrationStep>* propagatorBuilder);
 
     /*! \brief Return VRescaleThermostat
      *
@@ -195,7 +195,7 @@ VRescaleThermostatBuilder::VRescaleThermostatBuilder(Args&&... args)
 }
 
 template<IntegrationStep integrationStep>
-void VRescaleThermostatBuilder::setPropagator(Propagator<integrationStep>* propagator)
+void VRescaleThermostatBuilder::setPropagatorBuilder(PropagatorBuilder<integrationStep>* propagatorBuilder)
 {
 
     GMX_RELEASE_ASSERT(registrationPossible_,
@@ -206,9 +206,9 @@ void VRescaleThermostatBuilder::setPropagator(Propagator<integrationStep>* propa
     {
         // TODO: With increased complexity of the propagator, this will need further development,
         //       e.g. using propagators templated for velocity propagation policies
-        propagator->setNumVelocityScalingVariables(vrThermostat_->numTemperatureGroups_);
-        vrThermostat_->lambda_             = propagator->viewOnVelocityScaling();
-        vrThermostat_->propagatorCallback_ = propagator->velocityScalingCallback();
+        propagatorBuilder->setNumVelocityScalingVariables(vrThermostat_->numTemperatureGroups_);
+        vrThermostat_->lambda_             = propagatorBuilder->viewOnVelocityScaling();
+        vrThermostat_->propagatorCallback_ = propagatorBuilder->velocityScalingCallback();
     }
     registeredWithPropagator_ = true;
 }

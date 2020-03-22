@@ -166,7 +166,7 @@ public:
 
     //! Set propagator
     template<IntegrationStep integrationStep>
-    void setPropagator(Propagator<integrationStep>* propagator);
+    void setPropagatorBuilder(PropagatorBuilder<integrationStep>* propagatorBuilder);
 
     /*! \brief Return ParrinelloRahmanBarostat
      *
@@ -207,7 +207,7 @@ ParrinelloRahmanBarostatBuilder::ParrinelloRahmanBarostatBuilder(Args&&... args)
 }
 
 template<IntegrationStep integrationStep>
-void ParrinelloRahmanBarostatBuilder::setPropagator(Propagator<integrationStep>* propagator)
+void ParrinelloRahmanBarostatBuilder::setPropagatorBuilder(PropagatorBuilder<integrationStep>* propagatorBuilder)
 {
     GMX_RELEASE_ASSERT(registrationPossible_,
                        "Tried to set propagator after Parrinello-Rahman barostat was built.");
@@ -216,8 +216,8 @@ void ParrinelloRahmanBarostatBuilder::setPropagator(Propagator<integrationStep>*
 
     if (prBarostat_)
     {
-        prBarostat_->scalingTensor_      = propagator->viewOnPRScalingMatrix();
-        prBarostat_->propagatorCallback_ = propagator->prScalingCallback();
+        prBarostat_->scalingTensor_      = propagatorBuilder->viewOnPRScalingMatrix();
+        prBarostat_->propagatorCallback_ = propagatorBuilder->prScalingCallback();
     }
     registeredWithPropagator_ = true;
 }

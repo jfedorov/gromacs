@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -100,6 +100,10 @@ enum class ParrinelloRahmanVelocityScaling
     Count
 };
 
+
+template<IntegrationStep algorithm>
+class PropagatorBuilder;
+
 //! Generic callback to the propagator
 typedef std::function<void(Step)> PropagatorCallback;
 //! Pointer to generic callback to the propagator
@@ -114,21 +118,12 @@ typedef std::unique_ptr<PropagatorCallback> PropagatorCallbackPtr;
  * functions allows to have performance comparable to fused update elements
  * while keeping easily re-orderable single instructions.
  *
- * \todo: Get rid of updateVelocities2() once we don't require identical
- *        reproduction of do_md() results.
- *
- * @tparam algorithm  The integration types
+ * @tparam algorithm  The integration type
  */
 template<IntegrationStep algorithm>
 class Propagator final : public ISimulatorElement
 {
 public:
-    //! Constructor
-    Propagator(double               timestep,
-               StatePropagatorData* statePropagatorData,
-               const MDAtoms*       mdAtoms,
-               gmx_wallcycle*       wcycle);
-
     /*! \brief Register run function for step / time
      *
      * @param step                 The step number
@@ -142,19 +137,13 @@ public:
     //! No element teardown needed
     void elementTeardown() override {}
 
-    //! Set the number of velocity scaling variables
-    void setNumVelocityScalingVariables(int numVelocityScalingVariables);
-    //! Get view on the velocity scaling vector
-    ArrayRef<real> viewOnVelocityScaling();
-    //! Get velocity scaling callback
-    PropagatorCallbackPtr velocityScalingCallback();
-
-    //! Get view on the full PR scaling matrix
-    ArrayRef<rvec> viewOnPRScalingMatrix();
-    //! Get PR scaling callback
-    PropagatorCallbackPtr prScalingCallback();
+    //! Allow builder to do its job
+    friend class PropagatorBuilder<algorithm>;
 
 private:
+    //! Constructor
+    Propagator(double timestep, const MDAtoms* mdAtoms, gmx_wallcycle* wcycle);
+
     //! The actual propagation
     template<NumVelocityScalingValues numVelocityScalingValues, ParrinelloRahmanVelocityScaling parrinelloRahmanVelocityScaling>
     void run();
@@ -187,6 +176,55 @@ private:
     //! Manages wall cycle accounting.
     gmx_wallcycle* wcycle_;
 };
+
+/*! \libinternal
+ * \ingroup module_modularsimulator
+ * \brief Builder for the propagator element
+ *
+ * @tparam algorithm  The integration type
+ */
+template<IntegrationStep algorithm>
+class PropagatorBuilder
+{
+public:
+    //! Constructor, forwarding arguments to Propagator constructor
+    template<typename... Args>
+    explicit PropagatorBuilder(Args&&... args);
+
+    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
+    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
+
+    //! Set the number of velocity scaling variables
+    void setNumVelocityScalingVariables(int numVelocityScalingVariables);
+    //! Get view on the velocity scaling vector
+    ArrayRef<real> viewOnVelocityScaling();
+    //! Get velocity scaling callback
+    PropagatorCallbackPtr velocityScalingCallback();
+
+    //! Get view on the full PR scaling matrix
+    ArrayRef<rvec> viewOnPRScalingMatrix();
+    //! Get PR scaling callback
+    PropagatorCallbackPtr prScalingCallback();
+
+    //! Return Propagator
+    std::unique_ptr<Propagator<algorithm>> build();
+
+    //! Destructor, make sure we didn't connect an element which won't exist anymore
+    ~PropagatorBuilder();
+
+private:
+    //! The element to be built
+    std::unique_ptr<Propagator<algorithm>> propagator_ = nullptr;
+};
+
+template<IntegrationStep algorithm>
+template<typename... Args>
+PropagatorBuilder<algorithm>::PropagatorBuilder(Args&&... args)
+{
+    // NOLINTNEXTLINE(modernize-make-unique): make_unique does not work with private constructor
+    propagator_ = std::unique_ptr<Propagator<algorithm>>(
+            new Propagator<algorithm>(std::forward<Args>(args)...));
+}
 
 //! \}
 } // namespace gmx

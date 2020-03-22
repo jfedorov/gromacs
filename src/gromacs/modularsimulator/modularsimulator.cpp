@@ -620,10 +620,10 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
 
     if (inputrec->eI == eiMD)
     {
-        auto propagator = std::make_unique<Propagator<IntegrationStep::LeapFrog>>(
-                inputrec->delta_t, statePropagatorDataPtr, mdAtoms, wcycle);
-        parrinelloRahmanBarostatBuilder.setPropagator(propagator.get());
-        vRescaleThermostatBuilder.setPropagator(propagator.get());
+        PropagatorBuilder<IntegrationStep::LeapFrog> propagatorBuilder(inputrec->delta_t, mdAtoms, wcycle);
+        propagatorBuilder.setStatePropagatorData(statePropagatorDataPtr);
+        parrinelloRahmanBarostatBuilder.setPropagatorBuilder(&propagatorBuilder);
+        vRescaleThermostatBuilder.setPropagatorBuilder(&propagatorBuilder);
 
         addToCallListAndMove(forceElementBuilder.build(), elementCallList, elementsOwnershipList);
         addToCallList(statePropagatorDataPtr, elementCallList); // we have a full microstate at time t here!
@@ -632,7 +632,7 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
         energyElementPtr->setVRescaleThermostat(thermostat.get());
         addToCallListAndMove(std::move(thermostat), elementCallList, elementsOwnershipList);
 
-        addToCallListAndMove(std::move(propagator), elementCallList, elementsOwnershipList);
+        addToCallListAndMove(propagatorBuilder.build(), elementCallList, elementsOwnershipList);
 
         addToCallListAndMove(constraintsElementBuilder.build<ConstraintVariable::Positions>(),
                              elementCallList, elementsOwnershipList);
@@ -647,17 +647,19 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
     }
     else if (inputrec->eI == eiVV)
     {
-        auto propagatorVelocities = std::make_unique<Propagator<IntegrationStep::VelocitiesOnly>>(
-                inputrec->delta_t * 0.5, statePropagatorDataPtr, mdAtoms, wcycle);
-        auto propagatorVelocitiesAndPositions =
-                std::make_unique<Propagator<IntegrationStep::VelocityVerletPositionsAndVelocities>>(
-                        inputrec->delta_t, statePropagatorDataPtr, mdAtoms, wcycle);
-        parrinelloRahmanBarostatBuilder.setPropagator(propagatorVelocities.get());
-        vRescaleThermostatBuilder.setPropagator(propagatorVelocitiesAndPositions.get());
+        PropagatorBuilder<IntegrationStep::VelocitiesOnly> velocityPropagatorBuilder(
+                inputrec->delta_t * 0.5, mdAtoms, wcycle);
+        velocityPropagatorBuilder.setStatePropagatorData(statePropagatorDataPtr);
+        parrinelloRahmanBarostatBuilder.setPropagatorBuilder(&velocityPropagatorBuilder);
+
+        PropagatorBuilder<IntegrationStep::VelocityVerletPositionsAndVelocities> velocityAndPositionPropagatorBuilder(
+                inputrec->delta_t, mdAtoms, wcycle);
+        velocityAndPositionPropagatorBuilder.setStatePropagatorData(statePropagatorDataPtr);
+        vRescaleThermostatBuilder.setPropagatorBuilder(&velocityAndPositionPropagatorBuilder);
 
         addToCallListAndMove(forceElementBuilder.build(), elementCallList, elementsOwnershipList);
 
-        addToCallListAndMove(std::move(propagatorVelocities), elementCallList, elementsOwnershipList);
+        addToCallListAndMove(velocityPropagatorBuilder.build(), elementCallList, elementsOwnershipList);
 
         addToCallListAndMove(constraintsElementBuilder.build<ConstraintVariable::Velocities>(),
                              elementCallList, elementsOwnershipList);
@@ -671,7 +673,7 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
         energyElementPtr->setVRescaleThermostat(thermostat.get());
         addToCallListAndMove(std::move(thermostat), elementCallList, elementsOwnershipList);
 
-        addToCallListAndMove(std::move(propagatorVelocitiesAndPositions), elementCallList,
+        addToCallListAndMove(velocityAndPositionPropagatorBuilder.build(), elementCallList,
                              elementsOwnershipList);
 
         addToCallListAndMove(constraintsElementBuilder.build<ConstraintVariable::Positions>(),
