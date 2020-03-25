@@ -359,7 +359,7 @@ void gpu_pme_loadbal_update_param(const nonbonded_verlet_t* nbv, const interacti
 
     GMX_RELEASE_ASSERT(ic->coulombEwaldTables, "Need valid Coulomb Ewald correction tables");
     init_ewald_coulomb_force_table(*ic->coulombEwaldTables, nbp, *nb->deviceContext_,
-                                   nb->deviceStreams[InteractionLocality::Local]);
+                                   *nb->deviceStreams[InteractionLocality::Local]);
 }
 
 /*! Initializes the pair list data structure. */
@@ -417,7 +417,7 @@ static void cuda_init_const(NbnxmGpu*                       nb,
 {
     init_atomdata_first(nb->atdat, nbatParams.numTypes);
     init_nbparam(nb->nbparam, ic, listParams, nbatParams, *nb->deviceContext_,
-                 nb->deviceStreams[InteractionLocality::Local]);
+                 *nb->deviceStreams[InteractionLocality::Local]);
 
     /* clear energy and shift force outputs */
     nbnxn_cuda_clear_e_fshift(nb);
