@@ -52,6 +52,7 @@
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/nbnxm/nbnxm.h"
 
+#include "signallers.h"
 #include "statepropagatordata.h"
 
 namespace gmx
@@ -64,19 +65,18 @@ bool PmeLoadBalanceHelper::doPmeLoadBalancing(const MdrunOptions& mdrunOptions,
             && inputrec->cutoff_scheme != ecutsGROUP);
 }
 
-PmeLoadBalanceHelper::PmeLoadBalanceHelper(bool                 isVerbose,
-                                           StatePropagatorData* statePropagatorData,
-                                           FILE*                fplog,
-                                           t_commrec*           cr,
-                                           const MDLogger&      mdlog,
-                                           const t_inputrec*    inputrec,
-                                           gmx_wallcycle*       wcycle,
-                                           t_forcerec*          fr) :
+PmeLoadBalanceHelper::PmeLoadBalanceHelper(const MdrunOptions& mdrunOptions,
+                                           FILE*               fplog,
+                                           t_commrec*          cr,
+                                           const MDLogger&     mdlog,
+                                           const t_inputrec*   inputrec,
+                                           gmx_wallcycle*      wcycle,
+                                           t_forcerec*         fr) :
     pme_loadbal_(nullptr),
     nextNSStep_(-1),
-    isVerbose_(isVerbose),
+    isVerbose_(mdrunOptions.verbose),
     bPMETunePrinting_(false),
-    statePropagatorData_(statePropagatorData),
+    statePropagatorData_(nullptr),
     fplog_(fplog),
     cr_(cr),
     mdlog_(mdlog),
@@ -84,6 +84,10 @@ PmeLoadBalanceHelper::PmeLoadBalanceHelper(bool                 isVerbose,
     wcycle_(wcycle),
     fr_(fr)
 {
+    if (!doPmeLoadBalancing(mdrunOptions, inputrec, fr))
+    {
+        GMX_THROW(ElementNotNeededException("PME load balancing not active."));
+    }
 }
 
 void PmeLoadBalanceHelper::setup()
@@ -130,6 +134,52 @@ SignallerCallbackPtr PmeLoadBalanceHelper::registerNSCallback()
 {
     return std::make_unique<SignallerCallback>(
             [this](Step step, Time gmx_unused time) { nextNSStep_ = step; });
+}
+
+void PmeLoadBalanceHelperBuilder::setStatePropagatorData(StatePropagatorData* statePropagatorData)
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Tried to set StatePropagatorData without available PmeLoadBalanceHelper.");
+    if (pmeLoadBalanceHelper_)
+    {
+        pmeLoadBalanceHelper_->statePropagatorData_ = statePropagatorData;
+    }
+}
+
+void PmeLoadBalanceHelperBuilder::registerWithNeighborSearchSignaller(
+        SignallerBuilder<NeighborSearchSignaller>* signallerBuilder)
+{
+    GMX_RELEASE_ASSERT(
+            registrationPossible_,
+            "Tried to set NeighborSearchSignaller after PmeLoadBalanceHelper was built.");
+    if (pmeLoadBalanceHelper_)
+    {
+        signallerBuilder->registerSignallerClient(compat::make_not_null(pmeLoadBalanceHelper_.get()));
+    }
+    registeredWithNeighborSearchSignaller_ = true;
+}
+
+std::unique_ptr<PmeLoadBalanceHelper> PmeLoadBalanceHelperBuilder::build()
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Called build() without available PmeLoadBalanceHelper.");
+    if (pmeLoadBalanceHelper_)
+    {
+        GMX_RELEASE_ASSERT(
+                pmeLoadBalanceHelper_->statePropagatorData_,
+                "Tried to build PmeLoadBalanceHelper before setting StatePropagatorData.");
+        GMX_RELEASE_ASSERT(
+                registeredWithNeighborSearchSignaller_,
+                "Tried to build PmeLoadBalanceHelper before registering with LoggingSignaller.");
+    }
+    registrationPossible_ = false;
+    return std::move(pmeLoadBalanceHelper_);
+}
+
+PmeLoadBalanceHelperBuilder::~PmeLoadBalanceHelperBuilder()
+{
+    // If the helper was built, but not consumed, we risk dangling pointers
+    GMX_ASSERT(!pmeLoadBalanceHelper_, "PmeLoadBalanceHelper was constructed, but not used.");
 }
 
 } // namespace gmx

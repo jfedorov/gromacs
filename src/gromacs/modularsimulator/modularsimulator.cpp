@@ -386,6 +386,10 @@ void ModularSimulator::constructElementsAndSignallers()
                                               mdModulesNotifier, MASTER(cr), observablesHistory,
                                               startingBehavior);
 
+    // PME load balance helper builder
+    PmeLoadBalanceHelperBuilder pmeLoadBalanceHelperBuilder(mdrunOptions, fplog, cr, mdlog,
+                                                            inputrec, wcycle, fr);
+
     /*
      * Connect simulator builders
      */
@@ -397,6 +401,10 @@ void ModularSimulator::constructElementsAndSignallers()
 
     // Checkpoint helper
     checkpointHelperBuilder.registerWithLastStepSignaller(&lastStepSignallerBuilder);
+
+    // PME load balance helper
+    pmeLoadBalanceHelperBuilder.registerWithNeighborSearchSignaller(&neighborSearchSignallerBuilder);
+
     /*
      * Build data structures
      */
@@ -421,6 +429,8 @@ void ModularSimulator::constructElementsAndSignallers()
 
     energyElementBuilder.setStatePropagatorData(statePropagatorDataPtr);
     energyElementBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementPtr);
+
+    pmeLoadBalanceHelperBuilder.setStatePropagatorData(statePropagatorDataPtr);
 
     /*
      * Build stop handler
@@ -458,13 +468,7 @@ void ModularSimulator::constructElementsAndSignallers()
      * Build infrastructure elements
      */
 
-    if (PmeLoadBalanceHelper::doPmeLoadBalancing(mdrunOptions, inputrec, fr))
-    {
-        pmeLoadBalanceHelper_ = std::make_unique<PmeLoadBalanceHelper>(
-                mdrunOptions.verbose, statePropagatorDataPtr, fplog, cr, mdlog, inputrec, wcycle, fr);
-        neighborSearchSignallerBuilder.registerSignallerClient(
-                compat::make_not_null(pmeLoadBalanceHelper_.get()));
-    }
+    pmeLoadBalanceHelper_ = pmeLoadBalanceHelperBuilder.build();
 
     if (DOMAINDECOMP(cr))
     {

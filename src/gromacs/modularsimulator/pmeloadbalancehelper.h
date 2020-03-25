@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -42,6 +42,8 @@
 #ifndef GMX_MODULARSIMULATOR_PMELOADBALANCEHELPER_H
 #define GMX_MODULARSIMULATOR_PMELOADBALANCEHELPER_H
 
+#include "gromacs/utility/exceptions.h"
+
 #include "modularsimulatorinterfaces.h"
 
 struct gmx_wallcycle;
@@ -72,16 +74,6 @@ class StatePropagatorData;
 class PmeLoadBalanceHelper final : public INeighborSearchSignallerClient
 {
 public:
-    //! Constructor
-    PmeLoadBalanceHelper(bool                 isVerbose,
-                         StatePropagatorData* statePropagatorData,
-                         FILE*                fplog,
-                         t_commrec*           cr,
-                         const MDLogger&      mdlog,
-                         const t_inputrec*    inputrec,
-                         gmx_wallcycle*       wcycle,
-                         t_forcerec*          fr);
-
     //! Initialize the load balancing object
     void setup();
     //! Do load balancing
@@ -99,7 +91,19 @@ public:
     //! Direct access to the load balancing object - used by reset counter
     const pme_load_balancing_t* loadBalancingObject();
 
+    //! Allow builder to do its job
+    friend class PmeLoadBalanceHelperBuilder;
+
 private:
+    //! Constructor
+    PmeLoadBalanceHelper(const MdrunOptions& mdrunOptions,
+                         FILE*               fplog,
+                         t_commrec*          cr,
+                         const MDLogger&     mdlog,
+                         const t_inputrec*   inputrec,
+                         gmx_wallcycle*      wcycle,
+                         t_forcerec*         fr);
+
     //! The PME load balancing object - used by reset counter
     pme_load_balancing_t* pme_loadbal_;
 
@@ -130,6 +134,56 @@ private:
     //! Parameters for force calculations.
     t_forcerec* fr_;
 };
+
+/*! \libinternal
+ * \ingroup module_modularsimulator
+ * \brief Builder for the PME load balance helper
+ */
+class PmeLoadBalanceHelperBuilder
+{
+public:
+    //! Constructor, forwarding arguments to PmeLoadBalanceHelper constructor
+    template<typename... Args>
+    explicit PmeLoadBalanceHelperBuilder(Args&&... args);
+
+    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
+    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
+
+    //! Register element with NeighborSearchSignaller (required)
+    void registerWithNeighborSearchSignaller(SignallerBuilder<NeighborSearchSignaller>* signallerBuilder);
+
+    //! Return PmeLoadBalanceHelper
+    std::unique_ptr<PmeLoadBalanceHelper> build();
+
+    //! Destructor, make sure we didn't connect an element which won't exist anymore
+    ~PmeLoadBalanceHelperBuilder();
+
+private:
+    //! The element to be built
+    std::unique_ptr<PmeLoadBalanceHelper> pmeLoadBalanceHelper_ = nullptr;
+    //! Whether we allow registration
+    bool registrationPossible_ = false;
+    //! Whether we have registered the element with the neighbor search signaller
+    bool registeredWithNeighborSearchSignaller_ = false;
+};
+
+template<typename... Args>
+PmeLoadBalanceHelperBuilder::PmeLoadBalanceHelperBuilder(Args&&... args)
+{
+    try
+    {
+        pmeLoadBalanceHelper_ =
+                // NOLINTNEXTLINE(modernize-make-unique): make_unique does not work with private constructor
+                std::unique_ptr<PmeLoadBalanceHelper>(new PmeLoadBalanceHelper(std::forward<Args>(args)...));
+    }
+    catch (ElementNotNeededException&)
+    {
+        pmeLoadBalanceHelper_ = nullptr;
+    }
+    // Element being nullptr is a valid state, nullptr (element is not built)
+    // needs to be handled by the caller of build().
+    registrationPossible_ = true;
+}
 
 } // namespace gmx
 
