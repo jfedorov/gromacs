@@ -582,7 +582,7 @@ void gpu_upload_shiftvec(NbnxmGpu* nb, const nbnxn_atomdata_t* nbatom)
     /* only if we have a dynamic box */
     if (nbatom->bDynamicBox || !adat->bShiftVecUploaded)
     {
-        static_assert(sizeof(*adat->shift_vec) == sizeof(*nbatom->shift_vec.data()),
+        static_assert(sizeof(adat->shift_vec[0]) == sizeof(nbatom->shift_vec[0]),
                       "Sizes of host- and device-side shift vectors should be the same.");
         copyToDeviceBuffer(&adat->shift_vec, reinterpret_cast<const float3*>(nbatom->shift_vec.data()),
                            0, SHIFTS, deviceStream, GpuApiCallBehavior::Async, nullptr);
@@ -691,7 +691,7 @@ void gpu_init_atomdata(NbnxmGpu* nb, const nbnxn_atomdata_t* nbat)
 
     if (useLjCombRule(nb->nbparam))
     {
-        static_assert(sizeof(*d_atdat->lj_comb) == sizeof(float2),
+        static_assert(sizeof(d_atdat->lj_comb[0]) == sizeof(float2),
                       "Size of the LJ parameters element should be equal to the size of float2.");
         copyToDeviceBuffer(&d_atdat->lj_comb,
                            reinterpret_cast<const float2*>(nbat->params().lj_comb.data()), 0,
@@ -699,7 +699,7 @@ void gpu_init_atomdata(NbnxmGpu* nb, const nbnxn_atomdata_t* nbat)
     }
     else
     {
-        static_assert(sizeof(*d_atdat->atom_types) == sizeof(*nbat->params().type.data()),
+        static_assert(sizeof(d_atdat->atom_types[0]) == sizeof(nbat->params().type[0]),
                       "Sizes of host- and device-side atom types should be the same.");
         copyToDeviceBuffer(&d_atdat->atom_types, nbat->params().type.data(), 0, natoms,
                            deviceStream, GpuApiCallBehavior::Async, nullptr);

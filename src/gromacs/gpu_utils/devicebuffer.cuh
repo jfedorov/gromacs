@@ -91,8 +91,8 @@ void freeDeviceBuffer(DeviceBuffer* buffer)
 /*! \brief
  * Performs the host-to-device data copy, synchronous or asynchronously on request.
  *
- * Note that synchronous copy will not synchronize the stream in case of zero \p numValues
- * because of the early return.
+ * Note that because of the early return in case of zero \p numValues one can not expect completion of
+ * all commands issued to the \p deviceStream before this copy even when synchronous copy type was requested.
  *
  * \tparam        ValueType            Raw value type of the \p buffer.
  * \param[in,out] buffer               Pointer to the device-side buffer
@@ -115,7 +115,7 @@ void copyToDeviceBuffer(DeviceBuffer<ValueType>* buffer,
 {
     if (numValues == 0)
     {
-        return; // Such calls are actually made with empty domains.
+        return; // such calls are actually made with empty domains.
     }
     GMX_ASSERT(buffer, "needs a buffer pointer");
     GMX_ASSERT(hostBuffer, "needs a host buffer pointer");
@@ -146,8 +146,8 @@ void copyToDeviceBuffer(DeviceBuffer<ValueType>* buffer,
 /*! \brief
  * Performs the device-to-host data copy, synchronous or asynchronously on request.
  *
- * Note that synchronous copy will not synchronize the stream in case of zero \p numValues
- * because of the early return.
+ * Note that because of the early return in case of zero \p numValues one can not expect completion of
+ * all commands issued to the \p deviceStream before this copy even when synchronous copy type was requested.
  *
  * \tparam        ValueType            Raw value type of the \p buffer.
  * \param[in,out] hostBuffer           Pointer to the raw host-side memory, also typed \p ValueType

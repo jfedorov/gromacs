@@ -444,7 +444,7 @@ void gpu_copy_xq_to_gpu(NbnxmGpu* nb, const nbnxn_atomdata_t* nbatom, const Atom
         t->xf[atomLocality].nb_h2d.openTimingRegion(deviceStream);
     }
 
-    static_assert(sizeof(*adat->xq) == sizeof(float4),
+    static_assert(sizeof(adat->xq[0]) == sizeof(float4),
                   "The size of the xyzq buffer element should be equal to the size of float4.");
     copyToDeviceBuffer(&adat->xq, reinterpret_cast<const float4*>(nbatom->x().data()) + adat_begin,
                        adat_begin, adat_len, deviceStream, GpuApiCallBehavior::Async, nullptr);
@@ -763,7 +763,7 @@ void gpu_launch_cpyback(NbnxmGpu*                nb,
     if (!stepWork.useGpuFBufferOps)
     {
         static_assert(
-                sizeof(*adat->f) == sizeof(float3),
+                sizeof(adat->f[0]) == sizeof(float3),
                 "The size of the force buffer element should be equal to the size of float3.");
         copyFromDeviceBuffer(reinterpret_cast<float3*>(nbatom->out[0].f.data()) + adat_begin, &adat->f,
                              adat_begin, adat_len, deviceStream, GpuApiCallBehavior::Async, nullptr);
@@ -785,7 +785,7 @@ void gpu_launch_cpyback(NbnxmGpu*                nb,
         /* DtoH fshift when virial is needed */
         if (stepWork.computeVirial)
         {
-            static_assert(sizeof(*nb->nbst.fshift) == sizeof(*adat->fshift),
+            static_assert(sizeof(nb->nbst.fshift[0]) == sizeof(adat->fshift[0]),
                           "Sizes of host- and device-side shift vectors should be the same.");
             copyFromDeviceBuffer(nb->nbst.fshift, &adat->fshift, 0, SHIFTS, deviceStream,
                                  GpuApiCallBehavior::Async, nullptr);
@@ -794,11 +794,11 @@ void gpu_launch_cpyback(NbnxmGpu*                nb,
         /* DtoH energies */
         if (stepWork.computeEnergy)
         {
-            static_assert(sizeof(*nb->nbst.e_lj) == sizeof(*adat->e_lj),
+            static_assert(sizeof(nb->nbst.e_lj[0]) == sizeof(adat->e_lj[0]),
                           "Sizes of host- and device-side LJ energy terms should be the same.");
             copyFromDeviceBuffer(nb->nbst.e_lj, &adat->e_lj, 0, 1, deviceStream,
                                  GpuApiCallBehavior::Async, nullptr);
-            static_assert(sizeof(*nb->nbst.e_el) == sizeof(*adat->e_el),
+            static_assert(sizeof(nb->nbst.e_el[0]) == sizeof(adat->e_el[0]),
                           "Sizes of host- and device-side electrostatic energy terms should be the "
                           "same.");
             copyFromDeviceBuffer(nb->nbst.e_el, &adat->e_el, 0, 1, deviceStream,
