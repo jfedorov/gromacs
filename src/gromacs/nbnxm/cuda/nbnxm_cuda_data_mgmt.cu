@@ -51,7 +51,7 @@
 
 // TODO Remove this comment when the above order issue is resolved
 #include "gromacs/gpu_utils/cudautils.cuh"
-#include "gromacs/gpu_utils/device_context.h"
+#include "gromacs/gpu_utils/device_stream_manager.h"
 #include "gromacs/gpu_utils/gpu_utils.h"
 #include "gromacs/gpu_utils/gpueventsynchronizer.cuh"
 #include "gromacs/gpu_utils/pmalloc_cuda.h"
@@ -359,7 +359,7 @@ void gpu_pme_loadbal_update_param(const nonbonded_verlet_t* nbv, const interacti
 
     GMX_RELEASE_ASSERT(ic->coulombEwaldTables, "Need valid Coulomb Ewald correction tables");
     init_ewald_coulomb_force_table(*ic->coulombEwaldTables, nbp, *nb->deviceContext_,
-                                   nb->deviceStreams[InteractionLocality::Local]);
+                                   *nb->deviceStreams[InteractionLocality::Local]);
 }
 
 /*! Initializes the pair list data structure. */
@@ -417,22 +417,22 @@ static void cuda_init_const(NbnxmGpu*                       nb,
 {
     init_atomdata_first(nb->atdat, nbatParams.numTypes);
     init_nbparam(nb->nbparam, ic, listParams, nbatParams, *nb->deviceContext_,
-                 nb->deviceStreams[InteractionLocality::Local]);
+                 *nb->deviceStreams[InteractionLocality::Local]);
 
     /* clear energy and shift force outputs */
     nbnxn_cuda_clear_e_fshift(nb);
 }
 
-NbnxmGpu* gpu_init(const DeviceContext&       deviceContext,
-                   const interaction_const_t* ic,
-                   const PairlistParams&      listParams,
-                   const nbnxn_atomdata_t*    nbat,
-                   bool                       bLocalAndNonlocal)
+NbnxmGpu* gpu_init(const gmx::DeviceStreamManager& deviceStreamManager,
+                   const interaction_const_t*      ic,
+                   const PairlistParams&           listParams,
+                   const nbnxn_atomdata_t*         nbat,
+                   bool                            bLocalAndNonlocal)
 {
     cudaError_t stat;
 
     auto nb            = new NbnxmGpu();
-    nb->deviceContext_ = &deviceContext;
+    nb->deviceContext_ = &deviceStreamManager.context();
     snew(nb->atdat, 1);
     snew(nb->nbparam, 1);
     snew(nb->plist[InteractionLocality::Local], 1);
@@ -454,8 +454,10 @@ NbnxmGpu* gpu_init(const DeviceContext&       deviceContext,
     init_plist(nb->plist[InteractionLocality::Local]);
 
     /* local/non-local GPU streams */
-    nb->deviceStreams[InteractionLocality::Local].init(*nb->deviceContext_,
-                                                       DeviceStreamPriority::Normal, nb->bDoTime);
+    GMX_RELEASE_ASSERT(deviceStreamManager.streamIsValid(gmx::DeviceStreamType::NonBondedLocal),
+                       "Local non-bonded stream should be initialized to use GPU for non-bonded.");
+    nb->deviceStreams[InteractionLocality::Local] =
+            &deviceStreamManager.stream(gmx::DeviceStreamType::NonBondedLocal);
     if (nb->bUseTwoStreams)
     {
         init_plist(nb->plist[InteractionLocality::NonLocal]);
@@ -464,8 +466,12 @@ NbnxmGpu* gpu_init(const DeviceContext&       deviceContext,
          * priorities, because we are querying the priority range which in this
          * case will be a single value.
          */
-        nb->deviceStreams[InteractionLocality::NonLocal].init(
-                *nb->deviceContext_, DeviceStreamPriority::High, nb->bDoTime);
+        GMX_RELEASE_ASSERT(deviceStreamManager.streamIsValid(gmx::DeviceStreamType::NonBondedNonLocal),
+                           "Non-local non-bonded stream should be initialized to use GPU for "
+                           "non-bonded with domain decomposition.");
+        nb->deviceStreams[InteractionLocality::NonLocal] =
+                &deviceStreamManager.stream(gmx::DeviceStreamType::NonBondedNonLocal);
+        ;
     }
 
     /* init events for sychronization (timing disabled for performance reasons!) */
@@ -514,7 +520,7 @@ void gpu_init_pairlist(NbnxmGpu* nb, const NbnxnPairlistGpu* h_plist, const Inte
 {
     char                sbuf[STRLEN];
     bool                bDoTime      = (nb->bDoTime && !h_plist->sci.empty());
-    const DeviceStream& deviceStream = nb->deviceStreams[iloc];
+    const DeviceStream& deviceStream = *nb->deviceStreams[iloc];
     cu_plist_t*         d_plist      = nb->plist[iloc];
 
     if (d_plist->na_c < 0)
@@ -571,7 +577,7 @@ void gpu_init_pairlist(NbnxmGpu* nb, const NbnxnPairlistGpu* h_plist, const Inte
 void gpu_upload_shiftvec(NbnxmGpu* nb, const nbnxn_atomdata_t* nbatom)
 {
     cu_atomdata_t*      adat         = nb->atdat;
-    const DeviceStream& deviceStream = nb->deviceStreams[InteractionLocality::Local];
+    const DeviceStream& deviceStream = *nb->deviceStreams[InteractionLocality::Local];
 
     /* only if we have a dynamic box */
     if (nbatom->bDynamicBox || !adat->bShiftVecUploaded)
@@ -589,7 +595,7 @@ static void nbnxn_cuda_clear_f(NbnxmGpu* nb, int natoms_clear)
 {
     cudaError_t    stat;
     cu_atomdata_t* adat = nb->atdat;
-    cudaStream_t   ls   = nb->deviceStreams[InteractionLocality::Local].stream();
+    cudaStream_t   ls   = nb->deviceStreams[InteractionLocality::Local]->stream();
 
     stat = cudaMemsetAsync(adat->f, 0, natoms_clear * sizeof(*adat->f), ls);
     CU_RET_ERR(stat, "cudaMemsetAsync on f falied");
@@ -600,7 +606,7 @@ static void nbnxn_cuda_clear_e_fshift(NbnxmGpu* nb)
 {
     cudaError_t    stat;
     cu_atomdata_t* adat = nb->atdat;
-    cudaStream_t   ls   = nb->deviceStreams[InteractionLocality::Local].stream();
+    cudaStream_t   ls   = nb->deviceStreams[InteractionLocality::Local]->stream();
 
     stat = cudaMemsetAsync(adat->fshift, 0, SHIFTS * sizeof(*adat->fshift), ls);
     CU_RET_ERR(stat, "cudaMemsetAsync on fshift falied");
@@ -629,7 +635,7 @@ void gpu_init_atomdata(NbnxmGpu* nb, const nbnxn_atomdata_t* nbat)
     bool                bDoTime      = nb->bDoTime;
     cu_timers_t*        timers       = nb->timers;
     cu_atomdata_t*      d_atdat      = nb->atdat;
-    const DeviceStream& deviceStream = nb->deviceStreams[InteractionLocality::Local];
+    const DeviceStream& deviceStream = *nb->deviceStreams[InteractionLocality::Local];
 
     natoms    = nbat->numAtoms();
     realloced = false;
@@ -824,13 +830,6 @@ gmx_bool gpu_is_kernel_ewald_analytical(const NbnxmGpu* nb)
     return ((nb->nbparam->eeltype == eelCuEWALD_ANA) || (nb->nbparam->eeltype == eelCuEWALD_ANA_TWIN));
 }
 
-const DeviceStream* gpu_get_command_stream(NbnxmGpu* nb, const InteractionLocality iloc)
-{
-    assert(nb);
-
-    return &nb->deviceStreams[iloc];
-}
-
 void* gpu_get_xq(NbnxmGpu* nb)
 {
     assert(nb);
@@ -856,7 +855,7 @@ DeviceBuffer<gmx::RVec> gpu_get_fshift(NbnxmGpu* nb)
 /* TODO  Remove explicit pinning from host arrays from here and manage in a more natural way*/
 void nbnxn_gpu_init_x_to_nbat_x(const Nbnxm::GridSet& gridSet, NbnxmGpu* gpu_nbv)
 {
-    const DeviceStream& deviceStream  = gpu_nbv->deviceStreams[InteractionLocality::Local];
+    const DeviceStream& deviceStream  = *gpu_nbv->deviceStreams[InteractionLocality::Local];
     bool                bDoTime       = gpu_nbv->bDoTime;
     const int           maxNumColumns = gridSet.numColumnsMax();
 
@@ -947,7 +946,7 @@ void nbnxn_gpu_init_add_nbat_f_to_f(const int*                  cell,
                                     GpuEventSynchronizer* const localReductionDone)
 {
 
-    const DeviceStream& deviceStream = gpu_nbv->deviceStreams[InteractionLocality::Local];
+    const DeviceStream& deviceStream = *gpu_nbv->deviceStreams[InteractionLocality::Local];
 
     GMX_ASSERT(localReductionDone, "localReductionDone should be a valid pointer");
     gpu_nbv->localFReductionDone = localReductionDone;
