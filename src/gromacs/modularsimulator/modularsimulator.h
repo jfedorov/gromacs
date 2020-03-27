@@ -155,7 +155,7 @@ private:
                     SignallerBuilder<LoggingSignaller>*        loggingSignallerBuilder,
                     TrajectoryElementBuilder*                  trajectoryElementBuilder,
                     CheckpointHelperBuilder*                   checkpointHelperBuilder,
-                    CheckBondedInteractionsCallbackPtr*        checkBondedInteractionsCallback,
+                    DomDecHelperBuilder*                       domDecHelperBuilder,
                     compat::not_null<StatePropagatorData*>     statePropagatorDataPtr,
                     EnergyElementBuilder*                      energyElementBuilder,
                     FreeEnergyPerturbationElement*             freeEnergyPerturbationElementPtr,

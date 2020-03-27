@@ -386,6 +386,11 @@ void ModularSimulator::constructElementsAndSignallers()
                                               mdModulesNotifier, MASTER(cr), observablesHistory,
                                               startingBehavior);
 
+    // Domain decomposition helper builder
+    DomDecHelperBuilder domDecHelperBuilder(
+            mdrunOptions.verbose, mdrunOptions.verboseStepPrintInterval, nstglobalcomm_, fplog, cr,
+            mdlog, constr, inputrec, mdAtoms, nrnb, wcycle, fr, vsite, imdSession, pull_work);
+
     // PME load balance helper builder
     PmeLoadBalanceHelperBuilder pmeLoadBalanceHelperBuilder(mdrunOptions, fplog, cr, mdlog,
                                                             inputrec, wcycle, fr);
@@ -401,6 +406,10 @@ void ModularSimulator::constructElementsAndSignallers()
 
     // Checkpoint helper
     checkpointHelperBuilder.registerWithLastStepSignaller(&lastStepSignallerBuilder);
+
+    // DD helper
+    domDecHelperBuilder.registerWithNeighborSearchSignaller(&neighborSearchSignallerBuilder);
+    domDecHelperBuilder.setTopologyHolder(topologyHolder_.get());
 
     // PME load balance helper
     pmeLoadBalanceHelperBuilder.registerWithNeighborSearchSignaller(&neighborSearchSignallerBuilder);
@@ -430,6 +439,7 @@ void ModularSimulator::constructElementsAndSignallers()
     energyElementBuilder.setStatePropagatorData(statePropagatorDataPtr);
     energyElementBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementPtr);
 
+    domDecHelperBuilder.setStatePropagatorData(statePropagatorDataPtr);
     pmeLoadBalanceHelperBuilder.setStatePropagatorData(statePropagatorDataPtr);
 
     /*
@@ -457,30 +467,17 @@ void ModularSimulator::constructElementsAndSignallers()
      * constraining, and of the place the statePropagatorData and the energy element
      * have a full timestep state.
      */
-    CheckBondedInteractionsCallbackPtr checkBondedInteractionsCallback = nullptr;
     auto integrator = buildIntegrator(&neighborSearchSignallerBuilder, &energySignallerBuilder,
                                       &loggingSignallerBuilder, &trajectoryElementBuilder,
-                                      &checkpointHelperBuilder, &checkBondedInteractionsCallback,
+                                      &checkpointHelperBuilder, &domDecHelperBuilder,
                                       statePropagatorDataPtr, &energyElementBuilder,
                                       freeEnergyPerturbationElementPtr, hasReadEkinState);
 
     /*
      * Build infrastructure elements
      */
-
+    domDecHelper_         = domDecHelperBuilder.build();
     pmeLoadBalanceHelper_ = pmeLoadBalanceHelperBuilder.build();
-
-    if (DOMAINDECOMP(cr))
-    {
-        GMX_ASSERT(checkBondedInteractionsCallback,
-                   "Domain decomposition needs a callback for check the number of bonded "
-                   "interactions.");
-        domDecHelper_ = std::make_unique<DomDecHelper>(
-                mdrunOptions.verbose, mdrunOptions.verboseStepPrintInterval, statePropagatorDataPtr,
-                topologyHolder_.get(), std::move(checkBondedInteractionsCallback), nstglobalcomm_, fplog,
-                cr, mdlog, constr, inputrec, mdAtoms, nrnb, wcycle, fr, vsite, imdSession, pull_work);
-        neighborSearchSignallerBuilder.registerSignallerClient(compat::make_not_null(domDecHelper_.get()));
-    }
 
     const bool simulationsShareResetCounters = false;
     resetHandler_                            = std::make_unique<ResetHandler>(
@@ -553,7 +550,7 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
         SignallerBuilder<LoggingSignaller>*        loggingSignallerBuilder,
         TrajectoryElementBuilder*                  trajectoryElementBuilder,
         CheckpointHelperBuilder*                   checkpointHelperBuilder,
-        CheckBondedInteractionsCallbackPtr*        checkBondedInteractionsCallback,
+        DomDecHelperBuilder*                       domDecHelperBuilder,
         compat::not_null<StatePropagatorData*>     statePropagatorDataPtr,
         EnergyElementBuilder*                      energyElementBuilder,
         FreeEnergyPerturbationElement*             freeEnergyPerturbationElementPtr,
@@ -610,8 +607,8 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
     computeGlobalsElementBuilder.registerWithTopologyHolder(topologyHolder_.get());
     computeGlobalsElementBuilder.registerWithEnergySignaller(energySignallerBuilder);
     computeGlobalsElementBuilder.registerWithTrajectorySignaller(trajectoryElementBuilder);
-    *checkBondedInteractionsCallback =
-            computeGlobalsElementBuilder.getCheckNumberOfBondedInteractionsCallback();
+
+    domDecHelperBuilder->setComputeGlobalsElementBuilder(&computeGlobalsElementBuilder);
 
     // Parrinello-Rahman barostat
     parrinelloRahmanBarostatBuilder.setStatePropagatorData(statePropagatorDataPtr);

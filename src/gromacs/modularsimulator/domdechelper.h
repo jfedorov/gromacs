@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -42,6 +42,8 @@
 #ifndef GMX_MODULARSIMULATOR_DOMDECHELPER_H
 #define GMX_MODULARSIMULATOR_DOMDECHELPER_H
 
+#include "gromacs/utility/exceptions.h"
+
 #include "modularsimulatorinterfaces.h"
 
 struct gmx_localtop_t;
@@ -55,6 +57,7 @@ struct t_nrnb;
 
 namespace gmx
 {
+class ComputeGlobalsElementBuilder;
 class Constraints;
 class ImdSession;
 class MDAtoms;
@@ -86,26 +89,6 @@ typedef std::unique_ptr<CheckBondedInteractionsCallback> CheckBondedInteractions
 class DomDecHelper final : public INeighborSearchSignallerClient
 {
 public:
-    //! Constructor
-    DomDecHelper(bool                               isVerbose,
-                 int                                verbosePrintInterval,
-                 StatePropagatorData*               statePropagatorData,
-                 TopologyHolder*                    topologyHolder,
-                 CheckBondedInteractionsCallbackPtr checkBondedInteractionsCallback,
-                 int                                nstglobalcomm,
-                 FILE*                              fplog,
-                 t_commrec*                         cr,
-                 const MDLogger&                    mdlog,
-                 Constraints*                       constr,
-                 t_inputrec*                        inputrec,
-                 MDAtoms*                           mdAtoms,
-                 t_nrnb*                            nrnb,
-                 gmx_wallcycle*                     wcycle,
-                 t_forcerec*                        fr,
-                 gmx_vsite_t*                       vsite,
-                 ImdSession*                        imdSession,
-                 pull_t*                            pull_work);
-
     /*! \brief Run domain decomposition
      *
      * Does domain decomposition partitioning at neighbor searching steps
@@ -120,7 +103,27 @@ public:
      */
     void setup();
 
+    //! Allow builder to do its job
+    friend class DomDecHelperBuilder;
+
 private:
+    //! Constructor
+    DomDecHelper(bool            isVerbose,
+                 int             verbosePrintInterval,
+                 int             nstglobalcomm,
+                 FILE*           fplog,
+                 t_commrec*      cr,
+                 const MDLogger& mdlog,
+                 Constraints*    constr,
+                 t_inputrec*     inputrec,
+                 MDAtoms*        mdAtoms,
+                 t_nrnb*         nrnb,
+                 gmx_wallcycle*  wcycle,
+                 t_forcerec*     fr,
+                 gmx_vsite_t*    vsite,
+                 ImdSession*     imdSession,
+                 pull_t*         pull_work);
+
     //! INeighborSearchSignallerClient implementation
     SignallerCallbackPtr registerNSCallback() override;
 
@@ -166,6 +169,62 @@ private:
     //! The pull work object.
     pull_t* pull_work_;
 };
+
+/*! \libinternal
+ * \ingroup module_modularsimulator
+ * \brief Builder for the domain decomposition helper
+ */
+class DomDecHelperBuilder
+{
+public:
+    //! Constructor, forwarding arguments to DomDecHelper constructor
+    template<typename... Args>
+    explicit DomDecHelperBuilder(Args&&... args);
+
+    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
+    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
+
+    //! Set pointer to TopologyHolder valid throughout the simulation (required)
+    void setTopologyHolder(TopologyHolder* topologyHolder);
+
+    //! Allow DomDecHelperBuilder to get CheckNumberOfBondedInteractionsCallback (required)
+    void setComputeGlobalsElementBuilder(ComputeGlobalsElementBuilder* computeGlobalsElementBuilder);
+
+    //! Register element with NeighborSearchSignaller (required)
+    void registerWithNeighborSearchSignaller(SignallerBuilder<NeighborSearchSignaller>* signallerBuilder);
+
+    //! Return DomDecHelper
+    std::unique_ptr<DomDecHelper> build();
+
+    //! Destructor, make sure we didn't connect an element which won't exist anymore
+    ~DomDecHelperBuilder();
+
+private:
+    //! The element to be built
+    std::unique_ptr<DomDecHelper> domDecHelper_ = nullptr;
+    //! Whether we allow registration
+    bool registrationPossible_ = false;
+    //! Whether we have registered the element with the neighbor search signaller
+    bool registeredWithNeighborSearchSignaller_ = false;
+};
+
+template<typename... Args>
+DomDecHelperBuilder::DomDecHelperBuilder(Args&&... args)
+{
+    try
+    {
+        domDecHelper_ =
+                // NOLINTNEXTLINE(modernize-make-unique): make_unique does not work with private constructor
+                std::unique_ptr<DomDecHelper>(new DomDecHelper(std::forward<Args>(args)...));
+    }
+    catch (ElementNotNeededException&)
+    {
+        domDecHelper_ = nullptr;
+    }
+    // Element being nullptr is a valid state, nullptr (element is not built)
+    // needs to be handled by the caller of build().
+    registrationPossible_ = true;
+}
 
 //! \}
 } // namespace gmx

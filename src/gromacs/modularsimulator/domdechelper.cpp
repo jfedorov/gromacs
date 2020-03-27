@@ -50,36 +50,35 @@
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/pbcutil/pbc.h"
 
+#include "computeglobalselement.h"
+#include "signallers.h"
 #include "statepropagatordata.h"
 #include "topologyholder.h"
 
 namespace gmx
 {
-DomDecHelper::DomDecHelper(bool                               isVerbose,
-                           int                                verbosePrintInterval,
-                           StatePropagatorData*               statePropagatorData,
-                           TopologyHolder*                    topologyHolder,
-                           CheckBondedInteractionsCallbackPtr checkBondedInteractionsCallback,
-                           int                                nstglobalcomm,
-                           FILE*                              fplog,
-                           t_commrec*                         cr,
-                           const MDLogger&                    mdlog,
-                           Constraints*                       constr,
-                           t_inputrec*                        inputrec,
-                           MDAtoms*                           mdAtoms,
-                           t_nrnb*                            nrnb,
-                           gmx_wallcycle*                     wcycle,
-                           t_forcerec*                        fr,
-                           gmx_vsite_t*                       vsite,
-                           ImdSession*                        imdSession,
-                           pull_t*                            pull_work) :
+DomDecHelper::DomDecHelper(bool            isVerbose,
+                           int             verbosePrintInterval,
+                           int             nstglobalcomm,
+                           FILE*           fplog,
+                           t_commrec*      cr,
+                           const MDLogger& mdlog,
+                           Constraints*    constr,
+                           t_inputrec*     inputrec,
+                           MDAtoms*        mdAtoms,
+                           t_nrnb*         nrnb,
+                           gmx_wallcycle*  wcycle,
+                           t_forcerec*     fr,
+                           gmx_vsite_t*    vsite,
+                           ImdSession*     imdSession,
+                           pull_t*         pull_work) :
     nextNSStep_(-1),
     isVerbose_(isVerbose),
     verbosePrintInterval_(verbosePrintInterval),
     nstglobalcomm_(nstglobalcomm),
-    statePropagatorData_(statePropagatorData),
-    topologyHolder_(topologyHolder),
-    checkBondedInteractionsCallback_(std::move(checkBondedInteractionsCallback)),
+    statePropagatorData_(nullptr),
+    topologyHolder_(nullptr),
+    checkBondedInteractionsCallback_(nullptr),
     fplog_(fplog),
     cr_(cr),
     mdlog_(mdlog),
@@ -93,7 +92,10 @@ DomDecHelper::DomDecHelper(bool                               isVerbose,
     imdSession_(imdSession),
     pull_work_(pull_work)
 {
-    GMX_ASSERT(DOMAINDECOMP(cr), "Domain decomposition Helper constructed in non-DD simulation");
+    if (!DOMAINDECOMP(cr))
+    {
+        GMX_THROW(ElementNotNeededException("Domain decomposition not active."));
+    }
 }
 
 void DomDecHelper::setup()
@@ -162,6 +164,73 @@ SignallerCallbackPtr DomDecHelper::registerNSCallback()
 {
     return std::make_unique<SignallerCallback>(
             [this](Step step, Time gmx_unused time) { this->nextNSStep_ = step; });
+}
+
+void DomDecHelperBuilder::setStatePropagatorData(StatePropagatorData* statePropagatorData)
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Tried to set StatePropagatorData without available DomDecHelper.");
+    if (domDecHelper_)
+    {
+        domDecHelper_->statePropagatorData_ = statePropagatorData;
+    }
+}
+
+void DomDecHelperBuilder::setTopologyHolder(TopologyHolder* topologyHolder)
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Tried to set TopologyHolder without available DomDecHelper.");
+    if (domDecHelper_)
+    {
+        domDecHelper_->topologyHolder_ = topologyHolder;
+    }
+}
+
+void DomDecHelperBuilder::setComputeGlobalsElementBuilder(ComputeGlobalsElementBuilder* computeGlobalsElementBuilder)
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Tried to set ComputeGlobalsElementBuilder without available DomDecHelper.");
+    if (domDecHelper_)
+    {
+        domDecHelper_->checkBondedInteractionsCallback_ =
+                computeGlobalsElementBuilder->getCheckNumberOfBondedInteractionsCallback();
+    }
+}
+
+void DomDecHelperBuilder::registerWithNeighborSearchSignaller(SignallerBuilder<NeighborSearchSignaller>* signallerBuilder)
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Tried to set NeighborSearchSignaller after DomDecHelper was built.");
+    if (domDecHelper_)
+    {
+        signallerBuilder->registerSignallerClient(compat::make_not_null(domDecHelper_.get()));
+    }
+    registeredWithNeighborSearchSignaller_ = true;
+}
+
+std::unique_ptr<DomDecHelper> DomDecHelperBuilder::build()
+{
+    GMX_RELEASE_ASSERT(registrationPossible_, "Called build() without available DomDecHelper.");
+    if (domDecHelper_)
+    {
+        GMX_RELEASE_ASSERT(domDecHelper_->statePropagatorData_,
+                           "Tried to build DomDecHelper before setting StatePropagatorData.");
+        GMX_RELEASE_ASSERT(domDecHelper_->topologyHolder_,
+                           "Tried to build DomDecHelper before setting TopologyHolder.");
+        GMX_RELEASE_ASSERT(
+                domDecHelper_->checkBondedInteractionsCallback_,
+                "Tried to build DomDecHelper before setting CheckBondedInteractionsCallback.");
+        GMX_RELEASE_ASSERT(registeredWithNeighborSearchSignaller_,
+                           "Tried to build DomDecHelper before registering with LoggingSignaller.");
+    }
+    registrationPossible_ = false;
+    return std::move(domDecHelper_);
+}
+
+DomDecHelperBuilder::~DomDecHelperBuilder()
+{
+    // If the helper was built, but not consumed, we risk dangling pointers
+    GMX_ASSERT(!domDecHelper_, "DomDecHelper was constructed, but not used.");
 }
 
 } // namespace gmx
