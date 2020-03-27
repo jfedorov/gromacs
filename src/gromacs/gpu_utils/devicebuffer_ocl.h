@@ -270,7 +270,9 @@ using DeviceTexture = void*;
 
 /*! \brief Create a texture object for an array of type ValueType.
  *
- * Creates the device buffer, copies data and binds texture object for an array of type ValueType.
+ * Creates the device buffer and copies read-only data for an array of type ValueType.
+ *
+ * \todo Decide if using image2d is most efficient.
  *
  * \tparam      ValueType      Raw data type.
  *
@@ -284,8 +286,7 @@ void initParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer,
                           DeviceTexture* /* deviceTexture */,
                           const ValueType*     hostBuffer,
                           int                  numValues,
-                          const DeviceContext& deviceContext,
-                          const DeviceStream& /* deviceStream */)
+                          const DeviceContext& deviceContext)
 {
     GMX_ASSERT(hostBuffer, "needs a host buffer pointer");
     const size_t bytes = numValues * sizeof(ValueType);
