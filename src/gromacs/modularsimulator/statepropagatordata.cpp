@@ -54,26 +54,26 @@
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/mdatom.h"
-#include "gromacs/mdtypes/state.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/topology/atoms.h"
 #include "gromacs/topology/topology.h"
 
+#include "checkpointhelper.h"
 #include "freeenergyperturbationelement.h"
+#include "signallers.h"
+#include "trajectoryelement.h"
 
 namespace gmx
 {
-StatePropagatorData::StatePropagatorData(int                            numAtoms,
-                                         FILE*                          fplog,
-                                         const t_commrec*               cr,
-                                         t_state*                       globalState,
-                                         int                            nstxout,
-                                         int                            nstvout,
-                                         int                            nstfout,
-                                         int                            nstxout_compressed,
-                                         bool                           useGPU,
-                                         FreeEnergyPerturbationElement* freeEnergyPerturbationElement,
-                                         const TopologyHolder*          topologyHolder,
+StatePropagatorData::StatePropagatorData(int               numAtoms,
+                                         FILE*             fplog,
+                                         const t_commrec*  cr,
+                                         t_state*          globalState,
+                                         int               nstxout,
+                                         int               nstvout,
+                                         int               nstfout,
+                                         int               nstxout_compressed,
+                                         bool              useGPU,
                                          bool              canMoleculesBeDistributedOverPBC,
                                          bool              writeFinalConfiguration,
                                          std::string       finalConfigurationFilename,
@@ -85,16 +85,18 @@ StatePropagatorData::StatePropagatorData(int                            numAtoms
     nstfout_(nstfout),
     nstxout_compressed_(nstxout_compressed),
     localNAtoms_(0),
+    box_{ { 0 } },
+    previousBox_{ { 0 } },
     ddpCount_(0),
     writeOutStep_(-1),
     vvResetVelocities_(false),
-    freeEnergyPerturbationElement_(freeEnergyPerturbationElement),
+    freeEnergyPerturbationElement_(nullptr),
     isRegularSimulationEnd_(false),
     lastStep_(-1),
     canMoleculesBeDistributedOverPBC_(canMoleculesBeDistributedOverPBC),
     systemHasPeriodicMolecules_(inputrec->bPeriodicMols),
     pbcType_(inputrec->pbcType),
-    topologyHolder_(topologyHolder),
+    topologyHolder_(nullptr),
     lastPlannedStep_(inputrec->nsteps + inputrec->init_step),
     writeFinalConfiguration_(writeFinalConfiguration),
     finalConfigurationFilename_(std::move(finalConfigurationFilename)),
@@ -102,11 +104,6 @@ StatePropagatorData::StatePropagatorData(int                            numAtoms
     cr_(cr),
     globalState_(globalState)
 {
-    // Initialize these here, as box_{{0}} in the initialization list
-    // is confusing uncrustify and doxygen
-    clear_mat(box_);
-    clear_mat(previousBox_);
-
     bool stateHasVelocities;
     // Local state only becomes valid now.
     if (DOMAINDECOMP(cr))
@@ -493,6 +490,87 @@ SignallerCallbackPtr StatePropagatorData::registerLastStepCallback()
         lastStep_               = step;
         isRegularSimulationEnd_ = (step == lastPlannedStep_);
     });
+}
+
+void StatePropagatorDataBuilder::setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement)
+{
+    GMX_RELEASE_ASSERT(statePropagatorData_,
+                       "Tried to set FreeEnergyPerturbationElement after StatePropagatorData "
+                       "object was built.");
+    statePropagatorData_->freeEnergyPerturbationElement_ = freeEnergyPerturbationElement;
+}
+
+void StatePropagatorDataBuilder::setTopologyHolder(TopologyHolder* topologyHolder)
+{
+    GMX_RELEASE_ASSERT(statePropagatorData_,
+                       "Tried to set TopologyHolder without available StatePropagatorData object.");
+    statePropagatorData_->topologyHolder_ = topologyHolder;
+}
+
+StatePropagatorData* StatePropagatorDataBuilder::getPointer()
+{
+    GMX_RELEASE_ASSERT(statePropagatorData_,
+                       "Called getPointer() without available StatePropagatorData object.");
+    return statePropagatorData_.get();
+}
+
+void StatePropagatorDataBuilder::registerWithLastStepSignaller(SignallerBuilder<LastStepSignaller>* signallerBuilder)
+{
+    GMX_RELEASE_ASSERT(
+            statePropagatorData_,
+            "Tried to register to EnergySignaller after StatePropagatorData object was built.");
+    if (statePropagatorData_)
+    {
+        signallerBuilder->registerSignallerClient(compat::make_not_null(statePropagatorData_.get()));
+    }
+    registeredWithLastStepSignaller_ = true;
+}
+
+void StatePropagatorDataBuilder::registerWithTrajectoryElement(TrajectoryElementBuilder* trajectoryElementBuilder)
+{
+    GMX_RELEASE_ASSERT(
+            statePropagatorData_,
+            "Tried to register to TrajectoryElement after StatePropagatorData object was built.");
+    if (statePropagatorData_)
+    {
+        trajectoryElementBuilder->registerWriterClient(compat::make_not_null(statePropagatorData_.get()));
+        trajectoryElementBuilder->registerSignallerClient(
+                compat::make_not_null(statePropagatorData_.get()));
+    }
+    registeredWithTrajectoryElement_ = true;
+}
+
+void StatePropagatorDataBuilder::registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder)
+{
+    GMX_RELEASE_ASSERT(
+            statePropagatorData_,
+            "Tried to register to CheckpointHelper after StatePropagatorData object was built.");
+    checkpointHelperBuilder->registerClient(compat::make_not_null(statePropagatorData_.get()));
+    registeredWithCheckpointHelper_ = true;
+}
+
+std::unique_ptr<StatePropagatorData> StatePropagatorDataBuilder::build()
+{
+    GMX_RELEASE_ASSERT(statePropagatorData_,
+                       "Called build() without available StatePropagatorData object.");
+    GMX_RELEASE_ASSERT(statePropagatorData_->topologyHolder_,
+                       "Tried to build StatePropagatorData before setting the TopologyHolder.");
+    GMX_RELEASE_ASSERT(
+            registeredWithLastStepSignaller_,
+            "Tried to build StatePropagatorData before registering with EnergySignaller.");
+    GMX_RELEASE_ASSERT(
+            registeredWithCheckpointHelper_,
+            "Tried to build StatePropagatorData before registering with CheckpointHelper.");
+    GMX_RELEASE_ASSERT(
+            registeredWithTrajectoryElement_,
+            "Tried to build StatePropagatorData before registering with TrajectoryElement.");
+    return std::move(statePropagatorData_);
+}
+
+StatePropagatorDataBuilder::~StatePropagatorDataBuilder()
+{
+    // If elements were built, but not consumed, we risk dangling pointers
+    GMX_ASSERT(!statePropagatorData_, "StatePropagatorData object was constructed, but not used.");
 }
 
 } // namespace gmx

@@ -45,6 +45,7 @@
 #include "gromacs/gpu_utils/hostallocator.h"
 #include "gromacs/math/paddedvector.h"
 #include "gromacs/math/vectypes.h"
+#include "gromacs/mdtypes/state.h"
 
 #include "modularsimulatorinterfaces.h"
 #include "topologyholder.h"
@@ -59,7 +60,9 @@ struct t_mdatoms;
 namespace gmx
 {
 enum class ConstraintVariable;
+class CheckpointHelperBuilder;
 class FreeEnergyPerturbationElement;
+class TrajectoryElementBuilder;
 
 /*! \libinternal
  * \ingroup module_modularsimulator
@@ -106,24 +109,6 @@ class StatePropagatorData final :
     public ILastStepSignallerClient
 {
 public:
-    //! Constructor
-    StatePropagatorData(int                            numAtoms,
-                        FILE*                          fplog,
-                        const t_commrec*               cr,
-                        t_state*                       globalState,
-                        int                            nstxout,
-                        int                            nstvout,
-                        int                            nstfout,
-                        int                            nstxout_compressed,
-                        bool                           useGPU,
-                        FreeEnergyPerturbationElement* freeEnergyPerturbationElement,
-                        const TopologyHolder*          topologyHolder,
-                        bool                           canMoleculesBeDistributedOverPBC,
-                        bool                           writeFinalConfiguration,
-                        std::string                    finalConfigurationFilename,
-                        const t_inputrec*              inputrec,
-                        const t_mdatoms*               mdatoms);
-
     // Allow access to state
     //! Get write access to position vector
     ArrayRefWithPadding<RVec> positionsView();
@@ -187,7 +172,26 @@ public:
     friend class DomDecHelper;
     //! @endcond
 
+    //! Allow builder to do its job
+    friend class StatePropagatorDataBuilder;
+
 private:
+    //! Constructor
+    StatePropagatorData(int               numAtoms,
+                        FILE*             fplog,
+                        const t_commrec*  cr,
+                        t_state*          globalState,
+                        int               nstxout,
+                        int               nstvout,
+                        int               nstfout,
+                        int               nstxout_compressed,
+                        bool              useGPU,
+                        bool              canMoleculesBeDistributedOverPBC,
+                        bool              writeFinalConfiguration,
+                        std::string       finalConfigurationFilename,
+                        const t_inputrec* inputrec,
+                        const t_mdatoms*  mdatoms);
+
     //! The total number of atoms in the system
     int totalNumAtoms_;
     //! The position writeout frequency
@@ -296,6 +300,58 @@ private:
     //! Trajectory writer teardown - write final coordinates
     void trajectoryWriterTeardown(gmx_mdoutf* outf) override;
 };
+
+/*! \libinternal
+ * \ingroup module_modularsimulator
+ * \brief Builder for the state propagator data
+ */
+class StatePropagatorDataBuilder
+{
+public:
+    //! Constructor, forwarding arguments to StatePropagatorData constructor
+    template<typename... Args>
+    explicit StatePropagatorDataBuilder(Args&&... args);
+
+    //! Set pointer to FreeEnergyPerturbationElement valid throughout the simulation (optional)
+    void setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement);
+    //! Set pointer to TopologyHolder valid throughout the simulation (required)
+    void setTopologyHolder(TopologyHolder* topologyHolder);
+
+    //! Register element with LastStepSignaller (required)
+    void registerWithLastStepSignaller(SignallerBuilder<LastStepSignaller>* signallerBuilder);
+    //! Register element with TrajectoryElement (required)
+    void registerWithTrajectoryElement(TrajectoryElementBuilder* trajectoryElementBuilder);
+
+    //! Register element with CheckpointHelper (required)
+    void registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder);
+
+    //! Get (non-owning) pointer before element is built
+    StatePropagatorData* getPointer();
+
+    //! Return StatePropagatorData
+    std::unique_ptr<StatePropagatorData> build();
+
+    //! Destructor, make sure we didn't connect an element which won't exist anymore
+    ~StatePropagatorDataBuilder();
+
+private:
+    //! The element to be built
+    std::unique_ptr<StatePropagatorData> statePropagatorData_ = nullptr;
+    //! Whether we have registered the element with the last step signaller
+    bool registeredWithLastStepSignaller_ = false;
+    //! Whether we have registered the element with the trajectory element
+    bool registeredWithTrajectoryElement_ = false;
+    //! Whether we have registered the element with the checkpoint helper
+    bool registeredWithCheckpointHelper_ = false;
+};
+
+template<typename... Args>
+StatePropagatorDataBuilder::StatePropagatorDataBuilder(Args&&... args)
+{
+    statePropagatorData_ =
+            // NOLINTNEXTLINE(modernize-make-unique): make_unique does not work with private constructor
+            std::unique_ptr<StatePropagatorData>(new StatePropagatorData(std::forward<Args>(args)...));
+}
 
 } // namespace gmx
 
