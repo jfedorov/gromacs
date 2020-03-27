@@ -639,7 +639,7 @@ void gpu_init_atomdata(NbnxmGpu* nb, const nbnxn_atomdata_t* nbat)
     if (bDoTime)
     {
         /* time async copy */
-        timers->atdat.openTimingRegion(deviceStream);
+        timers->atdat.openTimingRegion(localStream);
     }
 
     /* need to reallocate if we have to copy more atoms than the amount of space
