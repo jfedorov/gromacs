@@ -142,6 +142,12 @@ private:
      */
     void postStep(Step step, Time time);
 
+    //! A helper struct holding all builders involved in setting up the modular simulator
+    struct Builders;
+
+    //! Construct builder list
+    std::unique_ptr<Builders> constructBuilders();
+
     /*! \brief Build the integrator part of the simulator
      *
      * This includes the force calculation, state propagation, constraints,
@@ -149,18 +155,7 @@ private:
      * micro state / energy states are found. Currently, buildIntegrator
      * knows about NVE md and md-vv algorithms.
      */
-    std::unique_ptr<ISimulatorElement>
-    buildIntegrator(SignallerBuilder<NeighborSearchSignaller>* neighborSearchSignallerBuilder,
-                    SignallerBuilder<EnergySignaller>*         energySignallerBuilder,
-                    SignallerBuilder<LoggingSignaller>*        loggingSignallerBuilder,
-                    TrajectoryElementBuilder*                  trajectoryElementBuilder,
-                    CheckpointHelperBuilder*                   checkpointHelperBuilder,
-                    DomDecHelperBuilder*                       domDecHelperBuilder,
-                    compat::not_null<StatePropagatorData*>     statePropagatorDataPtr,
-                    EnergyElementBuilder*                      energyElementBuilder,
-                    FreeEnergyPerturbationElement*             freeEnergyPerturbationElementPtr,
-                    TopologyHolderBuilder*                     topologyHolderBuilder,
-                    bool                                       hasReadEkinState);
+    std::unique_ptr<ISimulatorElement> buildIntegrator(Builders* builders);
 
     /*! \brief Add run functions to the task queue
      *
@@ -247,6 +242,10 @@ private:
     SimulationSignals signals_;
     //! Compute globals communication period
     int nstglobalcomm_;
+    //! Whether we have read the kinetic energy from checkpoint
+    bool hasReadEkinState_;
+    //! Whether multisim need the state to be synchronized
+    bool multiSimNeedsSynchronizedState_;
 
     //! The topology
     std::unique_ptr<TopologyHolder> topologyHolder_;

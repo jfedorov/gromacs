@@ -44,6 +44,7 @@
 #include "modularsimulator.h"
 
 #include "gromacs/commandline/filenm.h"
+#include "gromacs/compat/optional.h"
 #include "gromacs/domdec/domdec.h"
 #include "gromacs/ewald/pme.h"
 #include "gromacs/ewald/pme_load_balancing.h"
@@ -327,6 +328,240 @@ void ModularSimulator::populateTaskQueue()
     } while (step_ != signalHelper_->nextNSStep_ && step_ <= signalHelper_->lastStep_);
 }
 
+struct ModularSimulator::Builders
+{
+    compat::optional<SignallerBuilder<NeighborSearchSignaller>> neighborSearchSignaller;
+    compat::optional<SignallerBuilder<LastStepSignaller>>       lastStepSignaller;
+    compat::optional<SignallerBuilder<LoggingSignaller>>        loggingSignaller;
+    compat::optional<SignallerBuilder<EnergySignaller>>         energySignaller;
+    compat::optional<TrajectoryElementBuilder>                  trajectoryElement;
+
+    compat::optional<TopologyHolderBuilder>                topologyHolder;
+    compat::optional<CheckpointHelperBuilder>              checkpointHelper;
+    compat::optional<StatePropagatorDataBuilder>           statePropagatorData;
+    compat::optional<EnergyElementBuilder>                 energyElement;
+    compat::optional<FreeEnergyPerturbationElementBuilder> freeEnergyPerturbationElement;
+
+    compat::optional<DomDecHelperBuilder>         domDecHelper;
+    compat::optional<PmeLoadBalanceHelperBuilder> pmeLoadBalanceHelper;
+
+    compat::optional<ConstraintsElementBuilder>                    constraintsElement;
+    compat::optional<ForceElementBuilder>                          forceElement;
+    compat::optional<ComputeGlobalsElementBuilder>                 computeGlobalsElement;
+    compat::optional<ParrinelloRahmanBarostatBuilder>              parrinelloRahmanBarostat;
+    compat::optional<VRescaleThermostatBuilder>                    vRescaleThermostat;
+    compat::optional<PropagatorBuilder<IntegrationStep::LeapFrog>> leapFrogPropagator;
+    compat::optional<PropagatorBuilder<IntegrationStep::VelocityVerletPositionsAndVelocities>> velocityVerletPropagator;
+    compat::optional<PropagatorBuilder<IntegrationStep::VelocitiesOnly>> velocityPropagator;
+
+    explicit Builders(ModularSimulator* simulator);
+    void connectBuilders();
+};
+
+ModularSimulator::Builders::Builders(ModularSimulator* simulator)
+{
+    // Signalers
+    neighborSearchSignaller.emplace(simulator->inputrec->nstlist, simulator->inputrec->init_step,
+                                    simulator->inputrec->init_t);
+    lastStepSignaller.emplace(simulator->inputrec->nsteps, simulator->inputrec->init_step,
+                              simulator->stopHandler_.get());
+    loggingSignaller.emplace(simulator->inputrec->nstlog, simulator->inputrec->init_step,
+                             simulator->inputrec->init_t);
+    energySignaller.emplace(simulator->inputrec->nstcalcenergy,
+                            simulator->inputrec->fepvals->nstdhdl, simulator->inputrec->nstpcouple);
+    trajectoryElement.emplace(simulator->fplog, simulator->nfile, simulator->fnm,
+                              simulator->mdrunOptions, simulator->cr, simulator->outputProvider,
+                              simulator->mdModulesNotifier, simulator->inputrec, simulator->top_global,
+                              simulator->oenv, simulator->wcycle, simulator->startingBehavior,
+                              simulator->multiSimNeedsSynchronizedState_);
+
+    // Data elements
+    statePropagatorData.emplace(
+            simulator->top_global->natoms, simulator->fplog, simulator->cr, simulator->state_global,
+            simulator->inputrec->nstxout, simulator->inputrec->nstvout, simulator->inputrec->nstfout,
+            simulator->inputrec->nstxout_compressed, simulator->fr->nbv->useGpu(), simulator->fr->bMolPBC,
+            simulator->mdrunOptions.writeConfout, opt2fn("-c", simulator->nfile, simulator->fnm),
+            simulator->inputrec, simulator->mdAtoms->mdatoms());
+    energyElement.emplace(simulator->inputrec, simulator->mdAtoms, simulator->enerd,
+                          simulator->ekind, simulator->constr, simulator->fplog, simulator->fcd,
+                          simulator->mdModulesNotifier, MASTER(simulator->cr),
+                          simulator->observablesHistory, simulator->startingBehavior);
+    freeEnergyPerturbationElement.emplace(simulator->fplog, simulator->inputrec, simulator->mdAtoms);
+
+    // Infrastructure elements
+    topologyHolder.emplace(*simulator->top_global, simulator->cr, simulator->inputrec,
+                           simulator->fr, simulator->mdAtoms, simulator->constr, simulator->vsite);
+    checkpointHelper.emplace(simulator->inputrec->init_step, simulator->top_global->natoms,
+                             simulator->fplog, simulator->cr, simulator->observablesHistory,
+                             simulator->walltime_accounting, simulator->state_global,
+                             simulator->mdrunOptions.writeConfout);
+    checkpointHelper->setCheckpointHandler(std::make_unique<CheckpointHandler>(
+            compat::make_not_null<SimulationSignal*>(&simulator->signals_[eglsCHKPT]),
+            simulator->multiSimNeedsSynchronizedState_, simulator->inputrec->nstlist == 0,
+            MASTER(simulator->cr), simulator->mdrunOptions.writeConfout,
+            simulator->mdrunOptions.checkpointOptions.period));
+    domDecHelper.emplace(simulator->mdrunOptions.verbose,
+                         simulator->mdrunOptions.verboseStepPrintInterval, simulator->nstglobalcomm_,
+                         simulator->fplog, simulator->cr, simulator->mdlog, simulator->constr,
+                         simulator->inputrec, simulator->mdAtoms, simulator->nrnb, simulator->wcycle,
+                         simulator->fr, simulator->vsite, simulator->imdSession, simulator->pull_work);
+    pmeLoadBalanceHelper.emplace(simulator->mdrunOptions, simulator->fplog, simulator->cr,
+                                 simulator->mdlog, simulator->inputrec, simulator->wcycle, simulator->fr);
+
+    // Integrator elements
+    constraintsElement.emplace(simulator->constr, MASTER(simulator->cr), simulator->fplog,
+                               simulator->inputrec, simulator->mdAtoms->mdatoms());
+    forceElement.emplace(simulator->mdrunOptions.verbose, inputrecDynamicBox(simulator->inputrec),
+                         simulator->fplog, simulator->cr, simulator->inputrec, simulator->mdAtoms,
+                         simulator->nrnb, simulator->fr, simulator->fcd, simulator->wcycle,
+                         simulator->runScheduleWork, simulator->vsite, simulator->imdSession,
+                         simulator->pull_work, simulator->constr, simulator->top_global,
+                         simulator->enforcedRotation);
+    computeGlobalsElement.emplace(
+            simulator->inputrec->eI, &simulator->signals_, simulator->nstglobalcomm_,
+            simulator->fplog, simulator->mdlog, simulator->cr, simulator->inputrec,
+            simulator->mdAtoms, simulator->nrnb, simulator->wcycle, simulator->fr,
+            simulator->top_global, simulator->constr, simulator->hasReadEkinState_);
+    parrinelloRahmanBarostat.emplace(simulator->inputrec->nstpcouple,
+                                     simulator->inputrec->delta_t * simulator->inputrec->nstpcouple,
+                                     simulator->inputrec->init_step, simulator->fplog,
+                                     simulator->inputrec, simulator->mdAtoms, simulator->state_global,
+                                     simulator->cr, simulator->inputrec->bContinuation);
+    vRescaleThermostat.emplace(simulator->inputrec->nsttcouple, simulator->inputrec->ld_seed,
+                               simulator->inputrec->opts.ngtc,
+                               simulator->inputrec->delta_t * simulator->inputrec->nsttcouple,
+                               simulator->inputrec->opts.ref_t, simulator->inputrec->opts.tau_t,
+                               simulator->inputrec->opts.nrdf, simulator->state_global, simulator->cr,
+                               simulator->inputrec->bContinuation, simulator->inputrec->etc);
+    // TODO: Can this if / else be moved into the builder if we move to a more complex (policy-based) builder?
+    if (simulator->inputrec->eI == eiMD)
+    {
+        leapFrogPropagator.emplace(simulator->inputrec->delta_t, simulator->mdAtoms, simulator->wcycle);
+    }
+    else if (simulator->inputrec->eI == eiVV)
+    {
+        velocityVerletPropagator.emplace(simulator->inputrec->delta_t, simulator->mdAtoms,
+                                         simulator->wcycle);
+        velocityPropagator.emplace(simulator->inputrec->delta_t * 0.5, simulator->mdAtoms,
+                                   simulator->wcycle);
+    }
+}
+
+std::unique_ptr<ModularSimulator::Builders> ModularSimulator::constructBuilders()
+{
+    // The builder object
+    auto builders = std::make_unique<Builders>(this);
+
+    // Connect builders
+    builders->connectBuilders();
+
+    /*
+     * Register the simulator itself to the neighbor search / last step signaller
+     */
+    builders->neighborSearchSignaller->registerSignallerClient(compat::make_not_null(signalHelper_.get()));
+    builders->lastStepSignaller->registerSignallerClient(compat::make_not_null(signalHelper_.get()));
+
+    return builders;
+}
+
+void ModularSimulator::Builders::connectBuilders()
+{
+    // Last step signaller
+    lastStepSignaller->registerWithSignallerBuilder(
+            compat::make_not_null(&neighborSearchSignaller.value()));
+    // Logging signaller
+    loggingSignaller->registerWithSignallerBuilder(compat::make_not_null(&lastStepSignaller.value()));
+    // Trajectory element
+    trajectoryElement->registerWithSignallerBuilder(compat::make_not_null(&lastStepSignaller.value()));
+    trajectoryElement->registerWithSignallerBuilder(compat::make_not_null(&loggingSignaller.value()));
+    // Energy signaller
+    energySignaller->registerWithSignallerBuilder(compat::make_not_null(&loggingSignaller.value()));
+    energySignaller->registerWithSignallerBuilder(compat::make_not_null(&trajectoryElement.value()));
+
+    // State propagator data
+    statePropagatorData->setFreeEnergyPerturbationElement(freeEnergyPerturbationElement->getPointer());
+    statePropagatorData->registerWithLastStepSignaller(&lastStepSignaller.value());
+    statePropagatorData->registerWithTrajectoryElement(&trajectoryElement.value());
+    statePropagatorData->setTopologyHolder(topologyHolder->getPointer());
+    statePropagatorData->registerWithCheckpointHelper(&checkpointHelper.value());
+
+    // Energy element
+    energyElement->setStatePropagatorData(statePropagatorData->getPointer());
+    energyElement->setFreeEnergyPerturbationElement(freeEnergyPerturbationElement->getPointer());
+    energyElement->registerWithEnergySignaller(&energySignaller.value());
+    energyElement->registerWithTrajectoryElement(&trajectoryElement.value());
+    energyElement->registerWithCheckpointHelper(&checkpointHelper.value());
+    energyElement->setTopologyHolder(topologyHolder->getPointer());
+
+    // FEP element
+    freeEnergyPerturbationElement->registerWithCheckpointHelper(&checkpointHelper.value());
+
+    // Checkpoint helper
+    checkpointHelper->registerWithLastStepSignaller(&lastStepSignaller.value());
+    checkpointHelper->setTrajectoryElement(&trajectoryElement.value());
+
+    // DD helper
+    domDecHelper->setStatePropagatorData(statePropagatorData->getPointer());
+    domDecHelper->registerWithNeighborSearchSignaller(&neighborSearchSignaller.value());
+    domDecHelper->setTopologyHolder(topologyHolder->getPointer());
+    domDecHelper->setComputeGlobalsElementBuilder(&computeGlobalsElement.value());
+
+    // PME load balance helper
+    pmeLoadBalanceHelper->setStatePropagatorData(statePropagatorData->getPointer());
+    pmeLoadBalanceHelper->registerWithNeighborSearchSignaller(&neighborSearchSignaller.value());
+
+    // Constraint element
+    constraintsElement->setStatePropagatorData(statePropagatorData->getPointer());
+    constraintsElement->setEnergyElement(energyElement->getPointer());
+    constraintsElement->setFreeEnergyPerturbationElement(freeEnergyPerturbationElement->getPointer());
+    constraintsElement->registerWithEnergySignaller(&energySignaller.value());
+    constraintsElement->registerWithTrajectorySignaller(&trajectoryElement.value());
+    constraintsElement->registerWithLoggingSignaller(&loggingSignaller.value());
+
+    // Force element
+    forceElement->setStatePropagatorData(statePropagatorData->getPointer());
+    forceElement->setEnergyElement(energyElement->getPointer());
+    forceElement->setFreeEnergyPerturbationElement(freeEnergyPerturbationElement->getPointer());
+    forceElement->registerWithNeighborSearchSignaller(&neighborSearchSignaller.value());
+    forceElement->registerWithEnergySignaller(&energySignaller.value());
+    forceElement->registerWithTopologyHolder(&topologyHolder.value());
+
+    // Compute-globals element
+    computeGlobalsElement->setStatePropagatorData(statePropagatorData->getPointer());
+    computeGlobalsElement->setEnergyElement(energyElement->getPointer());
+    computeGlobalsElement->setFreeEnergyPerturbationElement(freeEnergyPerturbationElement->getPointer());
+    computeGlobalsElement->registerWithTopologyHolder(&topologyHolder.value());
+    computeGlobalsElement->registerWithEnergySignaller(&energySignaller.value());
+    computeGlobalsElement->registerWithTrajectorySignaller(&trajectoryElement.value());
+
+    // Parrinello-Rahman barostat
+    parrinelloRahmanBarostat->setStatePropagatorData(statePropagatorData->getPointer());
+    parrinelloRahmanBarostat->setEnergyElementBuilder(&energyElement.value());
+    parrinelloRahmanBarostat->registerWithCheckpointHelper(&checkpointHelper.value());
+
+    // v-rescale thermostat
+    vRescaleThermostat->setEnergyElementBuilder(&energyElement.value());
+    vRescaleThermostat->registerWithCheckpointHelper(&checkpointHelper.value());
+
+    // Propagators
+    if (leapFrogPropagator)
+    {
+        leapFrogPropagator->setStatePropagatorData(statePropagatorData->getPointer());
+        parrinelloRahmanBarostat->setPropagatorBuilder(&leapFrogPropagator.value());
+        vRescaleThermostat->setPropagatorBuilder(&leapFrogPropagator.value());
+    }
+    if (velocityVerletPropagator)
+    {
+        velocityVerletPropagator->setStatePropagatorData(statePropagatorData->getPointer());
+        vRescaleThermostat->setPropagatorBuilder(&velocityVerletPropagator.value());
+    }
+    if (velocityPropagator)
+    {
+        velocityPropagator->setStatePropagatorData(statePropagatorData->getPointer());
+        parrinelloRahmanBarostat->setPropagatorBuilder(&velocityPropagator.value());
+    }
+}
+
 void ModularSimulator::constructElementsAndSignallers()
 {
     /* When restarting from a checkpoint, it can be appropriate to
@@ -346,147 +581,43 @@ void ModularSimulator::constructElementsAndSignallers()
      *      reading directly follows .tpr reading, because all ranks can
      *      agree on hasReadEkinState at that time.
      */
-    bool hasReadEkinState = MASTER(cr) ? state_global->ekinstate.hasReadEkinState : false;
+    hasReadEkinState_ = MASTER(cr) ? state_global->ekinstate.hasReadEkinState : false;
     if (PAR(cr))
     {
-        gmx_bcast(sizeof(hasReadEkinState), &hasReadEkinState, cr->mpi_comm_mygroup);
+        gmx_bcast(sizeof(hasReadEkinState_), &hasReadEkinState_, cr->mpi_comm_mygroup);
     }
-    if (hasReadEkinState)
+    if (hasReadEkinState_)
     {
         restore_ekinstate_from_state(cr, ekind, &state_global->ekinstate);
     }
 
     // Multisim is currently disabled
-    const bool simulationsShareState = false;
+    multiSimNeedsSynchronizedState_ = false;
 
-    // Build stop handler
+    // Build stop handler (needed by last step signaller builder)
     stopHandler_ = stopHandlerBuilder->getStopHandlerMD(
-            compat::not_null<SimulationSignal*>(&signals_[eglsSTOPCOND]), simulationsShareState,
-            MASTER(cr), inputrec->nstlist, mdrunOptions.reproducible, nstglobalcomm_,
-            mdrunOptions.maximumHoursToRun, inputrec->nstlist == 0, fplog, stophandlerCurrentStep_,
-            stophandlerIsNSStep_, walltime_accounting);
+            compat::not_null<SimulationSignal*>(&signals_[eglsSTOPCOND]),
+            multiSimNeedsSynchronizedState_, MASTER(cr), inputrec->nstlist, mdrunOptions.reproducible,
+            nstglobalcomm_, mdrunOptions.maximumHoursToRun, inputrec->nstlist == 0, fplog,
+            stophandlerCurrentStep_, stophandlerIsNSStep_, walltime_accounting);
 
-    // Build the topology holder
-    TopologyHolderBuilder topologyHolderBuilder(*top_global, cr, inputrec, fr, mdAtoms, constr, vsite);
-
-    /*
-     * Create simulator builders
-     */
-    SignallerBuilder<NeighborSearchSignaller> neighborSearchSignallerBuilder(
-            inputrec->nstlist, inputrec->init_step, inputrec->init_t);
-    SignallerBuilder<LastStepSignaller> lastStepSignallerBuilder(
-            inputrec->nsteps, inputrec->init_step, stopHandler_.get());
-    SignallerBuilder<LoggingSignaller> loggingSignallerBuilder(
-            inputrec->nstlog, inputrec->init_step, inputrec->init_t);
-    SignallerBuilder<EnergySignaller> energySignallerBuilder(
-            inputrec->nstcalcenergy, inputrec->fepvals->nstdhdl, inputrec->nstpcouple);
-    TrajectoryElementBuilder trajectoryElementBuilder(
-            fplog, nfile, fnm, mdrunOptions, cr, outputProvider, mdModulesNotifier, inputrec,
-            top_global, oenv, wcycle, startingBehavior, simulationsShareState);
-
-    // Builder for the checkpoint helper
-    CheckpointHelperBuilder checkpointHelperBuilder(inputrec->init_step, top_global->natoms, fplog,
-                                                    cr, observablesHistory, walltime_accounting,
-                                                    state_global, mdrunOptions.writeConfout);
-    checkpointHelperBuilder.setCheckpointHandler(std::make_unique<CheckpointHandler>(
-            compat::make_not_null<SimulationSignal*>(&signals_[eglsCHKPT]), simulationsShareState,
-            inputrec->nstlist == 0, MASTER(cr), mdrunOptions.writeConfout,
-            mdrunOptions.checkpointOptions.period));
-
-    // State propagator data builder
-    StatePropagatorDataBuilder statePropagatorDataBuilder(
-            top_global->natoms, fplog, cr, state_global, inputrec->nstxout, inputrec->nstvout,
-            inputrec->nstfout, inputrec->nstxout_compressed, fr->nbv->useGpu(), fr->bMolPBC,
-            mdrunOptions.writeConfout, opt2fn("-c", nfile, fnm), inputrec, mdAtoms->mdatoms());
-
-    // Energy element builder
-    EnergyElementBuilder energyElementBuilder(inputrec, mdAtoms, enerd, ekind, constr, fplog, fcd,
-                                              mdModulesNotifier, MASTER(cr), observablesHistory,
-                                              startingBehavior);
-
-    // Free energy perturbation element builder
-    FreeEnergyPerturbationElementBuilder freeEnergyPerturbationElementBuilder(fplog, inputrec, mdAtoms);
-
-    // Domain decomposition helper builder
-    DomDecHelperBuilder domDecHelperBuilder(
-            mdrunOptions.verbose, mdrunOptions.verboseStepPrintInterval, nstglobalcomm_, fplog, cr,
-            mdlog, constr, inputrec, mdAtoms, nrnb, wcycle, fr, vsite, imdSession, pull_work);
-
-    // PME load balance helper builder
-    PmeLoadBalanceHelperBuilder pmeLoadBalanceHelperBuilder(mdrunOptions, fplog, cr, mdlog,
-                                                            inputrec, wcycle, fr);
-
-    /*
-     * Connect simulator builders
-     */
-    // Last step signaller
-    lastStepSignallerBuilder.registerWithSignallerBuilder(
-            compat::make_not_null(&neighborSearchSignallerBuilder));
-    // Logging signaller
-    loggingSignallerBuilder.registerWithSignallerBuilder(compat::make_not_null(&lastStepSignallerBuilder));
-    // Trajectory element
-    trajectoryElementBuilder.registerWithSignallerBuilder(compat::make_not_null(&lastStepSignallerBuilder));
-    trajectoryElementBuilder.registerWithSignallerBuilder(compat::make_not_null(&loggingSignallerBuilder));
-    // Energy signaller
-    energySignallerBuilder.registerWithSignallerBuilder(compat::make_not_null(&loggingSignallerBuilder));
-    energySignallerBuilder.registerWithSignallerBuilder(compat::make_not_null(&trajectoryElementBuilder));
-
-    // State propagator data
-    statePropagatorDataBuilder.setFreeEnergyPerturbationElement(
-            freeEnergyPerturbationElementBuilder.getPointer());
-    statePropagatorDataBuilder.registerWithLastStepSignaller(&lastStepSignallerBuilder);
-    statePropagatorDataBuilder.registerWithTrajectoryElement(&trajectoryElementBuilder);
-    statePropagatorDataBuilder.setTopologyHolder(topologyHolderBuilder.getPointer());
-    statePropagatorDataBuilder.registerWithCheckpointHelper(&checkpointHelperBuilder);
-
-    // Energy element
-    energyElementBuilder.setStatePropagatorData(statePropagatorDataBuilder.getPointer());
-    energyElementBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementBuilder.getPointer());
-    energyElementBuilder.registerWithEnergySignaller(&energySignallerBuilder);
-    energyElementBuilder.registerWithTrajectoryElement(&trajectoryElementBuilder);
-    energyElementBuilder.registerWithCheckpointHelper(&checkpointHelperBuilder);
-    energyElementBuilder.setTopologyHolder(topologyHolderBuilder.getPointer());
-
-    // FEP element
-    freeEnergyPerturbationElementBuilder.registerWithCheckpointHelper(&checkpointHelperBuilder);
-
-    // Checkpoint helper
-    checkpointHelperBuilder.registerWithLastStepSignaller(&lastStepSignallerBuilder);
-    checkpointHelperBuilder.setTrajectoryElement(&trajectoryElementBuilder);
-
-    // DD helper
-    domDecHelperBuilder.setStatePropagatorData(statePropagatorDataBuilder.getPointer());
-    domDecHelperBuilder.registerWithNeighborSearchSignaller(&neighborSearchSignallerBuilder);
-    domDecHelperBuilder.setTopologyHolder(topologyHolderBuilder.getPointer());
-
-    // PME load balance helper
-    pmeLoadBalanceHelperBuilder.setStatePropagatorData(statePropagatorDataBuilder.getPointer());
-    pmeLoadBalanceHelperBuilder.registerWithNeighborSearchSignaller(&neighborSearchSignallerBuilder);
-
-    /*
-     * Register the simulator itself to the neighbor search / last step signaller
-     */
-    neighborSearchSignallerBuilder.registerSignallerClient(compat::make_not_null(signalHelper_.get()));
-    lastStepSignallerBuilder.registerSignallerClient(compat::make_not_null(signalHelper_.get()));
+    // Construct and connect all builders
+    auto builders = constructBuilders();
 
     /*
      * Build integrator - this takes care of force calculation, propagation,
      * constraining, and of the place the statePropagatorData and the energy element
      * have a full timestep state.
      */
-    auto integrator = buildIntegrator(
-            &neighborSearchSignallerBuilder, &energySignallerBuilder, &loggingSignallerBuilder,
-            &trajectoryElementBuilder, &checkpointHelperBuilder, &domDecHelperBuilder,
-            compat::make_not_null(statePropagatorDataBuilder.getPointer()), &energyElementBuilder,
-            freeEnergyPerturbationElementBuilder.getPointer(), &topologyHolderBuilder, hasReadEkinState);
+    auto integrator = buildIntegrator(builders.get());
 
     /*
      * Build infrastructure elements
      */
-    domDecHelper_         = domDecHelperBuilder.build();
-    pmeLoadBalanceHelper_ = pmeLoadBalanceHelperBuilder.build();
-    topologyHolder_       = topologyHolderBuilder.build();
-    checkpointHelper_     = checkpointHelperBuilder.build();
+    domDecHelper_         = builders->domDecHelper->build();
+    pmeLoadBalanceHelper_ = builders->pmeLoadBalanceHelper->build();
+    topologyHolder_       = builders->topologyHolder->build();
+    checkpointHelper_     = builders->checkpointHelper->build();
 
     const bool simulationsShareResetCounters = false;
     resetHandler_                            = std::make_unique<ResetHandler>(
@@ -501,16 +632,18 @@ void ModularSimulator::constructElementsAndSignallers()
      * Note that as signallers depend on each others, the order of calling the signallers
      * matters. It is the responsibility of this builder to ensure that the order is
      * maintained.
+     *
+     * As the trajectory element is both a signaller and an element, it is added to the
+     * signaller _call_ list, but owned by the element list.
      */
+    auto trajectoryElement = builders->trajectoryElement->build();
 
-    auto trajectoryElement = trajectoryElementBuilder.build();
-
-    addToCallListAndMove(neighborSearchSignallerBuilder.build(), signallerCallList_,
+    addToCallListAndMove(builders->neighborSearchSignaller->build(), signallerCallList_,
                          signallersOwnershipList_);
-    addToCallListAndMove(lastStepSignallerBuilder.build(), signallerCallList_, signallersOwnershipList_);
-    addToCallListAndMove(loggingSignallerBuilder.build(), signallerCallList_, signallersOwnershipList_);
+    addToCallListAndMove(builders->lastStepSignaller->build(), signallerCallList_, signallersOwnershipList_);
+    addToCallListAndMove(builders->loggingSignaller->build(), signallerCallList_, signallersOwnershipList_);
     addToCallList(trajectoryElement, signallerCallList_);
-    addToCallListAndMove(energySignallerBuilder.build(), signallerCallList_, signallersOwnershipList_);
+    addToCallListAndMove(builders->energySignaller->build(), signallerCallList_, signallersOwnershipList_);
 
     /*
      * Build the element list
@@ -522,162 +655,65 @@ void ModularSimulator::constructElementsAndSignallers()
      * call list to be able to react to the last step being signalled.
      */
     addToCallList(checkpointHelper_, elementCallList_);
-    addToCallListAndMove(freeEnergyPerturbationElementBuilder.build(), elementCallList_,
+    addToCallListAndMove(builders->freeEnergyPerturbationElement->build(), elementCallList_,
                          elementsOwnershipList_);
     addToCallListAndMove(std::move(integrator), elementCallList_, elementsOwnershipList_);
     addToCallListAndMove(std::move(trajectoryElement), elementCallList_, elementsOwnershipList_);
     // for vv, we need to setup statePropagatorData after the compute
     // globals so that we reset the right velocities
     // TODO: Avoid this by getting rid of the need of resetting velocities in vv
-    elementsOwnershipList_.emplace_back(statePropagatorDataBuilder.build());
+    elementsOwnershipList_.emplace_back(builders->statePropagatorData->build());
 }
 
-std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
-        SignallerBuilder<NeighborSearchSignaller>* neighborSearchSignallerBuilder,
-        SignallerBuilder<EnergySignaller>*         energySignallerBuilder,
-        SignallerBuilder<LoggingSignaller>*        loggingSignallerBuilder,
-        TrajectoryElementBuilder*                  trajectoryElementBuilder,
-        CheckpointHelperBuilder*                   checkpointHelperBuilder,
-        DomDecHelperBuilder*                       domDecHelperBuilder,
-        compat::not_null<StatePropagatorData*>     statePropagatorDataPtr,
-        EnergyElementBuilder*                      energyElementBuilder,
-        FreeEnergyPerturbationElement*             freeEnergyPerturbationElementPtr,
-        TopologyHolderBuilder*                     topologyHolderBuilder,
-        bool                                       hasReadEkinState)
+std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(Builders* builders)
 {
-    /*
-     * Build module builders
-     */
-    ConstraintsElementBuilder constraintsElementBuilder(constr, MASTER(cr), fplog, inputrec,
-                                                        mdAtoms->mdatoms());
-
-    const bool          isVerbose    = mdrunOptions.verbose;
-    const bool          isDynamicBox = inputrecDynamicBox(inputrec);
-    ForceElementBuilder forceElementBuilder(isVerbose, isDynamicBox, fplog, cr, inputrec, mdAtoms,
-                                            nrnb, fr, fcd, wcycle, runScheduleWork, vsite, imdSession,
-                                            pull_work, constr, top_global, enforcedRotation);
-
-    ComputeGlobalsElementBuilder computeGlobalsElementBuilder(
-            inputrec->eI, &signals_, nstglobalcomm_, fplog, mdlog, cr, inputrec, mdAtoms, nrnb,
-            wcycle, fr, top_global, constr, hasReadEkinState);
-
-    ParrinelloRahmanBarostatBuilder parrinelloRahmanBarostatBuilder(
-            inputrec->nstpcouple, inputrec->delta_t * inputrec->nstpcouple, inputrec->init_step,
-            fplog, inputrec, mdAtoms, state_global, cr, inputrec->bContinuation);
-
-    VRescaleThermostatBuilder vRescaleThermostatBuilder(
-            inputrec->nsttcouple, inputrec->ld_seed, inputrec->opts.ngtc,
-            inputrec->delta_t * inputrec->nsttcouple, inputrec->opts.ref_t, inputrec->opts.tau_t,
-            inputrec->opts.nrdf, state_global, cr, inputrec->bContinuation, inputrec->etc);
-
-    /*
-     * Connect builders
-     */
-    // Constraint element
-    constraintsElementBuilder.setStatePropagatorData(statePropagatorDataPtr);
-    constraintsElementBuilder.setEnergyElement(energyElementBuilder->getPointer());
-    constraintsElementBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementPtr);
-    constraintsElementBuilder.registerWithEnergySignaller(energySignallerBuilder);
-    constraintsElementBuilder.registerWithTrajectorySignaller(trajectoryElementBuilder);
-    constraintsElementBuilder.registerWithLoggingSignaller(loggingSignallerBuilder);
-
-    // Force element
-    forceElementBuilder.setStatePropagatorData(statePropagatorDataPtr);
-    forceElementBuilder.setEnergyElement(energyElementBuilder->getPointer());
-    forceElementBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementPtr);
-    forceElementBuilder.registerWithNeighborSearchSignaller(neighborSearchSignallerBuilder);
-    forceElementBuilder.registerWithEnergySignaller(energySignallerBuilder);
-    forceElementBuilder.registerWithTopologyHolder(topologyHolderBuilder);
-
-    // Compute-globals element
-    computeGlobalsElementBuilder.setStatePropagatorData(statePropagatorDataPtr);
-    computeGlobalsElementBuilder.setEnergyElement(energyElementBuilder->getPointer());
-    computeGlobalsElementBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementPtr);
-    computeGlobalsElementBuilder.registerWithTopologyHolder(topologyHolderBuilder);
-    computeGlobalsElementBuilder.registerWithEnergySignaller(energySignallerBuilder);
-    computeGlobalsElementBuilder.registerWithTrajectorySignaller(trajectoryElementBuilder);
-
-    domDecHelperBuilder->setComputeGlobalsElementBuilder(&computeGlobalsElementBuilder);
-
-    // Parrinello-Rahman barostat
-    parrinelloRahmanBarostatBuilder.setStatePropagatorData(statePropagatorDataPtr);
-    parrinelloRahmanBarostatBuilder.setEnergyElementBuilder(energyElementBuilder);
-    parrinelloRahmanBarostatBuilder.registerWithCheckpointHelper(checkpointHelperBuilder);
-
-    // v-rescale thermostat
-    vRescaleThermostatBuilder.setEnergyElementBuilder(energyElementBuilder);
-    vRescaleThermostatBuilder.registerWithCheckpointHelper(checkpointHelperBuilder);
-
     // list of elements owned by the simulator composite object
     std::vector<std::unique_ptr<ISimulatorElement>> elementsOwnershipList;
     // call list of the simulator composite object
     std::vector<compat::not_null<ISimulatorElement*>> elementCallList;
 
+    // Note that the state propagator data needs to be added to the ownership list later, so we will only add the (non-owning) pointer to the call list here
+
     if (inputrec->eI == eiMD)
     {
-        PropagatorBuilder<IntegrationStep::LeapFrog> propagatorBuilder(inputrec->delta_t, mdAtoms, wcycle);
-        propagatorBuilder.setStatePropagatorData(statePropagatorDataPtr);
-        parrinelloRahmanBarostatBuilder.setPropagatorBuilder(&propagatorBuilder);
-        vRescaleThermostatBuilder.setPropagatorBuilder(&propagatorBuilder);
-
-        addToCallListAndMove(forceElementBuilder.build(), elementCallList, elementsOwnershipList);
-        addToCallList(statePropagatorDataPtr, elementCallList); // we have a full microstate at time t here!
-
-        addToCallListAndMove(vRescaleThermostatBuilder.build(-1, false), elementCallList,
+        addToCallListAndMove(builders->forceElement->build(), elementCallList, elementsOwnershipList);
+        addToCallList(builders->statePropagatorData->getPointer(),
+                      elementCallList); // we have a full microstate at time t here!
+        addToCallListAndMove(builders->vRescaleThermostat->build(-1, false), elementCallList,
                              elementsOwnershipList);
-
-        addToCallListAndMove(propagatorBuilder.build(), elementCallList, elementsOwnershipList);
-
-        addToCallListAndMove(constraintsElementBuilder.build<ConstraintVariable::Positions>(),
+        addToCallListAndMove(builders->leapFrogPropagator->build(), elementCallList, elementsOwnershipList);
+        addToCallListAndMove(builders->constraintsElement->build<ConstraintVariable::Positions>(),
                              elementCallList, elementsOwnershipList);
-
-        addToCallListAndMove(computeGlobalsElementBuilder.build<ComputeGlobalsAlgorithm::LeapFrog>(),
+        addToCallListAndMove(builders->computeGlobalsElement->build<ComputeGlobalsAlgorithm::LeapFrog>(),
                              elementCallList, elementsOwnershipList);
-
-        addToCallListAndMove(energyElementBuilder->build(), elementCallList,
+        addToCallListAndMove(builders->energyElement->build(), elementCallList,
                              elementsOwnershipList); // we have the energies at time t here!
-
-        addToCallListAndMove(parrinelloRahmanBarostatBuilder.build(-1), elementCallList,
+        addToCallListAndMove(builders->parrinelloRahmanBarostat->build(-1), elementCallList,
                              elementsOwnershipList);
     }
     else if (inputrec->eI == eiVV)
     {
-        PropagatorBuilder<IntegrationStep::VelocitiesOnly> velocityPropagatorBuilder(
-                inputrec->delta_t * 0.5, mdAtoms, wcycle);
-        velocityPropagatorBuilder.setStatePropagatorData(statePropagatorDataPtr);
-        parrinelloRahmanBarostatBuilder.setPropagatorBuilder(&velocityPropagatorBuilder);
-
-        PropagatorBuilder<IntegrationStep::VelocityVerletPositionsAndVelocities> velocityAndPositionPropagatorBuilder(
-                inputrec->delta_t, mdAtoms, wcycle);
-        velocityAndPositionPropagatorBuilder.setStatePropagatorData(statePropagatorDataPtr);
-        vRescaleThermostatBuilder.setPropagatorBuilder(&velocityAndPositionPropagatorBuilder);
-
-        addToCallListAndMove(forceElementBuilder.build(), elementCallList, elementsOwnershipList);
-
-        addToCallListAndMove(velocityPropagatorBuilder.build(), elementCallList, elementsOwnershipList);
-
-        addToCallListAndMove(constraintsElementBuilder.build<ConstraintVariable::Velocities>(),
-                             elementCallList, elementsOwnershipList);
-
+        // compute globals is called twice in VV, so we build it here, and add it once only to the call list, and move it only for the second call
         auto computeGlobalsElement =
-                computeGlobalsElementBuilder.build<ComputeGlobalsAlgorithm::VelocityVerlet>();
-        addToCallList(computeGlobalsElement.get(), elementCallList);
-        addToCallList(statePropagatorDataPtr, elementCallList); // we have a full microstate at time t here!
+                builders->computeGlobalsElement->build<ComputeGlobalsAlgorithm::VelocityVerlet>();
 
-        addToCallListAndMove(vRescaleThermostatBuilder.build(0, true), elementCallList,
-                             elementsOwnershipList);
-
-        addToCallListAndMove(velocityAndPositionPropagatorBuilder.build(), elementCallList,
-                             elementsOwnershipList);
-
-        addToCallListAndMove(constraintsElementBuilder.build<ConstraintVariable::Positions>(),
+        addToCallListAndMove(builders->forceElement->build(), elementCallList, elementsOwnershipList);
+        addToCallListAndMove(builders->velocityPropagator->build(), elementCallList, elementsOwnershipList);
+        addToCallListAndMove(builders->constraintsElement->build<ConstraintVariable::Velocities>(),
                              elementCallList, elementsOwnershipList);
-
+        addToCallList(computeGlobalsElement.get(), elementCallList);
+        addToCallList(builders->statePropagatorData->getPointer(),
+                      elementCallList); // we have a full microstate at time t here!
+        addToCallListAndMove(builders->vRescaleThermostat->build(0, true), elementCallList,
+                             elementsOwnershipList);
+        addToCallListAndMove(builders->velocityVerletPropagator->build(), elementCallList,
+                             elementsOwnershipList);
+        addToCallListAndMove(builders->constraintsElement->build<ConstraintVariable::Positions>(),
+                             elementCallList, elementsOwnershipList);
         addToCallListAndMove(std::move(computeGlobalsElement), elementCallList, elementsOwnershipList);
-        addToCallListAndMove(energyElementBuilder->build(), elementCallList,
+        addToCallListAndMove(builders->energyElement->build(), elementCallList,
                              elementsOwnershipList); // we have the energies at time t here!
-
-        addToCallListAndMove(parrinelloRahmanBarostatBuilder.build(-1), elementCallList,
+        addToCallListAndMove(builders->parrinelloRahmanBarostat->build(-1), elementCallList,
                              elementsOwnershipList);
     }
     else
