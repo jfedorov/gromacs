@@ -49,6 +49,8 @@
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/state.h"
 
+#include "checkpointhelper.h"
+
 namespace gmx
 {
 
@@ -63,6 +65,11 @@ FreeEnergyPerturbationElement::FreeEnergyPerturbationElement(FILE*             f
     inputrec_(inputrec),
     mdAtoms_(mdAtoms)
 {
+    if (inputrec->efep == efepNO)
+    {
+        GMX_THROW(ElementNotNeededException(
+                "FreeEnergyPerturbationElement is not needed without FEP."));
+    }
     lambda_.fill(0);
     lambda0_.fill(0);
     initialize_lambdas(fplog_, *inputrec_, true, &currentFEPState_, lambda_, lambda0_.data());
@@ -107,6 +114,46 @@ void FreeEnergyPerturbationElement::writeCheckpoint(t_state* localState, t_state
     localState->fep_state = currentFEPState_;
     localState->lambda    = lambda_;
     localState->flags |= (1U << estLAMBDA) | (1U << estFEPSTATE);
+}
+
+void FreeEnergyPerturbationElementBuilder::registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder)
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Tried to register to CheckpointHelper without available "
+                       "FreeEnergyPerturbationElement.");
+    if (element_)
+    {
+        checkpointHelperBuilder->registerClient(compat::make_not_null(element_.get()));
+    }
+    registeredWithCheckpointHelper_ = true;
+}
+
+FreeEnergyPerturbationElement* FreeEnergyPerturbationElementBuilder::getPointer()
+{
+    GMX_RELEASE_ASSERT(
+            registrationPossible_,
+            "Called getPointer() without available FreeEnergyPerturbationElement object.");
+    return element_.get();
+}
+
+std::unique_ptr<FreeEnergyPerturbationElement> FreeEnergyPerturbationElementBuilder::build()
+{
+    GMX_RELEASE_ASSERT(registrationPossible_,
+                       "Called build() without available FreeEnergyPerturbationElement.");
+    if (element_)
+    {
+        GMX_RELEASE_ASSERT(registeredWithCheckpointHelper_,
+                           "Tried to build FreeEnergyPerturbationElement before registering with "
+                           "CheckpointHelper.");
+    }
+    registrationPossible_ = false;
+    return std::move(element_);
+}
+
+FreeEnergyPerturbationElementBuilder::~FreeEnergyPerturbationElementBuilder()
+{
+    // If the element was built, but not consumed, we risk having dangling pointers
+    GMX_ASSERT(!element_, "FreeEnergyPerturbationElement was constructed, but not used.");
 }
 
 } // namespace gmx

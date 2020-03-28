@@ -392,6 +392,9 @@ void ModularSimulator::constructElementsAndSignallers()
                                               mdModulesNotifier, MASTER(cr), observablesHistory,
                                               startingBehavior);
 
+    // Free energy perturbation element builder
+    FreeEnergyPerturbationElementBuilder freeEnergyPerturbationElementBuilder(fplog, inputrec, mdAtoms);
+
     // Domain decomposition helper builder
     DomDecHelperBuilder domDecHelperBuilder(
             mdrunOptions.verbose, mdrunOptions.verboseStepPrintInterval, nstglobalcomm_, fplog, cr,
@@ -405,6 +408,7 @@ void ModularSimulator::constructElementsAndSignallers()
      * Connect simulator builders
      */
     // State propagator data
+    statePropagatorDataBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementBuilder.getPointer());
     statePropagatorDataBuilder.registerWithLastStepSignaller(&lastStepSignallerBuilder);
     statePropagatorDataBuilder.registerWithTrajectoryElement(&trajectoryElementBuilder);
     statePropagatorDataBuilder.setTopologyHolder(topologyHolder_.get());
@@ -412,10 +416,14 @@ void ModularSimulator::constructElementsAndSignallers()
 
     // Energy element
     energyElementBuilder.setStatePropagatorData(statePropagatorDataBuilder.getPointer());
+    energyElementBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementBuilder.getPointer());
     energyElementBuilder.registerWithEnergySignaller(&energySignallerBuilder);
     energyElementBuilder.registerWithTrajectoryElement(&trajectoryElementBuilder);
     energyElementBuilder.registerWithCheckpointHelper(&checkpointHelperBuilder);
     energyElementBuilder.setTopologyHolder(topologyHolder_.get());
+
+    // FEP element
+    freeEnergyPerturbationElementBuilder.registerWithCheckpointHelper(&checkpointHelperBuilder);
 
     // Checkpoint helper
     checkpointHelperBuilder.registerWithLastStepSignaller(&lastStepSignallerBuilder);
@@ -428,23 +436,6 @@ void ModularSimulator::constructElementsAndSignallers()
     // PME load balance helper
     pmeLoadBalanceHelperBuilder.setStatePropagatorData(statePropagatorDataBuilder.getPointer());
     pmeLoadBalanceHelperBuilder.registerWithNeighborSearchSignaller(&neighborSearchSignallerBuilder);
-
-    /*
-     * Build data structures
-     */
-
-    std::unique_ptr<FreeEnergyPerturbationElement> freeEnergyPerturbationElement    = nullptr;
-    FreeEnergyPerturbationElement*                 freeEnergyPerturbationElementPtr = nullptr;
-    if (inputrec->efep != efepNO)
-    {
-        freeEnergyPerturbationElement =
-                std::make_unique<FreeEnergyPerturbationElement>(fplog, inputrec, mdAtoms);
-        freeEnergyPerturbationElementPtr = freeEnergyPerturbationElement.get();
-        checkpointHelperBuilder.registerClient(compat::make_not_null(freeEnergyPerturbationElement.get()));
-    }
-
-    statePropagatorDataBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementPtr);
-    energyElementBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementPtr);
 
     /*
      * Build stop handler
@@ -470,7 +461,7 @@ void ModularSimulator::constructElementsAndSignallers()
             &neighborSearchSignallerBuilder, &energySignallerBuilder, &loggingSignallerBuilder,
             &trajectoryElementBuilder, &checkpointHelperBuilder, &domDecHelperBuilder,
             compat::make_not_null(statePropagatorDataBuilder.getPointer()), &energyElementBuilder,
-            freeEnergyPerturbationElementPtr, hasReadEkinState);
+            freeEnergyPerturbationElementBuilder.getPointer(), hasReadEkinState);
 
     /*
      * Build infrastructure elements
@@ -530,11 +521,8 @@ void ModularSimulator::constructElementsAndSignallers()
      * call list to be able to react to the last step being signalled.
      */
     addToCallList(checkpointHelper_, elementCallList_);
-    if (freeEnergyPerturbationElement)
-    {
-        addToCallListAndMove(std::move(freeEnergyPerturbationElement), elementCallList_,
-                             elementsOwnershipList_);
-    }
+    addToCallListAndMove(freeEnergyPerturbationElementBuilder.build(), elementCallList_,
+                         elementsOwnershipList_);
     addToCallListAndMove(std::move(integrator), elementCallList_, elementsOwnershipList_);
     addToCallListAndMove(std::move(trajectoryElement), elementCallList_, elementsOwnershipList_);
     // for vv, we need to setup statePropagatorData after the compute

@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -44,6 +44,7 @@
 
 #include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/real.h"
 
 #include "modularsimulatorinterfaces.h"
@@ -52,6 +53,7 @@ struct t_inputrec;
 
 namespace gmx
 {
+class CheckpointHelperBuilder;
 class MDAtoms;
 
 /*! \libinternal
@@ -68,9 +70,6 @@ class MDAtoms;
 class FreeEnergyPerturbationElement final : public ISimulatorElement, public ICheckpointHelperClient
 {
 public:
-    //! Constructor
-    FreeEnergyPerturbationElement(FILE* fplog, const t_inputrec* inputrec, MDAtoms* mdAtoms);
-
     //! Get a view of the current lambda vector
     ArrayRef<real> lambdaView();
     //! Get a const view of the current lambda vector
@@ -87,7 +86,13 @@ public:
     //! No teardown needed
     void elementTeardown() override{};
 
+    //! Allow builder to do its job
+    friend class FreeEnergyPerturbationElementBuilder;
+
 private:
+    //! Constructor
+    FreeEnergyPerturbationElement(FILE* fplog, const t_inputrec* inputrec, MDAtoms* mdAtoms);
+
     //! ICheckpointHelperClient implementation
     void writeCheckpoint(t_state* localState, t_state* globalState) override;
     //! Update the lambda values
@@ -110,6 +115,56 @@ private:
     //! Atom parameters for this domain.
     MDAtoms* mdAtoms_;
 };
+
+/*! \libinternal
+ * \ingroup module_modularsimulator
+ * \brief Builder for the free energy perturbation element
+ */
+class FreeEnergyPerturbationElementBuilder
+{
+public:
+    //! Constructor, forwarding arguments to FreeEnergyPerturbationElement constructor
+    template<typename... Args>
+    explicit FreeEnergyPerturbationElementBuilder(Args&&... args);
+
+    //! Register element with CheckpointHelper (required)
+    void registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder);
+
+    //! Get (non-owning) pointer before element is built
+    FreeEnergyPerturbationElement* getPointer();
+
+    //! Return FreeEnergyPerturbationElement
+    std::unique_ptr<FreeEnergyPerturbationElement> build();
+
+    //! Destructor, make sure we didn't connect an element which won't exist anymore
+    ~FreeEnergyPerturbationElementBuilder();
+
+private:
+    //! The element to be built
+    std::unique_ptr<FreeEnergyPerturbationElement> element_ = nullptr;
+    //! Whether we allow registration
+    bool registrationPossible_ = false;
+    //! Whether we have registered the element with the checkpoint helper
+    bool registeredWithCheckpointHelper_ = false;
+};
+
+template<typename... Args>
+FreeEnergyPerturbationElementBuilder::FreeEnergyPerturbationElementBuilder(Args&&... args)
+{
+    try
+    {
+        // NOLINTNEXTLINE(modernize-make-unique): make_unique does not work with private constructor
+        element_ = std::unique_ptr<FreeEnergyPerturbationElement>(
+                new FreeEnergyPerturbationElement(std::forward<Args>(args)...));
+    }
+    catch (ElementNotNeededException&)
+    {
+        element_ = nullptr;
+    }
+    // Element being nullptr is a valid state, nullptr (element is not built)
+    // needs to be handled by the caller of build().
+    registrationPossible_ = true;
+}
 
 } // namespace gmx
 
