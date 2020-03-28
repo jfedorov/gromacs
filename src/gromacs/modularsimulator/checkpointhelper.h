@@ -55,6 +55,7 @@ namespace gmx
 {
 class MDLogger;
 class TrajectoryElement;
+class TrajectoryElementBuilder;
 
 /*! \libinternal
  * \ingroup module_modularsimulator
@@ -190,7 +191,7 @@ public:
     //! Register checkpointing client
     void registerClient(compat::not_null<ICheckpointHelperClient*> client);
     //! Set pointer to TrajectoryElement valid throughout the simulation (required)
-    void setTrajectoryElement(TrajectoryElement* trajectoryElement);
+    void setTrajectoryElement(TrajectoryElementBuilder* trajectoryElementBuilder);
     //! Register element with LastStepSignaller (required)
     void registerWithLastStepSignaller(SignallerBuilder<LastStepSignaller>* signallerBuilder);
     //! Set CheckpointHandler

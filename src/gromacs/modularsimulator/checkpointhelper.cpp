@@ -137,11 +137,11 @@ void CheckpointHelperBuilder::registerClient(compat::not_null<ICheckpointHelperC
     checkpointHelper_->clients_.emplace_back(client);
 }
 
-void CheckpointHelperBuilder::setTrajectoryElement(TrajectoryElement* trajectoryElement)
+void CheckpointHelperBuilder::setTrajectoryElement(TrajectoryElementBuilder* trajectoryElementBuilder)
 {
     GMX_RELEASE_ASSERT(checkpointHelper_,
                        "Tried to set TrajectoryElement after CheckpointHelper was built.");
-    checkpointHelper_->trajectoryElement_ = trajectoryElement;
+    checkpointHelper_->trajectoryElement_ = trajectoryElementBuilder->getPointer();
 }
 
 void CheckpointHelperBuilder::registerWithLastStepSignaller(SignallerBuilder<LastStepSignaller>* signallerBuilder)

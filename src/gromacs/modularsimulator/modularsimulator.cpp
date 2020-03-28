@@ -356,20 +356,33 @@ void ModularSimulator::constructElementsAndSignallers()
         restore_ekinstate_from_state(cr, ekind, &state_global->ekinstate);
     }
 
+    // Multisim is currently disabled
+    const bool simulationsShareState = false;
+
+    // Build stop handler
+    stopHandler_ = stopHandlerBuilder->getStopHandlerMD(
+            compat::not_null<SimulationSignal*>(&signals_[eglsSTOPCOND]), simulationsShareState,
+            MASTER(cr), inputrec->nstlist, mdrunOptions.reproducible, nstglobalcomm_,
+            mdrunOptions.maximumHoursToRun, inputrec->nstlist == 0, fplog, stophandlerCurrentStep_,
+            stophandlerIsNSStep_, walltime_accounting);
+
     // Build the topology holder
     TopologyHolderBuilder topologyHolderBuilder(*top_global, cr, inputrec, fr, mdAtoms, constr, vsite);
 
     /*
      * Create simulator builders
      */
-    SignallerBuilder<NeighborSearchSignaller> neighborSearchSignallerBuilder;
-    SignallerBuilder<LastStepSignaller>       lastStepSignallerBuilder;
-    SignallerBuilder<LoggingSignaller>        loggingSignallerBuilder;
-    SignallerBuilder<EnergySignaller>         energySignallerBuilder;
-    TrajectoryElementBuilder                  trajectoryElementBuilder;
-
-    // Multisim is currently disabled
-    const bool simulationsShareState = false;
+    SignallerBuilder<NeighborSearchSignaller> neighborSearchSignallerBuilder(
+            inputrec->nstlist, inputrec->init_step, inputrec->init_t);
+    SignallerBuilder<LastStepSignaller> lastStepSignallerBuilder(
+            inputrec->nsteps, inputrec->init_step, stopHandler_.get());
+    SignallerBuilder<LoggingSignaller> loggingSignallerBuilder(
+            inputrec->nstlog, inputrec->init_step, inputrec->init_t);
+    SignallerBuilder<EnergySignaller> energySignallerBuilder(
+            inputrec->nstcalcenergy, inputrec->fepvals->nstdhdl, inputrec->nstpcouple);
+    TrajectoryElementBuilder trajectoryElementBuilder(
+            fplog, nfile, fnm, mdrunOptions, cr, outputProvider, mdModulesNotifier, inputrec,
+            top_global, oenv, wcycle, startingBehavior, simulationsShareState);
 
     // Builder for the checkpoint helper
     CheckpointHelperBuilder checkpointHelperBuilder(inputrec->init_step, top_global->natoms, fplog,
@@ -406,6 +419,18 @@ void ModularSimulator::constructElementsAndSignallers()
     /*
      * Connect simulator builders
      */
+    // Last step signaller
+    lastStepSignallerBuilder.registerWithSignallerBuilder(
+            compat::make_not_null(&neighborSearchSignallerBuilder));
+    // Logging signaller
+    loggingSignallerBuilder.registerWithSignallerBuilder(compat::make_not_null(&lastStepSignallerBuilder));
+    // Trajectory element
+    trajectoryElementBuilder.registerWithSignallerBuilder(compat::make_not_null(&lastStepSignallerBuilder));
+    trajectoryElementBuilder.registerWithSignallerBuilder(compat::make_not_null(&loggingSignallerBuilder));
+    // Energy signaller
+    energySignallerBuilder.registerWithSignallerBuilder(compat::make_not_null(&loggingSignallerBuilder));
+    energySignallerBuilder.registerWithSignallerBuilder(compat::make_not_null(&trajectoryElementBuilder));
+
     // State propagator data
     statePropagatorDataBuilder.setFreeEnergyPerturbationElement(
             freeEnergyPerturbationElementBuilder.getPointer());
@@ -427,6 +452,7 @@ void ModularSimulator::constructElementsAndSignallers()
 
     // Checkpoint helper
     checkpointHelperBuilder.registerWithLastStepSignaller(&lastStepSignallerBuilder);
+    checkpointHelperBuilder.setTrajectoryElement(&trajectoryElementBuilder);
 
     // DD helper
     domDecHelperBuilder.setStatePropagatorData(statePropagatorDataBuilder.getPointer());
@@ -436,15 +462,6 @@ void ModularSimulator::constructElementsAndSignallers()
     // PME load balance helper
     pmeLoadBalanceHelperBuilder.setStatePropagatorData(statePropagatorDataBuilder.getPointer());
     pmeLoadBalanceHelperBuilder.registerWithNeighborSearchSignaller(&neighborSearchSignallerBuilder);
-
-    /*
-     * Build stop handler
-     */
-    stopHandler_ = stopHandlerBuilder->getStopHandlerMD(
-            compat::not_null<SimulationSignal*>(&signals_[eglsSTOPCOND]), simulationsShareState,
-            MASTER(cr), inputrec->nstlist, mdrunOptions.reproducible, nstglobalcomm_,
-            mdrunOptions.maximumHoursToRun, inputrec->nstlist == 0, fplog, stophandlerCurrentStep_,
-            stophandlerIsNSStep_, walltime_accounting);
 
     /*
      * Register the simulator itself to the neighbor search / last step signaller
@@ -469,6 +486,7 @@ void ModularSimulator::constructElementsAndSignallers()
     domDecHelper_         = domDecHelperBuilder.build();
     pmeLoadBalanceHelper_ = pmeLoadBalanceHelperBuilder.build();
     topologyHolder_       = topologyHolderBuilder.build();
+    checkpointHelper_     = checkpointHelperBuilder.build();
 
     const bool simulationsShareResetCounters = false;
     resetHandler_                            = std::make_unique<ResetHandler>(
@@ -484,33 +502,15 @@ void ModularSimulator::constructElementsAndSignallers()
      * matters. It is the responsibility of this builder to ensure that the order is
      * maintained.
      */
-    auto energySignaller = energySignallerBuilder.build(
-            inputrec->nstcalcenergy, inputrec->fepvals->nstdhdl, inputrec->nstpcouple);
-    trajectoryElementBuilder.registerSignallerClient(compat::make_not_null(energySignaller.get()));
-    loggingSignallerBuilder.registerSignallerClient(compat::make_not_null(energySignaller.get()));
-    auto trajectoryElement = trajectoryElementBuilder.build(
-            fplog, nfile, fnm, mdrunOptions, cr, outputProvider, mdModulesNotifier, inputrec,
-            top_global, oenv, wcycle, startingBehavior, simulationsShareState);
-    loggingSignallerBuilder.registerSignallerClient(compat::make_not_null(trajectoryElement.get()));
 
-    checkpointHelperBuilder.setTrajectoryElement(trajectoryElement.get());
-    checkpointHelper_ = checkpointHelperBuilder.build();
+    auto trajectoryElement = trajectoryElementBuilder.build();
 
-    lastStepSignallerBuilder.registerSignallerClient(compat::make_not_null(trajectoryElement.get()));
-    auto loggingSignaller =
-            loggingSignallerBuilder.build(inputrec->nstlog, inputrec->init_step, inputrec->init_t);
-    lastStepSignallerBuilder.registerSignallerClient(compat::make_not_null(loggingSignaller.get()));
-    auto lastStepSignaller =
-            lastStepSignallerBuilder.build(inputrec->nsteps, inputrec->init_step, stopHandler_.get());
-    neighborSearchSignallerBuilder.registerSignallerClient(compat::make_not_null(lastStepSignaller.get()));
-    auto neighborSearchSignaller = neighborSearchSignallerBuilder.build(
-            inputrec->nstlist, inputrec->init_step, inputrec->init_t);
-
-    addToCallListAndMove(std::move(neighborSearchSignaller), signallerCallList_, signallersOwnershipList_);
-    addToCallListAndMove(std::move(lastStepSignaller), signallerCallList_, signallersOwnershipList_);
-    addToCallListAndMove(std::move(loggingSignaller), signallerCallList_, signallersOwnershipList_);
+    addToCallListAndMove(neighborSearchSignallerBuilder.build(), signallerCallList_,
+                         signallersOwnershipList_);
+    addToCallListAndMove(lastStepSignallerBuilder.build(), signallerCallList_, signallersOwnershipList_);
+    addToCallListAndMove(loggingSignallerBuilder.build(), signallerCallList_, signallersOwnershipList_);
     addToCallList(trajectoryElement, signallerCallList_);
-    addToCallListAndMove(std::move(energySignaller), signallerCallList_, signallersOwnershipList_);
+    addToCallListAndMove(energySignallerBuilder.build(), signallerCallList_, signallersOwnershipList_);
 
     /*
      * Build the element list

@@ -49,24 +49,22 @@
 
 namespace gmx
 {
-TrajectoryElement::TrajectoryElement(std::vector<SignallerCallbackPtr>     signalEnergyCallbacks,
-                                     std::vector<SignallerCallbackPtr>     signalStateCallbacks,
-                                     std::vector<ITrajectoryWriterClient*> writerClients,
-                                     FILE*                                 fplog,
-                                     int                                   nfile,
-                                     const t_filenm                        fnm[],
-                                     const MdrunOptions&                   mdrunOptions,
-                                     const t_commrec*                      cr,
-                                     gmx::IMDOutputProvider*               outputProvider,
-                                     const MdModulesNotifier&              mdModulesNotifier,
-                                     const t_inputrec*                     inputrec,
-                                     const gmx_mtop_t*                     top_global,
-                                     const gmx_output_env_t*               oenv,
-                                     gmx_wallcycle*                        wcycle,
-                                     StartingBehavior                      startingBehavior,
-                                     const bool                            simulationsShareState) :
+TrajectoryElement::TrajectoryElement(FILE*                    fplog,
+                                     int                      nfile,
+                                     const t_filenm           fnm[],
+                                     const MdrunOptions&      mdrunOptions,
+                                     const t_commrec*         cr,
+                                     gmx::IMDOutputProvider*  outputProvider,
+                                     const MdModulesNotifier& mdModulesNotifier,
+                                     const t_inputrec*        inputrec,
+                                     const gmx_mtop_t*        top_global,
+                                     const gmx_output_env_t*  oenv,
+                                     gmx_wallcycle*           wcycle,
+                                     StartingBehavior         startingBehavior,
+                                     const bool               simulationsShareState) :
     writeEnergyStep_(-1),
     writeStateStep_(-1),
+    logWritingStep_(-1),
     outf_(init_mdoutf(fplog,
                       nfile,
                       fnm,
@@ -90,11 +88,8 @@ TrajectoryElement::TrajectoryElement(std::vector<SignallerCallbackPtr>     signa
     tngBoxOutCompressed_(mdoutf_get_tng_compressed_box_output_interval(outf_)),
     tngLambdaOutCompressed_(mdoutf_get_tng_compressed_lambda_output_interval(outf_)),
     nstenergy_(inputrec->nstenergy),
-    signalEnergyCallbacks_(std::move(signalEnergyCallbacks)),
-    signalStateCallbacks_(std::move(signalStateCallbacks)),
     lastStep_(-1),
-    lastStepRegistrationDone_(false),
-    writerClients_(std::move(writerClients))
+    lastStepRegistrationDone_(false)
 {
 }
 
@@ -201,13 +196,53 @@ SignallerCallbackPtr TrajectoryElement::registerLoggingCallback()
             [this](Step step, Time /*unused*/) { logWritingStep_ = step; });
 }
 
+TrajectoryElement* TrajectoryElementBuilder::getPointer()
+{
+    GMX_RELEASE_ASSERT(trajectoryElement_,
+                       "Called getPointer() without available TrajectoryElement object.");
+    return trajectoryElement_.get();
+}
+
+std::unique_ptr<TrajectoryElement> TrajectoryElementBuilder::build()
+{
+    GMX_RELEASE_ASSERT(trajectoryElement_, "Called build() without available trajectory element.");
+    std::vector<SignallerCallbackPtr> signalEnergyCallbacks;
+    std::vector<SignallerCallbackPtr> signalStateCallbacks;
+    // Allow clients to register their callbacks
+    for (auto& client : signallerClients_)
+    {
+        // don't register nullptr
+        if (auto energyCallback =
+                    client->registerTrajectorySignallerCallback(TrajectoryEvent::EnergyWritingStep))
+        {
+            signalEnergyCallbacks.emplace_back(std::move(energyCallback));
+        }
+        if (auto stateCallback =
+                    client->registerTrajectorySignallerCallback(TrajectoryEvent::StateWritingStep))
+        {
+            signalStateCallbacks.emplace_back(std::move(stateCallback));
+        }
+    }
+    trajectoryElement_->signalEnergyCallbacks_ = std::move(signalEnergyCallbacks);
+    trajectoryElement_->signalStateCallbacks_  = std::move(signalStateCallbacks);
+    trajectoryElement_->writerClients_         = std::move(writerClients_);
+
+    return std::move(trajectoryElement_);
+}
+
 void TrajectoryElementBuilder::registerSignallerClient(compat::not_null<ITrajectorySignallerClient*> client)
 {
+    GMX_RELEASE_ASSERT(
+            trajectoryElement_,
+            "Tried to register with TrajectoryElementBuilder after TrajectoryElement was built.");
     signallerClients_.emplace_back(client);
 }
 
 void TrajectoryElementBuilder::registerWriterClient(compat::not_null<ITrajectoryWriterClient*> client)
 {
+    GMX_RELEASE_ASSERT(
+            trajectoryElement_,
+            "Tried to register with TrajectoryElementBuilder after TrajectoryElement was built.");
     writerClients_.emplace_back(client);
 }
 

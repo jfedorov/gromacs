@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -60,11 +60,7 @@ static inline void runAllCallbacks(std::vector<SignallerCallbackPtr>& callbacks,
     }
 }
 
-NeighborSearchSignaller::NeighborSearchSignaller(std::vector<SignallerCallbackPtr> callbacks,
-                                                 Step                              nstlist,
-                                                 Step                              initStep,
-                                                 Time                              initTime) :
-    callbacks_(std::move(callbacks)),
+NeighborSearchSignaller::NeighborSearchSignaller(Step nstlist, Step initStep, Time initTime) :
     nstlist_(nstlist),
     initStep_(initStep),
     initTime_(initTime)
@@ -80,11 +76,7 @@ void NeighborSearchSignaller::signal(Step step, Time time)
     }
 }
 
-LastStepSignaller::LastStepSignaller(std::vector<SignallerCallbackPtr> callbacks,
-                                     gmx::Step                         nsteps,
-                                     gmx::Step                         initStep,
-                                     StopHandler*                      stopHandler) :
-    callbacks_(std::move(callbacks)),
+LastStepSignaller::LastStepSignaller(gmx::Step nsteps, gmx::Step initStep, StopHandler* stopHandler) :
     stopStep_(initStep + nsteps),
     signalledStopCondition_(false),
     stopHandler_(stopHandler),
@@ -120,11 +112,7 @@ SignallerCallbackPtr LastStepSignaller::registerNSCallback()
             [this](Step step, Time gmx_unused time) { this->nextNSStep_ = step; });
 }
 
-LoggingSignaller::LoggingSignaller(std::vector<SignallerCallbackPtr> callbacks,
-                                   Step                              nstlog,
-                                   Step                              initStep,
-                                   Time                              initTime) :
-    callbacks_(std::move(callbacks)),
+LoggingSignaller::LoggingSignaller(Step nstlog, Step initStep, Time initTime) :
     nstlog_(nstlog),
     initStep_(initStep),
     initTime_(initTime),
@@ -154,15 +142,7 @@ SignallerCallbackPtr LoggingSignaller::registerLastStepCallback()
             [this](Step step, Time gmx_unused time) { this->lastStep_ = step; });
 }
 
-EnergySignaller::EnergySignaller(std::vector<SignallerCallbackPtr> calculateEnergyCallbacks,
-                                 std::vector<SignallerCallbackPtr> calculateVirialCallbacks,
-                                 std::vector<SignallerCallbackPtr> calculateFreeEnergyCallbacks,
-                                 int                               nstcalcenergy,
-                                 int                               nstcalcfreeenergy,
-                                 int                               nstcalcvirial) :
-    calculateEnergyCallbacks_(std::move(calculateEnergyCallbacks)),
-    calculateVirialCallbacks_(std::move(calculateVirialCallbacks)),
-    calculateFreeEnergyCallbacks_(std::move(calculateFreeEnergyCallbacks)),
+EnergySignaller::EnergySignaller(int nstcalcenergy, int nstcalcfreeenergy, int nstcalcvirial) :
     nstcalcenergy_(nstcalcenergy),
     nstcalcfreeenergy_(nstcalcfreeenergy),
     nstcalcvirial_(nstcalcvirial),
@@ -218,6 +198,19 @@ SignallerCallbackPtr EnergySignaller::registerLoggingCallback()
     loggingRegistrationDone_ = true;
     return std::make_unique<SignallerCallback>(
             [this](Step step, Time gmx_unused time) { this->loggingStep_ = step; });
+}
+
+template<>
+std::unique_ptr<EnergySignaller> SignallerBuilder<EnergySignaller>::build()
+{
+    GMX_RELEASE_ASSERT(signaller_, "Called build() without available signaller.");
+    signaller_->calculateEnergyCallbacks_ =
+            buildCallbackVector(EnergySignallerEvent::EnergyCalculationStep);
+    signaller_->calculateVirialCallbacks_ =
+            buildCallbackVector(EnergySignallerEvent::VirialCalculationStep);
+    signaller_->calculateFreeEnergyCallbacks_ =
+            buildCallbackVector(EnergySignallerEvent::FreeEnergyCalculationStep);
+    return std::move(signaller_);
 }
 
 } // namespace gmx

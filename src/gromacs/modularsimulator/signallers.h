@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -66,14 +66,24 @@ template<typename Signaller>
 class SignallerBuilder final
 {
 public:
+    //! Constructor, forwarding arguments to the Signaller constructor
+    template<typename... Args>
+    explicit SignallerBuilder(Args&&... args);
+
     //! Allows clients to register to the signaller
     void registerSignallerClient(compat::not_null<typename Signaller::Client*> client);
 
+    //! Register signaller-to-be-built with other signaller builders
+    template<typename Builder>
+    void registerWithSignallerBuilder(compat::not_null<Builder*> builder);
+
     //! Build the signaller
-    template<typename... Args>
-    std::unique_ptr<Signaller> build(Args&&... args);
+    std::unique_ptr<Signaller> build();
 
 private:
+    //! The signaller to be built
+    std::unique_ptr<Signaller> signaller_;
+
     //! List of signaller clients
     std::vector<typename Signaller::Client*> signallerClients_;
 
@@ -120,12 +130,11 @@ public:
 private:
     /*! \brief Constructor
      *
-     * @param callbacks  A vector of pointers to callbacks
      * @param nstlist    The frequency at which neighbor search is performed
      * @param initStep   The first step of the simulation
      * @param initTime   The start time of the simulation
      */
-    NeighborSearchSignaller(std::vector<SignallerCallbackPtr> callbacks, Step nstlist, Step initStep, Time initTime);
+    NeighborSearchSignaller(Step nstlist, Step initStep, Time initTime);
 
     //! Client callbacks
     std::vector<SignallerCallbackPtr> callbacks_;
@@ -168,15 +177,11 @@ public:
 private:
     /*! \brief Constructor
      *
-     * @param callbacks    A vector of pointers to callbacks
      * @param nsteps       The total number of steps for the simulation
      * @param initStep     The first step of the simulation
      * @param stopHandler  A pointer to the stop handler (LastStepSignaller takes ownership)
      */
-    LastStepSignaller(std::vector<SignallerCallbackPtr> callbacks,
-                      Step                              nsteps,
-                      Step                              initStep,
-                      StopHandler*                      stopHandler);
+    LastStepSignaller(Step nsteps, Step initStep, StopHandler* stopHandler);
 
     //! Client callbacks
     std::vector<SignallerCallbackPtr> callbacks_;
@@ -226,12 +231,11 @@ public:
 private:
     /*! \brief Constructor
      *
-     * @param callbacks  A vector of pointers to callbacks
      * @param nstlog     The logging frequency
      * @param initStep   The first step of the simulation
      * @param initTime   The start time of the simulation
      */
-    LoggingSignaller(std::vector<SignallerCallbackPtr> callbacks, Step nstlog, Step initStep, Time initTime);
+    LoggingSignaller(Step nstlog, Step initStep, Time initTime);
 
     //! Client callbacks
     std::vector<SignallerCallbackPtr> callbacks_;
@@ -284,19 +288,11 @@ public:
 private:
     /*! \brief Constructor
      *
-     * @param calculateEnergyCallbacks      A vector of pointers to callbacks (energy steps)
-     * @param calculateVirialCallbacks      A vector of pointers to callbacks (virial steps)
-     * @param calculateFreeEnergyCallbacks  A vector of pointers to callbacks (free energy steps)
      * @param nstcalcenergy                 The energy calculation frequency
      * @param nstcalcfreeenergy             The free energy calculation frequency
      * @param nstcalcvirial                 The free energy calculation frequency
      */
-    EnergySignaller(std::vector<SignallerCallbackPtr> calculateEnergyCallbacks,
-                    std::vector<SignallerCallbackPtr> calculateVirialCallbacks,
-                    std::vector<SignallerCallbackPtr> calculateFreeEnergyCallbacks,
-                    int                               nstcalcenergy,
-                    int                               nstcalcfreeenergy,
-                    int                               nstcalcvirial);
+    EnergySignaller(int nstcalcenergy, int nstcalcfreeenergy, int nstcalcvirial);
 
     //! Client callbacks
     //! {
@@ -327,45 +323,46 @@ private:
     bool loggingRegistrationDone_;
 };
 
-//! Allows clients to register to the signaller
+template<class Signaller>
+template<typename... Args>
+SignallerBuilder<Signaller>::SignallerBuilder(Args&&... args)
+{
+    // NOLINTNEXTLINE(modernize-make-unique): make_unique does not work with private constructor
+    signaller_ = std::unique_ptr<Signaller>(new Signaller(std::forward<Args>(args)...));
+}
+
 template<class Signaller>
 void SignallerBuilder<Signaller>::registerSignallerClient(compat::not_null<typename Signaller::Client*> client)
 {
+    GMX_RELEASE_ASSERT(signaller_,
+                       "Tried to register with SignallerBuilder after Signaller was built.");
     signallerClients_.emplace_back(client);
 }
 
-/*! \brief Build the signaller
- *
- * General version - for NeighborSearchSignaller, LastStepSignaller, LoggingSignaller
- */
 template<class Signaller>
-template<typename... Args>
-std::unique_ptr<Signaller> SignallerBuilder<Signaller>::build(Args&&... args)
+template<class Builder>
+void SignallerBuilder<Signaller>::registerWithSignallerBuilder(compat::not_null<Builder*> builder)
 {
-    auto callbacks = buildCallbackVector();
-    // NOLINTNEXTLINE(modernize-make-unique): make_unique does not work with private constructor
-    return std::unique_ptr<Signaller>(new Signaller(std::move(callbacks), std::forward<Args>(args)...));
+    GMX_RELEASE_ASSERT(signaller_,
+                       "Tried to register with SignallerBuilder after Signaller was built.");
+    builder->registerSignallerClient(compat::make_not_null(signaller_.get()));
 }
 
-/*! \brief Build the signaller
- *
- * Specialized version - EnergySignaller has a significantly different build process
- */
+//! @cond
+// (Template specializations confuse doxygen)
+// Signaller builder, general version - for NeighborSearchSignaller, LastStepSignaller, LoggingSignaller
+template<class Signaller>
+std::unique_ptr<Signaller> SignallerBuilder<Signaller>::build()
+{
+    GMX_RELEASE_ASSERT(signaller_, "Called build() without available signaller.");
+    signaller_->callbacks_ = buildCallbackVector();
+    return std::move(signaller_);
+}
+
+// Signaller builder, specialized version - EnergySignaller has a significantly different build process
 template<>
-template<typename... Args>
-std::unique_ptr<EnergySignaller> SignallerBuilder<EnergySignaller>::build(Args&&... args)
-{
-    auto calculateEnergyCallbacks = buildCallbackVector(EnergySignallerEvent::EnergyCalculationStep);
-    auto calculateVirialCallbacks = buildCallbackVector(EnergySignallerEvent::VirialCalculationStep);
-    auto calculateFreeEnergyCallbacks =
-            buildCallbackVector(EnergySignallerEvent::FreeEnergyCalculationStep);
-    // NOLINTNEXTLINE(modernize-make-unique): make_unique does not work with private constructor
-    return std::unique_ptr<EnergySignaller>(new EnergySignaller(
-            std::move(calculateEnergyCallbacks), std::move(calculateVirialCallbacks),
-            std::move(calculateFreeEnergyCallbacks), std::forward<Args>(args)...));
-}
+std::unique_ptr<EnergySignaller> SignallerBuilder<EnergySignaller>::build();
 
-//! Helper function to get the callbacks from the clients
 template<typename Signaller>
 template<typename... Args>
 std::vector<SignallerCallbackPtr> SignallerBuilder<Signaller>::buildCallbackVector(Args&&... args)
@@ -381,8 +378,8 @@ std::vector<SignallerCallbackPtr> SignallerBuilder<Signaller>::buildCallbackVect
     }
     return callbacks;
 }
+//! @endcond
 
-//! Get a callback from a single client - NeighborSearchSignaller
 template<>
 template<typename... Args>
 SignallerCallbackPtr SignallerBuilder<NeighborSearchSignaller>::getSignallerCallback(
@@ -392,7 +389,6 @@ SignallerCallbackPtr SignallerBuilder<NeighborSearchSignaller>::getSignallerCall
     return client->registerNSCallback(std::forward<Args>(args)...);
 }
 
-//! Get a callback from a single client - LastStepSignaller
 template<>
 template<typename... Args>
 SignallerCallbackPtr
@@ -402,7 +398,6 @@ SignallerBuilder<LastStepSignaller>::getSignallerCallback(typename LastStepSigna
     return client->registerLastStepCallback(std::forward<Args>(args)...);
 }
 
-//! Get a callback from a single client - LoggingSignaller
 template<>
 template<typename... Args>
 SignallerCallbackPtr
@@ -412,7 +407,6 @@ SignallerBuilder<LoggingSignaller>::getSignallerCallback(typename LoggingSignall
     return client->registerLoggingCallback(std::forward<Args>(args)...);
 }
 
-//! Get a callback from a single client - EnergySignaller
 template<>
 template<typename... Args>
 SignallerCallbackPtr SignallerBuilder<EnergySignaller>::getSignallerCallback(typename EnergySignaller::Client* client,

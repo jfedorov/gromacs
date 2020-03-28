@@ -145,22 +145,19 @@ public:
 
 private:
     //! Constructor
-    TrajectoryElement(std::vector<SignallerCallbackPtr>     signalEnergyCallbacks,
-                      std::vector<SignallerCallbackPtr>     signalStateCallbacks,
-                      std::vector<ITrajectoryWriterClient*> writerClients,
-                      FILE*                                 fplog,
-                      int                                   nfile,
-                      const t_filenm                        fnm[],
-                      const MdrunOptions&                   mdrunOptions,
-                      const t_commrec*                      cr,
-                      IMDOutputProvider*                    outputProvider,
-                      const MdModulesNotifier&              mdModulesNotifier,
-                      const t_inputrec*                     inputrec,
-                      const gmx_mtop_t*                     top_global,
-                      const gmx_output_env_t*               oenv,
-                      gmx_wallcycle*                        wcycle,
-                      StartingBehavior                      startingBehavior,
-                      bool                                  simulationsSharingState);
+    TrajectoryElement(FILE*                    fplog,
+                      int                      nfile,
+                      const t_filenm           fnm[],
+                      const MdrunOptions&      mdrunOptions,
+                      const t_commrec*         cr,
+                      IMDOutputProvider*       outputProvider,
+                      const MdModulesNotifier& mdModulesNotifier,
+                      const t_inputrec*        inputrec,
+                      const gmx_mtop_t*        top_global,
+                      const gmx_output_env_t*  oenv,
+                      gmx_wallcycle*           wcycle,
+                      StartingBehavior         startingBehavior,
+                      bool                     simulationsSharingState);
 
     //! The next energy writing step
     Step writeEnergyStep_;
@@ -232,17 +229,30 @@ private:
 class TrajectoryElementBuilder final
 {
 public:
+    //! Constructor, forwarding arguments to the TrajectoryElement constructor
+    template<typename... Args>
+    explicit TrajectoryElementBuilder(Args&&... args);
+
+    //! Register element-to-be-built with other signaller builders
+    template<typename Builder>
+    void registerWithSignallerBuilder(compat::not_null<Builder*> builder);
+
     //! Allows clients to register to the signaller
     void registerSignallerClient(compat::not_null<ITrajectorySignallerClient*> client);
 
     //! Allows clients to register as trajectory writers
     void registerWriterClient(compat::not_null<ITrajectoryWriterClient*> client);
 
+    //! Get (non-owning) pointer before element is built
+    TrajectoryElement* getPointer();
+
     //! Build the TrajectoryElement
-    template<typename... Args>
-    std::unique_ptr<TrajectoryElement> build(Args&&... args);
+    std::unique_ptr<TrajectoryElement> build();
 
 private:
+    //! The TrajectoryElement to be built
+    std::unique_ptr<TrajectoryElement> trajectoryElement_;
+
     //! List of signaller clients
     std::vector<ITrajectorySignallerClient*> signallerClients_;
     //! List of writer clients
@@ -250,29 +260,21 @@ private:
 };
 
 template<typename... Args>
-std::unique_ptr<TrajectoryElement> TrajectoryElementBuilder::build(Args&&... args)
+TrajectoryElementBuilder::TrajectoryElementBuilder(Args&&... args)
 {
-    std::vector<SignallerCallbackPtr> signalEnergyCallbacks;
-    std::vector<SignallerCallbackPtr> signalStateCallbacks;
-    // Allow clients to register their callbacks
-    for (auto& client : signallerClients_)
-    {
-        // don't register nullptr
-        if (auto energyCallback =
-                    client->registerTrajectorySignallerCallback(TrajectoryEvent::EnergyWritingStep))
-        {
-            signalEnergyCallbacks.emplace_back(std::move(energyCallback));
-        }
-        if (auto stateCallback =
-                    client->registerTrajectorySignallerCallback(TrajectoryEvent::StateWritingStep))
-        {
-            signalStateCallbacks.emplace_back(std::move(stateCallback));
-        }
-    }
     // NOLINTNEXTLINE(modernize-make-unique): make_unique does not work with private constructor
-    return std::unique_ptr<TrajectoryElement>(
-            new TrajectoryElement(std::move(signalEnergyCallbacks), std::move(signalStateCallbacks),
-                                  std::move(writerClients_), std::forward<Args>(args)...));
+    trajectoryElement_ =
+            std::unique_ptr<TrajectoryElement>(new TrajectoryElement(std::forward<Args>(args)...));
+}
+
+//! Register signaller-to-be-built with other signaller builders
+template<class Builder>
+void TrajectoryElementBuilder::registerWithSignallerBuilder(compat::not_null<Builder*> builder)
+{
+    GMX_RELEASE_ASSERT(
+            trajectoryElement_,
+            "Tried to register with TrajectoryElementBuilder after TrajectoryElement was built.");
+    builder->registerSignallerClient(compat::make_not_null(trajectoryElement_.get()));
 }
 
 } // namespace gmx
