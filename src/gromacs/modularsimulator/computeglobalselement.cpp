@@ -413,18 +413,18 @@ void ComputeGlobalsElementBuilder::registerWithTrajectorySignaller(TrajectoryEle
     registeredWithTrajectorySignaller_ = true;
 }
 
-void ComputeGlobalsElementBuilder::registerWithTopologyHolder(TopologyHolder* topologyHolder)
+void ComputeGlobalsElementBuilder::registerWithTopologyHolder(TopologyHolderBuilder* topologyHolderBuilder)
 {
     GMX_RELEASE_ASSERT(
             elementLeapFrog_ || elementVelocityVerlet_,
             "Tried to register with TopologyHolder after ComputeGlobalsElement was built.");
     if (elementLeapFrog_)
     {
-        topologyHolder->registerClient(elementLeapFrog_.get());
+        topologyHolderBuilder->registerClient(elementLeapFrog_.get());
     }
     if (elementVelocityVerlet_)
     {
-        topologyHolder->registerClient(elementVelocityVerlet_.get());
+        topologyHolderBuilder->registerClient(elementVelocityVerlet_.get());
     }
     registeredWithTopologyHolder_ = true;
 }

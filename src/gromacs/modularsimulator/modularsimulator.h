@@ -159,6 +159,7 @@ private:
                     compat::not_null<StatePropagatorData*>     statePropagatorDataPtr,
                     EnergyElementBuilder*                      energyElementBuilder,
                     FreeEnergyPerturbationElement*             freeEnergyPerturbationElementPtr,
+                    TopologyHolderBuilder*                     topologyHolderBuilder,
                     bool                                       hasReadEkinState);
 
     /*! \brief Add run functions to the task queue

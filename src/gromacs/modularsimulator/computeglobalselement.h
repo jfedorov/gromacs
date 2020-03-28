@@ -266,7 +266,7 @@ public:
     //! Register element with TrajectorySignaller (required)
     void registerWithTrajectorySignaller(TrajectoryElementBuilder* signallerBuilder);
     //! Register element with TopologyHolder (required)
-    void registerWithTopologyHolder(TopologyHolder* topologyHolder);
+    void registerWithTopologyHolder(TopologyHolderBuilder* topologyHolderBuilder);
 
     //! Get callback to request checking of bonded interactions
     CheckBondedInteractionsCallbackPtr getCheckNumberOfBondedInteractionsCallback();

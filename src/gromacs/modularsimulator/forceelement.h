@@ -226,7 +226,7 @@ public:
     //! Register element with NeighborSearchSignaller (required)
     void registerWithNeighborSearchSignaller(SignallerBuilder<NeighborSearchSignaller>* signallerBuilder);
     //! Register element with TopologyHolder (required)
-    void registerWithTopologyHolder(TopologyHolder* topologyHolder);
+    void registerWithTopologyHolder(TopologyHolderBuilder* topologyHolderBuilder);
 
     //! Return ForceElement
     std::unique_ptr<ForceElement> build();

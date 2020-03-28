@@ -93,4 +93,30 @@ void TopologyHolder::registerClient(ITopologyHolderClient* client)
     // Send copy of current topology
     client->setTopology(localTopology_.get());
 }
+
+void TopologyHolderBuilder::registerClient(ITopologyHolderClient* client)
+{
+    GMX_RELEASE_ASSERT(topologyHolder_,
+                       "Tried to register a topology client without available TopologyHolder.");
+    topologyHolder_->registerClient(client);
+}
+
+TopologyHolder* TopologyHolderBuilder::getPointer()
+{
+    GMX_RELEASE_ASSERT(topologyHolder_, "Called getPointer() without available TopologyHolder.");
+    return topologyHolder_.get();
+}
+
+std::unique_ptr<TopologyHolder> TopologyHolderBuilder::build()
+{
+    GMX_RELEASE_ASSERT(topologyHolder_, "Called build() without available TopologyHolder.");
+    return std::move(topologyHolder_);
+}
+
+TopologyHolderBuilder::~TopologyHolderBuilder()
+{
+    // If the TopologyHolder was built, but not consumed, we risk dangling pointers
+    GMX_ASSERT(!topologyHolder_, "TopologyHolder was constructed, but not used.");
+}
+
 } // namespace gmx

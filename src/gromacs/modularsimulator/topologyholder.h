@@ -45,6 +45,8 @@
 
 #include <vector>
 
+#include "gromacs/topology/topology.h"
+
 #include "modularsimulatorinterfaces.h"
 
 struct gmx_localtop_t;
@@ -69,6 +71,16 @@ class MDAtoms;
 class TopologyHolder final
 {
 public:
+    //! Get global topology
+    const gmx_mtop_t& globalTopology() const;
+
+    //! Allow domdec to update local topology
+    friend class DomDecHelper;
+
+    //! Allow builder to do its job
+    friend class TopologyHolderBuilder;
+
+private:
     //! Constructor
     TopologyHolder(const gmx_mtop_t& globalTopology,
                    const t_commrec*  cr,
@@ -78,16 +90,9 @@ public:
                    Constraints*      constr,
                    gmx_vsite_t*      vsite);
 
-    //! Get global topology
-    const gmx_mtop_t& globalTopology() const;
-
     //! Register topology client
     void registerClient(ITopologyHolderClient* client);
 
-    //! Allow domdec to update local topology
-    friend class DomDecHelper;
-
-private:
     //! Constant reference to the global topolgy
     const gmx_mtop_t& globalTopology_;
     //! Pointer to the currently valid local topology
@@ -99,6 +104,42 @@ private:
     //! Update local topology
     void updateLocalTopology();
 };
+
+/*! \libinternal
+ * \ingroup module_modularsimulator
+ * \brief Builder for the topology holder
+ */
+class TopologyHolderBuilder
+{
+public:
+    //! Constructor, forwarding arguments to TopologyHolder constructor
+    template<typename... Args>
+    explicit TopologyHolderBuilder(Args&&... args);
+
+    //! Register topology client
+    void registerClient(ITopologyHolderClient* client);
+
+    //! Get (non-owning) pointer before element is built
+    TopologyHolder* getPointer();
+
+    //! Return TopologyHolder
+    std::unique_ptr<TopologyHolder> build();
+
+    //! Destructor, make sure we didn't register an element which won't exist anymore
+    ~TopologyHolderBuilder();
+
+private:
+    //! The element to be built
+    std::unique_ptr<TopologyHolder> topologyHolder_ = nullptr;
+};
+
+template<typename... Args>
+TopologyHolderBuilder::TopologyHolderBuilder(Args&&... args)
+{
+    // NOLINTNEXTLINE(modernize-make-unique): make_unique does not work with private constructor
+    topologyHolder_ = std::unique_ptr<TopologyHolder>(new TopologyHolder(std::forward<Args>(args)...));
+}
+
 
 } // namespace gmx
 

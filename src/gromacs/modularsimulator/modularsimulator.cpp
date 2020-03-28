@@ -357,8 +357,7 @@ void ModularSimulator::constructElementsAndSignallers()
     }
 
     // Build the topology holder
-    topologyHolder_ =
-            std::make_unique<TopologyHolder>(*top_global, cr, inputrec, fr, mdAtoms, constr, vsite);
+    TopologyHolderBuilder topologyHolderBuilder(*top_global, cr, inputrec, fr, mdAtoms, constr, vsite);
 
     /*
      * Create simulator builders
@@ -408,10 +407,11 @@ void ModularSimulator::constructElementsAndSignallers()
      * Connect simulator builders
      */
     // State propagator data
-    statePropagatorDataBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementBuilder.getPointer());
+    statePropagatorDataBuilder.setFreeEnergyPerturbationElement(
+            freeEnergyPerturbationElementBuilder.getPointer());
     statePropagatorDataBuilder.registerWithLastStepSignaller(&lastStepSignallerBuilder);
     statePropagatorDataBuilder.registerWithTrajectoryElement(&trajectoryElementBuilder);
-    statePropagatorDataBuilder.setTopologyHolder(topologyHolder_.get());
+    statePropagatorDataBuilder.setTopologyHolder(topologyHolderBuilder.getPointer());
     statePropagatorDataBuilder.registerWithCheckpointHelper(&checkpointHelperBuilder);
 
     // Energy element
@@ -420,7 +420,7 @@ void ModularSimulator::constructElementsAndSignallers()
     energyElementBuilder.registerWithEnergySignaller(&energySignallerBuilder);
     energyElementBuilder.registerWithTrajectoryElement(&trajectoryElementBuilder);
     energyElementBuilder.registerWithCheckpointHelper(&checkpointHelperBuilder);
-    energyElementBuilder.setTopologyHolder(topologyHolder_.get());
+    energyElementBuilder.setTopologyHolder(topologyHolderBuilder.getPointer());
 
     // FEP element
     freeEnergyPerturbationElementBuilder.registerWithCheckpointHelper(&checkpointHelperBuilder);
@@ -431,7 +431,7 @@ void ModularSimulator::constructElementsAndSignallers()
     // DD helper
     domDecHelperBuilder.setStatePropagatorData(statePropagatorDataBuilder.getPointer());
     domDecHelperBuilder.registerWithNeighborSearchSignaller(&neighborSearchSignallerBuilder);
-    domDecHelperBuilder.setTopologyHolder(topologyHolder_.get());
+    domDecHelperBuilder.setTopologyHolder(topologyHolderBuilder.getPointer());
 
     // PME load balance helper
     pmeLoadBalanceHelperBuilder.setStatePropagatorData(statePropagatorDataBuilder.getPointer());
@@ -461,13 +461,14 @@ void ModularSimulator::constructElementsAndSignallers()
             &neighborSearchSignallerBuilder, &energySignallerBuilder, &loggingSignallerBuilder,
             &trajectoryElementBuilder, &checkpointHelperBuilder, &domDecHelperBuilder,
             compat::make_not_null(statePropagatorDataBuilder.getPointer()), &energyElementBuilder,
-            freeEnergyPerturbationElementBuilder.getPointer(), hasReadEkinState);
+            freeEnergyPerturbationElementBuilder.getPointer(), &topologyHolderBuilder, hasReadEkinState);
 
     /*
      * Build infrastructure elements
      */
     domDecHelper_         = domDecHelperBuilder.build();
     pmeLoadBalanceHelper_ = pmeLoadBalanceHelperBuilder.build();
+    topologyHolder_       = topologyHolderBuilder.build();
 
     const bool simulationsShareResetCounters = false;
     resetHandler_                            = std::make_unique<ResetHandler>(
@@ -541,6 +542,7 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
         compat::not_null<StatePropagatorData*>     statePropagatorDataPtr,
         EnergyElementBuilder*                      energyElementBuilder,
         FreeEnergyPerturbationElement*             freeEnergyPerturbationElementPtr,
+        TopologyHolderBuilder*                     topologyHolderBuilder,
         bool                                       hasReadEkinState)
 {
     /*
@@ -585,13 +587,13 @@ std::unique_ptr<ISimulatorElement> ModularSimulator::buildIntegrator(
     forceElementBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementPtr);
     forceElementBuilder.registerWithNeighborSearchSignaller(neighborSearchSignallerBuilder);
     forceElementBuilder.registerWithEnergySignaller(energySignallerBuilder);
-    forceElementBuilder.registerWithTopologyHolder(topologyHolder_.get());
+    forceElementBuilder.registerWithTopologyHolder(topologyHolderBuilder);
 
     // Compute-globals element
     computeGlobalsElementBuilder.setStatePropagatorData(statePropagatorDataPtr);
     computeGlobalsElementBuilder.setEnergyElement(energyElementBuilder->getPointer());
     computeGlobalsElementBuilder.setFreeEnergyPerturbationElement(freeEnergyPerturbationElementPtr);
-    computeGlobalsElementBuilder.registerWithTopologyHolder(topologyHolder_.get());
+    computeGlobalsElementBuilder.registerWithTopologyHolder(topologyHolderBuilder);
     computeGlobalsElementBuilder.registerWithEnergySignaller(energySignallerBuilder);
     computeGlobalsElementBuilder.registerWithTrajectorySignaller(trajectoryElementBuilder);
 

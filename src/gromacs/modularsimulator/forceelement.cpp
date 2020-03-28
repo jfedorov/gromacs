@@ -284,10 +284,10 @@ void ForceElementBuilder::registerWithNeighborSearchSignaller(SignallerBuilder<N
     registeredWithNeighborSearchSignaller_ = true;
 }
 
-void ForceElementBuilder::registerWithTopologyHolder(TopologyHolder* topologyHolder)
+void ForceElementBuilder::registerWithTopologyHolder(TopologyHolderBuilder* topologyHolderBuilder)
 {
     GMX_RELEASE_ASSERT(forceElement_, "Tried to set TopologyHolder after ForceElement was built.");
-    topologyHolder->registerClient(forceElement_.get());
+    topologyHolderBuilder->registerClient(forceElement_.get());
     registeredWithTopologyHolder_ = true;
 }
 
