@@ -78,7 +78,8 @@ copyright-check:
     KUBERNETES_MEMORY_LIMIT: 2Gi
     BASEREV: "HEAD^"
   variables:
-    only: [merge_requests]
+    only: 
+      - merge_requests
     BASEREV: $CI_MERGE_REQUEST_TARGET_BRANCH_SHA
   script:
     - echo $BASEREV
