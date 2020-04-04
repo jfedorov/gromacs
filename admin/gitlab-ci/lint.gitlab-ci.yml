@@ -79,6 +79,8 @@ copyright-check:
   script:
     - BASEREV="HEAD^"
     - if [ ! -z "$CI_COMMIT_BEFORE_SHA" ]; then BASEREV="$CI_COMMIT_BEFORE_SHA"; fi
+    - echo $CI_COMMIT_BEFORE_SHA
+    - echo $BASEREV
     - admin/copyright.sh check --rev=$BASEREV --warnings=copyright.log
     - grep -iq "copyright year" copyright.log | tee years.log || true
     - grep -iq "copyright header" copyright.log | tee headers.log || true
