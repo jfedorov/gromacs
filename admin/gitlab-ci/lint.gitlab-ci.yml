@@ -80,42 +80,11 @@ copyright-check:
     KUBERNETES_CPU_REQUEST: 1
     KUBERNETES_MEMORY_LIMIT: 2Gi
     BASEREV: "HEAD^"
-  script:
-    - echo $BASEREV
-    - admin/copyright.sh check --rev=$BASEREV --warnings=copyright.log
-    - grep -iq "copyright year" copyright.log | tee years.log || true
-    - grep -iq "copyright header" copyright.log | tee headers.log || true
-    - if [[ -s years.log || -s headers.log ]] ; then
-      echo "Copyright information needs updating" ;
-      exit 1 ;
-      fi
-  artifacts:
-    when: on_failure
-    paths:
-      - copyright.log
-      - years.log
-      - headers.log
-
-copyright-check-mr:
-  rules:
-    - if: $CI_MERGE_REQUEST_ID
-      when: always
-    - when: never
-  extends:
-    - .gromacs:base:build
-    - .variables:default
-    - .use-clang7
-    - .rules:not-for-release
-  cache: {}
-  stage: source-check
-  needs:
-    - job: simple-build
-      artifacts: false
   variables:
-    KUBERNETES_CPU_LIMIT: 1
-    KUBERNETES_CPU_REQUEST: 1
-    KUBERNETES_MEMORY_LIMIT: 2Gi
-    BASEREV: $CI_MERGE_REQUEST_TARGET_BRANCH_SHA
+  variable:
+    rules:
+    - if: "$CI_MERGE_REQUEST_TARGET_BRANCH_SHA"
+    BASEREV: "$CI_MERGE_REQUEST_TARGET_BRANCH_SHA"
   script:
     - echo $BASEREV
     - admin/copyright.sh check --rev=$BASEREV --warnings=copyright.log
