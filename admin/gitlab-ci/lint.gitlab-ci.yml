@@ -76,9 +76,11 @@ copyright-check:
     KUBERNETES_CPU_LIMIT: 1
     KUBERNETES_CPU_REQUEST: 1
     KUBERNETES_MEMORY_LIMIT: 2Gi
+    BASEREV: "HEAD^"
+  variables:
+    only: [merge_requests]
+    BASEREV: $CI_MERGE_REQUEST_TARGET_BRANCH_SHA
   script:
-    - BASEREV=`git rev-parse --quiet --verify $CI_COMMIT_BEFORE_SHA^{commit}`
-    - if [ ! -z "$BASEREV" ]; then BASEREV="HEAD^"; fi
     - echo $BASEREV
     - admin/copyright.sh check --rev=$BASEREV --warnings=copyright.log
     - grep -iq "copyright year" copyright.log | tee years.log || true
