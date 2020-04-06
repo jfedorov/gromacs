@@ -79,7 +79,7 @@ public:
      * launch receive of coordinate data from PP rank
      * \param[in] ppRank  PP rank to send data
      */
-    void launchReceiveCoordinatesFromPp(int ppRank);
+    void launchReceiveCoordinatesFromPp(void* recvbuf, int numBytes, int ppRank);
 
     /*! \brief
      * enqueue wait for coordinate data from PP ranks

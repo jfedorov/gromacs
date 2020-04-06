@@ -63,30 +63,12 @@ PmeForceSenderGpu::Impl::Impl(const DeviceStream& pmeStream, MPI_Comm comm, gmx:
     request_.resize(ppRanks.size(), MPI_REQUEST_NULL);
 }
 
-PmeForceSenderGpu::Impl::~Impl()
-{
-#if GMX_MPI
-
-#    if GMX_THREAD_MPI
-#    else
-    // free resources as MPI_waitall might not get called on these requests
-    std::for_each(request_.begin(), request_.end(), [](MPI_Request& req) {
-        if (req != MPI_REQUEST_NULL)
-        {
-            MPI_Request_free(&req);
-            req = MPI_REQUEST_NULL;
-        }
-    });
-#    endif
-#endif
-}
+PmeForceSenderGpu::Impl::~Impl() = default;
 
 /*! \brief  sends force buffer address to PP ranks */
-void PmeForceSenderGpu::Impl::setForceBufferAddress(rvec* d_f)
+void PmeForceSenderGpu::Impl::sendForceBufferAddressToPpRanks(rvec* d_f)
 {
-#if GMX_MPI
-
-#    if GMX_THREAD_MPI
+#if GMX_THREAD_MPI
     int ind_start = 0;
     int ind_end   = 0;
     for (const auto& receiver : ppRanks_)
@@ -99,18 +81,13 @@ void PmeForceSenderGpu::Impl::setForceBufferAddress(rvec* d_f)
 
         MPI_Send(&sendBuf, sizeof(void**), MPI_BYTE, receiver.rankId, 0, comm_);
     }
-#    else
-    // Just store the pointer which will be sent later
-    d_f_ = d_f;
-#    endif
-
 #else
     GMX_UNUSED_VALUE(d_f);
 #endif
 }
 
 /*! \brief Send PME data directly using CUDA memory copy */
-void PmeForceSenderGpu::Impl::sendFToPp(int ppRank)
+void PmeForceSenderGpu::Impl::sendFToPp(void* sendbuf, int numBytes, int ppRank, int msgId)
 {
 #if GMX_MPI
 #    if GMX_THREAD_MPI
@@ -124,36 +101,42 @@ void PmeForceSenderGpu::Impl::sendFToPp(int ppRank)
     // sending to multiple PP ranks
     MPI_Send(&pmeSyncPtr, sizeof(GpuEventSynchronizer*), MPI_BYTE, ppRank, 0, comm_);
 
+    GMX_UNUSED_VALUE(sendbuf);
+    GMX_UNUSED_VALUE(numBytes);
+    GMX_UNUSED_VALUE(msgId);
+
 #    else  // ToDo: split the logic in different functions
 
-    int ind_start = 0;
-    int i         = 0;
-    // Calculate starting atom for given PP rank
-    for (; i < ppRanks_.size() && ppRanks_[i].rankId != ppRank; ++i)
-    {
-        ind_start += ppRanks_[i].numAtoms;
-    }
+    // we need to synchronize PME stream only for the first time
+    if (msgId == 0)
+        isSynchronized_ = false;
 
-    GMX_ASSERT(i < ppRanks_.size(), "ppRank value different from expected values");
+    GMX_ASSERT(msgId < ppRanks_.size(), "msgId different from expected values");
 
     // This is needed to free resources; MPI_ISend call below is expected to be finished by now as
     // PP rank has MPI_Wait to receive the data.
-    if (request_[i] != MPI_REQUEST_NULL)
+    if (request_[msgId] != MPI_REQUEST_NULL)
     {
-        MPI_Request_free(&request_[i]);
-        request_[i] = MPI_REQUEST_NULL;
+        MPI_Request_free(&request_[msgId]);
+        request_[msgId] = MPI_REQUEST_NULL;
     }
 
     // Ensure PME force calcs are completed before data is sent
-    cudaError_t stat = cudaStreamSynchronize(pmeStream_.stream());
-    CU_RET_ERR(stat, "cudaStreamSynchronize on pmeStream_ failed");
+    if (!isSynchronized_)
+    {
+        cudaError_t stat = cudaStreamSynchronize(pmeStream_.stream());
+        CU_RET_ERR(stat, "cudaStreamSynchronize on pmeStream_ failed");
 
-    MPI_Isend(&d_f_[ind_start], ppRanks_[i].numAtoms * sizeof(rvec), MPI_BYTE, ppRank, 0, comm_,
-              &request_[i]);
+        isSynchronized_ = true;
+    }
+
+    MPI_Isend(sendbuf, numBytes, MPI_BYTE, ppRank, 0, comm_, &request_[msgId]);
 #    endif // GMX_THREAD_MPI
 #else
-    GMX_UNUSED_VALUE(pmeSyncPtr);
+    GMX_UNUSED_VALUE(sendbuf);
+    GMX_UNUSED_VALUE(numBytes);
     GMX_UNUSED_VALUE(ppRank);
+    GMX_UNUSED_VALUE(msgId);
 #endif
 }
 
@@ -166,14 +149,14 @@ PmeForceSenderGpu::PmeForceSenderGpu(const DeviceStream&    pmeStream,
 
 PmeForceSenderGpu::~PmeForceSenderGpu() = default;
 
-void PmeForceSenderGpu::setForceBufferAddress(rvec* d_f)
+void PmeForceSenderGpu::sendForceBufferAddressToPpRanks(rvec* d_f)
 {
-    impl_->setForceBufferAddress(d_f);
+    impl_->sendForceBufferAddressToPpRanks(d_f);
 }
 
-void PmeForceSenderGpu::sendFToPp(int ppRank)
+void PmeForceSenderGpu::sendFToPp(void* sendbuf, int numBytes, int ppRank, int msgId)
 {
-    impl_->sendFToPp(ppRank);
+    impl_->sendFToPp(sendbuf, numBytes, ppRank, msgId);
 }
 
 

@@ -82,7 +82,9 @@ void PmeCoordinateReceiverGpu::sendCoordinateBufferAddressToPpRanks(DeviceBuffer
                "correct implementation.");
 }
 
-void PmeCoordinateReceiverGpu::launchReceiveCoordinatesFromPp(int /* ppRank */)
+void PmeCoordinateReceiverGpu::launchReceiveCoordinatesFromPp(void* /* recvbuf */,
+                                                              int /* numBytes */,
+                                                              int /* ppRank */)
 {
     GMX_ASSERT(false,
                "A CPU stub for PME-PP GPU communication was called instead of the correct "

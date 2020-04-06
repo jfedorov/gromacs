@@ -88,20 +88,13 @@ void PmeCoordinateReceiverGpu::Impl::sendCoordinateBufferAddressToPpRanks(Device
         // Data will be transferred directly from GPU.
         void* sendBuf = reinterpret_cast<void*>(&d_x[ind_start]);
 
-#    if GMX_MPI
         MPI_Send(&sendBuf, sizeof(void**), MPI_BYTE, receiver.rankId, 0, comm_);
-#    else
-        GMX_UNUSED_VALUE(sendBuf);
-#    endif
     }
-#else
-    // set device pointer for later use
-    d_x_ = d_x;
 #endif
 }
 
 /*! \brief Receive coordinate data directly using CUDA memory copy */
-void PmeCoordinateReceiverGpu::Impl::launchReceiveCoordinatesFromPp(int ppRank)
+void PmeCoordinateReceiverGpu::Impl::launchReceiveCoordinatesFromPp(void* recvbuf, int numBytes, int ppRank)
 {
     // Data will be pushed directly from PP task
 
@@ -112,26 +105,18 @@ void PmeCoordinateReceiverGpu::Impl::launchReceiveCoordinatesFromPp(int ppRank)
     MPI_Irecv(&ppSync_[recvCount_], sizeof(GpuEventSynchronizer*), MPI_BYTE, ppRank, 0, comm_,
               &request_[recvCount_]);
 
-#    else // ToDo: split the logic in different functions
+    GMX_UNUSED_VALUE(recvbuf);
+    GMX_UNUSED_VALUE(numBytes);
+#    else
 
-    int ind_start = 0;
-    int i = 0;
-    // get starting point for given PP rank
-    for (; i < ppRanks_.size() && ppRanks_[i].rankId != ppRank; ++i)
-    {
-        ind_start += ppRanks_[i].numAtoms;
-    }
-
-    GMX_ASSERT(i < ppRanks_.size(), "ppRank value different from expected values");
-
-
-    MPI_Irecv(&d_x_[ind_start], ppRanks_[i].numAtoms * sizeof(rvec), MPI_BYTE, ppRank, 0, comm_,
-              &request_[recvCount_]);
+    MPI_Irecv(recvbuf, numBytes, MPI_BYTE, ppRank, 0, comm_, &request_[recvCount_]);
 
 #    endif // GMX_THREAD_MPI
 
     recvCount_++;
 #else
+    GMX_UNUSED_VALUE(recvbuf);
+    GMX_UNUSED_VALUE(numBytes);
     GMX_UNUSED_VALUE(ppRank);
 #endif
 }
@@ -171,9 +156,9 @@ void PmeCoordinateReceiverGpu::sendCoordinateBufferAddressToPpRanks(DeviceBuffer
     impl_->sendCoordinateBufferAddressToPpRanks(d_x);
 }
 
-void PmeCoordinateReceiverGpu::launchReceiveCoordinatesFromPp(int ppRank)
+void PmeCoordinateReceiverGpu::launchReceiveCoordinatesFromPp(void* recvbuf, int numBytes, int ppRank)
 {
-    impl_->launchReceiveCoordinatesFromPp(ppRank);
+    impl_->launchReceiveCoordinatesFromPp(recvbuf, numBytes, ppRank);
 }
 
 void PmeCoordinateReceiverGpu::waitOrEnqueueWaitReceiveCoordinatesFromPp()

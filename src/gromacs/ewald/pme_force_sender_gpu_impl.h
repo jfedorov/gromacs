@@ -68,13 +68,13 @@ public:
      * sends force buffer address to PP rank
      * \param[in] d_f   force buffer in GPU memory
      */
-    void setForceBufferAddress(rvec* d_f);
+    void sendForceBufferAddressToPpRanks(rvec* d_f);
 
     /*! \brief
      * Send PP data to PP rank
      * \param[in] ppRank           PP rank to receive data
      */
-    void sendFToPp(int ppRank);
+    void sendFToPp(void* sendbuf, int numBytes, int ppRank, int msgId);
 
 private:
     //! CUDA stream for PME operations
@@ -90,7 +90,7 @@ private:
     //! Event triggered when to allow remote PP stream to syn with pme stream
     GpuEventSynchronizer pmeSync_;
 #else
-    rvec* d_f_;
+    bool isSynchronized_ = false;
 #endif
 };
 

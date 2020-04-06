@@ -120,13 +120,11 @@ public:
 private:
 #if GMX_MPI
 #    if GMX_THREAD_MPI
-    void receiveForceFromPmeCUDADirect(void* pmeForcePtr, int recvSize, bool receivePmeForceToGpu);
     void sendCoordinatesToPmeCudaDirect(void* sendPtr,
                                         int   sendSize,
                                         bool gmx_unused       sendPmeCoordinatesFromGpu,
                                         GpuEventSynchronizer* coordinatesReadyOnDeviceEvent);
 #    else
-    void receiveForceFromPmeCUDAMPI(void* pmeForcePtr, int recvSize, bool receivePmeForceToGpu);
     void sendCoordinatesToPmeCudaMPI(void* sendPtr,
                                      int   sendSize,
                                      bool gmx_unused       sendPmeCoordinatesFromGpu,

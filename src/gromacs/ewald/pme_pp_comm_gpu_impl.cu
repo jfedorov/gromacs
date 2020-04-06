@@ -74,9 +74,7 @@ PmePpCommGpu::Impl::Impl(MPI_Comm             comm,
 
 PmePpCommGpu::Impl::~Impl()
 {
-#if GMX_MPI
-#    if GMX_THREAD_MPI
-#    else
+#if GMX_LIB_MPI
     // resource clean-up as MPI_waitcall might not be called on this status_
     if (status_ != MPI_REQUEST_NULL)
         MPI_Request_free(&status_);
@@ -84,7 +82,6 @@ PmePpCommGpu::Impl::~Impl()
     // free staging buffer on GPU. This code is workaround for UCX bug
     // https://github.com/openucx/ucx/issues/4722
     freeDeviceBuffer(d_ppCoord_);
-#    endif
 #endif
 }
 
@@ -114,12 +111,12 @@ void PmePpCommGpu::Impl::reinit(int size)
     return;
 }
 
-#if GMX_MPI
-#    if GMX_THREAD_MPI
-// TODO make this asynchronous by splitting into this into
-// launchRecvForceFromPmeCudaDirect() and sycnRecvForceFromPmeCudaDirect()
-void PmePpCommGpu::Impl::receiveForceFromPmeCUDADirect(void* pmeForcePtr, int recvSize, bool receivePmeForceToGpu)
+void PmePpCommGpu::Impl::receiveForceFromPme(void* recvPtr, int recvSize, bool receivePmeForceToGpu)
 {
+#if GMX_MPI
+    void* pmeForcePtr = receivePmeForceToGpu ? static_cast<void*>(d_pmeForces_) : recvPtr;
+
+#    if GMX_THREAD_MPI
     // Receive event from PME task and add to stream, to ensure pull of data doesn't
     // occur before PME force calc is completed
     GpuEventSynchronizer* pmeSync;
@@ -144,11 +141,7 @@ void PmePpCommGpu::Impl::receiveForceFromPmeCUDADirect(void* pmeForcePtr, int re
         // them with other forces on the CPU
         cudaStreamSynchronize(pmePpCommStream_.stream());
     }
-}
 #    else
-
-void PmePpCommGpu::Impl::receiveForceFromPmeCUDAMPI(void* pmeForcePtr, int recvSize, bool receivePmeForceToGpu)
-{
     if (status_ != MPI_REQUEST_NULL)
     {
         // Resource clean-up
@@ -157,19 +150,6 @@ void PmePpCommGpu::Impl::receiveForceFromPmeCUDAMPI(void* pmeForcePtr, int recvS
     }
 
     MPI_Irecv(pmeForcePtr, recvSize * DIM, MPI_FLOAT, pmeRank_, 0, comm_, &status_);
-}
-#    endif
-#endif
-
-void PmePpCommGpu::Impl::receiveForceFromPme(void* recvPtr, int recvSize, bool receivePmeForceToGpu)
-{
-#if GMX_MPI
-    void* pmeForcePtr = receivePmeForceToGpu ? static_cast<void*>(d_pmeForces_) : recvPtr;
-
-#    if GMX_THREAD_MPI
-    receiveForceFromPmeCUDADirect(pmeForcePtr, recvSize, receivePmeForceToGpu);
-#    else
-    receiveForceFromPmeCUDAMPI(pmeForcePtr, recvSize, receivePmeForceToGpu);
 
     if (!receivePmeForceToGpu)
     {

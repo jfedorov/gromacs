@@ -434,7 +434,7 @@ static int gmx_pme_recv_coeffs_coords(struct gmx_pme_t*            pme,
                     // This rank will have its data accessed directly by PP rank, so needs to send the remote addresses.
                     pme_pp->pmeCoordinateReceiverGpu->sendCoordinateBufferAddressToPpRanks(
                             stateGpu->getCoordinates());
-                    pme_pp->pmeForceSenderGpu->setForceBufferAddress(
+                    pme_pp->pmeForceSenderGpu->sendForceBufferAddressToPpRanks(
                             reinterpret_cast<rvec*>(pme_gpu_get_device_f(pme)));
                 }
             }
@@ -456,7 +456,9 @@ static int gmx_pme_recv_coeffs_coords(struct gmx_pme_t*            pme,
                 {
                     if (pme_pp->useGpuDirectComm)
                     {
-                        pme_pp->pmeCoordinateReceiverGpu->launchReceiveCoordinatesFromPp(sender.rankId);
+                        DeviceBuffer<gmx::RVec> recvBuf = stateGpu->getCoordinates();
+                        pme_pp->pmeCoordinateReceiverGpu->launchReceiveCoordinatesFromPp(
+                                &recvBuf[nat], sender.numAtoms * sizeof(rvec), sender.rankId);
                     }
                     else
                     {
@@ -528,7 +530,9 @@ static void sendFToPP(void* sendbuf, PpRanks receiver, gmx_pme_pp* pme_pp, int* 
                    "The use of GPU direct communication for PME-PP is enabled, "
                    "but the PME GPU force reciever object does not exist");
 
-        pme_pp->pmeForceSenderGpu->sendFToPp(receiver.rankId);
+        pme_pp->pmeForceSenderGpu->sendFToPp(sendbuf, receiver.numAtoms * sizeof(rvec),
+                                             receiver.rankId, *messages);
+        *messages = *messages + 1;
     }
     else
     {
