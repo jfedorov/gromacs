@@ -63,7 +63,18 @@ PmeForceSenderGpu::Impl::Impl(const DeviceStream& pmeStream, MPI_Comm comm, gmx:
     request_.resize(ppRanks.size(), MPI_REQUEST_NULL);
 }
 
-PmeForceSenderGpu::Impl::~Impl() = default;
+PmeForceSenderGpu::Impl::~Impl()
+{
+#if GMX_LIB_MPI
+    // free resources as MPI_waitall might not get called on these requests
+    std::for_each(request_.begin(), request_.end(), [](MPI_Request& req) {
+        if (req != MPI_REQUEST_NULL)
+        {
+            MPI_Request_free(&req);
+        }
+    });
+#endif
+}
 
 /*! \brief  sends force buffer address to PP ranks */
 void PmeForceSenderGpu::Impl::sendForceBufferAddressToPpRanks(rvec* d_f)
@@ -87,7 +98,7 @@ void PmeForceSenderGpu::Impl::sendForceBufferAddressToPpRanks(rvec* d_f)
 }
 
 /*! \brief Send PME data directly using CUDA memory copy */
-void PmeForceSenderGpu::Impl::sendFToPp(void* sendbuf, int numBytes, int ppRank, int msgId)
+void PmeForceSenderGpu::Impl::sendFToPp(void* sendbuf, int numBytes, int ppRank)
 {
 #if GMX_MPI
 #    if GMX_THREAD_MPI
@@ -103,40 +114,37 @@ void PmeForceSenderGpu::Impl::sendFToPp(void* sendbuf, int numBytes, int ppRank,
 
     GMX_UNUSED_VALUE(sendbuf);
     GMX_UNUSED_VALUE(numBytes);
-    GMX_UNUSED_VALUE(msgId);
 
-#    else  // ToDo: split the logic in different functions
+#    else
 
-    // we need to synchronize PME stream only for the first time
-    if (msgId == 0)
-        isSynchronized_ = false;
-
-    GMX_ASSERT(msgId < ppRanks_.size(), "msgId different from expected values");
+    GMX_ASSERT(sendCount_ < ppRanks_.size(), "sendCount_ different from expected values");
 
     // This is needed to free resources; MPI_ISend call below is expected to be finished by now as
     // PP rank has MPI_Wait to receive the data.
-    if (request_[msgId] != MPI_REQUEST_NULL)
+    if (request_[sendCount_] != MPI_REQUEST_NULL)
     {
-        MPI_Request_free(&request_[msgId]);
-        request_[msgId] = MPI_REQUEST_NULL;
+        MPI_Request_free(&request_[sendCount_]);
+        request_[sendCount_] = MPI_REQUEST_NULL;
     }
 
     // Ensure PME force calcs are completed before data is sent
-    if (!isSynchronized_)
+    // we need to synchronize PME stream only for the first time
+    if (sendCount_ == 0)
     {
         cudaError_t stat = cudaStreamSynchronize(pmeStream_.stream());
         CU_RET_ERR(stat, "cudaStreamSynchronize on pmeStream_ failed");
-
-        isSynchronized_ = true;
     }
 
-    MPI_Isend(sendbuf, numBytes, MPI_BYTE, ppRank, 0, comm_, &request_[msgId]);
+    MPI_Isend(sendbuf, numBytes, MPI_BYTE, ppRank, 0, comm_, &request_[sendCount_]);
+
+    if (++sendCount_ == ppRanks_.size())
+        sendCount_ = 0;
+
 #    endif // GMX_THREAD_MPI
 #else
     GMX_UNUSED_VALUE(sendbuf);
     GMX_UNUSED_VALUE(numBytes);
     GMX_UNUSED_VALUE(ppRank);
-    GMX_UNUSED_VALUE(msgId);
 #endif
 }
 
@@ -154,9 +162,9 @@ void PmeForceSenderGpu::sendForceBufferAddressToPpRanks(rvec* d_f)
     impl_->sendForceBufferAddressToPpRanks(d_f);
 }
 
-void PmeForceSenderGpu::sendFToPp(void* sendbuf, int numBytes, int ppRank, int msgId)
+void PmeForceSenderGpu::sendFToPp(void* sendbuf, int numBytes, int ppRank)
 {
-    impl_->sendFToPp(sendbuf, numBytes, ppRank, msgId);
+    impl_->sendFToPp(sendbuf, numBytes, ppRank);
 }
 
 

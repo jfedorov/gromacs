@@ -88,7 +88,7 @@ public:
      * Send PP data to PP rank
      * \param[in] ppRank           PP rank to receive data
      */
-    void sendFToPp(void* sendbuf, int numBytes, int ppRank, int msgId);
+    void sendFToPp(void* sendbuf, int numBytes, int ppRank);
 
 private:
     class Impl;

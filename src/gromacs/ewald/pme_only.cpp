@@ -530,9 +530,7 @@ static void sendFToPP(void* sendbuf, PpRanks receiver, gmx_pme_pp* pme_pp, int* 
                    "The use of GPU direct communication for PME-PP is enabled, "
                    "but the PME GPU force reciever object does not exist");
 
-        pme_pp->pmeForceSenderGpu->sendFToPp(sendbuf, receiver.numAtoms * sizeof(rvec),
-                                             receiver.rankId, *messages);
-        *messages = *messages + 1;
+        pme_pp->pmeForceSenderGpu->sendFToPp(sendbuf, receiver.numAtoms * sizeof(rvec), receiver.rankId);
     }
     else
     {

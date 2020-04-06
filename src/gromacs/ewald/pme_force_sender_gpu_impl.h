@@ -74,7 +74,7 @@ public:
      * Send PP data to PP rank
      * \param[in] ppRank           PP rank to receive data
      */
-    void sendFToPp(void* sendbuf, int numBytes, int ppRank, int msgId);
+    void sendFToPp(void* sendbuf, int numBytes, int ppRank);
 
 private:
     //! CUDA stream for PME operations
@@ -90,6 +90,9 @@ private:
     //! Event triggered when to allow remote PP stream to syn with pme stream
     GpuEventSynchronizer pmeSync_;
 #else
+    //! counter of messages to receive
+    int sendCount_ = 0;
+
     bool isSynchronized_ = false;
 #endif
 };
