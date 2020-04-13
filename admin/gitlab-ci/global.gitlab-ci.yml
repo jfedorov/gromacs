@@ -63,7 +63,7 @@
 # but not when GROMACS_RELEASE is set.
 # Excludes non-gromacs projects.
 .rules:merge-requests:master:
-  rules: &rules-merge-requests
+  rules:
     - if: '$CI_PROJECT_NAMESPACE != "gromacs"'
       when: never
     - if: '$GROMACS_RELEASE'
