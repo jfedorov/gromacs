@@ -59,6 +59,42 @@
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       when: always
 
+# Jobs that run for merge requests and schedules for branch `master`,
+# but not when GROMACS_RELEASE is set.
+# Excludes non-gromacs projects.
+.rules:merge-requests:master:
+  rules: &rules-merge-requests
+    - if: '$CI_PROJECT_NAMESPACE != "gromacs"'
+      when: never
+    - if: '$GROMACS_RELEASE'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: always
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME != "master" && $CI_COMMIT_REF_NAME != "master"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: always
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: always
+
+# Jobs that run for merge requests and schedules for branch `release-2020`,
+# but not when GROMACS_RELEASE is set.
+# Excludes non-gromacs projects.
+.rules:merge-requests:release-2020:
+  rules:
+    - if: '$CI_PROJECT_NAMESPACE != "gromacs"'
+      when: never
+    - if: '$GROMACS_RELEASE'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: always
+    - if: '$CI_MERGE_REQUEST_TARGET_BRANCH_NAME != "release-2020" && $CI_COMMIT_REF_NAME != "release-2020"'
+      when: never
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: always
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      when: always
+
 # Rule to run a job only in nightly release-preparation pipelines.
 # Checks if the GROMACS_RELEASE variable was set (typically through the GitLab web interface).
 # Excludes merge_requests and non-gromacs projects.
