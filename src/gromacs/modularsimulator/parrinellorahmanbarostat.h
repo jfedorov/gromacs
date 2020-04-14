@@ -53,6 +53,7 @@ struct t_commrec;
 
 namespace gmx
 {
+enum class CheckpointDataOperation;
 class CheckpointHelperBuilder;
 struct ElementAndSignallerBuilders;
 class EnergyElement;
@@ -99,10 +100,7 @@ private:
                              Step              initStep,
                              FILE*             fplog,
                              const t_inputrec* inputrec,
-                             const MDAtoms*    mdAtoms,
-                             const t_state*    globalState,
-                             t_commrec*        cr,
-                             bool              isRestart);
+                             const MDAtoms*    mdAtoms);
 
     //! The frequency at which the barostat is applied
     const int nstpcouple_;
@@ -135,8 +133,15 @@ private:
     //! Scale box and positions
     void scaleBoxAndPositions();
 
-    //! ICheckpointHelperClient implementation
-    void writeCheckpoint(t_state* localState, t_state* globalState) override;
+    //! ICheckpointHelperClient write checkpoint implementation
+    void writeCheckpoint(CheckpointData checkpointData, const t_commrec* cr) override;
+    //! ICheckpointHelperClient read checkpoint implementation
+    void readCheckpoint(CheckpointData checkpointData, const t_commrec* cr) override;
+    //! CheckpointHelper identifier
+    const std::string identifier = "ParrinelloRahmanBarostat";
+    //! Helper function to read from / write to CheckpointData
+    template<CheckpointDataOperation operation>
+    void doCheckpointData(CheckpointData* checkpointData, const t_commrec* cr);
 
     // Access to ISimulator data
     //! Handles logging.

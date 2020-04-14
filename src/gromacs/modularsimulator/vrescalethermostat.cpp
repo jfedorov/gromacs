@@ -48,6 +48,7 @@
 #include "gromacs/math/vec.h"
 #include "gromacs/mdlib/stat.h"
 #include "gromacs/mdlib/update.h"
+#include "gromacs/mdtypes/checkpointdata.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/group.h"
 #include "gromacs/mdtypes/state.h"
@@ -60,17 +61,14 @@
 namespace gmx
 {
 
-VRescaleThermostat::VRescaleThermostat(int            nstcouple,
-                                       int64_t        seed,
-                                       int            numTemperatureGroups,
-                                       double         couplingTimeStep,
-                                       const real*    referenceTemperature,
-                                       const real*    couplingTime,
-                                       const real*    numDegreesOfFreedom,
-                                       const t_state* globalState,
-                                       t_commrec*     cr,
-                                       bool           isRestart,
-                                       int            inputThermostatType) :
+VRescaleThermostat::VRescaleThermostat(int         nstcouple,
+                                       int64_t     seed,
+                                       int         numTemperatureGroups,
+                                       double      couplingTimeStep,
+                                       const real* referenceTemperature,
+                                       const real* couplingTime,
+                                       const real* numDegreesOfFreedom,
+                                       int         inputThermostatType) :
     nstcouple_(nstcouple),
     offset_(),
     useFullStepKE_(),
@@ -88,22 +86,6 @@ VRescaleThermostat::VRescaleThermostat(int            nstcouple,
     {
         GMX_THROW(ElementNotNeededException(
                 "VRescaleThermostat is not needed without v-rescale temperature control."));
-    }
-    // TODO: This is only needed to restore the thermostatIntegral_ from cpt. Remove this when
-    //       switching to purely client-based checkpointing.
-    if (isRestart)
-    {
-        if (MASTER(cr))
-        {
-            for (unsigned long i = 0; i < thermostatIntegral_.size(); ++i)
-            {
-                thermostatIntegral_[i] = globalState->therm_integral[i];
-            }
-        }
-        if (DOMAINDECOMP(cr))
-        {
-            dd_bcast(cr->dd, int(thermostatIntegral_.size() * sizeof(double)), thermostatIntegral_.data());
-        }
     }
 }
 
@@ -178,10 +160,28 @@ void VRescaleThermostat::setLambda(Step step)
     }
 }
 
-void VRescaleThermostat::writeCheckpoint(t_state* localState, t_state gmx_unused* globalState)
+template<CheckpointDataOperation operation>
+void VRescaleThermostat::doCheckpointData(CheckpointData* checkpointData, const t_commrec* cr)
 {
-    localState->therm_integral = thermostatIntegral_;
-    localState->flags |= (1U << estTHERM_INT);
+    if (MASTER(cr))
+    {
+        checkpointData->arrayRef<operation>("thermostat integral",
+                                            makeCheckpointArrayRef<operation>(thermostatIntegral_));
+    }
+    if (operation == CheckpointDataOperation::Read && DOMAINDECOMP(cr))
+    {
+        dd_bcast(cr->dd, thermostatIntegral_.size() * sizeof(double), thermostatIntegral_.data());
+    }
+}
+
+void VRescaleThermostat::writeCheckpoint(CheckpointData checkpointData, const t_commrec* cr)
+{
+    doCheckpointData<CheckpointDataOperation::Write>(&checkpointData, cr);
+}
+
+void VRescaleThermostat::readCheckpoint(CheckpointData checkpointData, const t_commrec* cr)
+{
+    doCheckpointData<CheckpointDataOperation::Read>(&checkpointData, cr);
 }
 
 const std::vector<double>& VRescaleThermostat::thermostatIntegral() const
@@ -212,7 +212,8 @@ void VRescaleThermostatBuilder::registerWithCheckpointHelper(CheckpointHelperBui
                        "Tried to register to CheckpointHelper after VRescaleThermostat was built.");
     if (vrThermostat_)
     {
-        checkpointHelperBuilder->registerClient(compat::make_not_null(vrThermostat_.get()));
+        checkpointHelperBuilder->registerClient(compat::make_not_null(vrThermostat_.get()),
+                                                vrThermostat_->identifier);
     }
     registeredWithCheckpointHelper_ = true;
 }

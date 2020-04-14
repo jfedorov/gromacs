@@ -100,7 +100,7 @@ ElementAndSignallerBuilders::ElementAndSignallerBuilders(ModularSimulator* simul
     energyElement = std::make_unique<EnergyElementBuilder>(
             simulator->inputrec, simulator->mdAtoms, simulator->enerd, simulator->ekind,
             simulator->constr, simulator->fplog, simulator->fcd, simulator->mdModulesNotifier,
-            MASTER(simulator->cr), simulator->observablesHistory, simulator->startingBehavior);
+            MASTER(simulator->cr), simulator->startingBehavior);
     freeEnergyPerturbationElement = std::make_unique<FreeEnergyPerturbationElementBuilder>(
             simulator->fplog, simulator->inputrec, simulator->mdAtoms);
 
@@ -109,8 +109,9 @@ ElementAndSignallerBuilders::ElementAndSignallerBuilders(ModularSimulator* simul
             *simulator->top_global, simulator->cr, simulator->inputrec, simulator->fr,
             simulator->mdAtoms, simulator->constr, simulator->vsite);
     checkpointHelper = std::make_unique<CheckpointHelperBuilder>(
-            simulator->inputrec->init_step, simulator->top_global->natoms, simulator->fplog,
-            simulator->cr, simulator->observablesHistory, simulator->walltime_accounting,
+            simulator->inputrec->init_step, simulator->top_global->natoms,
+            std::move(simulator->modularSimulatorCheckpointTree), simulator->startingBehavior,
+            simulator->fplog, simulator->cr, simulator->observablesHistory, simulator->walltime_accounting,
             simulator->state_global, simulator->mdrunOptions.writeConfout);
     checkpointHelper->setCheckpointHandler(std::make_unique<CheckpointHandler>(
             compat::make_not_null<SimulationSignal*>(&simulator->signals_[eglsCHKPT]),
@@ -137,20 +138,17 @@ ElementAndSignallerBuilders::ElementAndSignallerBuilders(ModularSimulator* simul
             simulator->vsite, simulator->imdSession, simulator->pull_work, simulator->constr,
             simulator->top_global, simulator->enforcedRotation);
     computeGlobalsElement = std::make_unique<ComputeGlobalsElementBuilder>(
-            simulator->inputrec->eI, &simulator->signals_, simulator->nstglobalcomm_,
-            simulator->fplog, simulator->mdlog, simulator->cr, simulator->inputrec,
-            simulator->mdAtoms, simulator->nrnb, simulator->wcycle, simulator->fr,
-            simulator->top_global, simulator->constr, simulator->hasReadEkinState_);
+            simulator->inputrec->eI, &simulator->signals_, simulator->nstglobalcomm_, simulator->fplog,
+            simulator->mdlog, simulator->cr, simulator->inputrec, simulator->mdAtoms, simulator->nrnb,
+            simulator->wcycle, simulator->fr, simulator->top_global, simulator->constr);
     parrinelloRahmanBarostat = std::make_unique<ParrinelloRahmanBarostatBuilder>(
             simulator->inputrec->nstpcouple, simulator->inputrec->delta_t * simulator->inputrec->nstpcouple,
-            simulator->inputrec->init_step, simulator->fplog, simulator->inputrec, simulator->mdAtoms,
-            simulator->state_global, simulator->cr, simulator->inputrec->bContinuation);
+            simulator->inputrec->init_step, simulator->fplog, simulator->inputrec, simulator->mdAtoms);
     vRescaleThermostat = std::make_unique<VRescaleThermostatBuilder>(
             simulator->inputrec->nsttcouple, simulator->inputrec->ld_seed, simulator->inputrec->opts.ngtc,
             simulator->inputrec->delta_t * simulator->inputrec->nsttcouple,
             simulator->inputrec->opts.ref_t, simulator->inputrec->opts.tau_t,
-            simulator->inputrec->opts.nrdf, simulator->state_global, simulator->cr,
-            simulator->inputrec->bContinuation, simulator->inputrec->etc);
+            simulator->inputrec->opts.nrdf, simulator->inputrec->etc);
     // TODO: Can this if / else be moved into the builder if we move to a more complex (policy-based) builder?
     if (simulator->inputrec->eI == eiMD)
     {

@@ -43,6 +43,7 @@
 
 #include "energyelement.h"
 
+#include "gromacs/gmxlib/network.h"
 #include "gromacs/math/vec.h"
 #include "gromacs/mdlib/compute_io.h"
 #include "gromacs/mdlib/enerdata_utils.h"
@@ -52,6 +53,8 @@
 #include "gromacs/mdlib/stat.h"
 #include "gromacs/mdlib/update.h"
 #include "gromacs/mdrunutility/handlerestart.h"
+#include "gromacs/mdtypes/checkpointdata.h"
+#include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/enerdata.h"
 #include "gromacs/mdtypes/energyhistory.h"
 #include "gromacs/mdtypes/inputrec.h"
@@ -86,7 +89,6 @@ EnergyElement::EnergyElement(const t_inputrec*        inputrec,
                              t_fcdata*                fcd,
                              const MdModulesNotifier& mdModulesNotifier,
                              bool                     isMasterRank,
-                             ObservablesHistory*      observablesHistory,
                              StartingBehavior         startingBehavior) :
     isMasterRank_(isMasterRank),
     energyWritingStep_(-1),
@@ -102,6 +104,7 @@ EnergyElement::EnergyElement(const t_inputrec*        inputrec,
     totalVirialStep_(-1),
     pressureStep_(-1),
     needToSumEkinhOld_(false),
+    hasReadEkinFromCheckpoint_(false),
     startingBehavior_(startingBehavior),
     statePropagatorData_(nullptr),
     freeEnergyPerturbationElement_(nullptr),
@@ -116,13 +119,14 @@ EnergyElement::EnergyElement(const t_inputrec*        inputrec,
     fplog_(fplog),
     fcd_(fcd),
     mdModulesNotifier_(mdModulesNotifier),
-    groups_(nullptr),
-    observablesHistory_(observablesHistory)
+    groups_(nullptr)
 {
     if (freeEnergyPerturbationElement_)
     {
         dummyLegacyState_.flags = (1U << estFEPSTATE);
     }
+    init_ekinstate(&ekinstate_, inputrec_);
+    observablesHistory_.energyHistory = std::make_unique<energyhistory_t>();
 }
 
 void EnergyElement::scheduleTask(Step step, Time time, const RegisterRunFunctionPtr& registerRunFunction)
@@ -168,7 +172,7 @@ void EnergyElement::trajectoryWriterSetup(gmx_mdoutf* outf)
         return;
     }
 
-    initializeEnergyHistory(startingBehavior_, observablesHistory_, energyOutput_.get());
+    initializeEnergyHistory(startingBehavior_, &observablesHistory_, energyOutput_.get());
 
     // TODO: This probably doesn't really belong here...
     //       but we have all we need in this element,
@@ -361,20 +365,53 @@ bool* EnergyElement::needToSumEkinhOld()
     return &needToSumEkinhOld_;
 }
 
-void EnergyElement::writeCheckpoint(t_state gmx_unused* localState, t_state* globalState)
+bool EnergyElement::hasReadEkinFromCheckpoint() const
 {
-    if (isMasterRank_)
+    return hasReadEkinFromCheckpoint_;
+}
+
+template<CheckpointDataOperation operation>
+void EnergyElement::doCheckpointData(CheckpointData* checkpointData, const t_commrec* cr)
+{
+    if (MASTER(cr))
+    {
+        observablesHistory_.energyHistory->doCheckpoint<operation>(
+                checkpointData->subCheckpointData<operation>("energy history"));
+        ekinstate_.doCheckpoint<operation>(
+                checkpointData->subCheckpointData<operation>("ekinstate"));
+    }
+}
+
+void EnergyElement::writeCheckpoint(CheckpointData checkpointData, const t_commrec* cr)
+{
+    if (MASTER(cr))
     {
         if (needToSumEkinhOld_)
         {
-            globalState->ekinstate.bUpToDate = false;
+            ekinstate_.bUpToDate = false;
         }
         else
         {
-            update_ekinstate(&globalState->ekinstate, ekind_);
-            globalState->ekinstate.bUpToDate = true;
+            update_ekinstate(&ekinstate_, ekind_);
+            ekinstate_.bUpToDate = true;
         }
-        energyOutput_->fillEnergyHistory(observablesHistory_->energyHistory.get());
+        energyOutput_->fillEnergyHistory(observablesHistory_.energyHistory.get());
+    }
+    doCheckpointData<CheckpointDataOperation::Write>(&checkpointData, cr);
+}
+
+void EnergyElement::readCheckpoint(CheckpointData checkpointData, const t_commrec* cr)
+{
+    doCheckpointData<CheckpointDataOperation::Read>(&checkpointData, cr);
+    hasReadEkinFromCheckpoint_ = MASTER(cr) ? ekinstate_.bUpToDate : false;
+    if (PAR(cr))
+    {
+        gmx_bcast(sizeof(hasReadEkinFromCheckpoint_), &hasReadEkinFromCheckpoint_, cr->mpi_comm_mygroup);
+    }
+    if (hasReadEkinFromCheckpoint_)
+    {
+        // this takes care of broadcasting from master to agents
+        restore_ekinstate_from_state(cr, ekind_, &ekinstate_);
     }
 }
 
@@ -503,7 +540,8 @@ void EnergyElementBuilder::registerWithCheckpointHelper(CheckpointHelperBuilder*
 {
     GMX_RELEASE_ASSERT(energyElement_,
                        "Tried to register to CheckpointHelper after EnergyElement was built.");
-    checkpointHelperBuilder->registerClient(compat::make_not_null(energyElement_.get()));
+    checkpointHelperBuilder->registerClient(compat::make_not_null(energyElement_.get()),
+                                            energyElement_->identifier);
     registeredWithCheckpointHelper_ = true;
 }
 

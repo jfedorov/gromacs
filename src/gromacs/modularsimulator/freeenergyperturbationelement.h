@@ -53,6 +53,7 @@ struct t_inputrec;
 
 namespace gmx
 {
+enum class CheckpointDataOperation;
 class CheckpointHelperBuilder;
 struct ElementAndSignallerBuilders;
 class MDAtoms;
@@ -94,8 +95,16 @@ private:
     //! Constructor
     FreeEnergyPerturbationElement(FILE* fplog, const t_inputrec* inputrec, MDAtoms* mdAtoms);
 
-    //! ICheckpointHelperClient implementation
-    void writeCheckpoint(t_state* localState, t_state* globalState) override;
+    //! ICheckpointHelperClient write checkpoint implementation
+    void writeCheckpoint(CheckpointData checkpointData, const t_commrec* cr) override;
+    //! ICheckpointHelperClient read checkpoint implementation
+    void readCheckpoint(CheckpointData checkpointData, const t_commrec* cr) override;
+    //! CheckpointHelper identifier
+    const std::string identifier = "FreeEnergyPerturbationElement";
+    //! Helper function to read from / write to CheckpointData
+    template<CheckpointDataOperation operation>
+    void doCheckpointData(CheckpointData* checkpointData, const t_commrec* cr);
+
     //! Update the lambda values
     void updateLambdas(Step step);
 

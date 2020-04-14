@@ -52,6 +52,7 @@ struct t_commrec;
 
 namespace gmx
 {
+enum class CheckpointDataOperation;
 class CheckpointHelperBuilder;
 class EnergyElement;
 class EnergyElementBuilder;
@@ -88,17 +89,14 @@ public:
 
 private:
     //! Constructor
-    VRescaleThermostat(int            nstcouple,
-                       int64_t        seed,
-                       int            numTemperatureGroups,
-                       double         couplingTimeStep,
-                       const real*    referenceTemperature,
-                       const real*    couplingTime,
-                       const real*    numDegreesOfFreedom,
-                       const t_state* globalState,
-                       t_commrec*     cr,
-                       bool           isRestart,
-                       int            inputThermostatType);
+    VRescaleThermostat(int         nstcouple,
+                       int64_t     seed,
+                       int         numTemperatureGroups,
+                       double      couplingTimeStep,
+                       const real* referenceTemperature,
+                       const real* couplingTime,
+                       const real* numDegreesOfFreedom,
+                       int         inputThermostatType);
 
     //! The frequency at which the thermostat is applied
     const int nstcouple_;
@@ -133,8 +131,15 @@ private:
     //! Set new lambda value (at T-coupling steps)
     void setLambda(Step step);
 
-    //! ICheckpointHelperClient implementation
-    void writeCheckpoint(t_state* localState, t_state* globalState) override;
+    //! ICheckpointHelperClient write checkpoint implementation
+    void writeCheckpoint(CheckpointData checkpointData, const t_commrec* cr) override;
+    //! ICheckpointHelperClient read checkpoint implementation
+    void readCheckpoint(CheckpointData checkpointData, const t_commrec* cr) override;
+    //! CheckpointHelper identifier
+    const std::string identifier = "VRescaleThermostat";
+    //! Helper function to read from / write to CheckpointData
+    template<CheckpointDataOperation operation>
+    void doCheckpointData(CheckpointData* checkpointData, const t_commrec* cr);
 };
 
 /*! \libinternal

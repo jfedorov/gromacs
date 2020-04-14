@@ -61,10 +61,12 @@
 
 struct gmx_localtop_t;
 struct gmx_mdoutf;
+struct t_commrec;
 class t_state;
 
 namespace gmx
 {
+class CheckpointData;
 template<class Signaller>
 class SignallerBuilder;
 class NeighborSearchSignaller;
@@ -362,7 +364,9 @@ public:
 
 protected:
     //! Write checkpoint
-    virtual void writeCheckpoint(t_state* localState, t_state* globalState) = 0;
+    virtual void writeCheckpoint(CheckpointData checkpointData, const t_commrec* cr) = 0;
+    //! Read checkpoint
+    virtual void readCheckpoint(CheckpointData checkpointData, const t_commrec* cr) = 0;
 };
 //! /}
 } // namespace gmx

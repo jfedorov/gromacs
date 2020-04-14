@@ -323,33 +323,6 @@ void ModularSimulator::populateTaskQueue()
 
 void ModularSimulator::constructElementsAndSignallers()
 {
-    /* When restarting from a checkpoint, it can be appropriate to
-     * initialize ekind from quantities in the checkpoint. Otherwise,
-     * compute_globals must initialize ekind before the simulation
-     * starts/restarts. However, only the master rank knows what was
-     * found in the checkpoint file, so we have to communicate in
-     * order to coordinate the restart.
-     *
-     * TODO (modular) This should become obsolete when checkpoint reading
-     *      happens within the modular simulator framework: The energy
-     *      element should read its data from the checkpoint file pointer,
-     *      and signal to the compute globals element if it needs anything
-     *      reduced.
-     *
-     * TODO (legacy) Consider removing this communication if/when checkpoint
-     *      reading directly follows .tpr reading, because all ranks can
-     *      agree on hasReadEkinState at that time.
-     */
-    hasReadEkinState_ = MASTER(cr) ? state_global->ekinstate.hasReadEkinState : false;
-    if (PAR(cr))
-    {
-        gmx_bcast(sizeof(hasReadEkinState_), &hasReadEkinState_, cr->mpi_comm_mygroup);
-    }
-    if (hasReadEkinState_)
-    {
-        restore_ekinstate_from_state(cr, ekind, &state_global->ekinstate);
-    }
-
     // Multisim is currently disabled
     multiSimNeedsSynchronizedState_ = false;
 

@@ -46,6 +46,7 @@
 #include "gromacs/math/paddedvector.h"
 #include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/state.h"
+#include "gromacs/utility/keyvaluetree.h"
 
 #include "modularsimulatorinterfaces.h"
 #include "topologyholder.h"
@@ -59,6 +60,7 @@ struct t_mdatoms;
 
 namespace gmx
 {
+enum class CheckpointDataOperation;
 enum class ConstraintVariable;
 class CheckpointHelperBuilder;
 struct ElementAndSignallerBuilders;
@@ -218,8 +220,21 @@ private:
     matrix box_;
     //! The box matrix of the previous step
     matrix previousBox_;
-    //! The DD partitioning count for legacy t_state compatibility
+    //! The DD partitioning count
     int ddpCount_;
+    //! The DD partitioning count for index_gl
+    int ddpCountCgGl_;
+    //! The global cg number of the local cgs
+    std::vector<int> cgGl_;
+
+    //! The position vector
+    PaddedHostVector<RVec> xGlobal_;
+    //! The position vector of the previous step
+    PaddedHostVector<RVec> previousXGlobal_;
+    //! The velocity vector
+    PaddedHostVector<RVec> vGlobal_;
+    //! The force vector
+    PaddedHostVector<RVec> fGlobal_;
 
     //! Move x_ to previousX_
     void copyPosition();
@@ -249,8 +264,15 @@ private:
     //! ITrajectoryWriterClient implementation
     ITrajectoryWriterCallbackPtr registerTrajectoryWriterCallback(TrajectoryEvent event) override;
 
-    //! ICheckpointHelperClient implementation
-    void writeCheckpoint(t_state* localState, t_state* globalState) override;
+    //! ICheckpointHelperClient write checkpoint implementation
+    void writeCheckpoint(CheckpointData checkpointData, const t_commrec* cr) override;
+    //! ICheckpointHelperClient read checkpoint implementation
+    void readCheckpoint(CheckpointData checkpointData, const t_commrec* cr) override;
+    //! CheckpointHelper identifier
+    const std::string identifier = "StatePropagatorData";
+    //! Helper function to read from / write to CheckpointData
+    template<CheckpointDataOperation operation>
+    void doCheckpointData(CheckpointData* checkpointData, const t_commrec* cr);
 
     //! ILastStepSignallerClient implementation (used for final output only)
     SignallerCallbackPtr registerLastStepCallback() override;
@@ -267,6 +289,8 @@ private:
 
     //! Pointer to the free energy perturbation element (for trajectory writing only)
     FreeEnergyPerturbationElement* freeEnergyPerturbationElement_;
+    //! A dummy KVTree - remove when we stop using the legacy trajectory writing function
+    const KeyValueTreeObject dummyKVTree;
 
     //! Whether planned total number of steps was reached (used for final output only)
     bool isRegularSimulationEnd_;

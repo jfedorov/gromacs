@@ -43,8 +43,11 @@
 
 #include "freeenergyperturbationelement.h"
 
+#include "gromacs/domdec/domdec_network.h"
 #include "gromacs/mdlib/md_support.h"
 #include "gromacs/mdlib/mdatoms.h"
+#include "gromacs/mdtypes/checkpointdata.h"
+#include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/state.h"
@@ -73,6 +76,7 @@ FreeEnergyPerturbationElement::FreeEnergyPerturbationElement(FILE*             f
     }
     lambda_.fill(0);
     lambda0_.fill(0);
+    // The legacy implementation only filled the lambda vector in state_global, which is only available on master. We have the lambda vector available everywhere, so we pass a `true` for isMaster on all ranks.
     initialize_lambdas(fplog_, *inputrec_, true, &currentFEPState_, lambda_, lambda0_.data());
     update_mdatoms(mdAtoms_->mdatoms(), lambda_[efptMASS]);
 }
@@ -110,11 +114,33 @@ int FreeEnergyPerturbationElement::currentFEPState()
     return currentFEPState_;
 }
 
-void FreeEnergyPerturbationElement::writeCheckpoint(t_state* localState, t_state gmx_unused* globalState)
+template<CheckpointDataOperation operation>
+void FreeEnergyPerturbationElement::doCheckpointData(CheckpointData* checkpointData, const t_commrec* cr)
 {
-    localState->fep_state = currentFEPState_;
-    localState->lambda    = lambda_;
-    localState->flags |= (1U << estLAMBDA) | (1U << estFEPSTATE);
+    if (MASTER(cr))
+    {
+        checkpointData->scalar<operation>("current FEP state", &currentFEPState_);
+        checkpointData->arrayRef<operation>("lambda vector", makeCheckpointArrayRef<operation>(lambda_));
+    }
+    if (operation == CheckpointDataOperation::Read)
+    {
+        if (DOMAINDECOMP(cr))
+        {
+            dd_bcast(cr->dd, sizeof(int), &currentFEPState_);
+            dd_bcast(cr->dd, lambda_.size() * sizeof(real), lambda_.data());
+        }
+        update_mdatoms(mdAtoms_->mdatoms(), lambda_[efptMASS]);
+    }
+}
+
+void FreeEnergyPerturbationElement::writeCheckpoint(CheckpointData checkpointData, const t_commrec* cr)
+{
+    doCheckpointData<CheckpointDataOperation::Write>(&checkpointData, cr);
+}
+
+void FreeEnergyPerturbationElement::readCheckpoint(CheckpointData checkpointData, const t_commrec* cr)
+{
+    doCheckpointData<CheckpointDataOperation::Read>(&checkpointData, cr);
 }
 
 void FreeEnergyPerturbationElementBuilder::connectWithBuilders(ElementAndSignallerBuilders* builders)
@@ -129,7 +155,7 @@ void FreeEnergyPerturbationElementBuilder::registerWithCheckpointHelper(Checkpoi
                        "FreeEnergyPerturbationElement.");
     if (element_)
     {
-        checkpointHelperBuilder->registerClient(compat::make_not_null(element_.get()));
+        checkpointHelperBuilder->registerClient(compat::make_not_null(element_.get()), element_->identifier);
     }
     registeredWithCheckpointHelper_ = true;
 }

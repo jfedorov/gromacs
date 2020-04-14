@@ -142,8 +142,7 @@ private:
                           gmx_wallcycle*     wcycle,
                           t_forcerec*        fr,
                           const gmx_mtop_t*  global_top,
-                          Constraints*       constr,
-                          bool               hasReadEkinState);
+                          Constraints*       constr);
 
     //! ITopologyClient implementation
     void setTopology(const gmx_localtop_t* top) override;
@@ -174,8 +173,6 @@ private:
     const Step initStep_;
     //! A dummy signaller (used for setup and VV)
     std::unique_ptr<SimulationSignaller> nullSignaller_;
-    //! Whether we read kinetic energy from checkpoint
-    const bool hasReadEkinState_;
 
     /*! \brief Check that DD doesn't miss bonded interactions
      *

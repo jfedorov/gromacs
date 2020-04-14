@@ -42,9 +42,11 @@
 #ifndef GMX_MODULARSIMULATOR_CHECKPOINTHELPER_H
 #define GMX_MODULARSIMULATOR_CHECKPOINTHELPER_H
 
+#include <map>
 #include <vector>
 
 #include "gromacs/mdlib/checkpointhandler.h"
+#include "gromacs/mdrunutility/handlerestart.h"
 
 #include "modularsimulatorinterfaces.h"
 
@@ -54,6 +56,7 @@ struct ObservablesHistory;
 namespace gmx
 {
 struct ElementAndSignallerBuilders;
+class KeyValueTreeObject;
 class MDLogger;
 class TrajectoryElement;
 class TrajectoryElementBuilder;
@@ -126,20 +129,26 @@ public:
 
 private:
     //! Constructor
-    CheckpointHelper(int                      initStep,
-                     int                      globalNumAtoms,
-                     FILE*                    fplog,
-                     t_commrec*               cr,
-                     ObservablesHistory*      observablesHistory,
-                     gmx_walltime_accounting* walltime_accounting,
-                     t_state*                 state_global,
-                     bool                     writeFinalCheckpoint);
+    CheckpointHelper(int                                       initStep,
+                     int                                       globalNumAtoms,
+                     std::unique_ptr<const KeyValueTreeObject> checkpointTree,
+                     StartingBehavior                          startingBehavior,
+                     FILE*                                     fplog,
+                     t_commrec*                                cr,
+                     ObservablesHistory*                       observablesHistory,
+                     gmx_walltime_accounting*                  walltime_accounting,
+                     t_state*                                  state_global,
+                     bool                                      writeFinalCheckpoint);
 
-    //! List of checkpoint clients
-    std::vector<ICheckpointHelperClient*> clients_;
+    //! Map of checkpoint clients
+    std::map<std::string, ICheckpointHelperClient*> clientsMap_;
+    //! Register client
+    void registerClient(ICheckpointHelperClient* client, const std::string& key);
 
     //! The checkpoint handler
     std::unique_ptr<CheckpointHandler> checkpointHandler_;
+    //! The input checkpoint tree
+    std::unique_ptr<const KeyValueTreeObject> checkpointTree_;
 
     //! The first step of the simulation
     const Step initStep_;
@@ -149,6 +158,8 @@ private:
     const int globalNumAtoms_;
     //! Whether a checkpoint is written on the last step
     const bool writeFinalCheckpoint_;
+    //! Whether we are resetting from checkpoint
+    const bool resetFromCheckpoint_;
 
     //! ILastStepSignallerClient implementation
     SignallerCallbackPtr registerLastStepCallback() override;
@@ -193,7 +204,7 @@ public:
     void connectWithBuilders(ElementAndSignallerBuilders* builders);
 
     //! Register checkpointing client
-    void registerClient(compat::not_null<ICheckpointHelperClient*> client);
+    void registerClient(compat::not_null<ICheckpointHelperClient*> client, const std::string& key);
 
     //! Set CheckpointHandler
     void setCheckpointHandler(std::unique_ptr<CheckpointHandler> checkpointHandler);

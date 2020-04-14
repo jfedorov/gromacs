@@ -74,8 +74,7 @@ ComputeGlobalsElement<algorithm>::ComputeGlobalsElement(SimulationSignals* signa
                                                         gmx_wallcycle*     wcycle,
                                                         t_forcerec*        fr,
                                                         const gmx_mtop_t*  global_top,
-                                                        Constraints*       constr,
-                                                        bool               hasReadEkinState) :
+                                                        Constraints*       constr) :
     energyReductionStep_(-1),
     virialReductionStep_(-1),
     vvSchedulingStep_(-1),
@@ -85,7 +84,6 @@ ComputeGlobalsElement<algorithm>::ComputeGlobalsElement(SimulationSignals* signa
     lastStep_(inputrec->nsteps + inputrec->init_step),
     initStep_(inputrec->init_step),
     nullSignaller_(std::make_unique<SimulationSignaller>(nullptr, nullptr, nullptr, false, false)),
-    hasReadEkinState_(hasReadEkinState),
     totalNumberOfBondedInteractions_(0),
     shouldCheckNumberOfBondedInteractions_(false),
     statePropagatorData_(nullptr),
@@ -139,7 +137,8 @@ void ComputeGlobalsElement<algorithm>::elementSetup()
         inc_nrnb(nrnb_, eNR_STOPCM, mdAtoms_->mdatoms()->homenr);
     }
 
-    unsigned int cglo_flags = (CGLO_TEMPERATURE | CGLO_GSTAT | (hasReadEkinState_ ? CGLO_READEKIN : 0));
+    unsigned int cglo_flags = (CGLO_TEMPERATURE | CGLO_GSTAT
+                               | (energyElement_->hasReadEkinFromCheckpoint() ? CGLO_READEKIN : 0));
 
     if (algorithm == ComputeGlobalsAlgorithm::VelocityVerlet)
     {

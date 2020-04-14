@@ -48,6 +48,7 @@
 #include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/stat.h"
 #include "gromacs/mdlib/update.h"
+#include "gromacs/mdtypes/checkpointdata.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/mdatom.h"
@@ -68,10 +69,7 @@ ParrinelloRahmanBarostat::ParrinelloRahmanBarostat(int               nstpcouple,
                                                    Step              initStep,
                                                    FILE*             fplog,
                                                    const t_inputrec* inputrec,
-                                                   const MDAtoms*    mdAtoms,
-                                                   const t_state*    globalState,
-                                                   t_commrec*        cr,
-                                                   bool              isRestart) :
+                                                   const MDAtoms*    mdAtoms) :
     nstpcouple_(nstpcouple),
     offset_(),
     couplingTimeStep_(couplingTimeStep),
@@ -91,22 +89,6 @@ ParrinelloRahmanBarostat::ParrinelloRahmanBarostat(int               nstpcouple,
         GMX_THROW(
                 ElementNotNeededException("ParrinelloRahmanBarostat is not needed without "
                                           "Parrinello-Rahman pressure control."));
-    }
-
-    // TODO: This is only needed to restore the thermostatIntegral_ from cpt. Remove this when
-    //       switching to purely client-based checkpointing.
-    if (isRestart)
-    {
-        if (MASTER(cr))
-        {
-            copy_mat(globalState->boxv, boxVelocity_);
-            copy_mat(globalState->box_rel, boxRel_);
-        }
-        if (DOMAINDECOMP(cr))
-        {
-            dd_bcast(cr->dd, sizeof(boxVelocity_), boxVelocity_);
-            dd_bcast(cr->dd, sizeof(boxRel_), boxRel_);
-        }
     }
 }
 
@@ -198,11 +180,29 @@ const rvec* ParrinelloRahmanBarostat::boxVelocities() const
     return boxVelocity_;
 }
 
-void ParrinelloRahmanBarostat::writeCheckpoint(t_state* localState, t_state gmx_unused* globalState)
+template<CheckpointDataOperation operation>
+void ParrinelloRahmanBarostat::doCheckpointData(CheckpointData* checkpointData, const t_commrec* cr)
 {
-    copy_mat(boxVelocity_, localState->boxv);
-    copy_mat(boxRel_, localState->box_rel);
-    localState->flags |= (1U << estBOXV) | (1U << estBOX_REL);
+    if (MASTER(cr))
+    {
+        checkpointData->tensor<operation>("box velocity", boxVelocity_);
+        checkpointData->tensor<operation>("relative box vector", boxRel_);
+    }
+    if (operation == CheckpointDataOperation::Read && DOMAINDECOMP(cr))
+    {
+        dd_bcast(cr->dd, sizeof(boxVelocity_), boxVelocity_);
+        dd_bcast(cr->dd, sizeof(boxRel_), boxRel_);
+    }
+}
+
+void ParrinelloRahmanBarostat::writeCheckpoint(CheckpointData checkpointData, const t_commrec* cr)
+{
+    doCheckpointData<CheckpointDataOperation::Write>(&checkpointData, cr);
+}
+
+void ParrinelloRahmanBarostat::readCheckpoint(CheckpointData checkpointData, const t_commrec* cr)
+{
+    doCheckpointData<CheckpointDataOperation::Read>(&checkpointData, cr);
 }
 
 void ParrinelloRahmanBarostatBuilder::connectWithBuilders(ElementAndSignallerBuilders* builders)
@@ -241,7 +241,8 @@ void ParrinelloRahmanBarostatBuilder::registerWithCheckpointHelper(CheckpointHel
             "Tried to register to CheckpointHelper after ParrinelloRahmanBarostat was built.");
     if (prBarostat_)
     {
-        checkpointHelperBuilder->registerClient(compat::make_not_null(prBarostat_.get()));
+        checkpointHelperBuilder->registerClient(compat::make_not_null(prBarostat_.get()),
+                                                prBarostat_->identifier);
     }
     registeredWithCheckpointHelper_ = true;
 }

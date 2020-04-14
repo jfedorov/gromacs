@@ -44,6 +44,7 @@
 
 #include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/energyoutput.h"
+#include "gromacs/mdtypes/observableshistory.h"
 #include "gromacs/mdtypes/state.h"
 
 #include "modularsimulatorinterfaces.h"
@@ -186,6 +187,13 @@ public:
      */
     bool* needToSumEkinhOld();
 
+    /*! \brief Whether kinetic energy was read from checkpoint
+     *
+     * This is needed by the compute globals element
+     * TODO: Remove this when moving global reduction to client system
+     */
+    bool hasReadEkinFromCheckpoint() const;
+
     /*! \brief Initialize energy history
      *
      * Kept as a static function to allow usage from legacy code
@@ -209,7 +217,6 @@ private:
                   t_fcdata*                fcd,
                   const MdModulesNotifier& mdModulesNotifier,
                   bool                     isMasterRank,
-                  ObservablesHistory*      observablesHistory,
                   StartingBehavior         startingBehavior);
 
     /*! \brief Setup (needs file pointer)
@@ -245,14 +252,25 @@ private:
      */
     void write(gmx_mdoutf* outf, Step step, Time time, bool writeTrajectory, bool writeLog);
 
-    //! ICheckpointHelperClient implementation
-    void writeCheckpoint(t_state* localState, t_state* globalState) override;
+    //! ICheckpointHelperClient write checkpoint implementation
+    void writeCheckpoint(CheckpointData checkpointData, const t_commrec* cr) override;
+    //! ICheckpointHelperClient read checkpoint implementation
+    void readCheckpoint(CheckpointData checkpointData, const t_commrec* cr) override;
+    //! CheckpointHelper identifier
+    const std::string identifier = "EnergyElement";
+    //! Helper function to read from / write to CheckpointData
+    template<CheckpointDataOperation operation>
+    void doCheckpointData(CheckpointData* checkpointData, const t_commrec* cr);
 
     /*
      * Data owned by EnergyElement
      */
     //! The energy output object
     std::unique_ptr<EnergyOutput> energyOutput_;
+    //! Helper object to checkpoint kinetic energy data
+    ekinstate_t ekinstate_;
+    //! History of simulation observables.
+    ObservablesHistory observablesHistory_;
 
     //! Whether this is the master rank
     const bool isMasterRank_;
@@ -285,6 +303,8 @@ private:
 
     //! Whether ekinh_old needs to be summed up (set by compute globals)
     bool needToSumEkinhOld_;
+    //! Whether we have read ekin from checkpoint
+    bool hasReadEkinFromCheckpoint_;
 
     //! Describes how the simulation (re)starts
     const StartingBehavior startingBehavior_;
@@ -323,8 +343,6 @@ private:
     const MdModulesNotifier& mdModulesNotifier_;
     //! Global topology groups
     const SimulationGroups* groups_;
-    //! History of simulation observables.
-    ObservablesHistory* observablesHistory_;
 };
 
 /*! \libinternal

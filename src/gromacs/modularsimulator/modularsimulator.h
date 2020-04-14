@@ -240,8 +240,6 @@ private:
     SimulationSignals signals_;
     //! Compute globals communication period
     int nstglobalcomm_;
-    //! Whether we have read the kinetic energy from checkpoint
-    bool hasReadEkinState_;
     //! Whether multisim need the state to be synchronized
     bool multiSimNeedsSynchronizedState_;
 

@@ -51,13 +51,12 @@
 #include "gromacs/mdlib/mdoutf.h"
 #include "gromacs/mdlib/stat.h"
 #include "gromacs/mdlib/update.h"
+#include "gromacs/mdtypes/checkpointdata.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/mdatom.h"
-#include "gromacs/mdtypes/checkpointdata.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/topology/atoms.h"
-#include "gromacs/topology/topology.h"
 
 #include "builders.h"
 #include "checkpointhelper.h"
@@ -131,6 +130,14 @@ StatePropagatorData::StatePropagatorData(int               numAtoms,
     if (useGPU)
     {
         changePinningPolicy(&x_, gmx::PinningPolicy::PinnedIfSupported);
+    }
+
+    if (DOMAINDECOMP(cr) && MASTER(cr))
+    {
+        xGlobal_.reserveWithPadding(totalNumAtoms_);
+        previousXGlobal_.reserveWithPadding(totalNumAtoms_);
+        vGlobal_.reserveWithPadding(totalNumAtoms_);
+        fGlobal_.reserveWithPadding(totalNumAtoms_);
     }
 
     if (!inputrec->bContinuation)
@@ -237,7 +244,9 @@ std::unique_ptr<t_state> StatePropagatorData::localState()
     state->x = x_;
     state->v = v_;
     copy_mat(box_, state->box);
-    state->ddp_count = ddpCount_;
+    state->ddp_count       = ddpCount_;
+    state->ddp_count_cg_gl = ddpCountCgGl_;
+    state->cg_gl           = cgGl_;
     return state;
 }
 
@@ -251,7 +260,9 @@ void StatePropagatorData::setLocalState(std::unique_ptr<t_state> state)
     v_ = state->v;
     copy_mat(state->box, box_);
     copyPosition();
-    ddpCount_ = state->ddp_count;
+    ddpCount_     = state->ddp_count;
+    ddpCountCgGl_ = state->ddp_count_cg_gl;
+    cgGl_         = state->cg_gl;
 
     if (vvResetVelocities_)
     {
@@ -407,11 +418,9 @@ void StatePropagatorData::write(gmx_mdoutf_t outf, Step currentStep, Time curren
     // TODO: This is only used for CPT - needs to be filled when we turn CPT back on
     ObservablesHistory* observablesHistory = nullptr;
 
-
-    KeyValueTreeObject dummyKVTreeObject;
     mdoutf_write_to_trajectory_files(fplog_, cr_, outf, static_cast<int>(mdof_flags), totalNumAtoms_,
                                      currentStep, currentTime, localStateBackup_.get(),
-                                     globalState_, observablesHistory, f_, dummyKVTreeObject);
+                                     globalState_, observablesHistory, f_, dummyKVTree);
 
     if (currentStep != lastStep_ || !isRegularSimulationEnd_)
     {
@@ -436,14 +445,48 @@ void StatePropagatorData::resetVelocities()
     v_ = velocityBackup_;
 }
 
-void StatePropagatorData::writeCheckpoint(t_state* localState, t_state gmx_unused* globalState)
+template<CheckpointDataOperation operation>
+void StatePropagatorData::doCheckpointData(CheckpointData* checkpointData, const t_commrec* cr)
 {
-    state_change_natoms(localState, localNAtoms_);
-    localState->x = x_;
-    localState->v = v_;
-    copy_mat(box_, localState->box);
-    localState->ddp_count = ddpCount_;
-    localState->flags |= (1U << estX) | (1U << estV) | (1U << estBOX);
+    ArrayRef<RVec> xGlobalRef;
+    ArrayRef<RVec> vGlobalRef;
+    if (DOMAINDECOMP(cr))
+    {
+        if (MASTER(cr))
+        {
+            xGlobalRef = xGlobal_;
+            vGlobalRef = vGlobal_;
+        }
+        if (operation == CheckpointDataOperation::Write)
+        {
+            dd_collect_vec(cr->dd, ddpCount_, ddpCountCgGl_, cgGl_, x_, xGlobalRef);
+            dd_collect_vec(cr->dd, ddpCount_, ddpCountCgGl_, cgGl_, v_, vGlobalRef);
+        }
+    }
+    else
+    {
+        xGlobalRef = x_;
+        vGlobalRef = v_;
+    }
+    if (MASTER(cr))
+    {
+        checkpointData->arrayRef<operation>("positions", makeCheckpointArrayRef<operation>(xGlobalRef));
+        checkpointData->arrayRef<operation>("velocities", makeCheckpointArrayRef<operation>(vGlobalRef));
+        checkpointData->tensor<operation>("box", box_);
+        checkpointData->scalar<operation>("ddpCount", &ddpCount_);
+        checkpointData->scalar<operation>("ddpCountCgGl", &ddpCountCgGl_);
+        checkpointData->arrayRef<operation>("cgGl", makeCheckpointArrayRef<operation>(cgGl_));
+    }
+}
+
+void StatePropagatorData::writeCheckpoint(CheckpointData checkpointData, const t_commrec* cr)
+{
+    doCheckpointData<CheckpointDataOperation::Write>(&checkpointData, cr);
+}
+
+void StatePropagatorData::readCheckpoint(CheckpointData checkpointData, const t_commrec* cr)
+{
+    doCheckpointData<CheckpointDataOperation::Read>(&checkpointData, cr);
 }
 
 void StatePropagatorData::trajectoryWriterTeardown(gmx_mdoutf* gmx_unused outf)
@@ -560,7 +603,8 @@ void StatePropagatorDataBuilder::registerWithCheckpointHelper(CheckpointHelperBu
     GMX_RELEASE_ASSERT(
             statePropagatorData_,
             "Tried to register to CheckpointHelper after StatePropagatorData object was built.");
-    checkpointHelperBuilder->registerClient(compat::make_not_null(statePropagatorData_.get()));
+    checkpointHelperBuilder->registerClient(compat::make_not_null(statePropagatorData_.get()),
+                                            statePropagatorData_->identifier);
     registeredWithCheckpointHelper_ = true;
 }
 
