@@ -71,7 +71,7 @@ target_include_directories(gmxapi-test PRIVATE
 # Link against the gmxapi libraries and get access to its public (installed) headers.
 target_link_libraries(gmxapi-test PRIVATE Gromacs::gmxapi mdrun_test_infrastructure)
 
-gmx_register_gtest_test(GmxapiExternalInterfaceTests gmxapi-test OPENMP_THREADS 2 INTEGRATION_TEST)
+gmx_register_gtest_test(GmxapiExternalInterfaceTests gmxapi-test INTEGRATION_TEST)
 
 set_tests_properties(GmxapiExternalInterfaceTests PROPERTIES
                      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
@@ -104,5 +104,5 @@ target_link_libraries(gmxapi-mpi-test PRIVATE Gromacs::gmxapi mdrun_test_infrast
 # Note that gmxapi-mpi-test does not have a command line argument processor,
 # so some of the information that is supposed to be conveyed through this macro
 # is not transmitted in the usual way. For instance, OPENMP_THREADS may have no
-# effect.
-gmx_register_gtest_test(GmxapiMpiTests gmxapi-mpi-test MPI_RANKS 2 OPENMP_THREADS 2 INTEGRATION_TEST)
+# effect. See testingconfiguration.h
+gmx_register_gtest_test(GmxapiMpiTests gmxapi-mpi-test MPI_RANKS 2 INTEGRATION_TEST)

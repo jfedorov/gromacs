@@ -63,7 +63,7 @@ Miscellaneous
 Fixed overzealous OpenMP configuration by test suite
 """"""""""""""""""""""""""""""""""""""""""""""""""""
 
-Constrain GmxapiMpiTests (and others) to use `-ntomp 1`.
+Constrain GmxapiMpiTests (and others) to use ``-ntomp 1``.
 
 :issue:`3485`
 
