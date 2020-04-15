@@ -115,8 +115,6 @@ public:
     {
         std::vector<std::string> mdArgs;
 
-        mdArgs.emplace_back("-ntomp");
-        mdArgs.emplace_back("1");
         mdArgs.emplace_back("-o");
         mdArgs.emplace_back(runner_.fullPrecisionTrajectoryFileName_);
         mdArgs.emplace_back("-x");
@@ -129,6 +127,12 @@ public:
         mdArgs.emplace_back(runner_.edrFileName_);
         mdArgs.emplace_back("-cpo");
         mdArgs.emplace_back(runner_.cptFileName_);
+
+        // If we do not specify -ntomp, libgromacs may detect more threading
+        // facilities than it knows what to do with.
+        // Reference https://gitlab.com/gromacs/gromacs/-/issues/3485
+        mdArgs.emplace_back("-ntomp");
+        mdArgs.emplace_back("1");
 
         return mdArgs;
     }
