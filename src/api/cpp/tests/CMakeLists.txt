@@ -1,7 +1,7 @@
 #
 # This file is part of the GROMACS molecular simulation package.
 #
-# Copyright (c) 2018,2019, by the GROMACS development team, led by
+# Copyright (c) 2018,2019,2020, by the GROMACS development team, led by
 # Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
 # and including many others, as listed in the AUTHORS file in the
 # top-level source directory and at http://www.gromacs.org.
@@ -101,4 +101,8 @@ target_include_directories(gmxapi-mpi-test PRIVATE
                            ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(gmxapi-mpi-test PRIVATE Gromacs::gmxapi mdrun_test_infrastructure)
 
+# Note that gmxapi-mpi-test does not have a command line argument processor,
+# so some of the information that is supposed to be conveyed through this macro
+# is not transmitted in the usual way. For instance, OPENMP_THREADS may have no
+# effect.
 gmx_register_gtest_test(GmxapiMpiTests gmxapi-mpi-test MPI_RANKS 2 OPENMP_THREADS 2 INTEGRATION_TEST)

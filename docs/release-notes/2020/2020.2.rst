@@ -60,6 +60,13 @@ Fixes that affect portability
 Miscellaneous
 ^^^^^^^^^^^^^
 
+Fixed overzealous OpenMP configuration by test suite
+""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+Constrain GmxapiMpiTests (and others) to use `-ntomp 1`.
+
+:issue:`3485`
+
 Fixed initial DLB state reporting
 """""""""""""""""""""""""""""""""
 
