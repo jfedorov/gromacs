@@ -141,7 +141,6 @@ void copyToDeviceBuffer(DeviceBuffer<ValueType>* buffer,
     }
 }
 
-
 /*! \brief
  * Performs the device-to-host data copy, synchronous or asynchronously on request.
  *
@@ -240,6 +239,8 @@ using DeviceTexture = cudaTextureObject_t;
  *
  * Creates the device buffer, copies data and binds texture object for an array of type ValueType.
  *
+ * \todo Test if using textures is still relevant on modern hardware.
+ *
  * \tparam      ValueType      Raw data type.
  *
  * \param[out]  deviceBuffer   Device buffer to store data in.
@@ -247,24 +248,34 @@ using DeviceTexture = cudaTextureObject_t;
  * \param[in]   hostBuffer     Host buffer to get date from
  * \param[in]   numValues      Number of elements in the buffer.
  * \param[in]   deviceContext  GPU device context.
- * \param[in]   deviceStream   GPU stream to perform data copy in.
  */
 template<typename ValueType>
 void initParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer,
                           DeviceTexture*           deviceTexture,
                           const ValueType*         hostBuffer,
                           int                      numValues,
-                          const DeviceContext&     deviceContext,
-                          const DeviceStream&      deviceStream)
+                          const DeviceContext&     deviceContext)
 {
-    GMX_RELEASE_ASSERT(deviceStream.isValid(), "Stream should be valid.");
+    if (numValues == 0)
+    {
+        return;
+    }
+    GMX_ASSERT(hostBuffer, "Host buffer should be specified.");
+
     allocateDeviceBuffer(deviceBuffer, numValues, deviceContext);
-    copyToDeviceBuffer(deviceBuffer, hostBuffer, 0, numValues, deviceStream,
-                       GpuApiCallBehavior::Sync, nullptr);
+
+    const size_t sizeInBytes = numValues * sizeof(ValueType);
+
+    cudaError_t stat =
+            cudaMemcpy(*((ValueType**)deviceBuffer), hostBuffer, sizeInBytes, cudaMemcpyHostToDevice);
+
+    GMX_RELEASE_ASSERT(
+            stat == cudaSuccess,
+            gmx::formatString("Synchronous H2D copy failed (CUDA error: %s).", cudaGetErrorName(stat))
+                    .c_str());
 
     if (!c_disableCudaTextures)
     {
-        cudaError_t      stat;
         cudaResourceDesc rd;
         cudaTextureDesc  td;
 
@@ -272,7 +283,7 @@ void initParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer,
         rd.resType                = cudaResourceTypeLinear;
         rd.res.linear.devPtr      = *deviceBuffer;
         rd.res.linear.desc        = cudaCreateChannelDesc<ValueType>();
-        rd.res.linear.sizeInBytes = numValues * sizeof(*hostBuffer);
+        rd.res.linear.sizeInBytes = sizeInBytes;
 
         memset(&td, 0, sizeof(td));
         td.readMode = cudaReadModeElementType;

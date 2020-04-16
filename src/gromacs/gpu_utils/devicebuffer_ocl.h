@@ -250,6 +250,11 @@ void clearDeviceBufferAsync(DeviceBuffer<ValueType>* buffer,
                                .c_str());
 }
 
+#if defined(__clang__)
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wunused-template"
+#endif
+
 /*! \brief Check the validity of the device buffer.
  *
  * Checks if the buffer is not nullptr and if its allocation is big enough.
@@ -276,7 +281,9 @@ using DeviceTexture = void*;
 
 /*! \brief Create a texture object for an array of type ValueType.
  *
- * Creates the device buffer, copies data and binds texture object for an array of type ValueType.
+ * Creates the device buffer and copies read-only data for an array of type ValueType.
+ *
+ * \todo Decide if using image2d is most efficient.
  *
  * \tparam      ValueType      Raw data type.
  *
@@ -290,10 +297,9 @@ void initParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer,
                           DeviceTexture* /* deviceTexture */,
                           const ValueType*     hostBuffer,
                           int                  numValues,
-                          const DeviceContext& deviceContext,
-                          const DeviceStream& /* deviceStream */)
+                          const DeviceContext& deviceContext)
 {
-    GMX_ASSERT(hostBuffer, "needs a host buffer pointer");
+    GMX_ASSERT(hostBuffer, "Host buffer pointer can not be null");
     const size_t bytes = numValues * sizeof(ValueType);
     cl_int       clError;
     *deviceBuffer = clCreateBuffer(deviceContext.context(),
@@ -317,5 +323,8 @@ void destroyParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer, DeviceTextur
 {
     freeDeviceBuffer(deviceBuffer);
 }
+#if defined(__clang__)
+#    pragma clang diagnostic pop
+#endif
 
 #endif

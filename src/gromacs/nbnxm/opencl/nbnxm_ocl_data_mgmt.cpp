@@ -116,8 +116,7 @@ bool useLjCombRule(int vdwType)
  */
 static void init_ewald_coulomb_force_table(const EwaldCorrectionTables& tables,
                                            cl_nbparam_t*                nbp,
-                                           const DeviceContext&         deviceContext,
-                                           const DeviceStream&          deviceStream)
+                                           const DeviceContext&         deviceContext)
 {
     if (nbp->coulomb_tab_climg2d != nullptr)
     {
@@ -126,8 +125,7 @@ static void init_ewald_coulomb_force_table(const EwaldCorrectionTables& tables,
 
     DeviceBuffer<real> coulomb_tab;
 
-    initParamLookupTable(&coulomb_tab, nullptr, tables.tableF.data(), tables.tableF.size(),
-                         deviceContext, deviceStream);
+    initParamLookupTable(&coulomb_tab, nullptr, tables.tableF.data(), tables.tableF.size(), deviceContext);
 
     nbp->coulomb_tab_climg2d = coulomb_tab;
     nbp->coulomb_tab_scale   = tables.scale;
@@ -276,8 +274,7 @@ static void init_nbparam(cl_nbparam_t*                   nbp,
                          const interaction_const_t*      ic,
                          const PairlistParams&           listParams,
                          const nbnxn_atomdata_t::Params& nbatParams,
-                         const DeviceContext&            deviceContext,
-                         const DeviceStream&             deviceStream)
+                         const DeviceContext&            deviceContext)
 {
     cl_int cl_error;
 
@@ -301,25 +298,10 @@ static void init_nbparam(cl_nbparam_t*                   nbp,
     if (nbp->eeltype == eelOclEWALD_TAB || nbp->eeltype == eelOclEWALD_TAB_TWIN)
     {
         GMX_RELEASE_ASSERT(ic->coulombEwaldTables, "Need valid Coulomb Ewald correction tables");
-        init_ewald_coulomb_force_table(*ic->coulombEwaldTables, nbp, deviceContext, deviceStream);
+        init_ewald_coulomb_force_table(*ic->coulombEwaldTables, nbp, deviceContext);
     }
     else
-    // TODO: improvement needed.
-    // The image2d is created here even if eeltype is not eelCuEWALD_TAB or eelCuEWALD_TAB_TWIN
-    // because the OpenCL kernels don't accept nullptr values for image2D parameters.
     {
-        /* Switched from using textures to using buffers */
-        // TODO: decide which alternative is most efficient - textures or buffers.
-        /*
-           cl_image_format array_format;
-
-           array_format.image_channel_data_type = CL_FLOAT;
-           array_format.image_channel_order     = CL_R;
-
-           nbp->coulomb_tab_climg2d = clCreateImage2D(deviceContext.context(),
-           CL_MEM_READ_WRITE, &array_format, 1, 1, 0, nullptr, &cl_error);
-         */
-
         nbp->coulomb_tab_climg2d = clCreateBuffer(deviceContext.context(), CL_MEM_READ_ONLY,
                                                   sizeof(cl_float), nullptr, &cl_error);
         GMX_RELEASE_ASSERT(cl_error == CL_SUCCESS,
@@ -330,32 +312,15 @@ static void init_nbparam(cl_nbparam_t*                   nbp,
     const int nnbfp_comb = 2 * nbatParams.numTypes;
 
     {
-        /* Switched from using textures to using buffers */
-        // TODO: decide which alternative is most efficient - textures or buffers.
-        /*
-           cl_image_format array_format;
-
-           array_format.image_channel_data_type = CL_FLOAT;
-           array_format.image_channel_order     = CL_R;
-
-           nbp->nbfp_climg2d = clCreateImage2D(deviceContext.context(), CL_MEM_READ_ONLY |
-           CL_MEM_COPY_HOST_PTR, &array_format, nnbfp, 1, 0, nbat->nbfp, &cl_error);
-         */
-
         /* set up LJ parameter lookup table */
         DeviceBuffer<real> nbfp;
-        initParamLookupTable(&nbfp, nullptr, nbatParams.nbfp.data(), nnbfp, deviceContext, deviceStream);
+        initParamLookupTable(&nbfp, nullptr, nbatParams.nbfp.data(), nnbfp, deviceContext);
         nbp->nbfp_climg2d = nbfp;
 
         if (ic->vdwtype == evdwPME)
         {
-            /* Switched from using textures to using buffers */
-            // TODO: decide which alternative is most efficient - textures or buffers.
-            /*  nbp->nbfp_comb_climg2d = clCreateImage2D(deviceContext.context(), CL_MEM_READ_WRITE |
-               CL_MEM_COPY_HOST_PTR, &array_format, nnbfp_comb, 1, 0, nbat->nbfp_comb, &cl_error);*/
             DeviceBuffer<float> nbfp_comb;
-            initParamLookupTable(&nbfp_comb, nullptr, nbatParams.nbfp_comb.data(), nnbfp_comb,
-                                 deviceContext, deviceStream);
+            initParamLookupTable(&nbfp_comb, nullptr, nbatParams.nbfp_comb.data(), nnbfp_comb, deviceContext);
             nbp->nbfp_comb_climg2d = nbfp_comb;
         }
     }
@@ -376,8 +341,7 @@ void gpu_pme_loadbal_update_param(const nonbonded_verlet_t* nbv, const interacti
     nbp->eeltype = nbnxn_gpu_pick_ewald_kernel_type(*ic);
 
     GMX_RELEASE_ASSERT(ic->coulombEwaldTables, "Need valid Coulomb Ewald correction tables");
-    init_ewald_coulomb_force_table(*ic->coulombEwaldTables, nbp, *nb->deviceContext_,
-                                   *nb->deviceStreams[InteractionLocality::Local]);
+    init_ewald_coulomb_force_table(*ic->coulombEwaldTables, nbp, *nb->deviceContext_);
 }
 
 /*! \brief Initializes the pair list data structure.
@@ -515,11 +479,10 @@ static void nbnxn_ocl_init_const(cl_atomdata_t*                  atomData,
                                  const interaction_const_t*      ic,
                                  const PairlistParams&           listParams,
                                  const nbnxn_atomdata_t::Params& nbatParams,
-                                 const DeviceContext&            deviceContext,
-                                 const DeviceStream&             deviceStream)
+                                 const DeviceContext&            deviceContext)
 {
     init_atomdata_first(atomData, nbatParams.numTypes, deviceContext);
-    init_nbparam(nbParams, ic, listParams, nbatParams, deviceContext, deviceStream);
+    init_nbparam(nbParams, ic, listParams, nbatParams, deviceContext);
 }
 
 
@@ -582,8 +545,7 @@ NbnxmGpu* gpu_init(const gmx::DeviceStreamManager& deviceStreamManager,
         init_timings(nb->timings);
     }
 
-    nbnxn_ocl_init_const(nb->atdat, nb->nbparam, ic, listParams, nbat->params(),
-                         *nb->deviceContext_, *nb->deviceStreams[InteractionLocality::Local]);
+    nbnxn_ocl_init_const(nb->atdat, nb->nbparam, ic, listParams, nbat->params(), *nb->deviceContext_);
 
     /* Enable LJ param manual prefetch for AMD or Intel or if we request through env. var.
      * TODO: decide about NVIDIA

@@ -113,8 +113,7 @@ static inline bool useLjCombRule(const cu_nbparam_t* nbparam)
  */
 static void init_ewald_coulomb_force_table(const EwaldCorrectionTables& tables,
                                            cu_nbparam_t*                nbp,
-                                           const DeviceContext&         deviceContext,
-                                           const DeviceStream&          deviceStream)
+                                           const DeviceContext&         deviceContext)
 {
     if (nbp->coulomb_tab != nullptr)
     {
@@ -123,7 +122,7 @@ static void init_ewald_coulomb_force_table(const EwaldCorrectionTables& tables,
 
     nbp->coulomb_tab_scale = tables.scale;
     initParamLookupTable(&nbp->coulomb_tab, &nbp->coulomb_tab_texobj, tables.tableF.data(),
-                         tables.tableF.size(), deviceContext, deviceStream);
+                         tables.tableF.size(), deviceContext);
 }
 
 
@@ -237,8 +236,7 @@ static void init_nbparam(cu_nbparam_t*                   nbp,
                          const interaction_const_t*      ic,
                          const PairlistParams&           listParams,
                          const nbnxn_atomdata_t::Params& nbatParams,
-                         const DeviceContext&            deviceContext,
-                         const DeviceStream&             deviceStream)
+                         const DeviceContext&            deviceContext)
 {
     int ntypes;
 
@@ -324,21 +322,21 @@ static void init_nbparam(cu_nbparam_t*                   nbp,
     if (nbp->eeltype == eelCuEWALD_TAB || nbp->eeltype == eelCuEWALD_TAB_TWIN)
     {
         GMX_RELEASE_ASSERT(ic->coulombEwaldTables, "Need valid Coulomb Ewald correction tables");
-        init_ewald_coulomb_force_table(*ic->coulombEwaldTables, nbp, deviceContext, deviceStream);
+        init_ewald_coulomb_force_table(*ic->coulombEwaldTables, nbp, deviceContext);
     }
 
     /* set up LJ parameter lookup table */
     if (!useLjCombRule(nbp))
     {
         initParamLookupTable(&nbp->nbfp, &nbp->nbfp_texobj, nbatParams.nbfp.data(),
-                             2 * ntypes * ntypes, deviceContext, deviceStream);
+                             2 * ntypes * ntypes, deviceContext);
     }
 
     /* set up LJ-PME parameter lookup table */
     if (ic->vdwtype == evdwPME)
     {
         initParamLookupTable(&nbp->nbfp_comb, &nbp->nbfp_comb_texobj, nbatParams.nbfp_comb.data(),
-                             2 * ntypes, deviceContext, deviceStream);
+                             2 * ntypes, deviceContext);
     }
 }
 
@@ -358,8 +356,7 @@ void gpu_pme_loadbal_update_param(const nonbonded_verlet_t* nbv, const interacti
     nbp->eeltype = pick_ewald_kernel_type(*ic);
 
     GMX_RELEASE_ASSERT(ic->coulombEwaldTables, "Need valid Coulomb Ewald correction tables");
-    init_ewald_coulomb_force_table(*ic->coulombEwaldTables, nbp, *nb->deviceContext_,
-                                   *nb->deviceStreams[InteractionLocality::Local]);
+    init_ewald_coulomb_force_table(*ic->coulombEwaldTables, nbp, *nb->deviceContext_);
 }
 
 /*! Initializes the pair list data structure. */
@@ -416,8 +413,7 @@ static void cuda_init_const(NbnxmGpu*                       nb,
                             const nbnxn_atomdata_t::Params& nbatParams)
 {
     init_atomdata_first(nb->atdat, nbatParams.numTypes);
-    init_nbparam(nb->nbparam, ic, listParams, nbatParams, *nb->deviceContext_,
-                 *nb->deviceStreams[InteractionLocality::Local]);
+    init_nbparam(nb->nbparam, ic, listParams, nbatParams, *nb->deviceContext_);
 
     /* clear energy and shift force outputs */
     nbnxn_cuda_clear_e_fshift(nb);

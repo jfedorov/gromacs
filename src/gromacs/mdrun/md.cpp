@@ -236,7 +236,7 @@ void gmx::LegacySimulator::do_md()
     int nstglobalcomm = computeGlobalCommunicationPeriod(mdlog, ir, cr);
     bGStatEveryStep   = (nstglobalcomm == 1);
 
-    SimulationGroups* groups = &top_global->groups;
+    const SimulationGroups* groups = &top_global->groups;
 
     std::unique_ptr<EssentialDynamics> ed = nullptr;
     if (opt2bSet("-ei", nfile, fnm))
@@ -336,12 +336,11 @@ void gmx::LegacySimulator::do_md()
     else
     {
         state_change_natoms(state_global, state_global->natoms);
-        f.resizeWithPadding(state_global->natoms);
         /* Copy the pointer to the global state */
         state = state_global;
 
         /* Generate and initialize new topology */
-        mdAlgorithmsSetupAtomData(cr, ir, *top_global, &top, fr, mdAtoms, constr, vsite, shellfc);
+        mdAlgorithmsSetupAtomData(cr, ir, *top_global, &top, fr, &f, mdAtoms, constr, vsite, shellfc);
 
         upd.setNumAtoms(state->natoms);
     }
@@ -547,7 +546,7 @@ void gmx::LegacySimulator::do_md()
     bool hasReadEkinState = MASTER(cr) ? state_global->ekinstate.hasReadEkinState : false;
     if (PAR(cr))
     {
-        gmx_bcast(sizeof(hasReadEkinState), &hasReadEkinState, cr);
+        gmx_bcast(sizeof(hasReadEkinState), &hasReadEkinState, cr->mpi_comm_mygroup);
     }
     if (hasReadEkinState)
     {
@@ -738,7 +737,7 @@ void gmx::LegacySimulator::do_md()
                               "The initial step is not consistent across multi simulations which "
                               "share the state");
                 }
-                gmx_barrier(cr);
+                gmx_barrier(cr->mpi_comm_mygroup);
             }
             else
             {
@@ -872,7 +871,7 @@ void gmx::LegacySimulator::do_md()
                     GMX_RELEASE_ASSERT(fr->deviceStreamManager != nullptr,
                                        "GPU device manager has to be initialized to use GPU "
                                        "version of halo exchange.");
-                    // TODO remove need to pass local stream into GPU halo exchange - Redmine #3093
+                    // TODO remove need to pass local stream into GPU halo exchange - Issue #3093
                     constructGpuHaloExchange(mdlog, *cr, *fr->deviceStreamManager);
                 }
             }
@@ -880,7 +879,8 @@ void gmx::LegacySimulator::do_md()
 
         if (MASTER(cr) && do_log)
         {
-            energyOutput.printHeader(fplog, step, t); /* can we improve the information printed here? */
+            gmx::EnergyOutput::printHeader(fplog, step,
+                                           t); /* can we improve the information printed here? */
         }
 
         if (ir->efep != efepNO)
@@ -1370,7 +1370,7 @@ void gmx::LegacySimulator::do_md()
             /* this factor or 2 correction is necessary
                because half of the constraint force is removed
                in the vv step, so we have to double it.  See
-               the Redmine issue #1255.  It is not yet clear
+               the Issue #1255.  It is not yet clear
                if the factor of 2 is exact, or just a very
                good approximation, and this will be
                investigated.  The next step is to see if this
@@ -1545,7 +1545,8 @@ void gmx::LegacySimulator::do_md()
 
             if (doSimulatedAnnealing)
             {
-                energyOutput.printAnnealingTemperatures(do_log ? fplog : nullptr, groups, &(ir->opts));
+                gmx::EnergyOutput::printAnnealingTemperatures(do_log ? fplog : nullptr, groups,
+                                                              &(ir->opts));
             }
             if (do_log || do_ene || do_dr || do_or)
             {
@@ -1672,7 +1673,7 @@ void gmx::LegacySimulator::do_md()
     {
         if (ir->nstcalcenergy > 0)
         {
-            energyOutput.printAnnealingTemperatures(fplog, groups, &(ir->opts));
+            gmx::EnergyOutput::printAnnealingTemperatures(fplog, groups, &(ir->opts));
             energyOutput.printAverages(fplog, groups);
         }
     }
