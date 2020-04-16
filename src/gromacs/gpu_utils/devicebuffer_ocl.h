@@ -293,12 +293,6 @@ void initParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer,
                           int                  numValues,
                           const DeviceContext& deviceContext)
 {
-    GMX_ASSERT(false,
-               "This assert failure is here to test that the OpenCL CI is actually working!");
-    GMX_RELEASE_ASSERT(
-            false,
-            "This release assert failure is here to test that the OpenCL CI is actually working!");
-
     GMX_ASSERT(hostBuffer, "Host buffer pointer can not be null");
     const size_t bytes = numValues * sizeof(ValueType);
     cl_int       clError;

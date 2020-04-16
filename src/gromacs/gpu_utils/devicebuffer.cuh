@@ -256,10 +256,6 @@ void initParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer,
                           int                      numValues,
                           const DeviceContext&     deviceContext)
 {
-    GMX_ASSERT(false, "This assert failure is here to test that the CUDA CI is actually working!");
-    GMX_RELEASE_ASSERT(
-            false,
-            "This release assert failure is here to test that the CUDA CI is actually working!");
     if (numValues == 0)
     {
         return;
