@@ -244,6 +244,11 @@ void clearDeviceBufferAsync(DeviceBuffer<ValueType>* buffer,
                                .c_str());
 }
 
+#if defined(__clang__)
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wunused-template"
+#endif
+
 /*! \brief Check the validity of the device buffer.
  *
  * Checks if the buffer is not nullptr and if its allocation is big enough.
@@ -288,7 +293,7 @@ void initParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer,
                           int                  numValues,
                           const DeviceContext& deviceContext)
 {
-    GMX_ASSERT(hostBuffer, "needs a host buffer pointer");
+    GMX_ASSERT(hostBuffer, "Host buffer pointer can not be null");
     const size_t bytes = numValues * sizeof(ValueType);
     cl_int       clError;
     *deviceBuffer = clCreateBuffer(deviceContext.context(),
@@ -312,5 +317,8 @@ void destroyParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer, DeviceTextur
 {
     freeDeviceBuffer(deviceBuffer);
 }
+#if defined(__clang__)
+#    pragma clang diagnostic pop
+#endif
 
 #endif

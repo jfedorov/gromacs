@@ -34,10 +34,8 @@
 # To help us fund GROMACS development, we humbly ask that you cite
 # the research papers on the package. Check out http://www.gromacs.org.
 
-cmake_minimum_required(VERSION 3.9.6)
-if(POLICY CMP0074) #3.12
-    cmake_policy(SET CMP0074 NEW)
-endif()
+cmake_minimum_required(VERSION 3.13)
+cmake_policy(SET CMP0074 NEW) # From CMake 3.12
 cmake_policy(SET CMP0068 NEW) # From CMake-3.9
 
 # CMake modules/macros are in a subdirectory to keep this file cleaner
@@ -837,7 +835,7 @@ if (BUILD_TESTING)
 endif()
 
 # TODO: Determine control flow and defaults for package installation and testing use cases.
-# Ref: http://redmine.gromacs.org/issues/2896
+# Ref: https://gitlab.com/gromacs/gromacs/-/issues/2896
 option(GMX_PYTHON_PACKAGE "Configure gmxapi Python package" OFF)
 mark_as_advanced(GMX_PYTHON_PACKAGE)
 
@@ -854,12 +852,12 @@ if (NOT GMX_BUILD_MDRUN_ONLY)
     # Older CMake versions might not search for Python newer than 3.7.
     set(Python_ADDITIONAL_VERSIONS 3.8)
     if(GMX_PYTHON_PACKAGE)
-        find_package(PythonInterp 3.5 REQUIRED)
+        find_package(PythonInterp 3.6 REQUIRED)
         # Note: PythonLibs will be found later by pybind11.
-        # TODO: (issue #2998) When CMake >= 3.12 is required, update detection.
-        # I.e.  find_package(Python3 3.5 COMPONENTS Interpreter Development REQUIRED)
+        # TODO: (Issue #2998) When CMake >= 3.12 is required, update detection.
+        # I.e.  find_package(Python3 3.6 COMPONENTS Interpreter Development REQUIRED)
     else()
-        find_package(PythonInterp 3.5)
+        find_package(PythonInterp 3.6)
     endif()
     find_package(ImageMagick QUIET COMPONENTS convert)
     include(gmxTestImageMagick)
