@@ -208,18 +208,20 @@ void gmx::LegacySimulator::do_mimic()
     int        nstglobalcomm = 1;
     const bool bNS           = true;
 
-    // Communicator to interact with MiMiC
-    MimicCommunicator mimicCommunicator{};
     if (MASTER(cr))
     {
-        mimicCommunicator.init();
-        mimicCommunicator.sendInitData(top_global, state_global->x);
-        ir->nsteps = mimicCommunicator.getStepNumber();
+        MimicCommunicator::init();
+        auto nonConstGlobalTopology = const_cast<gmx_mtop_t*>(top_global);
+        MimicCommunicator::sendInitData(nonConstGlobalTopology, state_global->x);
+        ir->nsteps = MimicCommunicator::getStepNumber();
     }
 
-    ir->nstxout_compressed                   = 0;
-    SimulationGroups* groups                 = &top_global->groups;
-    top_global->intermolecularExclusionGroup = genQmmmIndices(*top_global);
+    ir->nstxout_compressed         = 0;
+    const SimulationGroups* groups = &top_global->groups;
+    {
+        auto nonConstGlobalTopology                          = const_cast<gmx_mtop_t*>(top_global);
+        nonConstGlobalTopology->intermolecularExclusionGroup = genQmmmIndices(*top_global);
+    }
 
     initialize_lambdas(fplog, *ir, MASTER(cr), &state_global->fep_state, state_global->lambda, lam0);
 
@@ -262,19 +264,15 @@ void gmx::LegacySimulator::do_mimic()
                             imdSession, pull_work, state, &f, mdAtoms, &top, fr, vsite, constr,
                             nrnb, nullptr, FALSE);
         shouldCheckNumberOfBondedInteractions = true;
-        gmx_bcast(sizeof(ir->nsteps), &ir->nsteps, cr);
+        gmx_bcast(sizeof(ir->nsteps), &ir->nsteps, cr->mpi_comm_mygroup);
     }
     else
     {
         state_change_natoms(state_global, state_global->natoms);
-        /* We need to allocate one element extra, since we might use
-         * (unaligned) 4-wide SIMD loads to access rvec entries.
-         */
-        f.resizeWithPadding(state_global->natoms);
         /* Copy the pointer to the global state */
         state = state_global;
 
-        mdAlgorithmsSetupAtomData(cr, ir, *top_global, &top, fr, mdAtoms, constr, vsite, shellfc);
+        mdAlgorithmsSetupAtomData(cr, ir, *top_global, &top, fr, &f, mdAtoms, constr, vsite, shellfc);
     }
 
     auto mdatoms = mdAtoms->mdatoms();
@@ -368,7 +366,7 @@ void gmx::LegacySimulator::do_mimic()
 
         if (MASTER(cr))
         {
-            mimicCommunicator.getCoords(&state_global->x, state_global->natoms);
+            MimicCommunicator::getCoords(&state_global->x, state_global->natoms);
         }
 
         if (ir->efep != efepNO)
@@ -400,7 +398,7 @@ void gmx::LegacySimulator::do_mimic()
 
         if (MASTER(cr))
         {
-            energyOutput.printHeader(fplog, step, t); /* can we improve the information printed here? */
+            EnergyOutput::printHeader(fplog, step, t); /* can we improve the information printed here? */
         }
 
         if (ir->efep != efepNO)
@@ -497,8 +495,8 @@ void gmx::LegacySimulator::do_mimic()
 
             if (MASTER(cr))
             {
-                mimicCommunicator.sendEnergies(enerd->term[F_EPOT]);
-                mimicCommunicator.sendForces(ftemp, state_global->natoms);
+                MimicCommunicator::sendEnergies(enerd->term[F_EPOT]);
+                MimicCommunicator::sendForces(ftemp, state_global->natoms);
             }
         }
 
@@ -530,7 +528,7 @@ void gmx::LegacySimulator::do_mimic()
             const bool do_dr  = ir->nstdisreout != 0;
             const bool do_or  = ir->nstorireout != 0;
 
-            energyOutput.printAnnealingTemperatures(do_log ? fplog : nullptr, groups, &(ir->opts));
+            EnergyOutput::printAnnealingTemperatures(do_log ? fplog : nullptr, groups, &(ir->opts));
             energyOutput.printStepToEnergyFile(mdoutf_get_fp_ene(outf), do_ene, do_dr, do_or,
                                                do_log ? fplog : nullptr, step, t, fcd, awh);
 
@@ -574,7 +572,7 @@ void gmx::LegacySimulator::do_mimic()
 
     if (MASTER(cr))
     {
-        mimicCommunicator.finalize();
+        MimicCommunicator::finalize();
     }
 
     if (!thisRankHasDuty(cr, DUTY_PME))

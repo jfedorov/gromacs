@@ -256,7 +256,7 @@ if (NOT SOURCE_IS_SOURCE_DISTRIBUTION AND
 endif()
 
 set(REGRESSIONTEST_VERSION "${GMX_VERSION_STRING}")
-set(REGRESSIONTEST_BRANCH "refs/heads/master")
+set(REGRESSIONTEST_BRANCH "master")
 # Run the regressiontests packaging job with the correct pakage
 # version string, and the release box checked, in order to have it
 # build the regressiontests tarball with all the right naming. The
@@ -339,7 +339,7 @@ list(APPEND SET_OF_DIRECTORIES_TO_CHECKSUM "${PROJECT_SOURCE_DIR}/python_packagi
 string(REPLACE ";" ":" DIRECTORIES_TO_CHECKSUM_STRING "${SET_OF_DIRECTORIES_TO_CHECKSUM}")
 # Try to find python for the checksumming script
 set(PythonInterp_FIND_QUIETLY ON)
-find_package(PythonInterp 3.5)
+find_package(PythonInterp 3.6)
 
 # Rules to create the VersionInfo.cmake file.
 # For git info, the sequence is:

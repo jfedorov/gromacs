@@ -2,7 +2,7 @@
 #
 # This file is part of the GROMACS molecular simulation package.
 #
-# Copyright (c) 2013,2014,2015,2019, by the GROMACS development team, led by
+# Copyright (c) 2020, by the GROMACS development team, led by
 # Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
 # and including many others, as listed in the AUTHORS file in the
 # top-level source directory and at http://www.gromacs.org.
@@ -33,17 +33,18 @@
 # To help us fund GROMACS development, we humbly ask that you cite
 # the research papers on the package. Check out http://www.gromacs.org.
 
-# This script runs uncrustify on modified files and
+# This script runs clang tidy checks on modified files and
 # reports/applies the necessary changes.
 #
-# See `uncrustify.sh -h` for a brief usage, and docs/dev-manual/code-formatting.rst
+# See `clang-tidy.sh -h` for a brief usage, and docs/dev-manual/code-formatting.rst
 # for more details.
 
 # Parse command-line arguments
 function usage() {
-    echo "usage: uncrustify.sh [-f|--force] [--rev=REV]"
-    echo "           [--uncrustify=(off|check)]"
+    echo "usage: clang-tidy.sh [-f|--force] [--parallel=#Jobs] [--rev=REV]"
+    echo "           [--tidy=(off|check)]"
     echo "           [--warnings=<file>] [<action>]"
+    echo "           [-B=<builddir>]"
     echo "<action>: (check*|diff|update)[-(index|workdir*)] (*=default)"
 }
 
@@ -51,8 +52,10 @@ action="check-workdir"
 declare -a diffargs
 baserev="HEAD"
 force=
-uncrustify_mode=check
+tidy_mode=check
 warning_file=
+builddir=
+concurrency=2
 for arg in "$@" ; do
     if [[ "$arg" == "check-index" || "$arg" == "check-workdir" || \
           "$arg" == "diff-index" || "$arg" == "diff-workdir" || \
@@ -63,9 +66,9 @@ for arg in "$@" ; do
         action=$arg-workdir
     elif [[ "$action" == diff-* ]] ; then
         diffargs+=("$arg")
-    elif [[ "$arg" == --uncrustify=* ]] ; then
-        uncrustify_mode=${arg#--uncrustify=}
-        if [[ "$uncrustify_mode" != "off" && "$uncrustify_mode" != "check" ]] ; then
+    elif [[ "$arg" == --tidy=* ]] ; then
+        tidy_mode=${arg#--tidy=}
+        if [[ "$tidy_mode" != "off" && "$tidy_mode" != "check" ]] ; then
             echo "Unknown option: $arg"
             echo
             usage
@@ -73,10 +76,14 @@ for arg in "$@" ; do
         fi
     elif [[ "$arg" == "-f" || "$arg" == "--force" ]] ; then
         force=1
+    elif [[ "$arg" == --parallel=* ]] ; then
+        concurrency=${arg#--parallel=}
     elif [[ "$arg" == --rev=* ]] ; then
         baserev=${arg#--rev=}
     elif [[ "$arg" == --warnings=* ]] ; then
         warning_file=${arg#--warnings=}
+    elif [[ "$arg" == -B=* ]] ; then
+        builddir=${arg#-B=}
     elif [[ "$arg" == "-h" || "$arg" == "--help" ]] ; then
         usage
         exit 0
@@ -88,41 +95,34 @@ for arg in "$@" ; do
     fi
 done
 
-# Check that uncrustify is present
-if [[ "$uncrustify_mode" != "off" ]]
+# Check that format is present
+if [[ "$tidy_mode" != "off" ]]
 then
-    if [ -z "$UNCRUSTIFY" ]
+    if [ -z "$RUN_CLANG_TIDY" ]
     then
-        UNCRUSTIFY=`git config hooks.uncrustifypath`
+        RUN_CLANG_TIDY=`git config hooks.runclangtidypath`
     fi
-    if [ -z "$UNCRUSTIFY" ]
+    if [ -z "$RUN_CLANG_TIDY" ]
     then
-        echo "Please set the path to uncrustify using UNCRUSTIFY or"
-        echo "git config hooks.uncrustifypath."
-        echo "Note that you need a custom version of uncrustify."
-        echo "See docs/dev-manual/uncrustify.rst for how to get one."
+        echo "Please set the path to run-clang-tidy using the git hook"
+        echo "git config hooks.runclangtidypath /path/to/run-clang-tidy-9.py"
+        echo "or by setting an environment variable, e.g."
+        echo "RUN_CLANG_TIDY=/path/to/run-clang-tidy-9.py"
         exit 2
     fi
-    if ! which "$UNCRUSTIFY" 1>/dev/null
+    if ! which "$RUN_CLANG_TIDY" 1>/dev/null
     then
-        echo "Uncrustify not found: $UNCRUSTIFY"
+        echo "run-clang-tidy-9.py not found: $RUN_CLANG_TIDY"
         exit 2
     fi
 fi
 
 # Switch to the root of the source tree and check the config file
 srcdir=`git rev-parse --show-toplevel`
-pushd $srcdir >/dev/null
-admin_dir=$srcdir/admin
-cfg_file=$admin_dir/uncrustify.cfg
-if [ ! -f "$cfg_file" ]
-then
-    echo "Uncrustify configuration file not found: $cfg_file"
-    exit 2
-fi
+pushd $srcdir >/dev/null || exit
 
 # Actual processing starts: create a temporary directory
-tmpdir=`mktemp -d -t gmxuncrust.XXXXXX`
+tmpdir=`mktemp -d -t gmxclangtidy.XXXXXX`
 
 # Produce a list of changed files
 # Only include files that have proper filter set in .gitattributes
@@ -136,18 +136,31 @@ cut -f2 <$tmpdir/difflist | \
     git check-attr --stdin filter | \
     sed -e 's/.*: filter: //' | \
     paste $tmpdir/difflist - | \
-    grep -E '(complete_formatting|uncrustify|copyright|includesort)$' >$tmpdir/filtered
+    grep -E '(complete_formatting|clangformat|copyright|includesort)$' >$tmpdir/filtered
 cut -f2 <$tmpdir/filtered >$tmpdir/filelist_all
-grep -E '(uncrustify)$' <$tmpdir/filtered | \
-    cut -f2 >$tmpdir/filelist_uncrustify
+grep -E '(complete_formatting|clangformat)$' <$tmpdir/filtered | \
+    cut -f2 >$tmpdir/filelist_clangtidy
 git diff-files --name-only | grep -Ff $tmpdir/filelist_all >$tmpdir/localmods
 
 # Extract changed files to a temporary directory
 mkdir $tmpdir/org
 if [[ $action == *-index ]] ; then
-    git checkout-index --prefix=$tmpdir/org/ --stdin <$tmpdir/filelist_all
+    git checkout-index --prefix=$tmpdir/org/
 else
-    rsync --files-from=$tmpdir/filelist_all $srcdir $tmpdir/org
+    rsync -a $srcdir/src/ $tmpdir/org/src/
+fi
+# check for the existence of the compile_commands.json file and abort
+# if it is not present. If we don't have a build directory, try the
+# current source directory.
+if [ -z $builddir ] ; then
+    builddir=$srcdir
+fi
+if [[ ! -f $builddir/compile_commands.json ]] ; then
+    echo "Could not find compile_commands.json in builddir=$builddir"
+    echo "Make sure you gave a correct build tree and that it contains the file!"
+else
+    # Need to have compilation database file available somewhere above where we are using it
+    rsync -a $builddir/compile_commands.json $tmpdir/org
 fi
 # Duplicate the original files to a separate directory, where all changes will
 # be made.
@@ -156,25 +169,29 @@ cp -r $tmpdir/org $tmpdir/new
 # Create output file for what was done (in case no messages get written)
 touch $tmpdir/messages
 
-# Run uncrustify on the temporary directory
+# Run clang-tidy on the temporary directory
+# Can only perform clang-tidy on a non-empty list of files
 cd $tmpdir/new
-if [[ $uncrustify_mode != "off" ]] ; then
-    if ! $UNCRUSTIFY -c $cfg_file -F $tmpdir/filelist_uncrustify --no-backup >$tmpdir/uncrustify.out 2>&1 ; then
-        echo "Reformatting failed. Check uncrustify output below for errors:"
-        cat $tmpdir/uncrustify.out
+if [[ $tidy_mode != "off" &&  -s $tmpdir/filelist_clangtidy ]] ; then
+    $RUN_CLANG_TIDY `cat $tmpdir/filelist_clangtidy` -- -header-filter=.* -j $concurrency -fix -fix-errors --cuda-host-only -nocudainc -quiet >$tmpdir/clang-tidy.out 2>&1
+    awk '/warning/,/clang-tidy|^$/' $tmpdir/clang-tidy.out | grep -v "warnings generated." | grep -v "Suppressed .* warnings" | grep -v "clang-analyzer"  | grep -v "to display errors from all non" | sed '/^\s*$/d' > $tmpdir/clang-tidy-errors.out
+    cp $tmpdir/clang-tidy.out $tmpdir/clang-tidy-errors.out $srcdir
+    if [ -s $tmpdir/clang-tidy-errors.out ]; then
+        echo "Running code tidying failed. Check output below for errors:"
+        cat $tmpdir/clang-tidy-errors.out
         rm -rf $tmpdir
         exit 2
     fi
     # Find the changed files if necessary
     if [[ $action != diff-* ]] ; then
-        msg="needs uncrustify"
+        msg="found code issues"
         if [[ $action == update-* ]] ; then
-            msg="uncrustified"
+            msg="clang-tidy performed"
         fi
         git diff --no-index --name-only ../org/ . | \
             awk -v msg="$msg" '{sub(/.\//,""); print $0 ": " msg}' >> $tmpdir/messages
     fi
-    # TODO: Consider checking whether rerunning uncrustify causes additional changes
+    # TODO: Consider checking whether rerunning clang-tidy causes additional changes
 fi
 
 cd $tmpdir
