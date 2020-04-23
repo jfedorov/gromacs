@@ -683,10 +683,6 @@ int gmx_fsync(FILE* fp)
 {
     int rc = 0;
 
-#if GMX_FAHCORE
-    /* the fahcore defines its own os-independent fsync */
-    rc = fah_fsync(fp);
-#else /* GMX_FAHCORE */
     {
         int fn;
 
@@ -709,7 +705,6 @@ int gmx_fsync(FILE* fp)
 #    endif
         }
     }
-#endif /* GMX_FAHCORE */
 
     /* We check for these error codes this way because POSIX requires them
        to be defined, and using anything other than macros is unlikely: */
