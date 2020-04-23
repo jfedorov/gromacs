@@ -418,7 +418,7 @@ void make_backup(const std::string& name)
 FILE* gmx_ffopen(const std::string& file, const char* mode)
 {
 #ifdef SKIP_FFOPS
-    return fopen(file, mode);
+    return fopen(file.c_str(), mode);
 #else
     FILE*    ff = nullptr;
     gmx_bool bRead;
