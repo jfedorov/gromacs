@@ -48,6 +48,7 @@
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/state.h"
 
+#include "builders.h"
 #include "signallers.h"
 #include "trajectoryelement.h"
 
@@ -128,6 +129,12 @@ SignallerCallbackPtr CheckpointHelper::registerLastStepCallback()
 {
     return std::make_unique<SignallerCallback>(
             [this](Step step, Time gmx_unused time) { this->lastStep_ = step; });
+}
+
+void CheckpointHelperBuilder::connectWithBuilders(ElementAndSignallerBuilders* builders)
+{
+    registerWithLastStepSignaller(builders->lastStepSignaller.get());
+    setTrajectoryElement(builders->trajectoryElement.get());
 }
 
 void CheckpointHelperBuilder::registerClient(compat::not_null<ICheckpointHelperClient*> client)

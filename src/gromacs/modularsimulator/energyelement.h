@@ -61,6 +61,7 @@ namespace gmx
 enum class StartingBehavior;
 class CheckpointHelperBuilder;
 class Constraints;
+struct ElementAndSignallerBuilders;
 class FreeEnergyPerturbationElement;
 class MDAtoms;
 class ParrinelloRahmanBarostat;
@@ -337,20 +338,8 @@ public:
     template<typename... Args>
     explicit EnergyElementBuilder(Args&&... args);
 
-    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
-    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
-    //! Set pointer to FreeEnergyPerturbationElement valid throughout the simulation (optional)
-    void setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement);
-    //! Set pointer to TopologyHolder (required)
-    void setTopologyHolder(TopologyHolder* topologyHolder);
-
-    //! Register element with EnergySignaller (required)
-    void registerWithEnergySignaller(SignallerBuilder<EnergySignaller>* signallerBuilder);
-    //! Register element with TrajectoryElement (required)
-    void registerWithTrajectoryElement(TrajectoryElementBuilder* trajectoryElementBuilder);
-
-    //! Register element with CheckpointHelper (required)
-    void registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder);
+    //! Connect with other builders (required)
+    void connectWithBuilders(ElementAndSignallerBuilders* builders);
 
     /*! \brief Set v-rescale thermostat
      *
@@ -386,6 +375,21 @@ private:
     bool registeredWithTrajectoryElement_ = false;
     //! Whether we have registered the element with the checkpoint helper
     bool registeredWithCheckpointHelper_ = false;
+
+    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
+    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
+    //! Set pointer to FreeEnergyPerturbationElement valid throughout the simulation (optional)
+    void setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement);
+    //! Set pointer to TopologyHolder (required)
+    void setTopologyHolder(TopologyHolder* topologyHolder);
+
+    //! Register element with EnergySignaller (required)
+    void registerWithEnergySignaller(SignallerBuilder<EnergySignaller>* signallerBuilder);
+    //! Register element with TrajectoryElement (required)
+    void registerWithTrajectoryElement(TrajectoryElementBuilder* trajectoryElementBuilder);
+
+    //! Register element with CheckpointHelper (required)
+    void registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder);
 };
 
 template<typename... Args>

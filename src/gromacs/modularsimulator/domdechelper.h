@@ -59,6 +59,7 @@ namespace gmx
 {
 class ComputeGlobalsElementBuilder;
 class Constraints;
+struct ElementAndSignallerBuilders;
 class ImdSession;
 class MDAtoms;
 class MDLogger;
@@ -181,17 +182,8 @@ public:
     template<typename... Args>
     explicit DomDecHelperBuilder(Args&&... args);
 
-    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
-    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
-
-    //! Set pointer to TopologyHolder valid throughout the simulation (required)
-    void setTopologyHolder(TopologyHolder* topologyHolder);
-
-    //! Allow DomDecHelperBuilder to get CheckNumberOfBondedInteractionsCallback (required)
-    void setComputeGlobalsElementBuilder(ComputeGlobalsElementBuilder* computeGlobalsElementBuilder);
-
-    //! Register element with NeighborSearchSignaller (required)
-    void registerWithNeighborSearchSignaller(SignallerBuilder<NeighborSearchSignaller>* signallerBuilder);
+    //! Connect with other builders (required)
+    void connectWithBuilders(ElementAndSignallerBuilders* builders);
 
     //! Return DomDecHelper
     std::unique_ptr<DomDecHelper> build();
@@ -206,6 +198,15 @@ private:
     bool registrationPossible_ = false;
     //! Whether we have registered the element with the neighbor search signaller
     bool registeredWithNeighborSearchSignaller_ = false;
+
+    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
+    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
+    //! Set pointer to TopologyHolder valid throughout the simulation (required)
+    void setTopologyHolder(TopologyHolder* topologyHolder);
+    //! Allow DomDecHelperBuilder to get CheckNumberOfBondedInteractionsCallback (required)
+    void setComputeGlobalsElementBuilder(ComputeGlobalsElementBuilder* computeGlobalsElementBuilder);
+    //! Register element with NeighborSearchSignaller (required)
+    void registerWithNeighborSearchSignaller(SignallerBuilder<NeighborSearchSignaller>* signallerBuilder);
 };
 
 template<typename... Args>

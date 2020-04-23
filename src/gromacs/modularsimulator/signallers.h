@@ -50,6 +50,7 @@
 
 namespace gmx
 {
+struct ElementAndSignallerBuilders;
 class StopHandler;
 class TrajectoryElement;
 
@@ -73,9 +74,8 @@ public:
     //! Allows clients to register to the signaller
     void registerSignallerClient(compat::not_null<typename Signaller::Client*> client);
 
-    //! Register signaller-to-be-built with other signaller builders
-    template<typename Builder>
-    void registerWithSignallerBuilder(compat::not_null<Builder*> builder);
+    //! Connect with other builders (required)
+    void connectWithBuilders(ElementAndSignallerBuilders* builders);
 
     //! Build the signaller
     std::unique_ptr<Signaller> build();
@@ -98,6 +98,10 @@ private:
      */
     template<typename... Args>
     SignallerCallbackPtr getSignallerCallback(typename Signaller::Client* client, Args&&... args);
+
+    //! Register signaller-to-be-built with other signaller builders
+    template<typename Builder>
+    void registerWithSignallerBuilder(compat::not_null<Builder*> builder);
 };
 
 /*! \libinternal
@@ -350,6 +354,15 @@ void SignallerBuilder<Signaller>::registerWithSignallerBuilder(compat::not_null<
 
 //! @cond
 // (Template specializations confuse doxygen)
+template<>
+void SignallerBuilder<NeighborSearchSignaller>::connectWithBuilders(ElementAndSignallerBuilders* builders);
+template<>
+void SignallerBuilder<LastStepSignaller>::connectWithBuilders(ElementAndSignallerBuilders* builders);
+template<>
+void SignallerBuilder<LoggingSignaller>::connectWithBuilders(ElementAndSignallerBuilders* builders);
+template<>
+void SignallerBuilder<EnergySignaller>::connectWithBuilders(ElementAndSignallerBuilders* builders);
+
 // Signaller builder, general version - for NeighborSearchSignaller, LastStepSignaller, LoggingSignaller
 template<class Signaller>
 std::unique_ptr<Signaller> SignallerBuilder<Signaller>::build()

@@ -61,6 +61,7 @@
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/topology/topology.h"
 
+#include "builders.h"
 #include "checkpointhelper.h"
 #include "freeenergyperturbationelement.h"
 #include "parrinellorahmanbarostat.h"
@@ -419,6 +420,16 @@ void EnergyElement::initializeEnergyHistory(StartingBehavior    startingBehavior
     }
     /* Set the initial energy history */
     energyOutput->fillEnergyHistory(observablesHistory->energyHistory.get());
+}
+
+void EnergyElementBuilder::connectWithBuilders(ElementAndSignallerBuilders* builders)
+{
+    setStatePropagatorData(builders->statePropagatorData->getPointer());
+    setFreeEnergyPerturbationElement(builders->freeEnergyPerturbationElement->getPointer());
+    registerWithEnergySignaller(builders->energySignaller.get());
+    registerWithTrajectoryElement(builders->trajectoryElement.get());
+    registerWithCheckpointHelper(builders->checkpointHelper.get());
+    setTopologyHolder(builders->topologyHolder->getPointer());
 }
 
 void EnergyElementBuilder::setVRescaleThermostat(const VRescaleThermostat* vRescaleThermostat)

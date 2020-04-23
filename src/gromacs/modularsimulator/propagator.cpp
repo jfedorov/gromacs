@@ -53,7 +53,10 @@
 #include "gromacs/timing/wallcycle.h"
 #include "gromacs/utility/fatalerror.h"
 
+#include "builders.h"
+#include "parrinellorahmanbarostat.h"
 #include "statepropagatordata.h"
+#include "vrescalethermostat.h"
 
 namespace gmx
 {
@@ -505,6 +508,21 @@ void Propagator<algorithm>::scheduleTask(Step gmx_unused step,
                 run<NumVelocityScalingValues::None, ParrinelloRahmanVelocityScaling::No>();
             }));
         }
+    }
+}
+
+template<IntegrationStep algorithm>
+void PropagatorBuilder<algorithm>::connectWithBuilders(ElementAndSignallerBuilders* builders)
+{
+    setStatePropagatorData(builders->statePropagatorData->getPointer());
+    if (algorithm == IntegrationStep::LeapFrog
+        || algorithm == IntegrationStep::VelocityVerletPositionsAndVelocities)
+    {
+        builders->vRescaleThermostat->setPropagatorBuilder(this);
+    }
+    if (algorithm == IntegrationStep::LeapFrog || algorithm == IntegrationStep::VelocitiesOnly)
+    {
+        builders->parrinelloRahmanBarostat->setPropagatorBuilder(this);
     }
 }
 

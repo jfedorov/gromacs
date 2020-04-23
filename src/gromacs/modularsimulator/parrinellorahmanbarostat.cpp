@@ -54,6 +54,7 @@
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/pbcutil/boxutilities.h"
 
+#include "builders.h"
 #include "checkpointhelper.h"
 #include "energyelement.h"
 #include "signallers.h"
@@ -202,6 +203,13 @@ void ParrinelloRahmanBarostat::writeCheckpoint(t_state* localState, t_state gmx_
     copy_mat(boxVelocity_, localState->boxv);
     copy_mat(boxRel_, localState->box_rel);
     localState->flags |= (1U << estBOXV) | (1U << estBOX_REL);
+}
+
+void ParrinelloRahmanBarostatBuilder::connectWithBuilders(ElementAndSignallerBuilders* builders)
+{
+    setStatePropagatorData(builders->statePropagatorData->getPointer());
+    setEnergyElementBuilder(builders->energyElement.get());
+    registerWithCheckpointHelper(builders->checkpointHelper.get());
 }
 
 void ParrinelloRahmanBarostatBuilder::setStatePropagatorData(StatePropagatorData* statePropagatorData)

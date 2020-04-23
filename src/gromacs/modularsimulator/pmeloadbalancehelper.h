@@ -54,6 +54,7 @@ struct t_inputrec;
 
 namespace gmx
 {
+struct ElementAndSignallerBuilders;
 class MDLogger;
 struct MdrunOptions;
 class StatePropagatorData;
@@ -146,11 +147,8 @@ public:
     template<typename... Args>
     explicit PmeLoadBalanceHelperBuilder(Args&&... args);
 
-    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
-    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
-
-    //! Register element with NeighborSearchSignaller (required)
-    void registerWithNeighborSearchSignaller(SignallerBuilder<NeighborSearchSignaller>* signallerBuilder);
+    //! Connect with other builders (required)
+    void connectWithBuilders(ElementAndSignallerBuilders* builders);
 
     //! Return PmeLoadBalanceHelper
     std::unique_ptr<PmeLoadBalanceHelper> build();
@@ -165,6 +163,11 @@ private:
     bool registrationPossible_ = false;
     //! Whether we have registered the element with the neighbor search signaller
     bool registeredWithNeighborSearchSignaller_ = false;
+
+    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
+    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
+    //! Register element with NeighborSearchSignaller (required)
+    void registerWithNeighborSearchSignaller(SignallerBuilder<NeighborSearchSignaller>* signallerBuilder);
 };
 
 template<typename... Args>

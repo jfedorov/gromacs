@@ -54,17 +54,18 @@
 #include "domdechelper.h"
 #include "modularsimulatorinterfaces.h"
 #include "pmeloadbalancehelper.h"
+#include "propagator.h"
 #include "topologyholder.h"
 
 namespace gmx
 {
 class DomDecHelper;
+struct ElementAndSignallerBuilders;
 class EnergyElement;
 class EnergyElementBuilder;
 class EnergySignaller;
 class FreeEnergyPerturbationElement;
 class LoggingSignaller;
-class StatePropagatorData;
 class NeighborSearchSignaller;
 class PmeLoadBalanceHelper;
 class TrajectoryElementBuilder;
@@ -143,10 +144,7 @@ private:
     void postStep(Step step, Time time);
 
     //! A helper struct holding all builders involved in setting up the modular simulator
-    struct Builders;
-
-    //! Construct builder list
-    std::unique_ptr<Builders> constructBuilders();
+    friend struct ElementAndSignallerBuilders;
 
     /*! \brief Build the integrator part of the simulator
      *
@@ -155,7 +153,7 @@ private:
      * micro state / energy states are found. Currently, buildIntegrator
      * knows about NVE md and md-vv algorithms.
      */
-    std::unique_ptr<ISimulatorElement> buildIntegrator(Builders* builders);
+    std::unique_ptr<ISimulatorElement> buildIntegrator(ElementAndSignallerBuilders* builders);
 
     /*! \brief Add run functions to the task queue
      *

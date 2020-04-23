@@ -49,6 +49,7 @@
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/state.h"
 
+#include "builders.h"
 #include "checkpointhelper.h"
 
 namespace gmx
@@ -114,6 +115,11 @@ void FreeEnergyPerturbationElement::writeCheckpoint(t_state* localState, t_state
     localState->fep_state = currentFEPState_;
     localState->lambda    = lambda_;
     localState->flags |= (1U << estLAMBDA) | (1U << estFEPSTATE);
+}
+
+void FreeEnergyPerturbationElementBuilder::connectWithBuilders(ElementAndSignallerBuilders* builders)
+{
+    registerWithCheckpointHelper(builders->checkpointHelper.get());
 }
 
 void FreeEnergyPerturbationElementBuilder::registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder)

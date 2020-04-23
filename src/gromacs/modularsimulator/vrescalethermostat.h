@@ -55,6 +55,7 @@ namespace gmx
 class CheckpointHelperBuilder;
 class EnergyElement;
 class EnergyElementBuilder;
+struct ElementAndSignallerBuilders;
 
 /*! \libinternal
  * \ingroup module_modularsimulator
@@ -147,11 +148,8 @@ public:
     template<typename... Args>
     explicit VRescaleThermostatBuilder(Args&&... args);
 
-    //! Set pointer to EnergyElement valid throughout the simulation (required)
-    void setEnergyElementBuilder(EnergyElementBuilder* energyElementBuilder);
-
-    //! Register element with CheckpointHelper (required)
-    void registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder);
+    //! Connect with other builders (required)
+    void connectWithBuilders(ElementAndSignallerBuilders* builders);
 
     //! Set propagator
     template<IntegrationStep integrationStep>
@@ -176,6 +174,11 @@ private:
     bool registeredWithCheckpointHelper_ = false;
     //! Whether we have registered the element with a propagator
     bool registeredWithPropagator_ = false;
+
+    //! Set pointer to EnergyElement valid throughout the simulation (required)
+    void setEnergyElementBuilder(EnergyElementBuilder* energyElementBuilder);
+    //! Register element with CheckpointHelper (required)
+    void registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder);
 };
 
 template<typename... Args>

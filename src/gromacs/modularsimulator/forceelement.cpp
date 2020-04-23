@@ -54,6 +54,7 @@
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/pbcutil/pbc.h"
 
+#include "builders.h"
 #include "energyelement.h"
 #include "freeenergyperturbationelement.h"
 #include "signallers.h"
@@ -246,6 +247,16 @@ SignallerCallbackPtr ForceElement::registerEnergyCallback(EnergySignallerEvent e
                 [this](Step step, Time /*unused*/) { nextFreeEnergyCalculationStep_ = step; });
     }
     return nullptr;
+}
+
+void ForceElementBuilder::connectWithBuilders(ElementAndSignallerBuilders* builders)
+{
+    setStatePropagatorData(builders->statePropagatorData->getPointer());
+    setEnergyElement(builders->energyElement->getPointer());
+    setFreeEnergyPerturbationElement(builders->freeEnergyPerturbationElement->getPointer());
+    registerWithNeighborSearchSignaller(builders->neighborSearchSignaller.get());
+    registerWithEnergySignaller(builders->energySignaller.get());
+    registerWithTopologyHolder(builders->topologyHolder.get());
 }
 
 void ForceElementBuilder::setStatePropagatorData(StatePropagatorData* statePropagatorData)

@@ -54,6 +54,7 @@ struct gmx_wallcycle;
 
 namespace gmx
 {
+struct ElementAndSignallerBuilders;
 class MDAtoms;
 class StatePropagatorData;
 
@@ -191,8 +192,8 @@ public:
     template<typename... Args>
     explicit PropagatorBuilder(Args&&... args);
 
-    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
-    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
+    //! Connect with other builders (required)
+    void connectWithBuilders(ElementAndSignallerBuilders* builders);
 
     //! Set the number of velocity scaling variables
     void setNumVelocityScalingVariables(int numVelocityScalingVariables);
@@ -215,6 +216,9 @@ public:
 private:
     //! The element to be built
     std::unique_ptr<Propagator<algorithm>> propagator_ = nullptr;
+
+    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
+    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
 };
 
 template<IntegrationStep algorithm>

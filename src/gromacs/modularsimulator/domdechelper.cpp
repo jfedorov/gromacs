@@ -50,6 +50,7 @@
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/pbcutil/pbc.h"
 
+#include "builders.h"
 #include "computeglobalselement.h"
 #include "signallers.h"
 #include "statepropagatordata.h"
@@ -164,6 +165,14 @@ SignallerCallbackPtr DomDecHelper::registerNSCallback()
 {
     return std::make_unique<SignallerCallback>(
             [this](Step step, Time gmx_unused time) { this->nextNSStep_ = step; });
+}
+
+void DomDecHelperBuilder::connectWithBuilders(ElementAndSignallerBuilders* builders)
+{
+    setStatePropagatorData(builders->statePropagatorData->getPointer());
+    registerWithNeighborSearchSignaller(builders->neighborSearchSignaller.get());
+    setTopologyHolder(builders->topologyHolder->getPointer());
+    setComputeGlobalsElementBuilder(builders->computeGlobalsElement.get());
 }
 
 void DomDecHelperBuilder::setStatePropagatorData(StatePropagatorData* statePropagatorData)

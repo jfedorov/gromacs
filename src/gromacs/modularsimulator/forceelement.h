@@ -64,6 +64,7 @@ struct t_nrnb;
 namespace gmx
 {
 class Awh;
+struct ElementAndSignallerBuilders;
 class EnergyElement;
 class FreeEnergyPerturbationElement;
 class ImdSession;
@@ -214,19 +215,8 @@ public:
     template<typename... Args>
     explicit ForceElementBuilder(Args&&... args);
 
-    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
-    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
-    //! Set pointer to EnergyElement valid throughout the simulation (required)
-    void setEnergyElement(EnergyElement* energyElement);
-    //! Set pointer to FreeEnergyPerturbationElement valid throughout the simulation (optional)
-    void setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement);
-
-    //! Register element with EnergySignaller (required)
-    void registerWithEnergySignaller(SignallerBuilder<EnergySignaller>* signallerBuilder);
-    //! Register element with NeighborSearchSignaller (required)
-    void registerWithNeighborSearchSignaller(SignallerBuilder<NeighborSearchSignaller>* signallerBuilder);
-    //! Register element with TopologyHolder (required)
-    void registerWithTopologyHolder(TopologyHolderBuilder* topologyHolderBuilder);
+    //! Connect with other builders (required)
+    void connectWithBuilders(ElementAndSignallerBuilders* builders);
 
     //! Return ForceElement
     std::unique_ptr<ForceElement> build();
@@ -243,6 +233,20 @@ private:
     bool registeredWithNeighborSearchSignaller_ = false;
     //! Whether we have registered the element with the neighbor search signaller
     bool registeredWithTopologyHolder_ = false;
+
+    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
+    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
+    //! Set pointer to EnergyElement valid throughout the simulation (required)
+    void setEnergyElement(EnergyElement* energyElement);
+    //! Set pointer to FreeEnergyPerturbationElement valid throughout the simulation (optional)
+    void setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement);
+
+    //! Register element with EnergySignaller (required)
+    void registerWithEnergySignaller(SignallerBuilder<EnergySignaller>* signallerBuilder);
+    //! Register element with NeighborSearchSignaller (required)
+    void registerWithNeighborSearchSignaller(SignallerBuilder<NeighborSearchSignaller>* signallerBuilder);
+    //! Register element with TopologyHolder (required)
+    void registerWithTopologyHolder(TopologyHolderBuilder* topologyHolderBuilder);
 };
 
 template<typename... Args>

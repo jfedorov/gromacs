@@ -49,6 +49,7 @@
 namespace gmx
 {
 class Constraints;
+struct ElementAndSignallerBuilders;
 class EnergyElement;
 class FreeEnergyPerturbationElement;
 class StatePropagatorData;
@@ -157,19 +158,8 @@ public:
                                        const t_inputrec* inputrec,
                                        const t_mdatoms*  mdAtoms);
 
-    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
-    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
-    //! Set pointer to EnergyElement valid throughout the simulation (required)
-    void setEnergyElement(EnergyElement* energyElement);
-    //! Set pointer to FreeEnergyPerturbationElement valid throughout the simulation (optional)
-    void setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement);
-
-    //! Register element with EnergySignaller (required)
-    void registerWithEnergySignaller(SignallerBuilder<EnergySignaller>* signallerBuilder);
-    //! Register element with TrajectorySignaller (required)
-    void registerWithTrajectorySignaller(TrajectoryElementBuilder* signallerBuilder);
-    //! Register element with LoggingSignaller (required)
-    void registerWithLoggingSignaller(SignallerBuilder<LoggingSignaller>* signallerBuilder);
+    //! Connect with other builders (required)
+    void connectWithBuilders(ElementAndSignallerBuilders* builders);
 
     //! Return ConstraintsElement
     template<ConstraintVariable variable>
@@ -191,6 +181,20 @@ private:
     bool registeredWithTrajectorySignaller_ = false;
     //! Whether we have registered the element with the logging signaller
     bool registeredWithLoggingSignaller_ = false;
+
+    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
+    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
+    //! Set pointer to EnergyElement valid throughout the simulation (required)
+    void setEnergyElement(EnergyElement* energyElement);
+    //! Set pointer to FreeEnergyPerturbationElement valid throughout the simulation (optional)
+    void setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement);
+
+    //! Register element with EnergySignaller (required)
+    void registerWithEnergySignaller(SignallerBuilder<EnergySignaller>* signallerBuilder);
+    //! Register element with TrajectorySignaller (required)
+    void registerWithTrajectorySignaller(TrajectoryElementBuilder* signallerBuilder);
+    //! Register element with LoggingSignaller (required)
+    void registerWithLoggingSignaller(SignallerBuilder<LoggingSignaller>* signallerBuilder);
 };
 } // namespace gmx
 

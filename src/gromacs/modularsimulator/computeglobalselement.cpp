@@ -55,6 +55,7 @@
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/topology/topology.h"
 
+#include "builders.h"
 #include "freeenergyperturbationelement.h"
 #include "signallers.h"
 #include "trajectoryelement.h"
@@ -336,6 +337,16 @@ SignallerCallbackPtr ComputeGlobalsElement<algorithm>::registerTrajectorySignall
                 [this](Step step, Time /*unused*/) { energyReductionStep_ = step; });
     }
     return nullptr;
+}
+
+void ComputeGlobalsElementBuilder::connectWithBuilders(ElementAndSignallerBuilders* builders)
+{
+    setStatePropagatorData(builders->statePropagatorData->getPointer());
+    setEnergyElement(builders->energyElement->getPointer());
+    setFreeEnergyPerturbationElement(builders->freeEnergyPerturbationElement->getPointer());
+    registerWithTopologyHolder(builders->topologyHolder.get());
+    registerWithEnergySignaller(builders->energySignaller.get());
+    registerWithTrajectorySignaller(builders->trajectoryElement.get());
 }
 
 void ComputeGlobalsElementBuilder::setStatePropagatorData(StatePropagatorData* statePropagatorData)

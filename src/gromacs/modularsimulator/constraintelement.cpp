@@ -49,6 +49,7 @@
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/utility/fatalerror.h"
 
+#include "builders.h"
 #include "energyelement.h"
 #include "freeenergyperturbationelement.h"
 #include "signallers.h"
@@ -242,6 +243,16 @@ ConstraintsElementBuilder::ConstraintsElementBuilder(Constraints*      constr,
     // Element being nullptr is a valid state, nullptr (element is not built)
     // needs to be handled by the caller of build().
     registrationPossible_ = true;
+}
+
+void ConstraintsElementBuilder::connectWithBuilders(ElementAndSignallerBuilders* builders)
+{
+    setStatePropagatorData(builders->statePropagatorData->getPointer());
+    setEnergyElement(builders->energyElement->getPointer());
+    setFreeEnergyPerturbationElement(builders->freeEnergyPerturbationElement->getPointer());
+    registerWithEnergySignaller(builders->energySignaller.get());
+    registerWithTrajectorySignaller(builders->trajectoryElement.get());
+    registerWithLoggingSignaller(builders->loggingSignaller.get());
 }
 
 void ConstraintsElementBuilder::setStatePropagatorData(StatePropagatorData* statePropagatorData)

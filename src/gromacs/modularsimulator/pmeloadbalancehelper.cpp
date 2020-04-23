@@ -52,6 +52,7 @@
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/nbnxm/nbnxm.h"
 
+#include "builders.h"
 #include "signallers.h"
 #include "statepropagatordata.h"
 
@@ -134,6 +135,11 @@ SignallerCallbackPtr PmeLoadBalanceHelper::registerNSCallback()
 {
     return std::make_unique<SignallerCallback>(
             [this](Step step, Time gmx_unused time) { nextNSStep_ = step; });
+}
+void PmeLoadBalanceHelperBuilder::connectWithBuilders(ElementAndSignallerBuilders* builders)
+{
+    setStatePropagatorData(builders->statePropagatorData->getPointer());
+    registerWithNeighborSearchSignaller(builders->neighborSearchSignaller.get());
 }
 
 void PmeLoadBalanceHelperBuilder::setStatePropagatorData(StatePropagatorData* statePropagatorData)

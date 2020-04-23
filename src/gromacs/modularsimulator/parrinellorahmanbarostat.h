@@ -54,6 +54,7 @@ struct t_commrec;
 namespace gmx
 {
 class CheckpointHelperBuilder;
+struct ElementAndSignallerBuilders;
 class EnergyElement;
 class EnergyElementBuilder;
 class MDAtoms;
@@ -157,13 +158,8 @@ public:
     template<typename... Args>
     explicit ParrinelloRahmanBarostatBuilder(Args&&... args);
 
-    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
-    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
-    //! Set pointer to EnergyElement valid throughout the simulation (required)
-    void setEnergyElementBuilder(EnergyElementBuilder* energyElementBuilder);
-
-    //! Register element with CheckpointHelper (required)
-    void registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder);
+    //! Connect with other builders (required)
+    void connectWithBuilders(ElementAndSignallerBuilders* builders);
 
     //! Set propagator
     template<IntegrationStep integrationStep>
@@ -187,6 +183,14 @@ private:
     bool registeredWithCheckpointHelper_ = false;
     //! Whether we have registered the element with a propagator
     bool registeredWithPropagator_ = false;
+
+    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
+    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
+    //! Set pointer to EnergyElement valid throughout the simulation (required)
+    void setEnergyElementBuilder(EnergyElementBuilder* energyElementBuilder);
+
+    //! Register element with CheckpointHelper (required)
+    void registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder);
 };
 
 template<typename... Args>

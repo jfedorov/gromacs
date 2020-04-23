@@ -58,6 +58,7 @@
 #include "gromacs/topology/atoms.h"
 #include "gromacs/topology/topology.h"
 
+#include "builders.h"
 #include "checkpointhelper.h"
 #include "freeenergyperturbationelement.h"
 #include "signallers.h"
@@ -490,6 +491,15 @@ SignallerCallbackPtr StatePropagatorData::registerLastStepCallback()
         lastStep_               = step;
         isRegularSimulationEnd_ = (step == lastPlannedStep_);
     });
+}
+
+void StatePropagatorDataBuilder::connectWithBuilders(ElementAndSignallerBuilders* builders)
+{
+    setFreeEnergyPerturbationElement(builders->freeEnergyPerturbationElement->getPointer());
+    registerWithLastStepSignaller(builders->lastStepSignaller.get());
+    registerWithTrajectoryElement(builders->trajectoryElement.get());
+    setTopologyHolder(builders->topologyHolder->getPointer());
+    registerWithCheckpointHelper(builders->checkpointHelper.get());
 }
 
 void StatePropagatorDataBuilder::setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement)

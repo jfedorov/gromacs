@@ -47,6 +47,9 @@
 #include "gromacs/mdrunutility/handlerestart.h"
 #include "gromacs/mdtypes/inputrec.h"
 
+#include "builders.h"
+#include "signallers.h"
+
 namespace gmx
 {
 TrajectoryElement::TrajectoryElement(FILE*                    fplog,
@@ -194,6 +197,12 @@ SignallerCallbackPtr TrajectoryElement::registerLoggingCallback()
 {
     return std::make_unique<SignallerCallback>(
             [this](Step step, Time /*unused*/) { logWritingStep_ = step; });
+}
+
+void TrajectoryElementBuilder::connectWithBuilders(ElementAndSignallerBuilders* builders)
+{
+    registerWithSignallerBuilder(compat::make_not_null(builders->lastStepSignaller.get()));
+    registerWithSignallerBuilder(compat::make_not_null(builders->loggingSignaller.get()));
 }
 
 TrajectoryElement* TrajectoryElementBuilder::getPointer()

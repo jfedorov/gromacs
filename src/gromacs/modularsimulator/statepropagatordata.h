@@ -61,6 +61,7 @@ namespace gmx
 {
 enum class ConstraintVariable;
 class CheckpointHelperBuilder;
+struct ElementAndSignallerBuilders;
 class FreeEnergyPerturbationElement;
 class TrajectoryElementBuilder;
 
@@ -312,18 +313,8 @@ public:
     template<typename... Args>
     explicit StatePropagatorDataBuilder(Args&&... args);
 
-    //! Set pointer to FreeEnergyPerturbationElement valid throughout the simulation (optional)
-    void setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement);
-    //! Set pointer to TopologyHolder valid throughout the simulation (required)
-    void setTopologyHolder(TopologyHolder* topologyHolder);
-
-    //! Register element with LastStepSignaller (required)
-    void registerWithLastStepSignaller(SignallerBuilder<LastStepSignaller>* signallerBuilder);
-    //! Register element with TrajectoryElement (required)
-    void registerWithTrajectoryElement(TrajectoryElementBuilder* trajectoryElementBuilder);
-
-    //! Register element with CheckpointHelper (required)
-    void registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder);
+    //! Connect with other builders (required)
+    void connectWithBuilders(ElementAndSignallerBuilders* builders);
 
     //! Get (non-owning) pointer before element is built
     StatePropagatorData* getPointer();
@@ -343,6 +334,19 @@ private:
     bool registeredWithTrajectoryElement_ = false;
     //! Whether we have registered the element with the checkpoint helper
     bool registeredWithCheckpointHelper_ = false;
+
+    //! Set pointer to FreeEnergyPerturbationElement valid throughout the simulation (optional)
+    void setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement);
+    //! Set pointer to TopologyHolder valid throughout the simulation (required)
+    void setTopologyHolder(TopologyHolder* topologyHolder);
+
+    //! Register element with LastStepSignaller (required)
+    void registerWithLastStepSignaller(SignallerBuilder<LastStepSignaller>* signallerBuilder);
+    //! Register element with TrajectoryElement (required)
+    void registerWithTrajectoryElement(TrajectoryElementBuilder* trajectoryElementBuilder);
+
+    //! Register element with CheckpointHelper (required)
+    void registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder);
 };
 
 template<typename... Args>

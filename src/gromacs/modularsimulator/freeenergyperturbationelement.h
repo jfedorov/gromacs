@@ -54,6 +54,7 @@ struct t_inputrec;
 namespace gmx
 {
 class CheckpointHelperBuilder;
+struct ElementAndSignallerBuilders;
 class MDAtoms;
 
 /*! \libinternal
@@ -127,8 +128,8 @@ public:
     template<typename... Args>
     explicit FreeEnergyPerturbationElementBuilder(Args&&... args);
 
-    //! Register element with CheckpointHelper (required)
-    void registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder);
+    //! Connect with other builders (required)
+    void connectWithBuilders(ElementAndSignallerBuilders* builders);
 
     //! Get (non-owning) pointer before element is built
     FreeEnergyPerturbationElement* getPointer();
@@ -146,6 +147,9 @@ private:
     bool registrationPossible_ = false;
     //! Whether we have registered the element with the checkpoint helper
     bool registeredWithCheckpointHelper_ = false;
+
+    //! Register element with CheckpointHelper (required)
+    void registerWithCheckpointHelper(CheckpointHelperBuilder* checkpointHelperBuilder);
 };
 
 template<typename... Args>

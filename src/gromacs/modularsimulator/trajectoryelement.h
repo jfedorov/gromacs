@@ -57,6 +57,7 @@ struct t_inputrec;
 
 namespace gmx
 {
+struct ElementAndSignallerBuilders;
 class IMDOutputProvider;
 struct MdModulesNotifier;
 struct MdrunOptions;
@@ -233,9 +234,8 @@ public:
     template<typename... Args>
     explicit TrajectoryElementBuilder(Args&&... args);
 
-    //! Register element-to-be-built with other signaller builders
-    template<typename Builder>
-    void registerWithSignallerBuilder(compat::not_null<Builder*> builder);
+    //! Connect with other builders (required)
+    void connectWithBuilders(ElementAndSignallerBuilders* builders);
 
     //! Allows clients to register to the signaller
     void registerSignallerClient(compat::not_null<ITrajectorySignallerClient*> client);
@@ -257,6 +257,10 @@ private:
     std::vector<ITrajectorySignallerClient*> signallerClients_;
     //! List of writer clients
     std::vector<ITrajectoryWriterClient*> writerClients_;
+
+    //! Register element-to-be-built with other signaller builders
+    template<typename Builder>
+    void registerWithSignallerBuilder(compat::not_null<Builder*> builder);
 };
 
 template<typename... Args>

@@ -56,6 +56,7 @@ struct t_nrnb;
 
 namespace gmx
 {
+struct ElementAndSignallerBuilders;
 class FreeEnergyPerturbationElement;
 class MDAtoms;
 class MDLogger;
@@ -254,19 +255,8 @@ public:
     template<typename... Args>
     explicit ComputeGlobalsElementBuilder(int integratorAlgorithm, Args&&... args);
 
-    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
-    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
-    //! Set pointer to EnergyElement valid throughout the simulation (required)
-    void setEnergyElement(EnergyElement* energyElement);
-    //! Set pointer to FreeEnergyPerturbationElement valid throughout the simulation (optional)
-    void setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement);
-
-    //! Register element with EnergySignaller (required)
-    void registerWithEnergySignaller(SignallerBuilder<EnergySignaller>* signallerBuilder);
-    //! Register element with TrajectorySignaller (required)
-    void registerWithTrajectorySignaller(TrajectoryElementBuilder* signallerBuilder);
-    //! Register element with TopologyHolder (required)
-    void registerWithTopologyHolder(TopologyHolderBuilder* topologyHolderBuilder);
+    //! Connect with other builders (required)
+    void connectWithBuilders(ElementAndSignallerBuilders* builders);
 
     //! Get callback to request checking of bonded interactions
     CheckBondedInteractionsCallbackPtr getCheckNumberOfBondedInteractionsCallback();
@@ -291,6 +281,20 @@ private:
     bool registeredWithTrajectorySignaller_ = false;
     //! Whether we have registered the element with the topology holder
     bool registeredWithTopologyHolder_ = false;
+
+    //! Set pointer to StatePropagatorData valid throughout the simulation (required)
+    void setStatePropagatorData(StatePropagatorData* statePropagatorData);
+    //! Set pointer to EnergyElement valid throughout the simulation (required)
+    void setEnergyElement(EnergyElement* energyElement);
+    //! Set pointer to FreeEnergyPerturbationElement valid throughout the simulation (optional)
+    void setFreeEnergyPerturbationElement(FreeEnergyPerturbationElement* freeEnergyPerturbationElement);
+
+    //! Register element with EnergySignaller (required)
+    void registerWithEnergySignaller(SignallerBuilder<EnergySignaller>* signallerBuilder);
+    //! Register element with TrajectorySignaller (required)
+    void registerWithTrajectorySignaller(TrajectoryElementBuilder* signallerBuilder);
+    //! Register element with TopologyHolder (required)
+    void registerWithTopologyHolder(TopologyHolderBuilder* topologyHolderBuilder);
 };
 
 template<typename... Args>

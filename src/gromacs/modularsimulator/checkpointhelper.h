@@ -53,6 +53,7 @@ struct ObservablesHistory;
 
 namespace gmx
 {
+struct ElementAndSignallerBuilders;
 class MDLogger;
 class TrajectoryElement;
 class TrajectoryElementBuilder;
@@ -188,12 +189,12 @@ public:
     template<typename... Args>
     explicit CheckpointHelperBuilder(Args&&... args);
 
+    //! Connect with other builders (required)
+    void connectWithBuilders(ElementAndSignallerBuilders* builders);
+
     //! Register checkpointing client
     void registerClient(compat::not_null<ICheckpointHelperClient*> client);
-    //! Set pointer to TrajectoryElement valid throughout the simulation (required)
-    void setTrajectoryElement(TrajectoryElementBuilder* trajectoryElementBuilder);
-    //! Register element with LastStepSignaller (required)
-    void registerWithLastStepSignaller(SignallerBuilder<LastStepSignaller>* signallerBuilder);
+
     //! Set CheckpointHandler
     void setCheckpointHandler(std::unique_ptr<CheckpointHandler> checkpointHandler);
 
@@ -208,6 +209,11 @@ private:
     std::unique_ptr<CheckpointHelper> checkpointHelper_ = nullptr;
     //! Whether we have registered the element with the last step signaller
     bool registeredWithLastStepSignaller_ = false;
+
+    //! Set pointer to TrajectoryElement valid throughout the simulation (required)
+    void setTrajectoryElement(TrajectoryElementBuilder* trajectoryElementBuilder);
+    //! Register element with LastStepSignaller (required)
+    void registerWithLastStepSignaller(SignallerBuilder<LastStepSignaller>* signallerBuilder);
 };
 
 template<typename... Args>

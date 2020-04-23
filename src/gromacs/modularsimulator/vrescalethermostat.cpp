@@ -53,6 +53,7 @@
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/utility/fatalerror.h"
 
+#include "builders.h"
 #include "checkpointhelper.h"
 #include "energyelement.h"
 
@@ -186,6 +187,12 @@ void VRescaleThermostat::writeCheckpoint(t_state* localState, t_state gmx_unused
 const std::vector<double>& VRescaleThermostat::thermostatIntegral() const
 {
     return thermostatIntegral_;
+}
+
+void VRescaleThermostatBuilder::connectWithBuilders(ElementAndSignallerBuilders* builders)
+{
+    setEnergyElementBuilder(builders->energyElement.get());
+    registerWithCheckpointHelper(builders->checkpointHelper.get());
 }
 
 void VRescaleThermostatBuilder::setEnergyElementBuilder(EnergyElementBuilder* energyElementBuilder)

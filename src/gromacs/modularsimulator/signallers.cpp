@@ -47,7 +47,9 @@
 #include "gromacs/mdlib/stat.h"
 #include "gromacs/mdlib/stophandler.h"
 
+#include "builders.h"
 #include "modularsimulatorinterfaces.h"
+#include "trajectoryelement.h"
 
 namespace gmx
 {
@@ -211,6 +213,30 @@ std::unique_ptr<EnergySignaller> SignallerBuilder<EnergySignaller>::build()
     signaller_->calculateFreeEnergyCallbacks_ =
             buildCallbackVector(EnergySignallerEvent::FreeEnergyCalculationStep);
     return std::move(signaller_);
+}
+
+template<>
+void SignallerBuilder<NeighborSearchSignaller>::connectWithBuilders(ElementAndSignallerBuilders gmx_unused* builders)
+{
+}
+
+template<>
+void SignallerBuilder<LastStepSignaller>::connectWithBuilders(ElementAndSignallerBuilders* builders)
+{
+    registerWithSignallerBuilder(compat::make_not_null(builders->neighborSearchSignaller.get()));
+}
+
+template<>
+void SignallerBuilder<LoggingSignaller>::connectWithBuilders(ElementAndSignallerBuilders* builders)
+{
+    registerWithSignallerBuilder(compat::make_not_null(builders->lastStepSignaller.get()));
+}
+
+template<>
+void SignallerBuilder<EnergySignaller>::connectWithBuilders(ElementAndSignallerBuilders* builders)
+{
+    registerWithSignallerBuilder(compat::make_not_null(builders->loggingSignaller.get()));
+    registerWithSignallerBuilder(compat::make_not_null(builders->trajectoryElement.get()));
 }
 
 } // namespace gmx
