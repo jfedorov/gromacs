@@ -687,22 +687,22 @@ int gmx_fsync(FILE* fp)
         int fn;
 
         /* get the file number */
-#    if HAVE_FILENO
+#if HAVE_FILENO
         fn = fileno(fp);
-#    elif HAVE__FILENO
+#elif HAVE__FILENO
         fn = _fileno(fp);
-#    else
+#else
         fn = -1;
-#    endif
+#endif
 
         /* do the actual fsync */
         if (fn >= 0)
         {
-#    if HAVE_FSYNC
+#if HAVE_FSYNC
             rc = fsync(fn);
-#    elif HAVE__COMMIT
+#elif HAVE__COMMIT
             rc = _commit(fn);
-#    endif
+#endif
         }
     }
 
