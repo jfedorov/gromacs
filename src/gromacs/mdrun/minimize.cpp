@@ -500,18 +500,19 @@ static void swap_em_state(em_state_t** ems1, em_state_t** ems2)
 }
 
 //! Save the EM trajectory
-static void write_em_traj(FILE*               fplog,
-                          const t_commrec*    cr,
-                          gmx_mdoutf_t        outf,
-                          gmx_bool            bX,
-                          gmx_bool            bF,
-                          const char*         confout,
-                          const gmx_mtop_t*   top_global,
-                          t_inputrec*         ir,
-                          int64_t             step,
-                          em_state_t*         state,
-                          t_state*            state_global,
-                          ObservablesHistory* observablesHistory)
+static void write_em_traj(FILE*                          fplog,
+                          const t_commrec*               cr,
+                          gmx_mdoutf_t                   outf,
+                          gmx_bool                       bX,
+                          gmx_bool                       bF,
+                          const char*                    confout,
+                          const gmx_mtop_t*              top_global,
+                          t_inputrec*                    ir,
+                          int64_t                        step,
+                          em_state_t*                    state,
+                          t_state*                       state_global,
+                          ObservablesHistory*            observablesHistory,
+                          const gmx::KeyValueTreeObject& modularSimulatorCheckpointTree)
 {
     int mdof_flags = 0;
 
@@ -532,7 +533,7 @@ static void write_em_traj(FILE*               fplog,
 
     mdoutf_write_to_trajectory_files(fplog, cr, outf, mdof_flags, top_global->natoms, step,
                                      static_cast<double>(step), &state->s, state_global,
-                                     observablesHistory, state->f);
+                                     observablesHistory, state->f, modularSimulatorCheckpointTree);
 
     if (confout != nullptr)
     {
@@ -542,7 +543,8 @@ static void write_em_traj(FILE*               fplog,
             if (!bX)
             {
                 auto globalXRef = MASTER(cr) ? state_global->x : gmx::ArrayRef<gmx::RVec>();
-                dd_collect_vec(cr->dd, &state->s, state->s.x, globalXRef);
+                dd_collect_vec(cr->dd, state->s.ddp_count, state->s.ddp_count_cg_gl, state->s.cg_gl,
+                               state->s.x, globalXRef);
             }
         }
         else
@@ -1246,7 +1248,7 @@ void LegacySimulator::do_cg()
         do_f = do_per_step(step, inputrec->nstfout);
 
         write_em_traj(fplog, cr, outf, do_x, do_f, nullptr, top_global, inputrec, step, s_min,
-                      state_global, observablesHistory);
+                      state_global, observablesHistory, *modularSimulatorCheckpointTree);
 
         /* Take a step downhill.
          * In theory, we should minimize the function along this direction.
@@ -1607,7 +1609,7 @@ void LegacySimulator::do_cg()
     do_f = (inputrec->nstfout > 0 && !do_per_step(step, inputrec->nstfout));
 
     write_em_traj(fplog, cr, outf, do_x, do_f, ftp2fn(efSTO, nfile, fnm), top_global, inputrec,
-                  step, s_min, state_global, observablesHistory);
+                  step, s_min, state_global, observablesHistory, *modularSimulatorCheckpointTree);
 
 
     if (MASTER(cr))
@@ -1854,7 +1856,7 @@ void LegacySimulator::do_lbfgs()
 
         mdoutf_write_to_trajectory_files(fplog, cr, outf, mdof_flags, top_global->natoms, step,
                                          static_cast<real>(step), &ems.s, state_global,
-                                         observablesHistory, ems.f);
+                                         observablesHistory, ems.f, *modularSimulatorCheckpointTree);
 
         /* Do the linesearching in the direction dx[point][0..(n-1)] */
 
@@ -2327,7 +2329,7 @@ void LegacySimulator::do_lbfgs()
     do_x = !do_per_step(step, inputrec->nstxout);
     do_f = !do_per_step(step, inputrec->nstfout);
     write_em_traj(fplog, cr, outf, do_x, do_f, ftp2fn(efSTO, nfile, fnm), top_global, inputrec,
-                  step, &ems, state_global, observablesHistory);
+                  step, &ems, state_global, observablesHistory, *modularSimulatorCheckpointTree);
 
     if (MASTER(cr))
     {
@@ -2503,7 +2505,7 @@ void LegacySimulator::do_steep()
             do_x = do_per_step(steps_accepted, inputrec->nstxout);
             do_f = do_per_step(steps_accepted, inputrec->nstfout);
             write_em_traj(fplog, cr, outf, do_x, do_f, nullptr, top_global, inputrec, count, s_min,
-                          state_global, observablesHistory);
+                          state_global, observablesHistory, *modularSimulatorCheckpointTree);
         }
         else
         {
@@ -2559,7 +2561,8 @@ void LegacySimulator::do_steep()
         fprintf(stderr, "\nwriting lowest energy coordinates.\n");
     }
     write_em_traj(fplog, cr, outf, TRUE, inputrec->nstfout != 0, ftp2fn(efSTO, nfile, fnm),
-                  top_global, inputrec, count, s_min, state_global, observablesHistory);
+                  top_global, inputrec, count, s_min, state_global, observablesHistory,
+                  *modularSimulatorCheckpointTree);
 
     if (MASTER(cr))
     {

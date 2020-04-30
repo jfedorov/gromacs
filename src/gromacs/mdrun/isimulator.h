@@ -42,6 +42,7 @@
 #define GMX_MDRUN_ISIMULATOR_H
 
 #include "gromacs/mdlib/stophandler.h"
+#include "gromacs/utility/keyvaluetree.h"
 
 class energyhistory_t;
 struct gmx_ekindata_t;
@@ -133,7 +134,8 @@ public:
                gmx_membed_t*                       membed,
                gmx_walltime_accounting*            walltime_accounting,
                std::unique_ptr<StopHandlerBuilder> stopHandlerBuilder,
-               bool                                doRerun) :
+               bool                                doRerun,
+               std::unique_ptr<KeyValueTreeObject> modularSimulatorCheckpointTree) :
         fplog(fplog),
         cr(cr),
         ms(ms),
@@ -168,7 +170,8 @@ public:
         membed(membed),
         walltime_accounting(walltime_accounting),
         stopHandlerBuilder(std::move(stopHandlerBuilder)),
-        doRerun(doRerun)
+        doRerun(doRerun),
+        modularSimulatorCheckpointTree(std::move(modularSimulatorCheckpointTree))
     {
     }
 
@@ -243,6 +246,8 @@ protected:
     std::unique_ptr<StopHandlerBuilder> stopHandlerBuilder;
     //! Whether we're doing a rerun.
     bool doRerun;
+    //! Contains checkpointing data for the modular simulator
+    std::unique_ptr<const KeyValueTreeObject> modularSimulatorCheckpointTree;
 };
 
 } // namespace gmx

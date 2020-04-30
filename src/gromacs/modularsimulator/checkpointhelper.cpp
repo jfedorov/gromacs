@@ -45,6 +45,7 @@
 
 #include "gromacs/domdec/domdec.h"
 #include "gromacs/mdlib/mdoutf.h"
+#include "gromacs/mdtypes/checkpointdata.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/state.h"
 
@@ -119,10 +120,11 @@ void CheckpointHelper::writeCheckpoint(Step step, Time time)
     {
         client->writeCheckpoint(localStateInstance_, state_global_);
     }
+    KeyValueTreeObject dummyKVTreeObject;
 
     mdoutf_write_to_trajectory_files(fplog_, cr_, trajectoryElement_->outf_, MDOF_CPT,
-                                     globalNumAtoms_, step, time, localStateInstance_,
-                                     state_global_, observablesHistory_, ArrayRef<RVec>());
+                                     globalNumAtoms_, step, time, localStateInstance_, state_global_,
+                                     observablesHistory_, ArrayRef<RVec>(), dummyKVTreeObject);
 }
 
 SignallerCallbackPtr CheckpointHelper::registerLastStepCallback()

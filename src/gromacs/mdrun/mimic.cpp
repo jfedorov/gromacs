@@ -443,10 +443,10 @@ void gmx::LegacySimulator::do_mimic()
             const bool isCheckpointingStep = false;
             const bool doRerun             = false;
             const bool bSumEkinhOld        = false;
-            do_md_trajectory_writing(fplog, cr, nfile, fnm, step, step_rel, t, ir, state,
-                                     state_global, observablesHistory, top_global, fr, outf,
-                                     energyOutput, ekind, f, isCheckpointingStep, doRerun,
-                                     isLastStep, mdrunOptions.writeConfout, bSumEkinhOld);
+            do_md_trajectory_writing(fplog, cr, nfile, fnm, step, step_rel, t, ir, state, state_global,
+                                     observablesHistory, top_global, fr, outf, energyOutput, ekind,
+                                     f, *modularSimulatorCheckpointTree, isCheckpointingStep,
+                                     doRerun, isLastStep, mdrunOptions.writeConfout, bSumEkinhOld);
         }
 
         stopHandler->setSignal();
@@ -486,7 +486,8 @@ void gmx::LegacySimulator::do_mimic()
             if (DOMAINDECOMP(cr))
             {
                 ftemp = gmx::makeArrayRef(fglobal);
-                dd_collect_vec(cr->dd, state, flocal, ftemp);
+                dd_collect_vec(cr->dd, state->ddp_count, state->ddp_count_cg_gl, state->cg_gl,
+                               flocal, ftemp);
             }
             else
             {

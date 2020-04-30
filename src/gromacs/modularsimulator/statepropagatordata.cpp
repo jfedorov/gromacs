@@ -54,6 +54,7 @@
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/mdatom.h"
+#include "gromacs/mdtypes/checkpointdata.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/topology/atoms.h"
 #include "gromacs/topology/topology.h"
@@ -406,9 +407,11 @@ void StatePropagatorData::write(gmx_mdoutf_t outf, Step currentStep, Time curren
     // TODO: This is only used for CPT - needs to be filled when we turn CPT back on
     ObservablesHistory* observablesHistory = nullptr;
 
-    mdoutf_write_to_trajectory_files(fplog_, cr_, outf, static_cast<int>(mdof_flags),
-                                     totalNumAtoms_, currentStep, currentTime,
-                                     localStateBackup_.get(), globalState_, observablesHistory, f_);
+
+    KeyValueTreeObject dummyKVTreeObject;
+    mdoutf_write_to_trajectory_files(fplog_, cr_, outf, static_cast<int>(mdof_flags), totalNumAtoms_,
+                                     currentStep, currentTime, localStateBackup_.get(),
+                                     globalState_, observablesHistory, f_, dummyKVTreeObject);
 
     if (currentStep != lastStep_ || !isRegularSimulationEnd_)
     {
@@ -459,9 +462,11 @@ void StatePropagatorData::trajectoryWriterTeardown(gmx_mdoutf* gmx_unused outf)
     if (DOMAINDECOMP(cr_))
     {
         auto globalXRef = MASTER(cr_) ? globalState_->x : gmx::ArrayRef<gmx::RVec>();
-        dd_collect_vec(cr_->dd, localStateBackup_.get(), localStateBackup_->x, globalXRef);
+        dd_collect_vec(cr_->dd, localStateBackup_->ddp_count, localStateBackup_->ddp_count_cg_gl,
+                       localStateBackup_->cg_gl, localStateBackup_->x, globalXRef);
         auto globalVRef = MASTER(cr_) ? globalState_->v : gmx::ArrayRef<gmx::RVec>();
-        dd_collect_vec(cr_->dd, localStateBackup_.get(), localStateBackup_->v, globalVRef);
+        dd_collect_vec(cr_->dd, localStateBackup_->ddp_count, localStateBackup_->ddp_count_cg_gl,
+                       localStateBackup_->cg_gl, localStateBackup_->v, globalVRef);
     }
     else
     {

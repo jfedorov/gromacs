@@ -111,9 +111,10 @@ enum cptv
     cptv_Unknown = 17,                  /**< Version before numbering scheme */
     cptv_RemoveBuildMachineInformation, /**< remove functionality that makes mdrun builds non-reproducible */
     cptv_ComPrevStepAsPullGroupReference, /**< Allow using COM of previous step as pull group PBC reference */
-    cptv_PullAverage, /**< Added possibility to output average pull force and position */
-    cptv_MdModules,   /**< Added checkpointing for MdModules */
-    cptv_Count        /**< the total number of cptv versions */
+    cptv_PullAverage,      /**< Added possibility to output average pull force and position */
+    cptv_MdModules,        /**< Added checkpointing for MdModules */
+    cptv_ModularSimulator, /**< Added checkpointing for modular simulator */
+    cptv_Count             /**< the total number of cptv versions */
 };
 
 /*! \brief Version number of the file format written to checkpoint
@@ -2185,23 +2186,24 @@ static void mpiBarrierBeforeRename(const bool applyMpiBarrierBeforeRename, MPI_C
     }
 }
 
-void write_checkpoint(const char*                   fn,
-                      gmx_bool                      bNumberAndKeep,
-                      FILE*                         fplog,
-                      const t_commrec*              cr,
-                      ivec                          domdecCells,
-                      int                           nppnodes,
-                      int                           eIntegrator,
-                      int                           simulation_part,
-                      gmx_bool                      bExpanded,
-                      int                           elamstats,
-                      int64_t                       step,
-                      double                        t,
-                      t_state*                      state,
-                      ObservablesHistory*           observablesHistory,
-                      const gmx::MdModulesNotifier& mdModulesNotifier,
-                      bool                          applyMpiBarrierBeforeRename,
-                      MPI_Comm                      mpiBarrierCommunicator)
+void write_checkpoint(const char*                    fn,
+                      gmx_bool                       bNumberAndKeep,
+                      FILE*                          fplog,
+                      const t_commrec*               cr,
+                      ivec                           domdecCells,
+                      int                            nppnodes,
+                      int                            eIntegrator,
+                      int                            simulation_part,
+                      gmx_bool                       bExpanded,
+                      int                            elamstats,
+                      int64_t                        step,
+                      double                         t,
+                      t_state*                       state,
+                      ObservablesHistory*            observablesHistory,
+                      const gmx::MdModulesNotifier&  mdModulesNotifier,
+                      const gmx::KeyValueTreeObject& modularSimulatorCheckpointTree,
+                      bool                           applyMpiBarrierBeforeRename,
+                      MPI_Comm                       mpiBarrierCommunicator)
 {
     t_fileio* fp;
     char*     fntemp; /* the temporary checkpoint file name */
@@ -2390,6 +2392,12 @@ void write_checkpoint(const char*                   fn,
         auto                     tree = builder.build();
         gmx::FileIOXdrSerializer serializer(fp);
         gmx::serializeKeyValueTree(tree, &serializer);
+    }
+
+    // Checkpointing modular simulator
+    {
+        gmx::FileIOXdrSerializer serializer(fp);
+        gmx::serializeKeyValueTree(modularSimulatorCheckpointTree, &serializer);
     }
 
     do_cpt_footer(gmx_fio_getxdr(fp), headerContents.file_version);
@@ -2620,7 +2628,9 @@ static void read_checkpoint(const char*                   fn,
                             t_state*                      state,
                             ObservablesHistory*           observablesHistory,
                             gmx_bool                      reproducibilityRequested,
-                            const gmx::MdModulesNotifier& mdModulesNotifier)
+                            const gmx::MdModulesNotifier& mdModulesNotifier,
+                            gmx::KeyValueTreeObject*      modularSimulatorCheckpointTree,
+                            bool                          useModularSimulator)
 {
     t_fileio* fp;
     char      buf[STEPSTRSIZE];
@@ -2691,7 +2701,7 @@ static void read_checkpoint(const char*                   fn,
                   fn);
     }
 
-    if (headerContents->flags_state != state->flags)
+    if (headerContents->flags_state != state->flags && !useModularSimulator)
     {
         gmx_fatal(FARGS,
                   "Cannot change a simulation algorithm during a checkpoint restart. Perhaps you "
@@ -2801,6 +2811,11 @@ static void read_checkpoint(const char*                   fn,
         cp_error();
     }
     do_cpt_mdmodules(headerContents->file_version, fp, mdModulesNotifier);
+    if (headerContents->file_version >= cptv_ModularSimulator)
+    {
+        gmx::FileIOXdrSerializer serializer(fp);
+        *modularSimulatorCheckpointTree = gmx::deserializeKeyValueTree(&serializer);
+    }
     ret = do_cpt_footer(gmx_fio_getxdr(fp), headerContents->file_version);
     if (ret)
     {
@@ -2821,14 +2836,17 @@ void load_checkpoint(const char*                   fn,
                      t_state*                      state,
                      ObservablesHistory*           observablesHistory,
                      gmx_bool                      reproducibilityRequested,
-                     const gmx::MdModulesNotifier& mdModulesNotifier)
+                     const gmx::MdModulesNotifier& mdModulesNotifier,
+                     gmx::KeyValueTreeObject*      modularSimulatorCheckpointTree,
+                     bool                          useModularSimulator)
 {
     CheckpointHeaderContents headerContents;
     if (SIMMASTER(cr))
     {
         /* Read the state from the checkpoint file */
-        read_checkpoint(fn, logfio, cr, dd_nc, ir->eI, &(ir->fepvals->init_fep_state), &headerContents,
-                        state, observablesHistory, reproducibilityRequested, mdModulesNotifier);
+        read_checkpoint(fn, logfio, cr, dd_nc, ir->eI, &(ir->fepvals->init_fep_state),
+                        &headerContents, state, observablesHistory, reproducibilityRequested,
+                        mdModulesNotifier, modularSimulatorCheckpointTree, useModularSimulator);
     }
     if (PAR(cr))
     {
@@ -2959,6 +2977,11 @@ static CheckpointHeaderContents read_checkpoint_data(t_fileio*                  
     }
     gmx::MdModulesNotifier mdModuleNotifier;
     do_cpt_mdmodules(headerContents.file_version, fp, mdModuleNotifier);
+    if (headerContents.file_version >= cptv_ModularSimulator)
+    {
+        gmx::FileIOXdrSerializer serializer(fp);
+        auto                     tree = gmx::deserializeKeyValueTree(&serializer);
+    }
     ret = do_cpt_footer(gmx_fio_getxdr(fp), headerContents.file_version);
     if (ret)
     {

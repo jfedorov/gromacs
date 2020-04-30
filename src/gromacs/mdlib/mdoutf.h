@@ -57,6 +57,7 @@ namespace gmx
 {
 enum class StartingBehavior;
 class IMDOutputProvider;
+class KeyValueTreeObject;
 struct MdModulesNotifier;
 struct MdrunOptions;
 } // namespace gmx
@@ -109,29 +110,31 @@ void done_mdoutf(gmx_mdoutf_t of);
  * the master node only when necessary. Without domain decomposition
  * only data from state_local is used and state_global is ignored.
  *
- * \param[in] fplog              File handler to log file.
- * \param[in] cr                 Communication record.
- * \param[in] of                 File handler to trajectory file.
- * \param[in] mdof_flags         Flags indicating what data is written.
- * \param[in] natoms             The total number of atoms in the system.
- * \param[in] step               The current time step.
- * \param[in] t                  The current time.
- * \param[in] state_local        Pointer to the local state object.
- * \param[in] state_global       Pointer to the global state object.
- * \param[in] observablesHistory Pointer to the ObservableHistory object.
- * \param[in] f_local            The local forces.
+ * \param[in] fplog                           File handler to log file.
+ * \param[in] cr                              Communication record.
+ * \param[in] of                              File handler to trajectory file.
+ * \param[in] mdof_flags                      Flags indicating what data is written.
+ * \param[in] natoms                          The total number of atoms in the system.
+ * \param[in] step                            The current time step.
+ * \param[in] t                               The current time.
+ * \param[in] state_local                     Pointer to the local state object.
+ * \param[in] state_global                    Pointer to the global state object.
+ * \param[in] observablesHistory              Pointer to the ObservableHistory object.
+ * \param[in] f_local                         The local forces.
+ * \param[in] modularSimulatorCheckpointTree  A KV tree used by modular simulator.
  */
-void mdoutf_write_to_trajectory_files(FILE*                    fplog,
-                                      const t_commrec*         cr,
-                                      gmx_mdoutf_t             of,
-                                      int                      mdof_flags,
-                                      int                      natoms,
-                                      int64_t                  step,
-                                      double                   t,
-                                      t_state*                 state_local,
-                                      t_state*                 state_global,
-                                      ObservablesHistory*      observablesHistory,
-                                      gmx::ArrayRef<gmx::RVec> f_local);
+void mdoutf_write_to_trajectory_files(FILE*                          fplog,
+                                      const t_commrec*               cr,
+                                      gmx_mdoutf_t                   of,
+                                      int                            mdof_flags,
+                                      int                            natoms,
+                                      int64_t                        step,
+                                      double                         t,
+                                      t_state*                       state_local,
+                                      t_state*                       state_global,
+                                      ObservablesHistory*            observablesHistory,
+                                      gmx::ArrayRef<gmx::RVec>       f_local,
+                                      const gmx::KeyValueTreeObject& modularSimulatorCheckpointTree);
 
 /*! \brief Get the output interval of box size of uncompressed TNG output.
  * Returns 0 if no uncompressed TNG file is open.

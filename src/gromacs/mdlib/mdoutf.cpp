@@ -255,17 +255,18 @@ gmx_wallcycle_t mdoutf_get_wcycle(gmx_mdoutf_t of)
     return of->wcycle;
 }
 
-void mdoutf_write_to_trajectory_files(FILE*                    fplog,
-                                      const t_commrec*         cr,
-                                      gmx_mdoutf_t             of,
-                                      int                      mdof_flags,
-                                      int                      natoms,
-                                      int64_t                  step,
-                                      double                   t,
-                                      t_state*                 state_local,
-                                      t_state*                 state_global,
-                                      ObservablesHistory*      observablesHistory,
-                                      gmx::ArrayRef<gmx::RVec> f_local)
+void mdoutf_write_to_trajectory_files(FILE*                          fplog,
+                                      const t_commrec*               cr,
+                                      gmx_mdoutf_t                   of,
+                                      int                            mdof_flags,
+                                      int                            natoms,
+                                      int64_t                        step,
+                                      double                         t,
+                                      t_state*                       state_local,
+                                      t_state*                       state_global,
+                                      ObservablesHistory*            observablesHistory,
+                                      gmx::ArrayRef<gmx::RVec>       f_local,
+                                      const gmx::KeyValueTreeObject& modularSimulatorCheckpointTree)
 {
     rvec* f_global;
 
@@ -280,18 +281,21 @@ void mdoutf_write_to_trajectory_files(FILE*                    fplog,
             if (mdof_flags & (MDOF_X | MDOF_X_COMPRESSED))
             {
                 auto globalXRef = MASTER(cr) ? state_global->x : gmx::ArrayRef<gmx::RVec>();
-                dd_collect_vec(cr->dd, state_local, state_local->x, globalXRef);
+                dd_collect_vec(cr->dd, state_local->ddp_count, state_local->ddp_count_cg_gl,
+                               state_local->cg_gl, state_local->x, globalXRef);
             }
             if (mdof_flags & MDOF_V)
             {
                 auto globalVRef = MASTER(cr) ? state_global->v : gmx::ArrayRef<gmx::RVec>();
-                dd_collect_vec(cr->dd, state_local, state_local->v, globalVRef);
+                dd_collect_vec(cr->dd, state_local->ddp_count, state_local->ddp_count_cg_gl,
+                               state_local->cg_gl, state_local->v, globalVRef);
             }
         }
         f_global = of->f_global;
         if (mdof_flags & MDOF_F)
         {
-            dd_collect_vec(cr->dd, state_local, f_local,
+            dd_collect_vec(cr->dd, state_local->ddp_count, state_local->ddp_count_cg_gl,
+                           state_local->cg_gl, f_local,
                            gmx::arrayRefFromArray(reinterpret_cast<gmx::RVec*>(f_global), f_local.size()));
         }
     }
@@ -318,8 +322,8 @@ void mdoutf_write_to_trajectory_files(FILE*                    fplog,
             write_checkpoint(of->fn_cpt, of->bKeepAndNumCPT, fplog, cr,
                              DOMAINDECOMP(cr) ? cr->dd->numCells : one_ivec,
                              DOMAINDECOMP(cr) ? cr->dd->nnodes : cr->nnodes, of->eIntegrator,
-                             of->simulation_part, of->bExpanded, of->elamstats, step, t,
-                             state_global, observablesHistory, *(of->mdModulesNotifier),
+                             of->simulation_part, of->bExpanded, of->elamstats, step, t, state_global,
+                             observablesHistory, *(of->mdModulesNotifier), modularSimulatorCheckpointTree,
                              of->simulationsShareState, of->mpiCommMasters);
         }
 
