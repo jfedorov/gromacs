@@ -59,6 +59,8 @@
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/smalloc.h"
 
+#include "checkpointdata.h"
+
 /* The source code in this file should be thread-safe.
       Please keep it that way. */
 
@@ -68,7 +70,9 @@ history_t::history_t() :
     disre_rm3tav(nullptr),
     orire_initf(0),
     norire_Dtav(0),
-    orire_Dtav(nullptr){};
+    orire_Dtav(nullptr)
+{
+}
 
 ekinstate_t::ekinstate_t() :
     bUpToDate(FALSE),
@@ -82,7 +86,55 @@ ekinstate_t::ekinstate_t() :
     mvcos(0)
 {
     clear_mat(ekin_total);
+}
+
+enum class EkinstateCheckpointVersion
+{
+    Base
 };
+
+template<gmx::CheckpointDataOperation operation>
+void ekinstate_t::doCheckpoint(gmx::CheckpointData checkpointData)
+{
+    auto version = EkinstateCheckpointVersion::Base;
+    checkpointData.scalar<operation>("version", &version);
+
+    checkpointData.scalar<operation>("bUpToDate", &bUpToDate);
+    if (!bUpToDate)
+    {
+        return;
+    }
+    auto numOfTensors = ekin_n;
+    checkpointData.scalar<operation>("ekin_n", &numOfTensors);
+    if (operation == gmx::CheckpointDataOperation::Read)
+    {
+        // If this isn't matching, we haven't allocated the right amount of data
+        GMX_RELEASE_ASSERT(numOfTensors == ekin_n,
+                           "ekinstate_t checkpoint reading: Tensor size mismatch.");
+    }
+    for (int idx = 0; idx < numOfTensors; ++idx)
+    {
+        checkpointData.tensor<operation>(gmx::formatString("ekinh %d", idx), ekinh[idx]);
+        checkpointData.tensor<operation>(gmx::formatString("ekinf %d", idx), ekinf[idx]);
+        checkpointData.tensor<operation>(gmx::formatString("ekinh_old %d", idx), ekinh_old[idx]);
+    }
+    checkpointData.arrayRef<operation>("ekinscalef_nhc",
+                                       gmx::makeCheckpointArrayRef<operation>(ekinscalef_nhc));
+    checkpointData.arrayRef<operation>("ekinscaleh_nhc",
+                                       gmx::makeCheckpointArrayRef<operation>(ekinscaleh_nhc));
+    checkpointData.arrayRef<operation>("vscale_nhc", gmx::makeCheckpointArrayRef<operation>(vscale_nhc));
+    checkpointData.scalar<operation>("dekindl", &dekindl);
+    checkpointData.scalar<operation>("mvcos", &mvcos);
+
+    if (operation == gmx::CheckpointDataOperation::Read)
+    {
+        hasReadEkinState = true;
+    }
+}
+
+// Explicit template instantiation
+template void ekinstate_t::doCheckpoint<gmx::CheckpointDataOperation::Read>(gmx::CheckpointData checkpointData);
+template void ekinstate_t::doCheckpoint<gmx::CheckpointDataOperation::Write>(gmx::CheckpointData checkpointData);
 
 void init_gtc_state(t_state* state, int ngtc, int nnhpres, int nhchainlength)
 {

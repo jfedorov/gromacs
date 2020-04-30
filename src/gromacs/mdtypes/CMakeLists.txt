@@ -34,6 +34,7 @@
 
 file(GLOB MDTYPES_SOURCES
     df_history.cpp
+    energyhistory.cpp
     group.cpp
     iforceprovider.cpp
     inputrec.cpp

@@ -66,13 +66,16 @@
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/real.h"
+#include "gromacs/utility/stringutil.h"
 
 struct t_inputrec;
 
 namespace gmx
 {
 struct AwhHistory;
-}
+enum class CheckpointDataOperation;
+class CheckpointData;
+} // namespace gmx
 
 //! Convenience alias for until all is moved in the gmx namespace
 template<class T>
@@ -176,6 +179,9 @@ public:
      * before we enter the MD loop should compute these quantities
      * fresh, or not. */
     bool hasReadEkinState;
+
+    template<gmx::CheckpointDataOperation operation>
+    void doCheckpoint(gmx::CheckpointData checkpointData);
 };
 
 /*! \brief Free-energy sampling history struct
