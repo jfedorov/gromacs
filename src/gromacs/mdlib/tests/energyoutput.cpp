@@ -59,6 +59,7 @@
 
 #include "gromacs/mdlib/ebin.h"
 #include "gromacs/mdlib/makeconstraints.h"
+#include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdrunutility/handlerestart.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/fcdata.h"

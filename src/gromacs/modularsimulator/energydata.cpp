@@ -255,7 +255,7 @@ void EnergyData::doStep(Step step, Time time, bool isEnergyCalculationStep, bool
             isFreeEnergyCalculationStep,
             isEnergyCalculationStep,
             time,
-            mdAtoms_->mdatoms()->tmass,
+            mdAtoms_->tmass(),
             enerd_,
             inputrec_->fepvals.get(),
             inputrec_->expandedvals.get(),

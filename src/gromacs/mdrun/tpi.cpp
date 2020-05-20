@@ -82,7 +82,6 @@
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/interaction_const.h"
 #include "gromacs/mdtypes/md_enums.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/mdrunoptions.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/nbnxm/nbnxm.h"
@@ -135,20 +134,21 @@ static void realloc_bins(double** bin, int* nbin, int nbin_new)
 
 //! Computes and returns the RF exclusion energy for the last molecule starting at \p beginAtom
 static real reactionFieldExclusionCorrection(gmx::ArrayRef<const gmx::RVec> x,
-                                             const t_mdatoms&               mdatoms,
+                                             const gmx::MDAtoms&            mdatoms,
                                              const interaction_const_t&     ic,
                                              const int                      beginAtom)
 {
     real energy = 0;
 
-    for (int i = beginAtom; i < mdatoms.homenr; i++)
+    auto chargeA = mdatoms.chargeA();
+    for (int i = beginAtom; i < mdatoms.homenr(); i++)
     {
-        const real qi = mdatoms.chargeA[i];
+        const real qi = chargeA[i];
         energy -= 0.5 * qi * qi * ic.reactionFieldShift;
 
-        for (int j = i + 1; j < mdatoms.homenr; j++)
+        for (int j = i + 1; j < mdatoms.homenr(); j++)
         {
-            const real qj  = mdatoms.chargeA[j];
+            const real qj  = chargeA[j];
             const real rsq = distance2(x[i], x[j]);
             energy += qi * qj * (ic.reactionFieldCoefficient * rsq - ic.reactionFieldShift);
         }
@@ -192,7 +192,6 @@ void LegacySimulator::do_tpi()
     double            invbinw, *bin, refvolshift, logV, bUlogV;
     gmx_bool          bEnergyOutOfBounds;
     const char*       tpid_leg[2] = { "direct", "reweighted" };
-    auto*             mdatoms     = mdAtoms->mdatoms();
 
     GMX_UNUSED_VALUE(outputProvider);
 
@@ -299,8 +298,8 @@ void LegacySimulator::do_tpi()
         sscanf(dump_pdb, "%20lf", &dump_ener);
     }
 
-    atoms2md(top_global, *inputrec, -1, {}, top_global.natoms, mdAtoms);
-    update_mdatoms(mdatoms, inputrec->fepvals->init_lambda);
+    mdAtoms->reinitialize(top_global, *inputrec, -1, {}, top_global.natoms);
+    mdAtoms->adjustToLambda(inputrec->fepvals->init_lambda);
 
     f.resize(top_global.natoms);
 
@@ -332,7 +331,7 @@ void LegacySimulator::do_tpi()
     real rfExclusionEnergy = 0;
     if (EEL_RF(fr->ic->eeltype))
     {
-        rfExclusionEnergy = reactionFieldExclusionCorrection(x, *mdatoms, *fr->ic, a_tp0);
+        rfExclusionEnergy = reactionFieldExclusionCorrection(x, *mdAtoms, *fr->ic, a_tp0);
         if (debug)
         {
             fprintf(debug, "RF exclusion correction for inserted molecule: %f kJ/mol\n", rfExclusionEnergy);
@@ -341,15 +340,16 @@ void LegacySimulator::do_tpi()
 
     snew(x_mol, a_tp1 - a_tp0);
 
-    bDispCorr = (inputrec->eDispCorr != DispersionCorrectionType::No);
-    bCharge   = FALSE;
+    bDispCorr    = (inputrec->eDispCorr != DispersionCorrectionType::No);
+    bCharge      = FALSE;
+    auto chargeA = mdAtoms->chargeA();
+    auto chargeB = mdAtoms->chargeB();
     for (i = a_tp0; i < a_tp1; i++)
     {
         /* Copy the coordinates of the molecule to be insterted */
         copy_rvec(x[i], x_mol[i - a_tp0]);
         /* Check if we need to print electrostatic energies */
-        bCharge |= (mdatoms->chargeA[i] != 0
-                    || ((mdatoms->chargeB != nullptr) && mdatoms->chargeB[i] != 0));
+        bCharge |= (chargeA[i] != 0 || ((!chargeB.empty()) && chargeB[i] != 0));
     }
     bRFExcl = (bCharge && EEL_RF(fr->ic->eeltype));
 
@@ -554,7 +554,7 @@ void LegacySimulator::do_tpi()
     bNotLastFrame = read_first_frame(oenv, &status, opt2fn("-rerun", nfile, fnm), &rerun_fr, TRX_NEED_X);
     frame         = 0;
 
-    if (rerun_fr.natoms - (bCavity ? nat_cavity : 0) != mdatoms->nr - (a_tp1 - a_tp0))
+    if (rerun_fr.natoms - (bCavity ? nat_cavity : 0) != mdAtoms->nr() - (a_tp1 - a_tp0))
     {
         gmx_fatal(FARGS,
                   "Number of atoms in trajectory (%d)%s "
@@ -562,7 +562,7 @@ void LegacySimulator::do_tpi()
                   "minus the number of atoms to insert (%d)\n",
                   rerun_fr.natoms,
                   bCavity ? " minus one" : "",
-                  mdatoms->nr,
+                  mdAtoms->nr(),
                   a_tp1 - a_tp0);
     }
 
@@ -694,9 +694,7 @@ void LegacySimulator::do_tpi()
                         fr->nbv.get(), box, 1, x_init, x_init, nullptr, { a_tp0, a_tp1 }, -1, fr->cginfo, x, 0, nullptr);
 
                 /* TODO: Avoid updating all atoms at every bNS step */
-                fr->nbv->setAtomProperties(gmx::constArrayRefFromArray(mdatoms->typeA, mdatoms->nr),
-                                           gmx::constArrayRefFromArray(mdatoms->chargeA, mdatoms->nr),
-                                           fr->cginfo);
+                fr->nbv->setAtomProperties(mdAtoms->typeA(), mdAtoms->chargeA(), fr->cginfo);
 
                 fr->nbv->constructPairlist(InteractionLocality::Local, top.excls, step, nrnb);
 
@@ -785,7 +783,7 @@ void LegacySimulator::do_tpi()
                      &state_global->hist,
                      &f.view(),
                      force_vir,
-                     mdatoms,
+                     *mdAtoms,
                      enerd,
                      state_global->lambda,
                      fr,

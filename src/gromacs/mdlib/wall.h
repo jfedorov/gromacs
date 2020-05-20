@@ -42,7 +42,6 @@
 struct SimulationGroups;
 struct t_forcerec;
 struct t_inputrec;
-struct t_mdatoms;
 struct t_nrnb;
 
 namespace gmx
@@ -65,7 +64,7 @@ real do_walls(const t_inputrec&                   ir,
               gmx::ArrayRef<const int>            typeB,
               gmx::ArrayRef<const unsigned short> cENER,
               int                                 homenr,
-              int                                 numPerturbedAtoms,
+              bool                                havePerturbed,
               gmx::ArrayRef<const gmx::RVec>      x,
               gmx::ForceWithVirial*               forceWithVirial,
               real                                lambda,

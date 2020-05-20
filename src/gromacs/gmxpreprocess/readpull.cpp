@@ -46,10 +46,10 @@
 #include "gromacs/fileio/warninp.h"
 #include "gromacs/gmxpreprocess/readir.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/md_enums.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/pull_params.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/pulling/pull.h"
@@ -568,13 +568,12 @@ pull_t* set_pull_init(t_inputrec*                    ir,
 
     pull_params_t*           pull = ir->pull.get();
     gmx::LocalAtomSetManager atomSets;
-    pull_work     = init_pull(nullptr, pull, ir, mtop, nullptr, &atomSets, lambda);
-    auto  mdAtoms = gmx::makeMDAtoms(nullptr, mtop, *ir, false);
-    auto* md      = mdAtoms->mdatoms();
-    atoms2md(mtop, *ir, -1, {}, mtop.natoms, mdAtoms.get());
+    pull_work    = init_pull(nullptr, pull, ir, mtop, nullptr, &atomSets, lambda);
+    auto mdAtoms = gmx::makeMDAtoms(nullptr, mtop, *ir, false);
+    mdAtoms->reinitialize(mtop, *ir, -1, {}, mtop.natoms);
     if (ir->efep != FreeEnergyPerturbationType::No)
     {
-        update_mdatoms(md, lambda);
+        mdAtoms->adjustToLambda(lambda);
     }
 
     set_pbc(&pbc, ir->pbcType, box);
@@ -583,9 +582,9 @@ pull_t* set_pull_init(t_inputrec*                    ir,
 
     if (pull->bSetPbcRefToPrevStepCOM)
     {
-        initPullComFromPrevStep(nullptr, pull_work, gmx::arrayRefFromArray(md->massT, md->nr), &pbc, x);
+        initPullComFromPrevStep(nullptr, pull_work, mdAtoms->massT(), &pbc, x);
     }
-    pull_calc_coms(nullptr, pull_work, gmx::arrayRefFromArray(md->massT, md->nr), &pbc, t_start, x, {});
+    pull_calc_coms(nullptr, pull_work, mdAtoms->massT(), &pbc, t_start, x, {});
 
     for (int g = 0; g < pull->ngroup; g++)
     {

@@ -65,6 +65,7 @@ namespace gmx
 {
 template<typename>
 class ArrayRef;
+class MDAtoms;
 } // namespace gmx
 
 /*! \brief
@@ -76,7 +77,7 @@ real calc_orires_dev(const gmx_multisim_t*          ms,
                      int                            nfa,
                      const t_iatom                  fa[],
                      const t_iparams                ip[],
-                     const t_mdatoms*               md,
+                     const gmx::MDAtoms*            md,
                      gmx::ArrayRef<const gmx::RVec> xWholeMolecules,
                      const rvec                     x[],
                      const t_pbc*                   pbc,

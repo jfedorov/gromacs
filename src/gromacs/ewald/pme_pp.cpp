@@ -69,6 +69,7 @@
 #include "gromacs/mdtypes/state_propagator_data_gpu.h"
 #include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/timing/wallcycle.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/gmxmpi.h"
 #include "gromacs/utility/smalloc.h"
@@ -94,16 +95,16 @@ static void gmx_pme_send_coeffs_coords_wait(gmx_domdec_t* dd)
 }
 
 /*! \brief Send data to PME ranks */
-static void gmx_pme_send_coeffs_coords(t_forcerec*         fr,
-                                       const t_commrec*    cr,
-                                       unsigned int        flags,
-                                       gmx::ArrayRef<real> chargeA,
-                                       gmx::ArrayRef<real> chargeB,
-                                       gmx::ArrayRef<real> c6A,
-                                       gmx::ArrayRef<real> c6B,
-                                       gmx::ArrayRef<real> sigmaA,
-                                       gmx::ArrayRef<real> sigmaB,
-                                       const matrix        box,
+static void gmx_pme_send_coeffs_coords(t_forcerec*               fr,
+                                       const t_commrec*          cr,
+                                       unsigned int              flags,
+                                       gmx::ArrayRef<const real> chargeA,
+                                       gmx::ArrayRef<const real> chargeB,
+                                       gmx::ArrayRef<const real> c6A,
+                                       gmx::ArrayRef<const real> c6B,
+                                       gmx::ArrayRef<const real> sigmaA,
+                                       gmx::ArrayRef<const real> sigmaB,
+                                       const matrix              box,
                                        const rvec gmx_unused* x,
                                        real                   lambda_q,
                                        real                   lambda_lj,
@@ -314,12 +315,12 @@ void gmx_pme_send_parameters(const t_commrec*           cr,
                              const interaction_const_t& interactionConst,
                              bool                       bFreeEnergy_q,
                              bool                       bFreeEnergy_lj,
-                             gmx::ArrayRef<real>        chargeA,
-                             gmx::ArrayRef<real>        chargeB,
-                             gmx::ArrayRef<real>        sqrt_c6A,
-                             gmx::ArrayRef<real>        sqrt_c6B,
-                             gmx::ArrayRef<real>        sigmaA,
-                             gmx::ArrayRef<real>        sigmaB,
+                             gmx::ArrayRef<const real>  chargeA,
+                             gmx::ArrayRef<const real>  chargeB,
+                             gmx::ArrayRef<const real>  sqrt_c6A,
+                             gmx::ArrayRef<const real>  sqrt_c6B,
+                             gmx::ArrayRef<const real>  sigmaA,
+                             gmx::ArrayRef<const real>  sigmaB,
                              int                        maxshift_x,
                              int                        maxshift_y)
 {

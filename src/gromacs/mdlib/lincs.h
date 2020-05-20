@@ -69,6 +69,7 @@ enum class ConstraintVariable : int;
 class Lincs;
 template<typename>
 class ListOfLists;
+class MDAtoms;
 
 
 /*! \brief Return the data for determining constraint RMS relative deviations. */

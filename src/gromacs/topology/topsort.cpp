@@ -131,7 +131,11 @@ static gmx_bool ip_pert(int ftype, const t_iparams* ip)
     return bPert;
 }
 
-static gmx_bool ip_q_pert(int ftype, const t_iatom* ia, const t_iparams* ip, const real* qA, const real* qB)
+static bool ip_q_pert(int                       ftype,
+                      const t_iatom*            ia,
+                      const t_iparams*          ip,
+                      gmx::ArrayRef<const real> qA,
+                      gmx::ArrayRef<const real> qB)
 {
     /* 1-4 interactions do not have the charges stored in the iparams list,
      * so we need a separate check for those.
@@ -176,11 +180,18 @@ gmx_bool gmx_mtop_bondeds_free_energy(const gmx_mtop_t* mtop)
     return bPert;
 }
 
-void gmx_sort_ilist_fe(InteractionDefinitions* idef, const real* qA, const real* qB)
+void gmx_sort_ilist_fe(InteractionDefinitions* idef, gmx::ArrayRef<const real> qA, gmx::ArrayRef<const real> qB)
 {
-    if (qB == nullptr)
+    gmx::ArrayRef<const real> localChargeA = qA;
+    gmx::ArrayRef<const real> localChargeB;
+
+    if (qB.empty())
     {
-        qB = qA;
+        localChargeB = localChargeA;
+    }
+    else
+    {
+        localChargeB = qB;
     }
 
     bool havePerturbedInteractions = false;
@@ -201,7 +212,7 @@ void gmx_sort_ilist_fe(InteractionDefinitions* idef, const real* qA, const real*
             while (i < ilist->size())
             {
                 /* Check if this interaction is perturbed */
-                if (ip_q_pert(ftype, iatoms + i, idef->iparams.data(), qA, qB))
+                if (ip_q_pert(ftype, iatoms + i, idef->iparams.data(), localChargeA, localChargeB))
                 {
                     /* Copy to the perturbed buffer */
                     if (ib + 1 + nral > iabuf_nalloc)

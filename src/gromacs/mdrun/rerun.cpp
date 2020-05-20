@@ -109,7 +109,6 @@
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/interaction_const.h"
 #include "gromacs/mdtypes/md_enums.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/mdrunoptions.h"
 #include "gromacs/mdtypes/observableshistory.h"
 #include "gromacs/mdtypes/simulation_workload.h"
@@ -202,7 +201,7 @@ void gmx::LegacySimulator::do_rerun()
                     "e.g. gmx rerun -f.");
 
     if (ir->efep != FreeEnergyPerturbationType::No
-        && (mdAtoms->mdatoms()->nMassPerturbed > 0 || (constr && constr->havePerturbedConstraints())))
+        && (mdAtoms->havePerturbedMasses() || (constr && constr->havePerturbedConstraints())))
     {
         gmx_fatal(FARGS,
                   "Perturbed masses or constraints are not supported by rerun. "
@@ -370,14 +369,12 @@ void gmx::LegacySimulator::do_rerun()
         mdAlgorithmsSetupAtomData(cr, *ir, top_global, &top, fr, &f, mdAtoms, constr, vsite, shellfc);
     }
 
-    auto* mdatoms = mdAtoms->mdatoms();
-
     // NOTE: The global state is no longer used at this point.
     // But state_global is still used as temporary storage space for writing
     // the global state to file and potentially for replica exchange.
     // (Global topology should persist.)
 
-    update_mdatoms(mdatoms, state->lambda[FreeEnergyPerturbationCouplingType::Mass]);
+    mdAtoms->adjustToLambda(state->lambda[FreeEnergyPerturbationCouplingType::Mass]);
 
     if (ir->efep != FreeEnergyPerturbationType::No && ir->fepvals->nstdhdl != 0)
     {
@@ -400,7 +397,7 @@ void gmx::LegacySimulator::do_rerun()
                         makeConstArrayRef(state->x),
                         makeConstArrayRef(state->v),
                         state->box,
-                        mdatoms,
+                        *mdAtoms,
                         nrnb,
                         vcm,
                         nullptr,
@@ -618,7 +615,7 @@ void gmx::LegacySimulator::do_rerun()
 
         if (ir->efep != FreeEnergyPerturbationType::No)
         {
-            update_mdatoms(mdatoms, state->lambda[FreeEnergyPerturbationCouplingType::Mass]);
+            mdAtoms->adjustToLambda(state->lambda[FreeEnergyPerturbationCouplingType::Mass]);
         }
 
         force_flags = (GMX_FORCE_STATECHANGED | GMX_FORCE_DYNAMICBOX | GMX_FORCE_ALLFORCES
@@ -650,7 +647,7 @@ void gmx::LegacySimulator::do_rerun()
                                 &state->hist,
                                 &f.view(),
                                 force_vir,
-                                *mdatoms,
+                                *mdAtoms,
                                 nrnb,
                                 wcycle,
                                 shellfc,
@@ -687,7 +684,7 @@ void gmx::LegacySimulator::do_rerun()
                      &state->hist,
                      &f.view(),
                      force_vir,
-                     mdatoms,
+                     *mdAtoms,
                      enerd,
                      state->lambda,
                      fr,
@@ -753,7 +750,7 @@ void gmx::LegacySimulator::do_rerun()
                             makeConstArrayRef(state->x),
                             makeConstArrayRef(state->v),
                             state->box,
-                            mdatoms,
+                            *mdAtoms,
                             nrnb,
                             vcm,
                             wcycle,
@@ -786,7 +783,7 @@ void gmx::LegacySimulator::do_rerun()
             energyOutput.addDataAtEnergyStep(doFreeEnergyPerturbation,
                                              bCalcEnerStep,
                                              t,
-                                             mdatoms->tmass,
+                                             mdAtoms->tmass(),
                                              enerd,
                                              ir->fepvals.get(),
                                              ir->expandedvals.get(),

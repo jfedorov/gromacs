@@ -57,8 +57,9 @@
 
 namespace gmx
 {
+class MDAtoms;
 class MDLogger;
-}
+} // namespace gmx
 
 struct NbnxmGpu;
 struct nbnxn_atomdata_t;

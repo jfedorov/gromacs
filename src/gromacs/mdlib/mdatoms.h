@@ -44,61 +44,162 @@
 #include <vector>
 
 #include "gromacs/gpu_utils/hostallocator.h"
+#include "gromacs/math/arrayrefwithpadding.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/real.h"
-#include "gromacs/utility/unique_cptr.h"
 
 struct gmx_mtop_t;
 struct t_inputrec;
 struct t_mdatoms;
 
+enum class ParticleType : int;
+
 namespace gmx
 {
 
 /*! \libinternal
- * \brief Contains a C-style t_mdatoms while managing some of its
- * memory with C++ vectors with allocators.
- *
- * \todo The group-scheme kernels needed a plain C-style t_mdatoms, so
- * this type combines that with the memory management needed for
- * efficient PME on GPU transfers. The mdatoms_ member should be
- * removed. */
+ * \brief Contains Atom information used for efficient distribution.
+ */
 class MDAtoms
 {
-    //! C-style mdatoms struct.
-    unique_cptr<t_mdatoms> mdatoms_;
+private:
+    class Impl;
+    //! Implementation detail of the datastructure.
+    std::unique_ptr<Impl> impl_;
     //! Memory for chargeA that can be set up for efficient GPU transfer.
     gmx::PaddedHostVector<real> chargeA_;
     //! Memory for chargeB that can be set up for efficient GPU transfer.
     gmx::PaddedHostVector<real> chargeB_;
 
-public:
-    // TODO make this private
     MDAtoms();
+
+public:
     ~MDAtoms();
-    //! Getter.
-    t_mdatoms* mdatoms() { return mdatoms_.get(); }
-    //! Const getter.
-    const t_mdatoms* mdatoms() const { return mdatoms_.get(); }
-    /*! \brief Resizes memory for charges of FEP state A.
+    /*! \brief Resizes memory.
      *
      * \throws std::bad_alloc  If out of memory.
      */
     void resizeChargeA(int newSize);
-    /*! \brief Resizes memory for charges of FEP state B.
+    /*! \brief Resizes memory for state B charges.
      *
      * \throws std::bad_alloc  If out of memory.
      */
     void resizeChargeB(int newSize);
-    /*! \brief Reserves memory for charges of FEP state A.
+    /*! \brief Resizes memory for charges of FEP state B.
      *
      * \throws std::bad_alloc  If out of memory.
      */
     void reserveChargeA(int newCapacity);
-    /*! \brief Reserves memory for charges of FEP state B.
+    /*! \brief
+     * Reinitializes internal data during domain decomposition.
      *
-     * \throws std::bad_alloc  If out of memory.
+     * For the masses the A-state (lambda=0) mass is used.
+     * Sets md->lambda = 0.
+     * In free-energy runs, update_mdatoms() should be called after atoms2md()
+     * to set the masses corresponding to the value of lambda at each step.
+     *
+     * \param[in] mtop Topology data that holds legacy t_atoms.
+     * \param[in] ir   Interaction definitions.
+     * \param[in] nindex Number of atoms to use.
+     * \param[in] index  If not empty, store those atoms only.
+     * \param[in] homenr Number of atoms in this domain.
      */
-    void reserveChargeB(int newCapacity);
+    void reinitialize(const gmx_mtop_t&        mtop,
+                      const t_inputrec&        ir,
+                      int                      nindex,
+                      gmx::ArrayRef<const int> index,
+                      int                      homenr);
+
+    /*! \brief
+     * Sets values for correct lambda state.
+     *
+     * When necessary, sets all the mass parameters to values corresponding
+     * to the free-energy parameter \p lambda.
+     *
+     * \param[in] lambda Reaction parameter value to use.
+     */
+    void adjustToLambda(real lambda);
+
+    //! Getter for number.
+    int nr() const;
+    //! Getter for homenr.
+    int homenr() const;
+    //! Getter for number of energy groups.
+    int nenergrp() const;
+    //! Getter for number of perturbed charges.
+    int nChargePerturbed() const;
+    //! Getter for perturbed types.
+    int nTypePerturbed() const;
+    //! Getter for total mass
+    double tmass() const;
+    //! Getter for lambda.
+    real lambda() const;
+    //! Are there any perturbed charges?
+    bool havePerturbedCharges() const;
+    //! Are there any perturbed masses?
+    bool havePerturbedMasses() const;
+    //! Are there any perturbed types?
+    bool havePerturbedTypes() const;
+    //! Are there any perturbed interactions.
+    bool havePerturbed() const;
+    //! Number of perturbed interactions.
+    int numPerturbed() const;
+    //! Are there any vsites?
+    bool haveVsites() const;
+    //! Do we have partially frozen atoms?
+    bool havePartiallyFrozenAtoms() const;
+    //! Getter for atomic mass in A state.
+    gmx::ArrayRef<const real> massA() const;
+    //! Getter for atomic mass in B state.
+    gmx::ArrayRef<const real> massB() const;
+    //! Getter for atomic mass in present state.
+    gmx::ArrayRef<const real> massT() const;
+    //! Getter for inverse atomic mass per atom, 0 for vsites and shells
+    gmx::ArrayRefWithPadding<const real> invmass() const;
+    //! Getter for inverse atomic mass per atom and dimension.
+    gmx::ArrayRef<const RVec> invMassPerDim() const;
+    //! Getter for atomic charge in A state.
+    gmx::ArrayRef<const real> chargeA() const;
+    //! Getter for atomic charge in B state
+    gmx::ArrayRef<const real> chargeB() const;
+    //! Getter for dispersion constant C6 in A state.
+    gmx::ArrayRef<const real> sqrt_c6A() const;
+    //! Getter for dispersion constant C6 in A state.
+    gmx::ArrayRef<const real> sqrt_c6B() const;
+    //! Getter for van der Waals radius sigma in the A state.
+    gmx::ArrayRef<const real> sigmaA() const;
+    //! Getter for van der Waals radius sigma in the B state.
+    gmx::ArrayRef<const real> sigmaB() const;
+    //! Getter for van der Waals radius sigma^3 in the A state.
+    gmx::ArrayRef<const real> sigma3A() const;
+    //! Getter for van der Waals radius sigma^3 in the B state.
+    gmx::ArrayRef<const real> sigma3B() const;
+    //! Getter to check if this is atom perturbed.
+    const std::vector<bool>& bPerturbed() const;
+    //! Getter for type of atom in the A state.
+    gmx::ArrayRef<const int> typeA() const;
+    //! Getter for type of atom in the B state.
+    gmx::ArrayRef<const int> typeB() const;
+    //! Getter for particle type.
+    gmx::ArrayRef<const ParticleType> ptype() const;
+    //! Getter for group index for temperature coupling.
+    gmx::ArrayRef<const unsigned short> cTC() const;
+    //! Getter for group index for energy matrix.
+    gmx::ArrayRef<const unsigned short> cENER() const;
+    //! Getter for group index for acceleration.
+    gmx::ArrayRef<const unsigned short> cACC() const;
+    //! Getter for group index for freezing.
+    gmx::ArrayRef<const unsigned short> cFREEZE() const;
+    //! Getter for group index for center of mass motion removal
+    gmx::ArrayRef<const unsigned short> cVCM() const;
+    //! Getter for group index for user 1.
+    gmx::ArrayRef<const unsigned short> cU1() const;
+    //! Getter for group index for user 2.
+    gmx::ArrayRef<const unsigned short> cU2() const;
+    //! Getter for group index for orientation restraints.
+    gmx::ArrayRef<const unsigned short> cORF() const;
+
     //! Builder function.
     friend std::unique_ptr<MDAtoms>
     makeMDAtoms(FILE* fp, const gmx_mtop_t& mtop, const t_inputrec& ir, bool rankHasPmeGpuTask);
@@ -108,33 +209,5 @@ public:
 std::unique_ptr<MDAtoms> makeMDAtoms(FILE* fp, const gmx_mtop_t& mtop, const t_inputrec& ir, bool useGpuForPme);
 
 } // namespace gmx
-
-/*! \brief This routine copies the atoms->atom struct into md.
- *
- * \param[in]    mtop     The molecular topology.
- * \param[in]    inputrec The input record.
- * \param[in]    nindex   If nindex>=0 we are doing DD.
- * \param[in]    index    Lookup table for global atom index.
- * \param[in]    homenr   Number of atoms on this processor.
- * \param[inout] mdAtoms  Data set up by this routine.
- *
- * If index!=NULL only the indexed atoms are copied.
- * For the masses the A-state (lambda=0) mass is used.
- * Sets md->lambda = 0.
- * In free-energy runs, update_mdatoms() should be called after atoms2md()
- * to set the masses corresponding to the value of lambda at each step.
- */
-void atoms2md(const gmx_mtop_t&  mtop,
-              const t_inputrec&  inputrec,
-              int                nindex,
-              gmx::ArrayRef<int> index,
-              int                homenr,
-              gmx::MDAtoms*      mdAtoms);
-
-void update_mdatoms(t_mdatoms* md, real lambda);
-/* When necessary, sets all the mass parameters to values corresponding
- * to the free-energy parameter lambda.
- * Sets md->lambda = lambda.
- */
 
 #endif

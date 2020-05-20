@@ -52,6 +52,7 @@
 
 #include "gromacs/math/vectypes.h"
 #include "gromacs/topology/ifunc.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/basedefinitions.h"
 
 struct gmx_cmap_t;

@@ -322,19 +322,11 @@ protected:
         // 'nAtomsPerPair+1'-tuples (fType a_0 a_i ... a_nAtomsPerPair)
         std::vector<t_iatom> iatoms = { 0, 1, 2, 0, 0, 2 };
 
-        std::vector<int>            ddgatindex = { 0, 1, 2 };
-        std::vector<real>           chargeA    = { 1.0, -0.5, -0.5 };
-        std::vector<real>           chargeB    = { 0.0, 0.0, 0.0 };
-        std::vector<unsigned short> egrp       = { 0, 0, 0 };
-        t_mdatoms                   mdatoms    = { 0 };
-
-        mdatoms.chargeA = chargeA.data();
-        mdatoms.chargeB = chargeB.data();
-        mdatoms.cENER   = egrp.data();
-        // nPerturbed is not decisive for fep to be used; it is overruled by
-        // other conditions in do_pairs_general; just here to not segfault
-        // upon query
-        mdatoms.nPerturbed = 0;
+        std::vector<int>            ddgatindex      = { 0, 1, 2 };
+        std::vector<real>           chargeA         = { 1.0, -0.5, -0.5 };
+        std::vector<real>           chargeB         = { 0.0, 0.0, 0.0 };
+        std::vector<unsigned short> egrp            = { 0, 0, 0 };
+        int                         numEnergyGroups = 0;
 
         t_forcerec* fr = frHelper.get();
         fr->efep = input_.fep ? FreeEnergyPerturbationType::Yes : FreeEnergyPerturbationType::No;
@@ -380,11 +372,11 @@ protected:
                      &pbc_,
                      lambdas.data(),
                      output.dvdLambda.data(),
-                     gmx::arrayRefFromArray(mdatoms.chargeA, mdatoms.nr),
-                     gmx::arrayRefFromArray(mdatoms.chargeB, mdatoms.nr),
-                     gmx::arrayRefFromArray(mdatoms.bPerturbed, mdatoms.nr),
-                     gmx::arrayRefFromArray(mdatoms.cENER, mdatoms.nr),
-                     mdatoms.nPerturbed,
+                     chargeA,
+                     chargeB,
+                     {}, // we are not using the bPerturbed list
+                     egrp,
+                     numEnergyGroups,
                      fr,
                      havePerturbedInteractions,
                      stepWork,

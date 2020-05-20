@@ -78,7 +78,7 @@ ForceElement::ForceElement(StatePropagatorData*        statePropagatorData,
                            FILE*                       fplog,
                            const t_commrec*            cr,
                            const t_inputrec*           inputrec,
-                           const MDAtoms*              mdAtoms,
+                           const MDAtoms&              mdAtoms,
                            t_nrnb*                     nrnb,
                            t_forcerec*                 fr,
 
@@ -130,7 +130,7 @@ ForceElement::ForceElement(StatePropagatorData*        statePropagatorData,
     {
         // This was done in mdAlgorithmsSetupAtomData(), but shellfc
         // won't be available outside this element.
-        make_local_shells(cr, *mdAtoms->mdatoms(), shellfc_);
+        make_local_shells(cr, mdAtoms, shellfc_);
     }
 }
 
@@ -216,7 +216,7 @@ void ForceElement::run(Step step, Time time, unsigned int flags)
                             hist,
                             &forces,
                             force_vir,
-                            *mdAtoms_->mdatoms(),
+                            mdAtoms_,
                             nrnb_,
                             wcycle_,
                             shellfc_,
@@ -251,7 +251,7 @@ void ForceElement::run(Step step, Time time, unsigned int flags)
                  hist,
                  &forces,
                  force_vir,
-                 mdAtoms_->mdatoms(),
+                 mdAtoms_,
                  energyData_->enerdata(),
                  lambda,
                  fr_,
@@ -320,7 +320,7 @@ ForceElement::getElementPointerImpl(LegacySimulatorData*                    lega
                                            legacySimulatorData->fplog,
                                            legacySimulatorData->cr,
                                            legacySimulatorData->inputrec,
-                                           legacySimulatorData->mdAtoms,
+                                           *legacySimulatorData->mdAtoms,
                                            legacySimulatorData->nrnb,
                                            legacySimulatorData->fr,
                                            legacySimulatorData->wcycle,

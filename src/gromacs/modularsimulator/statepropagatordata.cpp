@@ -82,7 +82,7 @@ StatePropagatorData::StatePropagatorData(int                numAtoms,
                                          bool               writeFinalConfiguration,
                                          const std::string& finalConfigurationFilename,
                                          const t_inputrec*  inputrec,
-                                         const t_mdatoms*   mdatoms,
+                                         const MDAtoms&     mdatoms,
                                          const gmx_mtop_t&  globalTop) :
     totalNumAtoms_(numAtoms),
     localNAtoms_(0),
@@ -145,19 +145,21 @@ StatePropagatorData::StatePropagatorData(int                numAtoms,
     {
         if (stateHasVelocities)
         {
-            auto v = velocitiesView().paddedArrayRef();
+            auto v       = velocitiesView().paddedArrayRef();
+            auto ptype   = mdatoms.ptype();
+            auto cFREEZE = mdatoms.cFREEZE();
             // Set the velocities of vsites, shells and frozen atoms to zero
-            for (int i = 0; i < mdatoms->homenr; i++)
+            for (int i = 0; i < mdatoms.homenr(); i++)
             {
-                if (mdatoms->ptype[i] == ParticleType::Shell)
+                if (ptype[i] == ParticleType::Shell)
                 {
                     clear_rvec(v[i]);
                 }
-                else if (mdatoms->cFREEZE)
+                else if (!cFREEZE.empty())
                 {
                     for (int m = 0; m < DIM; m++)
                     {
-                        if (inputrec->opts.nFreeze[mdatoms->cFREEZE[i]][m])
+                        if (inputrec->opts.nFreeze[cFREEZE[i]][m])
                         {
                             v[i][m] = 0;
                         }

@@ -117,7 +117,7 @@ int FreeEnergyPerturbationData::currentFEPState() const
 
 void FreeEnergyPerturbationData::updateMDAtoms()
 {
-    update_mdatoms(mdAtoms_->mdatoms(), lambda_[FreeEnergyPerturbationCouplingType::Mass]);
+    mdAtoms_->adjustToLambda(lambda_[FreeEnergyPerturbationCouplingType::Mass]);
 }
 
 namespace

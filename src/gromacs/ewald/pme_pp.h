@@ -57,6 +57,8 @@ class GpuEventSynchronizer;
 
 namespace gmx
 {
+template<typename>
+class ArrayRef;
 class ForceWithVirial;
 class PmePpCommGpu;
 template<typename>
@@ -68,12 +70,12 @@ void gmx_pme_send_parameters(const t_commrec*           cr,
                              const interaction_const_t& interactionConst,
                              gmx_bool                   bFreeEnergy_q,
                              gmx_bool                   bFreeEnergy_lj,
-                             gmx::ArrayRef<real>        chargeA,
-                             gmx::ArrayRef<real>        chargeB,
-                             gmx::ArrayRef<real>        sqrt_c6A,
-                             gmx::ArrayRef<real>        sqrt_c6B,
-                             gmx::ArrayRef<real>        sigmaA,
-                             gmx::ArrayRef<real>        sigmaB,
+                             gmx::ArrayRef<const real>  chargeA,
+                             gmx::ArrayRef<const real>  chargeB,
+                             gmx::ArrayRef<const real>  sqrt_c6A,
+                             gmx::ArrayRef<const real>  sqrt_c6B,
+                             gmx::ArrayRef<const real>  sigmaA,
+                             gmx::ArrayRef<const real>  sigmaB,
                              int                        maxshift_x,
                              int                        maxshift_y);
 

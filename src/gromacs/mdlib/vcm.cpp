@@ -45,11 +45,12 @@
 #include "gromacs/math/vec.h"
 #include "gromacs/math/vecdump.h"
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
+#include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/md_enums.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/topology/topology.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/gmxomp.h"
@@ -159,7 +160,7 @@ static void update_tensor(const rvec x, real m0, tensor I)
 }
 
 /* Center of mass code for groups */
-void calc_vcm_grp(const t_mdatoms&               md,
+void calc_vcm_grp(const gmx::MDAtoms&            md,
                   gmx::ArrayRef<const gmx::RVec> x,
                   gmx::ArrayRef<const gmx::RVec> v,
                   t_vcm*                         vcm)
@@ -188,15 +189,16 @@ void calc_vcm_grp(const t_mdatoms&               md,
                     clear_mat(vcm_t->i);
                 }
             }
-
+            auto massT = md.massT();
+            auto cVCM  = md.cVCM();
 #pragma omp for schedule(static)
-            for (int i = 0; i < md.homenr; i++)
+            for (int i = 0; i < md.homenr(); i++)
             {
                 int  g  = 0;
-                real m0 = md.massT[i];
-                if (md.cVCM)
+                real m0 = massT[i];
+                if (!cVCM.empty())
                 {
-                    g = md.cVCM[i];
+                    g = cVCM[i];
                 }
                 t_vcm_thread* vcm_t = &vcm->thread_vcm[t * vcm->stride + g];
                 /* Calculate linear momentum */
@@ -263,20 +265,21 @@ void calc_vcm_grp(const t_mdatoms&               md,
  * \param[in]     vcm       VCM data
  */
 template<int numDimensions>
-static void doStopComMotionLinear(const t_mdatoms& mdatoms, gmx::ArrayRef<gmx::RVec> v, const t_vcm& vcm)
+static void doStopComMotionLinear(const gmx::MDAtoms& mdatoms, gmx::ArrayRef<gmx::RVec> v, const t_vcm& vcm)
 {
-    const int             homenr   = mdatoms.homenr;
-    const unsigned short* group_id = mdatoms.cVCM;
+    const int homenr   = mdatoms.homenr();
+    auto      group_id = mdatoms.cVCM();
+    auto      cFREEZE  = mdatoms.cFREEZE();
 
-    if (mdatoms.cFREEZE != nullptr)
+    if (!cFREEZE.empty())
     {
         GMX_RELEASE_ASSERT(vcm.nFreeze != nullptr, "Need freeze dimension info with freeze groups");
 
 #pragma omp for schedule(static)
         for (int i = 0; i < homenr; i++)
         {
-            unsigned short vcmGroup    = (group_id == nullptr ? 0 : group_id[i]);
-            unsigned short freezeGroup = mdatoms.cFREEZE[i];
+            unsigned short vcmGroup    = (group_id.empty() ? 0 : group_id[i]);
+            unsigned short freezeGroup = cFREEZE[i];
             for (int d = 0; d < numDimensions; d++)
             {
                 if (vcm.nFreeze[freezeGroup][d] == 0)
@@ -286,7 +289,7 @@ static void doStopComMotionLinear(const t_mdatoms& mdatoms, gmx::ArrayRef<gmx::R
             }
         }
     }
-    else if (group_id == nullptr)
+    else if (group_id.empty())
     { // NOLINT bugprone-branch-clone This is actually a clang-tidy bug
 #pragma omp for schedule(static)
         for (int i = 0; i < homenr; i++)
@@ -323,16 +326,16 @@ static void doStopComMotionLinear(const t_mdatoms& mdatoms, gmx::ArrayRef<gmx::R
  * \param[in]     vcm       VCM data
  */
 template<int numDimensions>
-static void doStopComMotionAccelerationCorrection(int                      homenr,
-                                                  const unsigned short*    group_id,
-                                                  gmx::ArrayRef<gmx::RVec> x,
-                                                  gmx::ArrayRef<gmx::RVec> v,
-                                                  const t_vcm&             vcm)
+static void doStopComMotionAccelerationCorrection(int                                 homenr,
+                                                  gmx::ArrayRef<const unsigned short> group_id,
+                                                  gmx::ArrayRef<gmx::RVec>            x,
+                                                  gmx::ArrayRef<gmx::RVec>            v,
+                                                  const t_vcm&                        vcm)
 {
     const real xCorrectionFactor = 0.5 * vcm.timeStep;
 
     // NOLINTNEXTLINE bugprone-branch-clone This is actually a clang-tidy bug
-    if (group_id == nullptr)
+    if (group_id.empty())
     {
 #pragma omp for schedule(static)
         for (int i = 0; i < homenr; i++)
@@ -359,7 +362,7 @@ static void doStopComMotionAccelerationCorrection(int                      homen
     }
 }
 
-static void do_stopcm_grp(const t_mdatoms&         mdatoms,
+static void do_stopcm_grp(const gmx::MDAtoms&      mdatoms,
                           gmx::ArrayRef<gmx::RVec> x,
                           gmx::ArrayRef<gmx::RVec> v,
                           const t_vcm&             vcm)
@@ -369,8 +372,8 @@ static void do_stopcm_grp(const t_mdatoms&         mdatoms,
         return;
     }
     {
-        const int             homenr   = mdatoms.homenr;
-        const unsigned short* group_id = mdatoms.cVCM;
+        const int homenr   = mdatoms.homenr();
+        auto      group_id = mdatoms.cVCM();
 
         int gmx_unused nth = gmx_omp_nthreads_get(ModuleMultiThread::Default);
         // homenr could be shared, but gcc-8 & gcc-9 don't agree how to write that...
@@ -417,7 +420,7 @@ static void do_stopcm_grp(const t_mdatoms&         mdatoms,
 #pragma omp for schedule(static)
                 for (int i = 0; i < homenr; i++)
                 {
-                    if (group_id)
+                    if (!group_id.empty())
                     {
                         g = group_id[i];
                     }
@@ -608,7 +611,7 @@ static void process_and_check_cm_grp(FILE* fp, t_vcm* vcm, real Temp_Max)
 
 void process_and_stopcm_grp(FILE*                    fplog,
                             t_vcm*                   vcm,
-                            const t_mdatoms&         mdatoms,
+                            const gmx::MDAtoms&      mdatoms,
                             gmx::ArrayRef<gmx::RVec> x,
                             gmx::ArrayRef<gmx::RVec> v)
 {

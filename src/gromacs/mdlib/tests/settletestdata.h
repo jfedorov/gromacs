@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -80,7 +80,7 @@ public:
     //! Atom masses
     std::vector<real> masses_;
     //! Reciprocal masses
-    std::vector<real> inverseMasses_;
+    PaddedVector<real> inverseMasses_;
     //! Local topology
     std::unique_ptr<InteractionDefinitions> idef_;
 

@@ -80,6 +80,7 @@
 #include "gromacs/mdlib/force_flags.h"
 #include "gromacs/mdlib/forcerec.h"
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
+#include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/update.h"
 #include "gromacs/mdlib/vsite.h"
 #include "gromacs/mdlib/wall.h"
@@ -188,7 +189,7 @@ static void pull_potential_wrapper(const t_commrec*               cr,
                                    const matrix                   box,
                                    gmx::ArrayRef<const gmx::RVec> x,
                                    gmx::ForceWithVirial*          force,
-                                   const t_mdatoms*               mdatoms,
+                                   const gmx::MDAtoms*            mdatoms,
                                    gmx_enerdata_t*                enerd,
                                    pull_t*                        pull_work,
                                    const real*                    lambda,
@@ -206,7 +207,7 @@ static void pull_potential_wrapper(const t_commrec*               cr,
     dvdl = 0;
     enerd->term[F_COM_PULL] +=
             pull_potential(pull_work,
-                           gmx::arrayRefFromArray(mdatoms->massT, mdatoms->nr),
+                           mdatoms->massT(),
                            &pbc,
                            cr,
                            t,
@@ -261,7 +262,7 @@ static void pme_receive_force_ener(t_forcerec*           fr,
 }
 
 static void print_large_forces(FILE*                fp,
-                               const t_mdatoms*     md,
+                               const gmx::MDAtoms*  md,
                                const t_commrec*     cr,
                                int64_t              step,
                                real                 forceTolerance,
@@ -270,7 +271,7 @@ static void print_large_forces(FILE*                fp,
 {
     real       force2Tolerance = gmx::square(forceTolerance);
     gmx::index numNonFinite    = 0;
-    for (int i = 0; i < md->homenr; i++)
+    for (int i = 0; i < md->homenr(); i++)
     {
         real force2    = norm2(f[i]);
         bool nonFinite = !std::isfinite(force2);
@@ -307,7 +308,7 @@ static void postProcessForceWithShiftForces(t_nrnb*                   nrnb,
                                             ArrayRef<const RVec>      x,
                                             ForceOutputs*             forceOutputs,
                                             tensor                    vir_force,
-                                            const t_mdatoms&          mdatoms,
+                                            const gmx::MDAtoms&       mdatoms,
                                             const t_forcerec&         fr,
                                             gmx::VirtualSitesHandler* vsite,
                                             const StepWorkload&       stepWork)
@@ -334,7 +335,7 @@ static void postProcessForceWithShiftForces(t_nrnb*                   nrnb,
     {
         /* Calculation of the virial must be done after vsites! */
         calc_virial(
-                0, mdatoms.homenr, as_rvec_array(x.data()), forceWithShiftForces, vir_force, box, nrnb, &fr, fr.pbcType);
+                0, mdatoms.homenr(), as_rvec_array(x.data()), forceWithShiftForces, vir_force, box, nrnb, &fr, fr.pbcType);
     }
 }
 
@@ -347,7 +348,7 @@ static void postProcessForces(const t_commrec*          cr,
                               ArrayRef<const RVec>      x,
                               ForceOutputs*             forceOutputs,
                               tensor                    vir_force,
-                              const t_mdatoms*          mdatoms,
+                              const gmx::MDAtoms*       mdatoms,
                               const t_forcerec*         fr,
                               gmx::VirtualSitesHandler* vsite,
                               const StepWorkload&       stepWork)
@@ -637,7 +638,7 @@ static void computeSpecialForces(FILE*                          fplog,
                                  gmx::ForceProviders*           forceProviders,
                                  const matrix                   box,
                                  gmx::ArrayRef<const gmx::RVec> x,
-                                 const t_mdatoms*               mdatoms,
+                                 const gmx::MDAtoms*            mdatoms,
                                  gmx::ArrayRef<const real>      lambda,
                                  const StepWorkload&            stepWork,
                                  gmx::ForceWithVirial*          forceWithVirialMtsLevel0,
@@ -652,13 +653,7 @@ static void computeSpecialForces(FILE*                          fplog,
     if (stepWork.computeForces)
     {
         gmx::ForceProviderInput forceProviderInput(
-                x,
-                mdatoms->homenr,
-                gmx::arrayRefFromArray(mdatoms->chargeA, mdatoms->homenr),
-                gmx::arrayRefFromArray(mdatoms->massT, mdatoms->homenr),
-                t,
-                box,
-                *cr);
+                x, mdatoms->homenr(), mdatoms->chargeA(), mdatoms->massT(), t, box, *cr);
         gmx::ForceProviderOutput forceProviderOutput(forceWithVirialMtsLevel0, enerd);
 
         /* Collect forces from modules */
@@ -690,17 +685,16 @@ static void computeSpecialForces(FILE*                          fplog,
             }
 
             auto& forceWithVirial = (mtsLevel == 0) ? forceWithVirialMtsLevel0 : forceWithVirialMtsLevel1;
-            enerd->term[F_COM_PULL] += awh->applyBiasForcesAndUpdateBias(
-                    inputrec.pbcType,
-                    gmx::arrayRefFromArray(mdatoms->massT, mdatoms->nr),
-                    foreignLambdaDeltaH,
-                    foreignLambdaDhDl,
-                    box,
-                    forceWithVirial,
-                    t,
-                    step,
-                    wcycle,
-                    fplog);
+            enerd->term[F_COM_PULL] += awh->applyBiasForcesAndUpdateBias(inputrec.pbcType,
+                                                                         mdatoms->massT(),
+                                                                         foreignLambdaDeltaH,
+                                                                         foreignLambdaDhDl,
+                                                                         box,
+                                                                         forceWithVirial,
+                                                                         t,
+                                                                         step,
+                                                                         wcycle,
+                                                                         fplog);
         }
     }
     /* Add the forces from enforced rotation potentials (if any) */
@@ -904,7 +898,7 @@ static DomainLifetimeWorkload setupDomainLifetimeWorkload(const t_inputrec&     
                                                           const t_forcerec&         fr,
                                                           const pull_t*             pull_work,
                                                           const gmx_edsam*          ed,
-                                                          const t_mdatoms&          mdatoms,
+                                                          const gmx::MDAtoms&       mdatoms,
                                                           const SimulationWorkload& simulationWork,
                                                           const StepWorkload&       stepWork)
 {
@@ -928,7 +922,7 @@ static DomainLifetimeWorkload setupDomainLifetimeWorkload(const t_inputrec&     
     domainWork.haveGpuBondedWork = ((fr.gpuBonded != nullptr) && fr.gpuBonded->haveInteractions());
     // Note that haveFreeEnergyWork is constant over the whole run
     domainWork.haveFreeEnergyWork =
-            (fr.efep != FreeEnergyPerturbationType::No && mdatoms.nPerturbed != 0);
+            (fr.efep != FreeEnergyPerturbationType::No && mdatoms.havePerturbed());
     // We assume we have local force work if there are CPU
     // force tasks including PME or nonbondeds.
     domainWork.haveCpuLocalForceWork =
@@ -1211,7 +1205,7 @@ void do_force(FILE*                               fplog,
               const history_t*                    hist,
               gmx::ForceBuffersView*              forceView,
               tensor                              vir_force,
-              const t_mdatoms*                    mdatoms,
+              const gmx::MDAtoms&                 mdatoms,
               gmx_enerdata_t*                     enerd,
               gmx::ArrayRef<const real>           lambda,
               t_forcerec*                         fr,
@@ -1266,9 +1260,9 @@ void do_force(FILE*                               fplog,
         {
             put_atoms_in_box_omp(fr->pbcType,
                                  box,
-                                 x.unpaddedArrayRef().subArray(0, mdatoms->homenr),
+                                 x.unpaddedArrayRef().subArray(0, mdatoms.homenr()),
                                  gmx_omp_nthreads_get(ModuleMultiThread::Default));
-            inc_nrnb(nrnb, eNR_SHIFTX, mdatoms->homenr);
+            inc_nrnb(nrnb, eNR_SHIFTX, mdatoms.homenr());
         }
     }
 
@@ -1317,8 +1311,8 @@ void do_force(FILE*                               fplog,
         if (stepWork.doNeighborSearch)
         {
             // TODO refactor this to do_md, after partitioning.
-            stateGpu->reinit(mdatoms->homenr,
-                             cr->dd != nullptr ? dd_numAtomsZones(*cr->dd) : mdatoms->homenr);
+            stateGpu->reinit(mdatoms.homenr(),
+                             cr->dd != nullptr ? dd_numAtomsZones(*cr->dd) : mdatoms.homenr());
             if (stepWork.haveGpuPmeOnThisRank)
             {
                 // TODO: This should be moved into PME setup function ( pme_gpu_prepare_computation(...) )
@@ -1392,7 +1386,7 @@ void do_force(FILE*                               fplog,
                               vzero,
                               boxDiagonal,
                               nullptr,
-                              { 0, mdatoms->homenr },
+                              { 0, mdatoms.homenr() },
                               -1,
                               fr->cginfo,
                               x.unpaddedArrayRef(),
@@ -1407,9 +1401,7 @@ void do_force(FILE*                               fplog,
             wallcycle_sub_stop(wcycle, WallCycleSubCounter::NBSGridNonLocal);
         }
 
-        nbv->setAtomProperties(gmx::constArrayRefFromArray(mdatoms->typeA, mdatoms->nr),
-                               gmx::constArrayRefFromArray(mdatoms->chargeA, mdatoms->nr),
-                               fr->cginfo);
+        nbv->setAtomProperties(mdatoms.typeA(), mdatoms.chargeA(), fr->cginfo);
 
         wallcycle_stop(wcycle, WallCycleCounter::NS);
 
@@ -1444,7 +1436,7 @@ void do_force(FILE*                               fplog,
         // Need to run after the GPU-offload bonded interaction lists
         // are set up to be able to determine whether there is bonded work.
         runScheduleWork->domainWork = setupDomainLifetimeWorkload(
-                inputrec, *fr, pull_work, ed, *mdatoms, simulationWork, stepWork);
+                inputrec, *fr, pull_work, ed, mdatoms, simulationWork, stepWork);
 
         wallcycle_start_nocount(wcycle, WallCycleCounter::NS);
         wallcycle_sub_start(wcycle, WallCycleSubCounter::NBSSearchLocal);
@@ -1665,13 +1657,11 @@ void do_force(FILE*                               fplog,
         gmx::ArrayRef<const gmx::RVec> xRef =
                 (xWholeMolecules.empty() ? x.unpaddedArrayRef() : xWholeMolecules);
         calc_mu(start,
-                mdatoms->homenr,
+                mdatoms.homenr(),
                 xRef,
-                mdatoms->chargeA ? gmx::arrayRefFromArray(mdatoms->chargeA, mdatoms->nr)
-                                 : gmx::ArrayRef<real>{},
-                mdatoms->chargeB ? gmx::arrayRefFromArray(mdatoms->chargeB, mdatoms->nr)
-                                 : gmx::ArrayRef<real>{},
-                mdatoms->nChargePerturbed != 0,
+                mdatoms.chargeA(),
+                mdatoms.chargeB(),
+                mdatoms.havePerturbedCharges(),
                 dipoleData.muStaging[0],
                 dipoleData.muStaging[1]);
 
@@ -1773,14 +1763,10 @@ void do_force(FILE*                               fplog,
                 fr->shift_vec,
                 fr->nbfp,
                 fr->ljpme_c6grid,
-                mdatoms->chargeA ? gmx::arrayRefFromArray(mdatoms->chargeA, mdatoms->nr)
-                                 : gmx::ArrayRef<real>{},
-                mdatoms->chargeB ? gmx::arrayRefFromArray(mdatoms->chargeB, mdatoms->nr)
-                                 : gmx::ArrayRef<real>{},
-                mdatoms->typeA ? gmx::arrayRefFromArray(mdatoms->typeA, mdatoms->nr)
-                               : gmx::ArrayRef<int>{},
-                mdatoms->typeB ? gmx::arrayRefFromArray(mdatoms->typeB, mdatoms->nr)
-                               : gmx::ArrayRef<int>{},
+                mdatoms.chargeA(),
+                mdatoms.chargeB(),
+                mdatoms.typeA(),
+                mdatoms.typeB(),
                 inputrec.fepvals.get(),
                 lambda,
                 enerd,
@@ -1800,14 +1786,10 @@ void do_force(FILE*                               fplog,
                     fr->shift_vec,
                     fr->nbfp,
                     fr->ljpme_c6grid,
-                    mdatoms->chargeA ? gmx::arrayRefFromArray(mdatoms->chargeA, mdatoms->nr)
-                                     : gmx::ArrayRef<real>{},
-                    mdatoms->chargeB ? gmx::arrayRefFromArray(mdatoms->chargeB, mdatoms->nr)
-                                     : gmx::ArrayRef<real>{},
-                    mdatoms->typeA ? gmx::arrayRefFromArray(mdatoms->typeA, mdatoms->nr)
-                                   : gmx::ArrayRef<int>{},
-                    mdatoms->typeB ? gmx::arrayRefFromArray(mdatoms->typeB, mdatoms->nr)
-                                   : gmx::ArrayRef<int>{},
+                    mdatoms.chargeA(),
+                    mdatoms.chargeB(),
+                    mdatoms.typeA(),
+                    mdatoms.typeB(),
                     inputrec.fepvals.get(),
                     lambda,
                     enerd,
@@ -1862,14 +1844,11 @@ void do_force(FILE*                               fplog,
         real dvdl_walls = do_walls(inputrec,
                                    *fr,
                                    box,
-                                   mdatoms->typeA ? gmx::arrayRefFromArray(mdatoms->typeA, mdatoms->nr)
-                                                  : gmx::ArrayRef<int>{},
-                                   mdatoms->typeB ? gmx::arrayRefFromArray(mdatoms->typeB, mdatoms->nr)
-                                                  : gmx::ArrayRef<int>{},
-                                   mdatoms->cENER ? gmx::arrayRefFromArray(mdatoms->cENER, mdatoms->nr)
-                                                  : gmx::ArrayRef<unsigned short>{},
-                                   mdatoms->homenr,
-                                   mdatoms->nPerturbed,
+                                   mdatoms.typeA(),
+                                   mdatoms.typeB(),
+                                   mdatoms.cENER(),
+                                   mdatoms.homenr(),
+                                   mdatoms.havePerturbed(),
                                    x.unpaddedConstArrayRef(),
                                    &forceOutMtsLevel0.forceWithVirial(),
                                    lambda[static_cast<int>(FreeEnergyPerturbationCouplingType::Vdw)],
@@ -1978,7 +1957,7 @@ void do_force(FILE*                               fplog,
                          fr->forceProviders,
                          box,
                          x.unpaddedArrayRef(),
-                         mdatoms,
+                         &mdatoms,
                          lambda,
                          stepWork,
                          &forceOutMtsLevel0.forceWithVirial(),
@@ -2070,7 +2049,7 @@ void do_force(FILE*                               fplog,
              && !(stepWork.computeVirial || simulationWork.useGpuNonbonded || stepWork.haveGpuPmeOnThisRank));
     if (combineMtsForcesBeforeHaloExchange)
     {
-        const int numAtoms = havePPDomainDecomposition(cr) ? dd_numAtomsZones(*cr->dd) : mdatoms->homenr;
+        const int numAtoms = havePPDomainDecomposition(cr) ? dd_numAtomsZones(*cr->dd) : mdatoms.homenr();
         combineMtsForces(numAtoms,
                          force.unpaddedArrayRef(),
                          forceView->forceMtsCombined(),
@@ -2293,12 +2272,12 @@ void do_force(FILE*                               fplog,
     if (stepWork.computeForces)
     {
         postProcessForceWithShiftForces(
-                nrnb, wcycle, box, x.unpaddedArrayRef(), &forceOutMtsLevel0, vir_force, *mdatoms, *fr, vsite, stepWork);
+                nrnb, wcycle, box, x.unpaddedArrayRef(), &forceOutMtsLevel0, vir_force, mdatoms, *fr, vsite, stepWork);
 
         if (fr->useMts && stepWork.computeSlowForces && !haveCombinedMtsForces)
         {
             postProcessForceWithShiftForces(
-                    nrnb, wcycle, box, x.unpaddedArrayRef(), forceOutMtsLevel1, vir_force, *mdatoms, *fr, vsite, stepWork);
+                    nrnb, wcycle, box, x.unpaddedArrayRef(), forceOutMtsLevel1, vir_force, mdatoms, *fr, vsite, stepWork);
         }
     }
 
@@ -2326,14 +2305,14 @@ void do_force(FILE*                               fplog,
          */
         ForceOutputs& forceOutCombined = (haveCombinedMtsForces ? forceOutMts.value() : forceOutMtsLevel0);
         postProcessForces(
-                cr, step, nrnb, wcycle, box, x.unpaddedArrayRef(), &forceOutCombined, vir_force, mdatoms, fr, vsite, stepWork);
+                cr, step, nrnb, wcycle, box, x.unpaddedArrayRef(), &forceOutCombined, vir_force, &mdatoms, fr, vsite, stepWork);
 
         if (fr->useMts && stepWork.computeSlowForces && !haveCombinedMtsForces)
         {
             postProcessForces(
-                    cr, step, nrnb, wcycle, box, x.unpaddedArrayRef(), forceOutMtsLevel1, vir_force, mdatoms, fr, vsite, stepWork);
+                    cr, step, nrnb, wcycle, box, x.unpaddedArrayRef(), forceOutMtsLevel1, vir_force, &mdatoms, fr, vsite, stepWork);
 
-            combineMtsForces(mdatoms->homenr,
+            combineMtsForces(mdatoms.homenr(),
                              force.unpaddedArrayRef(),
                              forceView->forceMtsCombined(),
                              inputrec.mtsLevels[1].stepFactor);

@@ -98,7 +98,6 @@
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/interaction_const.h"
 #include "gromacs/mdtypes/md_enums.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/mdrunoptions.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/pbcutil/pbc.h"
@@ -261,7 +260,7 @@ static void print_converged(FILE*             fp,
 //! Compute the norm and max of the force array in parallel
 static void get_f_norm_max(const t_commrec*               cr,
                            const t_grpopts*               opts,
-                           t_mdatoms*                     mdatoms,
+                           gmx::MDAtoms*                  mdatoms,
                            gmx::ArrayRef<const gmx::RVec> f,
                            real*                          fnorm,
                            real*                          fmax,
@@ -274,16 +273,17 @@ static void get_f_norm_max(const t_commrec*               cr,
     /* This routine finds the largest force and returns it.
      * On parallel machines the global max is taken.
      */
-    fnorm2 = 0;
-    fmax2  = 0;
-    la_max = -1;
-    start  = 0;
-    end    = mdatoms->homenr;
-    if (mdatoms->cFREEZE)
+    fnorm2       = 0;
+    fmax2        = 0;
+    la_max       = -1;
+    start        = 0;
+    end          = mdatoms->homenr();
+    auto cFREEZE = mdatoms->cFREEZE();
+    if (!cFREEZE.empty())
     {
         for (i = start; i < end; i++)
         {
-            gf  = mdatoms->cFREEZE[i];
+            gf  = cFREEZE[i];
             fam = 0;
             for (m = 0; m < DIM; m++)
             {
@@ -357,7 +357,7 @@ static void get_f_norm_max(const t_commrec*               cr,
 }
 
 //! Compute the norm of the force
-static void get_state_f_norm_max(const t_commrec* cr, const t_grpopts* opts, t_mdatoms* mdatoms, em_state_t* ems)
+static void get_state_f_norm_max(const t_commrec* cr, const t_grpopts* opts, gmx::MDAtoms* mdatoms, em_state_t* ems)
 {
     get_f_norm_max(cr, opts, mdatoms, ems->f.view().force(), &ems->fnorm, &ems->fmax, &ems->a_fmax);
 }
@@ -470,7 +470,7 @@ static void init_em(FILE*                fplog,
                 cr, *ir, top_global, top, fr, &ems->f, mdAtoms, constr, vsite, shellfc ? *shellfc : nullptr);
     }
 
-    update_mdatoms(mdAtoms->mdatoms(), ems->s.lambda[FreeEnergyPerturbationCouplingType::Mass]);
+    mdAtoms->adjustToLambda(ems->s.lambda[FreeEnergyPerturbationCouplingType::Mass]);
 
     if (constr)
     {
@@ -634,7 +634,7 @@ static void write_em_traj(FILE*               fplog,
 // \returns true when the step succeeded, false when a constraint error occurred
 static bool do_em_step(const t_commrec*                          cr,
                        const t_inputrec*                         ir,
-                       t_mdatoms*                                md,
+                       gmx::MDAtoms*                             md,
                        em_state_t*                               ems1,
                        real                                      a,
                        gmx::ArrayRefWithPadding<const gmx::RVec> force,
@@ -676,7 +676,7 @@ static bool do_em_step(const t_commrec*                          cr,
     copy_mat(s1->box, s2->box);
 
     start = 0;
-    end   = md->homenr;
+    end   = md->homenr();
 
     nthreads = gmx_omp_nthreads_get(ModuleMultiThread::Update);
 #pragma omp parallel num_threads(nthreads)
@@ -685,15 +685,16 @@ static bool do_em_step(const t_commrec*                          cr,
         rvec*       x2 = s2->x.rvec_array();
         const rvec* f  = as_rvec_array(force.unpaddedArrayRef().data());
 
-        int gf = 0;
+        int  gf      = 0;
+        auto cFREEZE = md->cFREEZE();
 #pragma omp for schedule(static) nowait
         for (int i = start; i < end; i++)
         {
             try
             {
-                if (md->cFREEZE)
+                if (!cFREEZE.empty())
                 {
-                    gf = md->cFREEZE[i];
+                    gf = cFREEZE[i];
                 }
                 for (int m = 0; m < DIM; m++)
                 {
@@ -972,7 +973,7 @@ void EnergyEvaluator::run(em_state_t* ems, rvec mu_tot, tensor vir, tensor pres,
     {
         // We need to generate a new pairlist when one atom moved more than half the buffer size
         ArrayRef<const RVec> localCoordinates =
-                ArrayRef<const RVec>(ems->s.x).subArray(0, mdAtoms->mdatoms()->homenr);
+                ArrayRef<const RVec>(ems->s.x).subArray(0, mdAtoms->homenr());
         bNS = 2 * maxCoordinateDifference(pairSearchCoordinates, localCoordinates, cr->mpi_comm_mygroup)
               > bufferSize;
     }
@@ -989,7 +990,7 @@ void EnergyEvaluator::run(em_state_t* ems, rvec mu_tot, tensor vir, tensor pres,
     if (bufferSize > 0 && bNS)
     {
         ArrayRef<const RVec> localCoordinates =
-                constArrayRefFromArray(ems->s.x.data(), mdAtoms->mdatoms()->homenr);
+                constArrayRefFromArray(ems->s.x.data(), mdAtoms->homenr());
         setCoordinates(&pairSearchCoordinates, localCoordinates);
     }
 
@@ -1014,7 +1015,7 @@ void EnergyEvaluator::run(em_state_t* ems, rvec mu_tot, tensor vir, tensor pres,
              &ems->s.hist,
              &ems->f.view(),
              force_vir,
-             mdAtoms->mdatoms(),
+             *mdAtoms,
              enerd,
              ems->s.lambda,
              fr,
@@ -1111,7 +1112,7 @@ void EnergyEvaluator::run(em_state_t* ems, rvec mu_tot, tensor vir, tensor pres,
 
     if (EI_ENERGY_MINIMIZATION(inputrec->eI))
     {
-        get_state_f_norm_max(cr, &(inputrec->opts), mdAtoms->mdatoms(), ems);
+        get_state_f_norm_max(cr, &(inputrec->opts), mdAtoms, ems);
     }
 }
 
@@ -1181,7 +1182,7 @@ static double reorder_partsum(const t_commrec*  cr,
 //! Print some stuff, like beta, whatever that means.
 static real pr_beta(const t_commrec*  cr,
                     const t_grpopts*  opts,
-                    t_mdatoms*        mdatoms,
+                    gmx::MDAtoms*     mdatoms,
                     const gmx_mtop_t& top_global,
                     const em_state_t* s_min,
                     const em_state_t* s_b)
@@ -1203,11 +1204,12 @@ static real pr_beta(const t_commrec*  cr,
         /* This part of code can be incorrect with DD,
          * since the atom ordering in s_b and s_min might differ.
          */
-        for (int i = 0; i < mdatoms->homenr; i++)
+        auto cFREEZE = mdatoms->cFREEZE();
+        for (int i = 0; i < mdatoms->homenr(); i++)
         {
-            if (mdatoms->cFREEZE)
+            if (!cFREEZE.empty())
             {
-                gf = mdatoms->cFREEZE[i];
+                gf = cFREEZE[i];
             }
             for (int m = 0; m < DIM; m++)
             {
@@ -1251,7 +1253,6 @@ void LegacySimulator::do_cg()
     tensor            vir, pres;
     int               number_steps, neval = 0, nstcg = inputrec->nstcgsteep;
     int               m, step, nminstep;
-    auto*             mdatoms = mdAtoms->mdatoms();
 
     GMX_LOG(mdlog.info)
             .asParagraph()
@@ -1361,7 +1362,7 @@ void LegacySimulator::do_cg()
         energyOutput.addDataAtEnergyStep(false,
                                          false,
                                          static_cast<double>(step),
-                                         mdatoms->tmass,
+                                         mdAtoms->tmass(),
                                          enerd,
                                          nullptr,
                                          nullptr,
@@ -1407,15 +1408,16 @@ void LegacySimulator::do_cg()
          */
 
         /* Calculate the new direction in p, and the gradient in this direction, gpa */
-        gmx::ArrayRef<gmx::RVec>       pm  = s_min->s.cg_p;
-        gmx::ArrayRef<const gmx::RVec> sfm = s_min->f.view().force();
-        double                         gpa = 0;
-        int                            gf  = 0;
-        for (int i = 0; i < mdatoms->homenr; i++)
+        gmx::ArrayRef<gmx::RVec>       pm      = s_min->s.cg_p;
+        gmx::ArrayRef<const gmx::RVec> sfm     = s_min->f.view().force();
+        double                         gpa     = 0;
+        int                            gf      = 0;
+        auto                           cFREEZE = mdAtoms->cFREEZE();
+        for (int i = 0; i < mdAtoms->homenr(); i++)
         {
-            if (mdatoms->cFREEZE)
+            if (!cFREEZE.empty())
             {
-                gf = mdatoms->cFREEZE[i];
+                gf = cFREEZE[i];
             }
             for (m = 0; m < DIM; m++)
             {
@@ -1439,7 +1441,7 @@ void LegacySimulator::do_cg()
         }
 
         /* Calculate the norm of the search vector */
-        get_f_norm_max(cr, &(inputrec->opts), mdatoms, pm, &pnorm, nullptr, nullptr);
+        get_f_norm_max(cr, &(inputrec->opts), mdAtoms, pm, &pnorm, nullptr, nullptr);
 
         /* Just in case stepsize reaches zero due to numerical precision... */
         if (stepsize <= 0)
@@ -1465,7 +1467,7 @@ void LegacySimulator::do_cg()
          */
         minstep      = 0;
         auto s_min_x = makeArrayRef(s_min->s.x);
-        for (int i = 0; i < mdatoms->homenr; i++)
+        for (int i = 0; i < mdAtoms->homenr(); i++)
         {
             for (m = 0; m < DIM; m++)
             {
@@ -1541,7 +1543,7 @@ void LegacySimulator::do_cg()
         }
 
         /* Take a trial step (new coords in s_c) */
-        do_em_step(cr, inputrec, mdatoms, s_min, c, s_min->s.cg_p.constArrayRefWithPadding(), s_c, constr, -1);
+        do_em_step(cr, inputrec, mdAtoms, s_min, c, s_min->s.cg_p.constArrayRefWithPadding(), s_c, constr, -1);
 
         neval++;
         /* Calculate energy for the trial step */
@@ -1551,7 +1553,7 @@ void LegacySimulator::do_cg()
         const rvec*                    pc  = s_c->s.cg_p.rvec_array();
         gmx::ArrayRef<const gmx::RVec> sfc = s_c->f.view().force();
         double                         gpc = 0;
-        for (int i = 0; i < mdatoms->homenr; i++)
+        for (int i = 0; i < mdAtoms->homenr(); i++)
         {
             for (m = 0; m < DIM; m++)
             {
@@ -1656,7 +1658,7 @@ void LegacySimulator::do_cg()
                 }
 
                 /* Take a trial step to this new point - new coords in s_b */
-                do_em_step(cr, inputrec, mdatoms, s_min, b, s_min->s.cg_p.constArrayRefWithPadding(), s_b, constr, -1);
+                do_em_step(cr, inputrec, mdAtoms, s_min, b, s_min->s.cg_p.constArrayRefWithPadding(), s_b, constr, -1);
 
                 neval++;
                 /* Calculate energy for the trial step */
@@ -1668,7 +1670,7 @@ void LegacySimulator::do_cg()
                 const rvec*                    pb  = s_b->s.cg_p.rvec_array();
                 gmx::ArrayRef<const gmx::RVec> sfb = s_b->f.view().force();
                 gpb                                = 0;
-                for (int i = 0; i < mdatoms->homenr; i++)
+                for (int i = 0; i < mdAtoms->homenr(); i++)
                 {
                     for (m = 0; m < DIM; m++)
                     {
@@ -1777,7 +1779,7 @@ void LegacySimulator::do_cg()
             /* Polak-Ribiere update.
              * Change to fnorm2/fnorm2_old for Fletcher-Reeves
              */
-            beta = pr_beta(cr, &inputrec->opts, mdatoms, top_global, s_min, s_b);
+            beta = pr_beta(cr, &inputrec->opts, mdAtoms, top_global, s_min, s_b);
         }
         /* Limit beta to prevent oscillations */
         if (fabs(beta) > 5.0)
@@ -1810,7 +1812,7 @@ void LegacySimulator::do_cg()
             energyOutput.addDataAtEnergyStep(false,
                                              false,
                                              static_cast<double>(step),
-                                             mdatoms->tmass,
+                                             mdAtoms->tmass(),
                                              enerd,
                                              nullptr,
                                              nullptr,
@@ -1939,7 +1941,6 @@ void LegacySimulator::do_lbfgs()
     em_state_t         ems;
     gmx_localtop_t     top(top_global.ffparams);
     gmx_global_stat_t  gstat;
-    auto*              mdatoms = mdAtoms->mdatoms();
 
     GMX_LOG(mdlog.info)
             .asParagraph()
@@ -2029,7 +2030,7 @@ void LegacySimulator::do_lbfgs()
                                    mdModulesNotifiers);
 
     const int start = 0;
-    const int end   = mdatoms->homenr;
+    const int end   = mdAtoms->homenr();
 
     /* We need 4 working states */
     em_state_t  s0{}, s1{}, s2{}, s3{};
@@ -2050,12 +2051,13 @@ void LegacySimulator::do_lbfgs()
 
     /* Create a 3*natoms index to tell whether each degree of freedom is frozen */
     std::vector<bool> frozen(n);
-    int               gf = 0;
+    int               gf      = 0;
+    auto              cFREEZE = mdAtoms->cFREEZE();
     for (int i = start; i < end; i++)
     {
-        if (mdatoms->cFREEZE)
+        if (!cFREEZE.empty())
         {
-            gf = mdatoms->cFREEZE[i];
+            gf = cFREEZE[i];
         }
         for (int m = 0; m < DIM; m++)
         {
@@ -2096,7 +2098,7 @@ void LegacySimulator::do_lbfgs()
         energyOutput.addDataAtEnergyStep(false,
                                          false,
                                          static_cast<double>(step),
-                                         mdatoms->tmass,
+                                         mdAtoms->tmass(),
                                          enerd,
                                          nullptr,
                                          nullptr,
@@ -2618,7 +2620,7 @@ void LegacySimulator::do_lbfgs()
             energyOutput.addDataAtEnergyStep(false,
                                              false,
                                              static_cast<double>(step),
-                                             mdatoms->tmass,
+                                             mdAtoms->tmass(),
                                              enerd,
                                              nullptr,
                                              nullptr,
@@ -2746,7 +2748,6 @@ void LegacySimulator::do_steep()
     int               nsteps;
     int               count          = 0;
     int               steps_accepted = 0;
-    auto*             mdatoms        = mdAtoms->mdatoms();
 
     GMX_LOG(mdlog.info)
             .asParagraph()
@@ -2848,7 +2849,7 @@ void LegacySimulator::do_steep()
         if (count > 0)
         {
             validStep = do_em_step(
-                    cr, inputrec, mdatoms, s_min, stepsize, s_min->f.view().forceWithPadding(), s_try, constr, count);
+                    cr, inputrec, mdAtoms, s_min, stepsize, s_min->f.view().forceWithPadding(), s_try, constr, count);
         }
 
         if (validStep)
@@ -2894,7 +2895,7 @@ void LegacySimulator::do_steep()
                 energyOutput.addDataAtEnergyStep(false,
                                                  false,
                                                  static_cast<double>(count),
-                                                 mdatoms->tmass,
+                                                 mdAtoms->tmass(),
                                                  enerd,
                                                  nullptr,
                                                  nullptr,
@@ -3062,11 +3063,10 @@ void LegacySimulator::do_nm()
     real*               full_matrix   = nullptr;
 
     /* added with respect to mdrun */
-    int   row, col;
-    real  der_range = 10.0 * std::sqrt(GMX_REAL_EPS);
-    real  x_min;
-    bool  bIsMaster = MASTER(cr);
-    auto* mdatoms   = mdAtoms->mdatoms();
+    int  row, col;
+    real der_range = 10.0 * std::sqrt(GMX_REAL_EPS);
+    real x_min;
+    bool bIsMaster = MASTER(cr);
 
     GMX_LOG(mdlog.info)
             .asParagraph()
@@ -3206,7 +3206,7 @@ void LegacySimulator::do_nm()
     cr->nnodes = nnodes;
 
     /* if forces are not small, warn user */
-    get_state_f_norm_max(cr, &(inputrec->opts), mdatoms, &state_work);
+    get_state_f_norm_max(cr, &(inputrec->opts), mdAtoms, &state_work);
 
     GMX_LOG(mdlog.warning).appendTextFormatted("Maximum force:%12.5e", state_work.fmax);
     if (state_work.fmax > 1.0e-3)
@@ -3281,7 +3281,7 @@ void LegacySimulator::do_nm()
                                         &state_work.s.hist,
                                         &state_work.f.view(),
                                         vir,
-                                        *mdatoms,
+                                        *mdAtoms,
                                         nrnb,
                                         wcycle,
                                         shellfc,

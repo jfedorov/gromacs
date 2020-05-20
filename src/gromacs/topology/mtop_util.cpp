@@ -839,7 +839,7 @@ static void sortFreeEnergyInteractionsAtEnd(const gmx_mtop_t& mtop, InteractionD
         qA[index]           = local.q;
         qB[index]           = local.qB;
     }
-    gmx_sort_ilist_fe(idef, qA.data(), qB.data());
+    gmx_sort_ilist_fe(idef, qA, qB);
 }
 
 static void gen_local_top(const gmx_mtop_t& mtop,

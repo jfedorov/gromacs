@@ -48,7 +48,6 @@
 #include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/interaction_const.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
@@ -77,13 +76,15 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
 {
     bool usingDomDec = DOMAINDECOMP(cr);
 
-    int numAtomIndex;
-    int numHomeAtoms;
-    int numTotalAtoms;
+    int                      numAtomIndex;
+    gmx::ArrayRef<const int> atomIndex;
+    int                      numHomeAtoms;
+    int                      numTotalAtoms;
 
     if (usingDomDec)
     {
         numAtomIndex  = dd_natoms_mdatoms(*cr->dd);
+        atomIndex     = cr->dd->globalAtomIndices;
         numHomeAtoms  = dd_numHomeAtoms(*cr->dd);
         numTotalAtoms = dd_natoms_mdatoms(*cr->dd);
     }
@@ -99,17 +100,15 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
         force->resize(numTotalAtoms);
     }
 
-    atoms2md(top_global,
-             inputrec,
-             numAtomIndex,
-             usingDomDec ? cr->dd->globalAtomIndices : std::vector<int>(),
-             numHomeAtoms,
-             mdAtoms);
+    mdAtoms->reinitialize(top_global,
+                          inputrec,
+                          numAtomIndex,
+                          usingDomDec ? cr->dd->globalAtomIndices : std::vector<int>(),
+                          numHomeAtoms);
 
-    t_mdatoms* mdatoms = mdAtoms->mdatoms();
     if (usingDomDec)
     {
-        dd_sort_local_top(*cr->dd, mdatoms, top);
+        dd_sort_local_top(*cr->dd, mdAtoms, top);
     }
     else
     {
@@ -118,10 +117,7 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
 
     if (vsite)
     {
-        vsite->setVirtualSites(top->idef.il,
-                               mdatoms->nr,
-                               mdatoms->homenr,
-                               gmx::arrayRefFromArray(mdatoms->ptype, mdatoms->nr));
+        vsite->setVirtualSites(top->idef.il, mdAtoms->nr(), mdAtoms->homenr(), mdAtoms->ptype());
     }
 
     /* Note that with DD only flexible constraints, not shells, are supported
@@ -132,7 +128,7 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
      */
     if (!usingDomDec && shellfc)
     {
-        make_local_shells(cr, *mdatoms, shellfc);
+        make_local_shells(cr, *mdAtoms, shellfc);
     }
 
     for (auto& listedForces : fr->listedForces)
@@ -146,25 +142,19 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
          * For PME-only ranks, gmx_pmeonly() has its own call to gmx_pme_reinit_atoms().
          */
         const int numPmeAtoms = numHomeAtoms - fr->n_tpi;
-        gmx_pme_reinit_atoms(fr->pmedata,
-                             numPmeAtoms,
-                             mdatoms->chargeA ? gmx::arrayRefFromArray(mdatoms->chargeA, mdatoms->nr)
-                                              : gmx::ArrayRef<real>{},
-                             mdatoms->chargeB ? gmx::arrayRefFromArray(mdatoms->chargeB, mdatoms->nr)
-                                              : gmx::ArrayRef<real>{});
+        gmx_pme_reinit_atoms(fr->pmedata, numPmeAtoms, mdAtoms->chargeA(), mdAtoms->chargeB());
     }
 
     if (constr)
     {
         constr->setConstraints(top,
-                               mdatoms->nr,
-                               mdatoms->homenr,
-                               gmx::arrayRefFromArray(mdatoms->massT, mdatoms->nr),
-                               gmx::arrayRefFromArray(mdatoms->invmass, mdatoms->nr),
-                               mdatoms->nMassPerturbed != 0,
-                               mdatoms->lambda,
-                               mdatoms->cFREEZE ? gmx::arrayRefFromArray(mdatoms->cFREEZE, mdatoms->nr)
-                                                : gmx::ArrayRef<const unsigned short>());
+                               mdAtoms->nr(),
+                               mdAtoms->homenr(),
+                               mdAtoms->massT(),
+                               mdAtoms->invmass().paddedConstArrayRef(),
+                               mdAtoms->havePerturbedMasses(),
+                               mdAtoms->lambda(),
+                               mdAtoms->cFREEZE());
     }
 }
 

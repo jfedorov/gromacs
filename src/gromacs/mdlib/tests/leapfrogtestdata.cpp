@@ -83,11 +83,10 @@ LeapFrogTestData::LeapFrogTestData(int        numAtoms,
     f_(numAtoms),
     inverseMasses_(numAtoms),
     inverseMassesPerDim_(numAtoms),
+    ptype_(numAtoms),
     kineticEnergyData_(numTCoupleGroups == 0 ? 1 : numTCoupleGroups, 0.0, 1),
     numTCoupleGroups_(numTCoupleGroups)
 {
-    mdAtoms_.nr = numAtoms_;
-
     for (int i = 0; i < numAtoms_; i++)
     {
         // Typical PBC box size is tens of nanometers
@@ -113,11 +112,9 @@ LeapFrogTestData::LeapFrogTestData(int        numAtoms,
             inverseMassesPerDim_[i][d] = inverseMasses_[i];
         }
     }
-    mdAtoms_.invmass       = inverseMasses_.data();
-    mdAtoms_.invMassPerDim = as_rvec_array(inverseMassesPerDim_.data());
 
     // Temperature coupling
-    snew(mdAtoms_.cTC, numAtoms_);
+    cTC_.resize(numAtoms_);
 
     // To do temperature coupling at each step
     inputRecord_.nsttcouple = 1;
@@ -127,7 +124,7 @@ LeapFrogTestData::LeapFrogTestData(int        numAtoms,
         inputRecord_.etc = TemperatureCoupling::No;
         for (int i = 0; i < numAtoms_; i++)
         {
-            mdAtoms_.cTC[i] = 0;
+            cTC_[i] = 0;
         }
         t_grp_tcstat temperatureCouplingGroupData;
         temperatureCouplingGroupData.lambda = 1.0;
@@ -138,7 +135,7 @@ LeapFrogTestData::LeapFrogTestData(int        numAtoms,
         inputRecord_.etc = TemperatureCoupling::Yes;
         for (int i = 0; i < numAtoms_; i++)
         {
-            mdAtoms_.cTC[i] = i % numTCoupleGroups_;
+            cTC_[i] = i % numTCoupleGroups_;
         }
         for (int i = 0; i < numTCoupleGroups_; i++)
         {
@@ -166,15 +163,10 @@ LeapFrogTestData::LeapFrogTestData(int        numAtoms,
     state_.box[ZZ][YY] = 0.0;
     state_.box[ZZ][ZZ] = 10.0;
 
-    mdAtoms_.homenr                   = numAtoms_;
-    mdAtoms_.haveVsites               = false;
-    mdAtoms_.havePartiallyFrozenAtoms = false;
-    mdAtoms_.cFREEZE                  = nullptr;
+    kineticEnergyData_.cosacc.cos_accel = 0.0;
 
     update_ = std::make_unique<Update>(inputRecord_, nullptr);
-    update_->updateAfterPartition(numAtoms,
-                                  gmx::ArrayRef<const unsigned short>(),
-                                  gmx::arrayRefFromArray(mdAtoms_.cTC, mdAtoms_.nr));
+    update_->updateAfterPartition(numAtoms, gmx::ArrayRef<const unsigned short>(), cTC_);
 
     doPressureCouple_ = (nstpcouple != 0);
 
@@ -213,10 +205,7 @@ LeapFrogTestData::LeapFrogTestData(int        numAtoms,
     }
 }
 
-LeapFrogTestData::~LeapFrogTestData()
-{
-    sfree(mdAtoms_.cTC);
-}
+LeapFrogTestData::~LeapFrogTestData() = default;
 
 } // namespace test
 } // namespace gmx

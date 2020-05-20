@@ -57,32 +57,32 @@ namespace gmx
 namespace test
 {
 
-ConstraintsTestData::ConstraintsTestData(const std::string&       title,
-                                         int                      numAtoms,
-                                         std::vector<real>        masses,
-                                         std::vector<int>         constraints,
-                                         std::vector<real>        constraintsR0,
-                                         bool                     computeVirial,
-                                         tensor                   virialScaledRef,
-                                         bool                     compute_dHdLambda,
-                                         float                    dHdLambdaRef,
-                                         real                     initialTime,
-                                         real                     timestep,
-                                         const std::vector<RVec>& x,
-                                         const std::vector<RVec>& xPrime,
-                                         const std::vector<RVec>& v,
-                                         real                     shakeTolerance,
-                                         gmx_bool                 shakeUseSOR,
-                                         int                      lincsNumIterations,
-                                         int                      lincsExpansionOrder,
-                                         real                     lincsWarnAngle)
+ConstraintsTestData::ConstraintsTestData(const std::string&   title,
+                                         int                  numAtoms,
+                                         std::vector<real>    masses,
+                                         std::vector<int>     constraints,
+                                         std::vector<real>    constraintsR0,
+                                         bool                 computeVirial,
+                                         tensor               virialScaledRef,
+                                         bool                 compute_dHdLambda,
+                                         float                dHdLambdaRef,
+                                         real                 initialTime,
+                                         real                 timestep,
+                                         ArrayRef<const RVec> x,
+                                         ArrayRef<const RVec> xPrime,
+                                         ArrayRef<const RVec> v,
+                                         real                 shakeTolerance,
+                                         gmx_bool             shakeUseSOR,
+                                         int                  lincsNumIterations,
+                                         int                  lincsExpansionOrder,
+                                         real                 lincsWarnAngle)
 {
     title_    = title;    // Human-friendly name of the system
     numAtoms_ = numAtoms; // Number of atoms
 
     // Masses of atoms
     masses_ = masses;
-    invmass_.resize(numAtoms); // Vector of inverse masses
+    invmass_.resizeWithPadding(numAtoms); // Vector of inverse masses
 
     for (int i = 0; i < numAtoms; i++)
     {

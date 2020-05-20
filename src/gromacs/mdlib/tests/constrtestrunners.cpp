@@ -62,6 +62,7 @@
 #include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/constr.h"
 #include "gromacs/mdlib/lincs.h"
+#include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/shake.h"
 #include "gromacs/mdrunutility/multisim.h"
 #include "gromacs/mdtypes/commrec.h"

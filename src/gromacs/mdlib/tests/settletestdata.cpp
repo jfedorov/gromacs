@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2014,2015,2016,2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2014,2015,2016,2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -123,7 +123,7 @@ SettleTestData::SettleTestData(int numSettles) :
             static_cast<t_atom*>(calloc(numSettles * atomsPerSettle_, sizeof(t_atom)));
     numAtoms_ = numSettles * atomsPerSettle_;
     masses_.resize(numAtoms_);
-    inverseMasses_.resize(numAtoms_);
+    inverseMasses_.resizeWithPadding(numAtoms_);
     for (int i = 0; i < numSettles; ++i)
     {
         masses_[i * atomsPerSettle_ + 0] = oxygenMass_;

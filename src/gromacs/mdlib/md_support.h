@@ -59,6 +59,7 @@ namespace gmx
 template<typename T>
 class ArrayRef;
 class Constraints;
+class MDAtoms;
 class MDLogger;
 class SimulationSignaller;
 } // namespace gmx
@@ -120,7 +121,7 @@ void compute_globals(gmx_global_stat*               gstat,
                      gmx::ArrayRef<const gmx::RVec> x,
                      gmx::ArrayRef<const gmx::RVec> v,
                      const matrix                   box,
-                     const t_mdatoms*               mdatoms,
+                     const gmx::MDAtoms&            mdatoms,
                      t_nrnb*                        nrnb,
                      t_vcm*                         vcm,
                      gmx_wallcycle*                 wcycle,

@@ -76,6 +76,7 @@ template<typename>
 class ArrayRef;
 class ForceWithVirial;
 class LocalAtomSetManager;
+class MDAtoms;
 } // namespace gmx
 
 /*! \brief Returns the units of the pull coordinate.

@@ -52,7 +52,6 @@
 #include "gromacs/mdtypes/checkpointdata.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/inputrec.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/pbcutil/boxutilities.h"
 
 #include "energydata.h"
@@ -71,7 +70,7 @@ ParrinelloRahmanBarostat::ParrinelloRahmanBarostat(int                  nstpcoup
                                                    EnergyData*          energyData,
                                                    FILE*                fplog,
                                                    const t_inputrec*    inputrec,
-                                                   const MDAtoms*       mdAtoms) :
+                                                   const MDAtoms&       mdAtoms) :
     nstpcouple_(nstpcouple),
     offset_(offset),
     couplingTimeStep_(couplingTimeStep),
@@ -167,8 +166,8 @@ void ParrinelloRahmanBarostat::scaleBoxAndPositions()
 
     // Scale the coordinates
     const int start  = 0;
-    const int homenr = mdAtoms_->mdatoms()->homenr;
-    auto*     x      = as_rvec_array(statePropagatorData_->positionsView().paddedArrayRef().data());
+    const int homenr = mdAtoms_.homenr();
+    auto      x      = as_rvec_array(statePropagatorData_->positionsView().paddedArrayRef().data());
     for (int n = start; n < start + homenr; n++)
     {
         tmvmul_ur0(mu_, x[n], x[n]);
@@ -343,7 +342,7 @@ ISimulatorElement* ParrinelloRahmanBarostat::getElementPointerImpl(
             energyData,
             legacySimulatorData->fplog,
             legacySimulatorData->inputrec,
-            legacySimulatorData->mdAtoms));
+            *legacySimulatorData->mdAtoms));
     auto* barostat = static_cast<ParrinelloRahmanBarostat*>(element);
     builderHelper->registerTemperaturePressureControl(
             [barostat, propagatorTag](const PropagatorConnection& connection) {

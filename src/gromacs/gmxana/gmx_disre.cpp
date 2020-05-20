@@ -64,7 +64,6 @@
 #include "gromacs/mdtypes/fcdata.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/md_enums.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/pbcutil/rmpbc.h"
@@ -874,8 +873,8 @@ int gmx_disre(int argc, char* argv[])
     }
 
     auto mdAtoms = gmx::makeMDAtoms(fplog, *topInfo.mtop(), *ir, false);
-    atoms2md(*topInfo.mtop(), *ir, -1, {}, ntopatoms, mdAtoms.get());
-    update_mdatoms(mdAtoms->mdatoms(), ir->fepvals->init_lambda);
+    mdAtoms->reinitialize(*topInfo.mtop(), *ir, -1, {}, ntopatoms);
+    mdAtoms->adjustToLambda(ir->fepvals->init_lambda);
     if (ir->pbcType != PbcType::No)
     {
         gpbc = gmx_rmpbc_init(idef, ir->pbcType, natoms);

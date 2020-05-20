@@ -57,7 +57,6 @@ struct t_commrec;
 struct t_forcerec;
 struct t_inputrec;
 struct t_lambda;
-struct t_mdatoms;
 struct t_nrnb;
 
 namespace gmx
@@ -71,6 +70,7 @@ class ForceBuffersView;
 class ForceWithVirial;
 class ImdSession;
 class MdrunScheduleWorkload;
+class MDAtoms;
 class MDLogger;
 class StepWorkload;
 class VirtualSitesHandler;
@@ -106,7 +106,7 @@ void do_force(FILE*                               log,
               const history_t*                    hist,
               gmx::ForceBuffersView*              force,
               tensor                              vir_force,
-              const t_mdatoms*                    mdatoms,
+              const gmx::MDAtoms&                 mdatoms,
               gmx_enerdata_t*                     enerd,
               gmx::ArrayRef<const real>           lambda,
               t_forcerec*                         fr,
@@ -138,7 +138,7 @@ void calculateLongRangeNonbondeds(t_forcerec*                    fr,
                                   const t_commrec*               cr,
                                   t_nrnb*                        nrnb,
                                   gmx_wallcycle*                 wcycle,
-                                  const t_mdatoms*               md,
+                                  const gmx::MDAtoms&            md,
                                   gmx::ArrayRef<const gmx::RVec> coordinates,
                                   gmx::ForceWithVirial*          forceWithVirial,
                                   gmx_enerdata_t*                enerd,

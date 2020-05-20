@@ -52,6 +52,8 @@
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/timing/wallcycle.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/fatalerror.h"
 
 #include "modularsimulator.h"
 #include "simulatoralgorithm.h"
@@ -77,7 +79,7 @@ static void inline updateVelocities(int                      a,
                                     real                     dt,
                                     real                     lambdaStart,
                                     real                     lambdaEnd,
-                                    const rvec* gmx_restrict invMassPerDim,
+                                    ArrayRef<const RVec>     invMassPerDim,
                                     rvec* gmx_restrict       v,
                                     const rvec* gmx_restrict f,
                                     const rvec               diagPR,
@@ -197,7 +199,7 @@ void Propagator<IntegrationStage::PositionsOnly>::run()
     const auto* v = as_rvec_array(statePropagatorData_->constVelocitiesView().paddedArrayRef().data());
 
     int nth    = gmx_omp_nthreads_get(ModuleMultiThread::Update);
-    int homenr = mdAtoms_->mdatoms()->homenr;
+    int homenr = mdAtoms_.homenr();
 
 #pragma omp parallel for num_threads(nth) schedule(static) default(none) shared(nth, homenr, x, xp, v)
     for (int th = 0; th < nth; th++)
@@ -232,11 +234,12 @@ void Propagator<IntegrationStage::ScalePositions>::run()
     const real lambda =
             (numPositionScalingValues == NumPositionScalingValues::Single) ? positionScaling_[0] : 1.0;
 
-    int nth    = gmx_omp_nthreads_get(ModuleMultiThread::Update);
-    int homenr = mdAtoms_->mdatoms()->homenr;
+    int  nth    = gmx_omp_nthreads_get(ModuleMultiThread::Update);
+    int  homenr = mdAtoms_.homenr();
+    auto cTC    = mdAtoms_.cTC();
 
-#pragma omp parallel for num_threads(nth) schedule(static) default(none) shared(nth, homenr, x) \
-        firstprivate(lambda)
+#pragma omp parallel for num_threads(nth) schedule(static) default(none) \
+        shared(nth, homenr, x, cTC) firstprivate(lambda)
     for (int th = 0; th < nth; th++)
     {
         try
@@ -249,7 +252,7 @@ void Propagator<IntegrationStage::ScalePositions>::run()
                 scalePositions<numPositionScalingValues>(
                         a,
                         (numPositionScalingValues == NumPositionScalingValues::Multiple)
-                                ? positionScaling_[mdAtoms_->mdatoms()->cTC[a]]
+                                ? positionScaling_[cTC[a]]
                                 : lambda,
                         x);
             }
@@ -271,7 +274,7 @@ void Propagator<IntegrationStage::VelocitiesOnly>::run()
 
     auto*       v = as_rvec_array(statePropagatorData_->velocitiesView().paddedArrayRef().data());
     const auto* f = as_rvec_array(statePropagatorData_->constForcesView().force().data());
-    const auto* invMassPerDim = mdAtoms_->mdatoms()->invMassPerDim;
+    auto  invMassPerDim = mdAtoms_.invMassPerDim();
 
     const real lambdaStart = (numStartVelocityScalingValues == NumVelocityScalingValues::Single)
                                      ? startVelocityScaling_[0]
@@ -284,7 +287,7 @@ void Propagator<IntegrationStage::VelocitiesOnly>::run()
             diagonalizePRMatrix<parrinelloRahmanVelocityScaling>(matrixPR_, diagPR_);
 
     const int nth    = gmx_omp_nthreads_get(ModuleMultiThread::Update);
-    const int homenr = mdAtoms_->mdatoms()->homenr;
+    const int homenr = mdAtoms_.homenr();
 
 // const variables could be shared, but gcc-8 & gcc-9 don't agree how to write that...
 // https://www.gnu.org/software/gcc/gcc-9/porting_to.html -> OpenMP data sharing
@@ -297,6 +300,7 @@ void Propagator<IntegrationStage::VelocitiesOnly>::run()
             int start_th, end_th;
             getThreadAtomRange(nth, th, homenr, &start_th, &end_th);
 
+            auto cTC = mdAtoms_.cTC();
             for (int a = start_th; a < end_th; a++)
             {
                 if (isFullScalingMatrixDiagonal)
@@ -305,10 +309,10 @@ void Propagator<IntegrationStage::VelocitiesOnly>::run()
                             a,
                             timestep_,
                             numStartVelocityScalingValues == NumVelocityScalingValues::Multiple
-                                    ? startVelocityScaling_[mdAtoms_->mdatoms()->cTC[a]]
+                                    ? startVelocityScaling_[cTC[a]]
                                     : lambdaStart,
                             numEndVelocityScalingValues == NumVelocityScalingValues::Multiple
-                                    ? endVelocityScaling_[mdAtoms_->mdatoms()->cTC[a]]
+                                    ? endVelocityScaling_[cTC[a]]
                                     : lambdaEnd,
                             invMassPerDim,
                             v,
@@ -322,10 +326,10 @@ void Propagator<IntegrationStage::VelocitiesOnly>::run()
                             a,
                             timestep_,
                             numStartVelocityScalingValues == NumVelocityScalingValues::Multiple
-                                    ? startVelocityScaling_[mdAtoms_->mdatoms()->cTC[a]]
+                                    ? startVelocityScaling_[cTC[a]]
                                     : lambdaStart,
                             numEndVelocityScalingValues == NumVelocityScalingValues::Multiple
-                                    ? endVelocityScaling_[mdAtoms_->mdatoms()->cTC[a]]
+                                    ? endVelocityScaling_[cTC[a]]
                                     : lambdaEnd,
                             invMassPerDim,
                             v,
@@ -354,7 +358,7 @@ void Propagator<IntegrationStage::LeapFrog>::run()
     const auto* x = as_rvec_array(statePropagatorData_->constPositionsView().paddedArrayRef().data());
     auto*       v = as_rvec_array(statePropagatorData_->velocitiesView().paddedArrayRef().data());
     const auto* f = as_rvec_array(statePropagatorData_->constForcesView().force().data());
-    const auto* invMassPerDim = mdAtoms_->mdatoms()->invMassPerDim;
+    auto invMassPerDim = mdAtoms_.invMassPerDim();
 
     const real lambdaStart = (numStartVelocityScalingValues == NumVelocityScalingValues::Single)
                                      ? startVelocityScaling_[0]
@@ -367,7 +371,7 @@ void Propagator<IntegrationStage::LeapFrog>::run()
             diagonalizePRMatrix<parrinelloRahmanVelocityScaling>(matrixPR_, diagPR_);
 
     const int nth    = gmx_omp_nthreads_get(ModuleMultiThread::Update);
-    const int homenr = mdAtoms_->mdatoms()->homenr;
+    const int homenr = mdAtoms_.homenr();
 
 // const variables could be shared, but gcc-8 & gcc-9 don't agree how to write that...
 // https://www.gnu.org/software/gcc/gcc-9/porting_to.html -> OpenMP data sharing
@@ -381,6 +385,7 @@ void Propagator<IntegrationStage::LeapFrog>::run()
             int start_th, end_th;
             getThreadAtomRange(nth, th, homenr, &start_th, &end_th);
 
+            auto cTC = mdAtoms_.cTC();
             for (int a = start_th; a < end_th; a++)
             {
                 if (isFullScalingMatrixDiagonal)
@@ -389,10 +394,10 @@ void Propagator<IntegrationStage::LeapFrog>::run()
                             a,
                             timestep_,
                             numStartVelocityScalingValues == NumVelocityScalingValues::Multiple
-                                    ? startVelocityScaling_[mdAtoms_->mdatoms()->cTC[a]]
+                                    ? startVelocityScaling_[cTC[a]]
                                     : lambdaStart,
                             numEndVelocityScalingValues == NumVelocityScalingValues::Multiple
-                                    ? endVelocityScaling_[mdAtoms_->mdatoms()->cTC[a]]
+                                    ? endVelocityScaling_[cTC[a]]
                                     : lambdaEnd,
                             invMassPerDim,
                             v,
@@ -406,10 +411,10 @@ void Propagator<IntegrationStage::LeapFrog>::run()
                             a,
                             timestep_,
                             numStartVelocityScalingValues == NumVelocityScalingValues::Multiple
-                                    ? startVelocityScaling_[mdAtoms_->mdatoms()->cTC[a]]
+                                    ? startVelocityScaling_[cTC[a]]
                                     : lambdaStart,
                             numEndVelocityScalingValues == NumVelocityScalingValues::Multiple
-                                    ? endVelocityScaling_[mdAtoms_->mdatoms()->cTC[a]]
+                                    ? endVelocityScaling_[cTC[a]]
                                     : lambdaEnd,
                             invMassPerDim,
                             v,
@@ -439,7 +444,7 @@ void Propagator<IntegrationStage::VelocityVerletPositionsAndVelocities>::run()
     const auto* x = as_rvec_array(statePropagatorData_->constPositionsView().paddedArrayRef().data());
     auto*       v = as_rvec_array(statePropagatorData_->velocitiesView().paddedArrayRef().data());
     const auto* f = as_rvec_array(statePropagatorData_->constForcesView().force().data());
-    const auto* invMassPerDim = mdAtoms_->mdatoms()->invMassPerDim;
+    auto invMassPerDim = mdAtoms_.invMassPerDim();
 
     const real lambdaStart = (numStartVelocityScalingValues == NumVelocityScalingValues::Single)
                                      ? startVelocityScaling_[0]
@@ -452,7 +457,7 @@ void Propagator<IntegrationStage::VelocityVerletPositionsAndVelocities>::run()
             diagonalizePRMatrix<parrinelloRahmanVelocityScaling>(matrixPR_, diagPR_);
 
     const int nth    = gmx_omp_nthreads_get(ModuleMultiThread::Update);
-    const int homenr = mdAtoms_->mdatoms()->homenr;
+    const int homenr = mdAtoms_.homenr();
 
 // const variables could be shared, but gcc-8 & gcc-9 don't agree how to write that...
 // https://www.gnu.org/software/gcc/gcc-9/porting_to.html -> OpenMP data sharing
@@ -466,6 +471,7 @@ void Propagator<IntegrationStage::VelocityVerletPositionsAndVelocities>::run()
             int start_th, end_th;
             getThreadAtomRange(nth, th, homenr, &start_th, &end_th);
 
+            auto cTC = mdAtoms_.cTC();
             for (int a = start_th; a < end_th; a++)
             {
                 if (isFullScalingMatrixDiagonal)
@@ -474,10 +480,10 @@ void Propagator<IntegrationStage::VelocityVerletPositionsAndVelocities>::run()
                             a,
                             0.5 * timestep_,
                             numStartVelocityScalingValues == NumVelocityScalingValues::Multiple
-                                    ? startVelocityScaling_[mdAtoms_->mdatoms()->cTC[a]]
+                                    ? startVelocityScaling_[cTC[a]]
                                     : lambdaStart,
                             numEndVelocityScalingValues == NumVelocityScalingValues::Multiple
-                                    ? endVelocityScaling_[mdAtoms_->mdatoms()->cTC[a]]
+                                    ? endVelocityScaling_[cTC[a]]
                                     : lambdaEnd,
                             invMassPerDim,
                             v,
@@ -491,10 +497,10 @@ void Propagator<IntegrationStage::VelocityVerletPositionsAndVelocities>::run()
                             a,
                             0.5 * timestep_,
                             numStartVelocityScalingValues == NumVelocityScalingValues::Multiple
-                                    ? startVelocityScaling_[mdAtoms_->mdatoms()->cTC[a]]
+                                    ? startVelocityScaling_[cTC[a]]
                                     : lambdaStart,
                             numEndVelocityScalingValues == NumVelocityScalingValues::Multiple
-                                    ? endVelocityScaling_[mdAtoms_->mdatoms()->cTC[a]]
+                                    ? endVelocityScaling_[cTC[a]]
                                     : lambdaEnd,
                             invMassPerDim,
                             v,
@@ -531,11 +537,12 @@ void Propagator<IntegrationStage::ScaleVelocities>::run()
                                      : 1.0;
 
     const int nth    = gmx_omp_nthreads_get(ModuleMultiThread::Update);
-    const int homenr = mdAtoms_->mdatoms()->homenr;
+    const int homenr = mdAtoms_.homenr();
+    auto      cTC    = mdAtoms_.cTC();
 
 // const variables could be shared, but gcc-8 & gcc-9 don't agree how to write that...
 // https://www.gnu.org/software/gcc/gcc-9/porting_to.html -> OpenMP data sharing
-#pragma omp parallel for num_threads(nth) schedule(static) default(none) shared(v) \
+#pragma omp parallel for num_threads(nth) schedule(static) default(none) shared(v, cTC) \
         firstprivate(nth, homenr, lambdaStart)
     for (int th = 0; th < nth; th++)
     {
@@ -550,7 +557,7 @@ void Propagator<IntegrationStage::ScaleVelocities>::run()
                 scaleVelocities<numStartVelocityScalingValues>(
                         a,
                         numStartVelocityScalingValues == NumVelocityScalingValues::Multiple
-                                ? startVelocityScaling_[mdAtoms_->mdatoms()->cTC[a]]
+                                ? startVelocityScaling_[cTC[a]]
                                 : lambdaStart,
                         v);
             }
@@ -563,7 +570,7 @@ void Propagator<IntegrationStage::ScaleVelocities>::run()
 template<IntegrationStage integrationStage>
 Propagator<integrationStage>::Propagator(double               timestep,
                                          StatePropagatorData* statePropagatorData,
-                                         const MDAtoms*       mdAtoms,
+                                         const MDAtoms&       mdAtoms,
                                          gmx_wallcycle*       wcycle) :
     timestep_(timestep),
     statePropagatorData_(statePropagatorData),
@@ -984,7 +991,7 @@ ISimulatorElement* Propagator<integrationStage>::getElementPointerImpl(
                                || (timestep == 0.0),
                        "Scaling elements don't propagate the system.");
     auto* element    = builderHelper->storeElement(std::make_unique<Propagator<integrationStage>>(
-            timestep, statePropagatorData, legacySimulatorData->mdAtoms, legacySimulatorData->wcycle));
+            timestep, statePropagatorData, *legacySimulatorData->mdAtoms, legacySimulatorData->wcycle));
     auto* propagator = static_cast<Propagator<integrationStage>*>(element);
     builderHelper->registerPropagator(getConnection<integrationStage>(propagator, propagatorTag));
     return element;

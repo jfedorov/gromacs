@@ -98,7 +98,7 @@ void FirstOrderPressureCoupling::scaleBoxAndCoordinates()
     const bool scaleCoordinates = true;
     // Atom range
     const int startAtom = 0;
-    const int numAtoms  = mdAtoms_->mdatoms()->homenr;
+    const int numAtoms  = mdAtoms_->homenr();
 
     pressureCouplingScaleBoxAndCoordinates<pressureCouplingType>(
             inputrec_, boxScalingMatrix_, box, boxRel_, startAtom, numAtoms, positions, velocities, cFreeze, nrnb_, scaleCoordinates);

@@ -63,6 +63,7 @@ enum class ParticleType : int;
 
 namespace gmx
 {
+class MDAtoms;
 class RangePartitioning;
 template<typename T>
 class ArrayRef;

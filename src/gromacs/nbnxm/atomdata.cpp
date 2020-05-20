@@ -48,6 +48,7 @@
 #include "gromacs/math/utilities.h"
 #include "gromacs/math/vec.h"
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
+#include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdtypes/forcerec.h" // only for GET_CGINFO_*
 #include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/nbnxm/nbnxm.h"

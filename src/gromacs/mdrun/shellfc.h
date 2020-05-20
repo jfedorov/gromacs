@@ -56,7 +56,6 @@ class history_t;
 struct pull_t;
 struct t_forcerec;
 struct t_inputrec;
-struct t_mdatoms;
 struct t_nrnb;
 class t_state;
 
@@ -70,6 +69,7 @@ class Constraints;
 class ForceBuffersView;
 class ImdSession;
 class MdrunScheduleWorkload;
+class MDAtoms;
 class VirtualSitesHandler;
 } // namespace gmx
 
@@ -114,7 +114,7 @@ void relax_shell_flexcon(FILE*                               log,
                          const history_t*                    hist,
                          gmx::ForceBuffersView*              f,
                          tensor                              force_vir,
-                         const t_mdatoms&                    md,
+                         const gmx::MDAtoms&                 md,
                          t_nrnb*                             nrnb,
                          gmx_wallcycle*                      wcycle,
                          gmx_shellfc_t*                      shfc,

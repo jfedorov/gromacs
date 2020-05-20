@@ -65,12 +65,12 @@
 #include "gromacs/math/vec.h"
 #include "gromacs/mdlib/forcerec.h"
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
+#include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/vsite.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/md_enums.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/pbcutil/mshift.h"
 #include "gromacs/pbcutil/pbc.h"
@@ -1849,11 +1849,11 @@ int dd_make_local_top(gmx_domdec_t*        dd,
     return numBondedInteractionsToReduce;
 }
 
-void dd_sort_local_top(const gmx_domdec_t& dd, const t_mdatoms* mdatoms, gmx_localtop_t* ltop)
+void dd_sort_local_top(const gmx_domdec_t& dd, const gmx::MDAtoms* mdatoms, gmx_localtop_t* ltop)
 {
     if (dd.reverse_top->doSorting())
     {
-        gmx_sort_ilist_fe(&ltop->idef, mdatoms->chargeA, mdatoms->chargeB);
+        gmx_sort_ilist_fe(&ltop->idef, mdatoms->chargeA(), mdatoms->chargeB());
     }
     else
     {

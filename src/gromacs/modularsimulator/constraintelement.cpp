@@ -68,7 +68,7 @@ ConstraintsElement<variable>::ConstraintsElement(Constraints*                con
                                                  bool                        isMaster,
                                                  FILE*                       fplog,
                                                  const t_inputrec*           inputrec,
-                                                 const t_mdatoms*            mdAtoms) :
+                                                 const MDAtoms&              mdAtoms) :
     nextVirialCalculationStep_(-1),
     nextEnergyWritingStep_(-1),
     nextLogWritingStep_(-1),
@@ -248,7 +248,7 @@ ISimulatorElement* ConstraintsElement<variable>::getElementPointerImpl(
                                                            MASTER(legacySimulatorData->cr),
                                                            legacySimulatorData->fplog,
                                                            legacySimulatorData->inputrec,
-                                                           legacySimulatorData->mdAtoms->mdatoms()));
+                                                           *legacySimulatorData->mdAtoms));
 }
 
 // Explicit template initializations

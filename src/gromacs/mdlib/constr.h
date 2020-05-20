@@ -76,6 +76,7 @@ template<typename T>
 class ArrayRefWithPadding;
 template<typename>
 class ListOfLists;
+class MDAtoms;
 
 //! Describes supported flavours of constrained updates.
 enum class ConstraintVariable : int

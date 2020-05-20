@@ -49,6 +49,8 @@
 
 namespace gmx
 {
+template<typename>
+class ArrayRef;
 class MDModules;
 struct MDModulesNotifiers;
 } // namespace gmx

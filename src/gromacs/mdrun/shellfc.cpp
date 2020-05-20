@@ -62,6 +62,7 @@
 #include "gromacs/mdlib/force.h"
 #include "gromacs/mdlib/force_flags.h"
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
+#include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/vsite.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/enerdata.h"
@@ -69,7 +70,6 @@
 #include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/md_enums.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/topology/ifunc.h"
@@ -535,7 +535,7 @@ gmx_shellfc_t* init_shell_flexcon(FILE*             fplog,
     return shfc;
 }
 
-void gmx::make_local_shells(const t_commrec* cr, const t_mdatoms& md, gmx_shellfc_t* shfc)
+void gmx::make_local_shells(const t_commrec* cr, const gmx::MDAtoms& md, gmx_shellfc_t* shfc)
 {
     int           a0, a1;
     gmx_domdec_t* dd = nullptr;
@@ -558,7 +558,7 @@ void gmx::make_local_shells(const t_commrec* cr, const t_mdatoms& md, gmx_shellf
 
     std::vector<t_shell>& shells = shfc->shells;
     shells.clear();
-    auto* ptype = md.ptype;
+    auto ptype = md.ptype();
     for (int i = a0; i < a1; i++)
     {
         if (ptype[i] == ParticleType::Shell)
@@ -819,7 +819,7 @@ static void init_adir(gmx_shellfc_t*            shfc,
                       const t_commrec*          cr,
                       int                       dd_ac1,
                       int64_t                   step,
-                      const t_mdatoms&          md,
+                      const gmx::MDAtoms&       md,
                       int                       end,
                       ArrayRefWithPadding<RVec> xOld,
                       ArrayRef<RVec>            x_init,
@@ -848,9 +848,9 @@ static void init_adir(gmx_shellfc_t*            shfc,
     rvec* x_old = as_rvec_array(xOld.paddedArrayRef().data());
     rvec* x     = as_rvec_array(xCurrent.paddedArrayRef().data());
 
-    auto* ptype   = md.ptype;
-    auto  invmass = gmx::arrayRefFromArray(md.invmass, md.nr);
-    dt            = ir->delta_t;
+    auto ptype   = md.ptype();
+    auto invmass = md.invmass().paddedConstArrayRef();
+    dt           = ir->delta_t;
 
     /* Does NOT work with freeze groups (yet) */
     for (n = 0; n < end; n++)
@@ -955,7 +955,7 @@ void relax_shell_flexcon(FILE*                         fplog,
                          const history_t*              hist,
                          gmx::ForceBuffersView*        f,
                          tensor                        force_vir,
-                         const t_mdatoms&              md,
+                         const gmx::MDAtoms&           md,
                          t_nrnb*                       nrnb,
                          gmx_wallcycle*                wcycle,
                          gmx_shellfc_t*                shfc,
@@ -971,7 +971,7 @@ void relax_shell_flexcon(FILE*                         fplog,
     real dum = 0;
     char sbuf[22];
     int  nat, dd_ac0, dd_ac1 = 0, i;
-    int  homenr = md.homenr, end = homenr;
+    int  homenr = md.homenr(), end = homenr;
     int  d, Min = 0, count = 0;
 #define Try (1 - Min) /* At start Try = 1 */
 
@@ -1024,8 +1024,10 @@ void relax_shell_flexcon(FILE*                         fplog,
          * before do_force is called, which normally puts all
          * charge groups in the box.
          */
-        put_atoms_in_box_omp(
-                fr->pbcType, box, x.subArray(0, md.homenr), gmx_omp_nthreads_get(ModuleMultiThread::Default));
+        put_atoms_in_box_omp(fr->pbcType,
+                             box,
+                             x.subArray(0, md.homenr()),
+                             gmx_omp_nthreads_get(ModuleMultiThread::Default));
     }
 
     if (nflexcon)
@@ -1042,7 +1044,7 @@ void relax_shell_flexcon(FILE*                         fplog,
         }
     }
 
-    auto massT = gmx::arrayRefFromArray(md.massT, md.nr);
+    auto massT = md.massT();
     /* Do a prediction of the shell positions, when appropriate.
      * Without velocities (EM, NM, BD) we only do initial prediction.
      */
@@ -1075,7 +1077,7 @@ void relax_shell_flexcon(FILE*                         fplog,
              hist,
              &forceViewInit,
              force_vir,
-             &md,
+             md,
              enerd,
              lambda,
              fr,
@@ -1124,7 +1126,7 @@ void relax_shell_flexcon(FILE*                         fplog,
 
     if (gmx_debug_at)
     {
-        pr_rvecs(debug, 0, "force0", as_rvec_array(force[Min].data()), md.nr);
+        pr_rvecs(debug, 0, "force0", as_rvec_array(force[Min].data()), md.nr());
     }
 
     if (!shells.empty() || nflexcon > 0)
@@ -1215,7 +1217,7 @@ void relax_shell_flexcon(FILE*                         fplog,
                  hist,
                  &forceViewTry,
                  force_vir,
-                 &md,
+                 md,
                  enerd,
                  lambda,
                  fr,

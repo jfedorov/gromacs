@@ -34,7 +34,7 @@
  */
 /*! \internal \file
  *
- * \brief Implements update and constraints class.
+ * \brief Implements update and constraints class using CUDA.
  *
  * The class combines Leap-Frog integrator with LINCS and SETTLE constraints.
  *
@@ -56,26 +56,45 @@
 
 #include <algorithm>
 
+#include "gromacs/gpu_utils/cudautils.cuh"
 #include "gromacs/gpu_utils/device_context.h"
 #include "gromacs/gpu_utils/device_stream.h"
 #include "gromacs/gpu_utils/devicebuffer.h"
-#if GMX_GPU_CUDA
-#    include "gromacs/gpu_utils/gpueventsynchronizer.cuh"
-#elif GMX_GPU_SYCL
-#    include "gromacs/gpu_utils/gpueventsynchronizer_sycl.h"
-#endif
-#include "gromacs/gpu_utils/gputraits.h"
+#include "gromacs/gpu_utils/gpueventsynchronizer.cuh"
+#include "gromacs/gpu_utils/gputraits.cuh"
+#include "gromacs/gpu_utils/vectype_ops.cuh"
 #include "gromacs/mdlib/leapfrog_gpu.h"
 #include "gromacs/mdlib/update_constrain_gpu.h"
-#include "gromacs/mdlib/update_constrain_gpu_internal.h"
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/timing/wallcycle.h"
-#include "gromacs/topology/mtop_util.h"
-
-static constexpr bool sc_haveGpuConstraintSupport = GMX_GPU_CUDA;
 
 namespace gmx
 {
+/*!\brief Number of CUDA threads in a block
+ *
+ * \todo Check if using smaller block size will lead to better performance.
+ */
+constexpr static int c_threadsPerBlock = 256;
+//! Maximum number of threads in a block (for __launch_bounds__)
+constexpr static int c_maxThreadsPerBlock = c_threadsPerBlock;
+
+__launch_bounds__(c_maxThreadsPerBlock) __global__
+        static void scaleCoordinates_kernel(const int numAtoms,
+                                            float3* __restrict__ gm_x,
+                                            const ScalingMatrix scalingMatrix)
+{
+    int threadIndex = blockIdx.x * blockDim.x + threadIdx.x;
+    if (threadIndex < numAtoms)
+    {
+        float3 x = gm_x[threadIndex];
+
+        x.x = scalingMatrix.xx * x.x + scalingMatrix.yx * x.y + scalingMatrix.zx * x.z;
+        x.y = scalingMatrix.yy * x.y + scalingMatrix.zy * x.z;
+        x.z = scalingMatrix.zz * x.z;
+
+        gm_x[threadIndex] = x;
+    }
+}
 
 void UpdateConstrainGpu::Impl::integrate(GpuEventSynchronizer*             fReadyOnDevice,
                                          const real                        dt,
@@ -105,14 +124,11 @@ void UpdateConstrainGpu::Impl::integrate(GpuEventSynchronizer*             fRead
     // Constraints need both coordinates before (d_x_) and after (d_xp_) update. However, after constraints
     // are applied, the d_x_ can be discarded. So we intentionally swap the d_x_ and d_xp_ here to avoid the
     // d_xp_ -> d_x_ copy after constraints. Note that the integrate saves them in the wrong order as well.
-    if (sc_haveGpuConstraintSupport)
-    {
-        lincsGpu_->apply(d_xp_, d_x_, updateVelocities, d_v_, 1.0 / dt, computeVirial, virial, pbcAiuc_);
-        settleGpu_->apply(d_xp_, d_x_, updateVelocities, d_v_, 1.0 / dt, computeVirial, virial, pbcAiuc_);
-    }
+    lincsGpu_->apply(d_xp_, d_x_, updateVelocities, d_v_, 1.0 / dt, computeVirial, virial, pbcAiuc_);
+    settleGpu_->apply(d_xp_, d_x_, updateVelocities, d_v_, 1.0 / dt, computeVirial, virial, pbcAiuc_);
 
     // scaledVirial -> virial (methods above returns scaled values)
-    float scaleFactor = 0.5F / (dt * dt);
+    float scaleFactor = 0.5f / (dt * dt);
     for (int i = 0; i < DIM; i++)
     {
         for (int j = 0; j < DIM; j++)
@@ -125,6 +141,8 @@ void UpdateConstrainGpu::Impl::integrate(GpuEventSynchronizer*             fRead
 
     wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LaunchGpuUpdateConstrain);
     wallcycle_stop(wcycle_, WallCycleCounter::LaunchGpu);
+
+    return;
 }
 
 void UpdateConstrainGpu::Impl::scaleCoordinates(const matrix scalingMatrix)
@@ -134,7 +152,17 @@ void UpdateConstrainGpu::Impl::scaleCoordinates(const matrix scalingMatrix)
 
     ScalingMatrix mu(scalingMatrix);
 
-    launchScaleCoordinatesKernel(numAtoms_, d_x_, mu, deviceStream_);
+    const auto kernelArgs = prepareGpuKernelArguments(
+            scaleCoordinates_kernel, coordinateScalingKernelLaunchConfig_, &numAtoms_, &d_x_, &mu);
+    launchGpuKernel(scaleCoordinates_kernel,
+                    coordinateScalingKernelLaunchConfig_,
+                    deviceStream_,
+                    nullptr,
+                    "scaleCoordinates_kernel",
+                    kernelArgs);
+    // TODO: Although this only happens on the pressure coupling steps, this synchronization
+    //       can affect the performance if nstpcouple is small.
+    deviceStream_.synchronize();
 
     wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LaunchGpuUpdateConstrain);
     wallcycle_stop(wcycle_, WallCycleCounter::LaunchGpu);
@@ -147,7 +175,17 @@ void UpdateConstrainGpu::Impl::scaleVelocities(const matrix scalingMatrix)
 
     ScalingMatrix mu(scalingMatrix);
 
-    launchScaleCoordinatesKernel(numAtoms_, d_v_, mu, deviceStream_);
+    const auto kernelArgs = prepareGpuKernelArguments(
+            scaleCoordinates_kernel, coordinateScalingKernelLaunchConfig_, &numAtoms_, &d_v_, &mu);
+    launchGpuKernel(scaleCoordinates_kernel,
+                    coordinateScalingKernelLaunchConfig_,
+                    deviceStream_,
+                    nullptr,
+                    "scaleCoordinates_kernel",
+                    kernelArgs);
+    // TODO: Although this only happens on the pressure coupling steps, this synchronization
+    //       can affect the performance if nstpcouple is small.
+    deviceStream_.synchronize();
 
     wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LaunchGpuUpdateConstrain);
     wallcycle_stop(wcycle_, WallCycleCounter::LaunchGpu);
@@ -167,30 +205,34 @@ UpdateConstrainGpu::Impl::Impl(const t_inputrec&     ir,
 {
     GMX_ASSERT(xUpdatedOnDevice != nullptr, "The event synchronizer can not be nullptr.");
 
+
     integrator_ = std::make_unique<LeapFrogGpu>(deviceContext_, deviceStream_, numTempScaleValues);
-    if (sc_haveGpuConstraintSupport)
-    {
-        lincsGpu_ = std::make_unique<LincsGpu>(ir.nLincsIter, ir.nProjOrder, deviceContext_, deviceStream_);
-        settleGpu_ = std::make_unique<SettleGpu>(mtop, deviceContext_, deviceStream_);
-    }
+    lincsGpu_ = std::make_unique<LincsGpu>(ir.nLincsIter, ir.nProjOrder, deviceContext_, deviceStream_);
+    settleGpu_ = std::make_unique<SettleGpu>(mtop, deviceContext_, deviceStream_);
+
+    coordinateScalingKernelLaunchConfig_.blockSize[0]     = c_threadsPerBlock;
+    coordinateScalingKernelLaunchConfig_.blockSize[1]     = 1;
+    coordinateScalingKernelLaunchConfig_.blockSize[2]     = 1;
+    coordinateScalingKernelLaunchConfig_.sharedMemorySize = 0;
 }
 
 UpdateConstrainGpu::Impl::~Impl() {}
 
-void UpdateConstrainGpu::Impl::set(DeviceBuffer<Float3>          d_x,
-                                   DeviceBuffer<Float3>          d_v,
-                                   const DeviceBuffer<Float3>    d_f,
-                                   const InteractionDefinitions& idef,
-                                   int numAtoms,
-                                   ArrayRef<const real> invMass,
+void UpdateConstrainGpu::Impl::set(DeviceBuffer<Float3>           d_x,
+                                   DeviceBuffer<Float3>           d_v,
+                                   const DeviceBuffer<Float3>     d_f,
+                                   const InteractionDefinitions&  idef,
+                                   int                            numAtoms,
+                                   ArrayRef<const real>           invmass,
                                    ArrayRef<const unsigned short> cTC)
 {
+    // TODO wallcycle
     wallcycle_start_nocount(wcycle_, WallCycleCounter::LaunchGpu);
     wallcycle_sub_start(wcycle_, WallCycleSubCounter::LaunchGpuUpdateConstrain);
 
-    GMX_ASSERT(d_x, "Coordinates device buffer should not be null.");
-    GMX_ASSERT(d_v, "Velocities device buffer should not be null.");
-    GMX_ASSERT(d_f, "Forces device buffer should not be null.");
+    GMX_ASSERT(d_x != nullptr, "Coordinates device buffer should not be null.");
+    GMX_ASSERT(d_v != nullptr, "Velocities device buffer should not be null.");
+    GMX_ASSERT(d_f != nullptr, "Forces device buffer should not be null.");
 
     d_x_ = d_x;
     d_v_ = d_v;
@@ -204,17 +246,12 @@ void UpdateConstrainGpu::Impl::set(DeviceBuffer<Float3>          d_x,
             &d_inverseMasses_, numAtoms_, &numInverseMasses_, &numInverseMassesAlloc_, deviceContext_);
 
     // Integrator should also update something, but it does not even have a method yet
-    integrator_->set(numAtoms_, invMass.data(), cTC.data());
-    if (sc_haveGpuConstraintSupport)
-    {
-        lincsGpu_->set(idef, numAtoms_, invMass.data());
-        settleGpu_->set(idef);
-    }
-    else
-    {
-        GMX_ASSERT(idef.il[F_SETTLE].empty(), "SETTLE not supported");
-        GMX_ASSERT(idef.il[F_CONSTR].empty(), "LINCS not supported");
-    }
+    integrator_->set(numAtoms_, invmass.data(), cTC.data());
+    lincsGpu_->set(idef, numAtoms_, invmass.data());
+    settleGpu_->set(idef);
+
+    coordinateScalingKernelLaunchConfig_.gridSize[0] =
+            (numAtoms_ + c_threadsPerBlock - 1) / c_threadsPerBlock;
 
     wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LaunchGpuUpdateConstrain);
     wallcycle_stop(wcycle_, WallCycleCounter::LaunchGpu);
@@ -277,15 +314,15 @@ void UpdateConstrainGpu::scaleVelocities(const matrix scalingMatrix)
     impl_->scaleVelocities(scalingMatrix);
 }
 
-void UpdateConstrainGpu::set(DeviceBuffer<RVec> d_x,
-                             DeviceBuffer<RVec> d_v,
-                             const DeviceBuffer<RVec> d_f,
-                             const InteractionDefinitions& idef,
-                             int numAtoms,
-                             ArrayRef<const real> invMass,
+void UpdateConstrainGpu::set(DeviceBuffer<Float3>           d_x,
+                             DeviceBuffer<Float3>           d_v,
+                             const DeviceBuffer<Float3>     d_f,
+                             const InteractionDefinitions&  idef,
+                             int                            numAtoms,
+                             ArrayRef<const real>           invmass,
                              ArrayRef<const unsigned short> cTC)
 {
-    impl_->set(d_x, d_v, d_f, idef, numAtoms, invMass, cTC);
+    impl_->set(d_x, d_v, d_f, idef, numAtoms, invmass, cTC);
 }
 
 void UpdateConstrainGpu::setPbc(const PbcType pbcType, const matrix box)
@@ -301,11 +338,6 @@ GpuEventSynchronizer* UpdateConstrainGpu::getCoordinatesReadySync()
 bool UpdateConstrainGpu::isNumCoupledConstraintsSupported(const gmx_mtop_t& mtop)
 {
     return LincsGpu::isNumCoupledConstraintsSupported(mtop);
-}
-
-bool UpdateConstrainGpu::areConstraintsSupported()
-{
-    return sc_haveGpuConstraintSupport;
 }
 
 } // namespace gmx

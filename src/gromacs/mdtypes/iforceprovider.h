@@ -62,6 +62,7 @@ namespace gmx
 template<typename T>
 class ArrayRef;
 class ForceWithVirial;
+class MDAtoms;
 
 
 /*! \libinternal \brief

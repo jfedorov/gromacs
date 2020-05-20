@@ -49,11 +49,11 @@
 #include "gromacs/math/units.h"
 #include "gromacs/math/utilities.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdtypes/forceoutput.h"
 #include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/md_enums.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/nblist.h"
 #include "gromacs/tables/forcetable.h"
 #include "gromacs/topology/topology.h"
@@ -172,7 +172,7 @@ real do_walls(const t_inputrec&                   ir,
               gmx::ArrayRef<const int>            typeB,
               gmx::ArrayRef<const unsigned short> cENER,
               const int                           homenr,
-              const int                           numPerturbedAtoms,
+              const bool                          havePerturbed,
               gmx::ArrayRef<const gmx::RVec>      x,
               gmx::ForceWithVirial*               forceWithVirial,
               real                                lambda,
@@ -213,11 +213,11 @@ real do_walls(const t_inputrec&                   ir,
 
     real   dvdlambda = 0;
     double sumRF     = 0;
-    for (int lam = 0; lam < (numPerturbedAtoms ? 2 : 1); lam++)
+    for (int lam = 0; lam < (havePerturbed ? 2 : 1); lam++)
     {
         real                     lamfac;
         gmx::ArrayRef<const int> type;
-        if (numPerturbedAtoms != 0)
+        if (havePerturbed)
         {
             if (lam == 0)
             {
@@ -327,7 +327,7 @@ real do_walls(const t_inputrec&                   ir,
                 }
             }
         }
-        if (numPerturbedAtoms != 0)
+        if (havePerturbed)
         {
             dvdlambda += (lam == 0 ? -1 : 1) * Vlambda;
         }

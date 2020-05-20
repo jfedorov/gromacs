@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -55,6 +55,7 @@ class EnergyData;
 class FreeEnergyPerturbationData;
 class GlobalCommunicationHelper;
 class LegacySimulatorData;
+class MDAtoms;
 class ModularSimulatorAlgorithmBuilderHelper;
 class StatePropagatorData;
 
@@ -85,7 +86,7 @@ public:
                        bool                        isMaster,
                        FILE*                       fplog,
                        const t_inputrec*           inputrec,
-                       const t_mdatoms*            mdAtoms);
+                       const MDAtoms&              mdAtoms);
 
     /*! \brief Register constraining function for step / time
      *
@@ -163,7 +164,7 @@ private:
     //! Contains user input mdp options.
     const t_inputrec* inputrec_;
     //! Atom parameters for this domain.
-    const t_mdatoms* mdAtoms_;
+    const MDAtoms& mdAtoms_;
 };
 
 } // namespace gmx

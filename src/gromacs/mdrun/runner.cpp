@@ -123,7 +123,6 @@
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/interaction_const.h"
 #include "gromacs/mdtypes/md_enums.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/mdrunoptions.h"
 #include "gromacs/mdtypes/observableshistory.h"
 #include "gromacs/mdtypes/simulation_workload.h"
@@ -1815,12 +1814,12 @@ int Mdrunner::mdrunner()
      * either on all nodes or on dedicated PME nodes only. */
     if (EEL_PME(inputrec->coulombtype) || EVDW_PME(inputrec->vdwtype))
     {
-        if (mdAtoms && mdAtoms->mdatoms())
+        if (mdAtoms)
         {
-            nChargePerturbed = mdAtoms->mdatoms()->nChargePerturbed;
+            nChargePerturbed = mdAtoms->nChargePerturbed();
             if (EVDW_PME(inputrec->vdwtype))
             {
-                nTypePerturbed = mdAtoms->mdatoms()->nTypePerturbed;
+                nTypePerturbed = mdAtoms->nTypePerturbed();
             }
         }
         if (cr->npmenodes > 0)

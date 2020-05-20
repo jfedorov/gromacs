@@ -102,7 +102,9 @@ void UpdateConstrainGpu::set(DeviceBuffer<RVec> /* d_x */,
                              DeviceBuffer<RVec> /* d_v */,
                              const DeviceBuffer<RVec> /* d_f */,
                              const InteractionDefinitions& /* idef */,
-                             const t_mdatoms& /* md */)
+                             int /* numAtoms */,
+                             ArrayRef<const real> /* invMass */,
+                             ArrayRef<const unsigned short> /* cTC */)
 {
     GMX_ASSERT(!impl_,
                "A CPU stub for UpdateConstrain was called instead of the correct implementation.");

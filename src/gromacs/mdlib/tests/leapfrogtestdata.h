@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019, by the GROMACS development team, led by
+ * Copyright (c) 2019,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -51,6 +51,7 @@
 #include "gromacs/gpu_utils/gpu_utils.h"
 #include "gromacs/math/vec.h"
 #include "gromacs/math/vectypes.h"
+#include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/update.h"
 #include "gromacs/mdtypes/fcdata.h"
 #include "gromacs/mdtypes/group.h"
@@ -58,6 +59,8 @@
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/utility/stringutil.h"
+
+enum class ParticleType : int;
 
 namespace gmx
 {
@@ -91,9 +94,11 @@ public:
     PaddedVector<real> inverseMasses_;
     //! Inverse masses of the particles per dimension
     PaddedVector<RVec> inverseMassesPerDim_;
+    //! Storage for particle type.
+    std::vector<ParticleType> ptype_;
+    //! Storage for temperature coupling groups.
+    std::vector<unsigned short> cTC_;
 
-    //! MD atoms structure in which inverse masses will be passed to the integrator
-    t_mdatoms mdAtoms_;
     //! Input record (to get integrator type, temperature and pressure coupling)
     t_inputrec inputRecord_;
     //! System state
@@ -107,7 +112,6 @@ public:
 
     //! Number of temperature coupling groups
     int numTCoupleGroups_;
-
     //! If the pressure coupling is enabled
     bool doPressureCouple_;
     //! Period between pressure coupling steps

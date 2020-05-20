@@ -52,6 +52,8 @@
 #include "gromacs/math/utilities.h"
 #include "gromacs/math/vec.h"
 #include "gromacs/mdlib/coupling.h"
+#include "gromacs/mdlib/dispersioncorrection.h"
+#include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
 #include "gromacs/mdlib/simulationsignal.h"
 #include "gromacs/mdlib/stat.h"
@@ -66,7 +68,6 @@
 #include "gromacs/mdtypes/group.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/md_enums.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/pulling/pull.h"
@@ -83,7 +84,7 @@
 
 static void calc_ke_part_normal(gmx::ArrayRef<const gmx::RVec> v,
                                 const t_grpopts*               opts,
-                                const t_mdatoms*               md,
+                                const gmx::MDAtoms&            md,
                                 gmx_ekindata_t*                ekind,
                                 t_nrnb*                        nrnb,
                                 gmx_bool                       bEkinAveVel)
@@ -126,8 +127,8 @@ static void calc_ke_part_normal(gmx::ArrayRef<const gmx::RVec> v,
         matrix* ekin_sum;
         real*   dekindl_sum;
 
-        start_t = ((thread + 0) * md->homenr) / nthread;
-        end_t   = ((thread + 1) * md->homenr) / nthread;
+        start_t = ((thread + 0) * md.homenr()) / nthread;
+        end_t   = ((thread + 1) * md.homenr()) / nthread;
 
         ekin_sum    = ekind->ekin_work[thread];
         dekindl_sum = ekind->dekindl_work[thread];
@@ -138,14 +139,19 @@ static void calc_ke_part_normal(gmx::ArrayRef<const gmx::RVec> v,
         }
         *dekindl_sum = 0.0;
 
-        gt = 0;
+        gt              = 0;
+        auto cTC        = md.cTC();
+        auto massA      = md.massA();
+        auto massB      = md.massB();
+        auto massT      = md.massT();
+        auto bPerturbed = md.bPerturbed();
         for (n = start_t; n < end_t; n++)
         {
-            if (md->cTC)
+            if (!cTC.empty())
             {
-                gt = md->cTC[n];
+                gt = cTC[n];
             }
-            hm = 0.5 * md->massT[n];
+            hm = 0.5 * massT[n];
 
             for (d = 0; (d < DIM); d++)
             {
@@ -155,9 +161,9 @@ static void calc_ke_part_normal(gmx::ArrayRef<const gmx::RVec> v,
                     ekin_sum[gt][m][d] += hm * v[n][m] * v[n][d];
                 }
             }
-            if (md->nMassPerturbed && md->bPerturbed[n])
+            if (md.havePerturbedMasses() && bPerturbed[n])
             {
-                *dekindl_sum += 0.5 * (md->massB[n] - md->massA[n]) * iprod(v[n], v[n]);
+                *dekindl_sum += 0.5 * (massB[n] - massA[n]) * iprod(v[n], v[n]);
             }
         }
     }
@@ -180,19 +186,19 @@ static void calc_ke_part_normal(gmx::ArrayRef<const gmx::RVec> v,
         ekind->dekindl += *ekind->dekindl_work[thread];
     }
 
-    inc_nrnb(nrnb, eNR_EKIN, md->homenr);
+    inc_nrnb(nrnb, eNR_EKIN, md.homenr());
 }
 
 static void calc_ke_part_visc(const matrix                   box,
                               gmx::ArrayRef<const gmx::RVec> x,
                               gmx::ArrayRef<const gmx::RVec> v,
                               const t_grpopts*               opts,
-                              const t_mdatoms*               md,
+                              const gmx::MDAtoms&            md,
                               gmx_ekindata_t*                ekind,
                               t_nrnb*                        nrnb,
                               gmx_bool                       bEkinAveVel)
 {
-    int                         start = 0, homenr = md->homenr;
+    int                         start = 0, homenr = md.homenr();
     int                         g, d, n, m, gt = 0;
     rvec                        v_corrt;
     real                        hm;
@@ -209,22 +215,27 @@ static void calc_ke_part_visc(const matrix                   box,
     }
     ekind->dekindl_old = ekind->dekindl;
 
-    fac     = 2 * M_PI / box[ZZ][ZZ];
-    mvcos   = 0;
-    dekindl = 0;
+    fac             = 2 * M_PI / box[ZZ][ZZ];
+    mvcos           = 0;
+    dekindl         = 0;
+    auto cTC        = md.cTC();
+    auto massA      = md.massA();
+    auto massB      = md.massB();
+    auto massT      = md.massT();
+    auto bPerturbed = md.bPerturbed();
     for (n = start; n < start + homenr; n++)
     {
-        if (md->cTC)
+        if (!cTC.empty())
         {
-            gt = md->cTC[n];
+            gt = cTC[n];
         }
-        hm = 0.5 * md->massT[n];
+        hm = 0.5 * massT[n];
 
         /* Note that the times of x and v differ by half a step */
         /* MRS -- would have to be changed for VV */
         cosz = std::cos(fac * x[n][ZZ]);
         /* Calculate the amplitude of the new velocity profile */
-        mvcos += 2 * cosz * md->massT[n] * v[n][XX];
+        mvcos += 2 * cosz * massT[n] * v[n][XX];
 
         copy_rvec(v[n], v_corrt);
         /* Subtract the profile for the kinetic energy */
@@ -244,14 +255,14 @@ static void calc_ke_part_visc(const matrix                   box,
                 }
             }
         }
-        if (md->nPerturbed && md->bPerturbed[n])
+        if (md.havePerturbed() && bPerturbed[n])
         {
             /* The minus sign here might be confusing.
              * The kinetic contribution from dH/dl doesn't come from
              * d m(l)/2 v^2 / dl, but rather from d p^2/2m(l) / dl,
              * where p are the momenta. The difference is only a minus sign.
              */
-            dekindl -= 0.5 * (md->massB[n] - md->massA[n]) * iprod(v_corrt, v_corrt);
+            dekindl -= 0.5 * (massB[n] - massA[n]) * iprod(v_corrt, v_corrt);
         }
     }
     ekind->dekindl = dekindl;
@@ -264,7 +275,7 @@ static void calc_ke_part(gmx::ArrayRef<const gmx::RVec> x,
                          gmx::ArrayRef<const gmx::RVec> v,
                          const matrix                   box,
                          const t_grpopts*               opts,
-                         const t_mdatoms*               md,
+                         const gmx::MDAtoms&            md,
                          gmx_ekindata_t*                ekind,
                          t_nrnb*                        nrnb,
                          gmx_bool                       bEkinAveVel)
@@ -289,7 +300,7 @@ void compute_globals(gmx_global_stat*               gstat,
                      gmx::ArrayRef<const gmx::RVec> x,
                      gmx::ArrayRef<const gmx::RVec> v,
                      const matrix                   box,
-                     const t_mdatoms*               mdatoms,
+                     const gmx::MDAtoms&            mdatoms,
                      t_nrnb*                        nrnb,
                      t_vcm*                         vcm,
                      gmx_wallcycle*                 wcycle,
@@ -342,7 +353,7 @@ void compute_globals(gmx_global_stat*               gstat,
     /* Calculate center of mass velocity if necessary, also parallellized */
     if (bStopCM)
     {
-        calc_vcm_grp(*mdatoms, x, v, vcm);
+        calc_vcm_grp(mdatoms, x, v, vcm);
     }
 
     if (bTemp || bStopCM || bPres || bEner || bConstrain || bCheckNumberOfBondedInteractions)
@@ -382,7 +393,7 @@ void compute_globals(gmx_global_stat*               gstat,
     if (bEner)
     {
         /* Calculate the amplitude of the cosine velocity profile */
-        ekind->cosacc.vcos = ekind->cosacc.mvcos / mdatoms->tmass;
+        ekind->cosacc.vcos = ekind->cosacc.mvcos / mdatoms.tmass();
     }
 
     if (bTemp)

@@ -59,6 +59,7 @@ template<typename>
 class ArrayRef;
 template<typename>
 class ArrayRefWithPadding;
+class MDAtoms;
 enum class ConstraintVariable : int;
 
 /* \brief Parameters for SETTLE algorithm.

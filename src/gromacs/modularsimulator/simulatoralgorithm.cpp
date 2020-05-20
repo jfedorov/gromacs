@@ -419,7 +419,7 @@ ModularSimulatorAlgorithmBuilder::ModularSimulatorAlgorithmBuilder(
             legacySimulatorData->mdrunOptions.writeConfout,
             opt2fn("-c", legacySimulatorData->nfile, legacySimulatorData->fnm),
             legacySimulatorData->inputrec,
-            legacySimulatorData->mdAtoms->mdatoms(),
+            *legacySimulatorData->mdAtoms,
             legacySimulatorData->top_global);
 
     // Multi sim is turned off

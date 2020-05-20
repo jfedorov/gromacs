@@ -75,7 +75,6 @@ struct gmx_mtop_t;
 struct t_commrec;
 struct t_forcerec;
 struct t_inputrec;
-struct t_mdatoms;
 struct t_nrnb;
 struct gmx_wallcycle;
 enum class PbcType : int;
@@ -87,6 +86,7 @@ namespace gmx
 {
 class DeviceStreamManager;
 class ForceWithShiftForces;
+class MDAtoms;
 class MDLogger;
 class RangePartitioning;
 class VirtualSitesHandler;
@@ -306,7 +306,7 @@ int dd_make_local_top(struct gmx_domdec_t*           dd,
                       gmx_localtop_t*                ltop);
 
 /*! \brief Sort ltop->ilist when we are doing free energy. */
-void dd_sort_local_top(const gmx_domdec_t& dd, const t_mdatoms* mdatoms, gmx_localtop_t* ltop);
+void dd_sort_local_top(const gmx_domdec_t& dd, const gmx::MDAtoms* mdatoms, gmx_localtop_t* ltop);
 
 /*! \brief Construct local state */
 void dd_init_local_state(const gmx_domdec_t& dd, const t_state* state_global, t_state* local_state);

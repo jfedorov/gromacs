@@ -39,6 +39,7 @@
 
 #include <memory>
 
+#include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdtypes/forceoutput.h"
 #include "gromacs/mdtypes/iforceprovider.h"
 

@@ -57,12 +57,13 @@ struct t_grpopts;
 struct t_inputrec;
 struct t_nrnb;
 class t_state;
-enum class ParticleType;
+enum class ParticleType : int;
 
 namespace gmx
 {
 class BoxDeformation;
 class Constraints;
+class MDAtoms;
 
 
 /*! \libinternal
@@ -128,7 +129,7 @@ public:
                        bool                                             havePartiallyFrozenAtoms,
                        gmx::ArrayRef<const ParticleType>                ptype,
                        gmx::ArrayRef<const real>                        invMass,
-                       gmx::ArrayRef<const rvec>                        invMassPerDim,
+                       gmx::ArrayRef<const RVec>                        invMassPerDim,
                        t_state*                                         state,
                        const gmx::ArrayRefWithPadding<const gmx::RVec>& f,
                        const t_fcdata&                                  fcdata,
@@ -197,7 +198,7 @@ public:
                                       int                       homenr,
                                       bool                      havePartiallyFrozenAtoms,
                                       gmx::ArrayRef<const real> invmass,
-                                      gmx::ArrayRef<const rvec> invMassPerDim,
+                                      gmx::ArrayRef<const RVec> invMassPerDim,
                                       const t_state&            state,
                                       const gmx::ArrayRefWithPadding<const gmx::RVec>& f,
                                       const gmx_ekindata_t&                            ekind);

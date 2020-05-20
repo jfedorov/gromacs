@@ -90,7 +90,6 @@ struct t_commrec;
 struct t_fcdata;
 struct t_forcerec;
 struct t_lambda;
-struct t_mdatoms;
 struct t_nrnb;
 class t_state;
 struct t_disresdata;
@@ -104,6 +103,7 @@ template<typename>
 class ArrayRef;
 template<typename>
 class ArrayRefWithPadding;
+class MDAtoms;
 } // namespace gmx
 
 //! Type of CPU function to compute a bonded interaction.
@@ -116,7 +116,7 @@ using BondedFunction = real (*)(int                 nbonds,
                                 const t_pbc*        pbc,
                                 real                lambda,
                                 gmx::ArrayRef<real> dvdlambda,
-                                const t_mdatoms*    md,
+                                const gmx::MDAtoms* md,
                                 t_fcdata*           fcd,
                                 t_disresdata*       disresdata,
                                 t_oriresdata*       oriresdata,
@@ -203,7 +203,7 @@ public:
                    gmx_enerdata_t*                           enerd,
                    t_nrnb*                                   nrnb,
                    gmx::ArrayRef<const real>                 lambda,
-                   const t_mdatoms*                          md,
+                   const gmx::MDAtoms&                       md,
                    int*                                      global_atom_index,
                    const gmx::StepWorkload&                  stepWork);
 

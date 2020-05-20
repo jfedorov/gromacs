@@ -242,10 +242,10 @@ real gmx_pme_calc_energy(gmx_pme_t* pme, gmx::ArrayRef<const gmx::RVec> x, gmx::
  *
  * \param[in,out] pme        The PME structure.
  * \param[in]     numAtoms   The number of particles.
- * \param[in]     chargesA   The pointer to the array of particle charges in the normal state or FEP
- * state A. Can be nullptr if PME is not performed on the GPU.
- * \param[in]     chargesB   The pointer to the array of particle charges in state B. Only used if
- * charges are perturbed and can otherwise be nullptr.
+ * \param[in]     chargesA   Array of particle charges in the normal state or FEP
+ * state A. Can be empty if PME is not performed on the GPU.
+ * \param[in]     chargesB   Array of particle charges in state B. Only used if
+ * charges are perturbed and can otherwise be empty.
  */
 void gmx_pme_reinit_atoms(gmx_pme_t*                pme,
                           int                       numAtoms,

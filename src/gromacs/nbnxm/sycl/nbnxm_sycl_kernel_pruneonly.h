@@ -48,8 +48,6 @@ enum class InteractionLocality;
 }
 struct NbnxmGpu;
 
-namespace Nbnxm
-{
 using gmx::InteractionLocality;
 
 void launchNbnxmKernelPruneOnly(NbnxmGpu*                 nb,
@@ -57,7 +55,5 @@ void launchNbnxmKernelPruneOnly(NbnxmGpu*                 nb,
                                 const int                 numParts,
                                 const int                 part,
                                 const int                 numSciInPart);
-
-} // namespace Nbnxm
 
 #endif // GMX_NBNXM_SYCL_NBNXM_SYCL_KERNEL_PRUNEONLY_H

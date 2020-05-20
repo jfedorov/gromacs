@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -56,6 +56,7 @@
 #include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
 #include "gromacs/mdlib/lincs.h"
+#include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/shake.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/pbcutil/pbc.h"
@@ -86,7 +87,7 @@ public:
     //! Masses
     std::vector<real> masses_;
     //! Inverse masses
-    std::vector<real> invmass_;
+    PaddedVector<real, gmx::Allocator<real, gmx::AlignedAllocationPolicy>> invmass_;
     //! Input record (info that usually in .mdp file)
     t_inputrec ir_;
     //! Local topology
@@ -174,25 +175,25 @@ public:
      *                                  exceeded the program will issue a warning.
      *
      */
-    ConstraintsTestData(const std::string&       title,
-                        int                      numAtoms,
-                        std::vector<real>        masses,
-                        std::vector<int>         constraints,
-                        std::vector<real>        constraintsR0,
-                        bool                     computeVirial,
-                        tensor                   virialScaledRef,
-                        bool                     compute_dHdLambda,
-                        float                    dHdLambdaRef,
-                        real                     initialTime,
-                        real                     timestep,
-                        const std::vector<RVec>& x,
-                        const std::vector<RVec>& xPrime,
-                        const std::vector<RVec>& v,
-                        real                     shakeTolerance,
-                        gmx_bool                 shakeUseSOR,
-                        int                      lincsNumIterations,
-                        int                      lincsExpansionOrder,
-                        real                     lincsWarnAngle);
+    ConstraintsTestData(const std::string&   title,
+                        int                  numAtoms,
+                        std::vector<real>    masses,
+                        std::vector<int>     constraints,
+                        std::vector<real>    constraintsR0,
+                        bool                 computeVirial,
+                        tensor               virialScaledRef,
+                        bool                 compute_dHdLambda,
+                        float                dHdLambdaRef,
+                        real                 initialTime,
+                        real                 timestep,
+                        ArrayRef<const RVec> x,
+                        ArrayRef<const RVec> xPrime,
+                        ArrayRef<const RVec> v,
+                        real                 shakeTolerance,
+                        bool                 shakeUseSOR,
+                        int                  lincsNumIterations,
+                        int                  lincsExpansionOrder,
+                        real                 lincsWarnAngle);
 
     /*! \brief
      * Reset the data structure so it can be reused.

@@ -82,7 +82,7 @@ public:
                              EnergyData*          energyData,
                              FILE*                fplog,
                              const t_inputrec*    inputrec,
-                             const MDAtoms*       mdAtoms);
+                             const MDAtoms&       mdAtoms);
 
     /*! \brief Register run function for step / time
      *
@@ -192,7 +192,7 @@ private:
     //! Contains user input mdp options.
     const t_inputrec* inputrec_;
     //! Atom parameters for this domain.
-    const MDAtoms* mdAtoms_;
+    const MDAtoms& mdAtoms_;
 };
 
 } // namespace gmx

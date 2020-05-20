@@ -62,8 +62,8 @@
 #include "gromacs/math/units.h"
 #include "gromacs/math/utilities.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdtypes/fcdata.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/pbcutil/pbc_simd.h"
@@ -2631,7 +2631,7 @@ real restrangles(int             nbonds,
             const rvec x[],rvec4 f[],rvec fshift[],
             const t_pbc *pbc,
             real gmx_unused lambda,real gmx_unused *dvdlambda,
-            const t_mdatoms gmx_unused *md,t_fcdata gmx_unused *fcd,
+            const gmx::MDAtoms gmx_unused *md,t_fcdata gmx_unused *fcd,
             int gmx_unused *global_atom_index)
            {
            int  i, d, ai, aj, ak, type, m;

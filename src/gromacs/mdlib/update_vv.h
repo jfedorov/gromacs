@@ -59,7 +59,6 @@ struct t_extmass;
 struct t_fcdata;
 struct t_forcerec;
 struct t_inputrec;
-struct t_mdatoms;
 struct t_nrnb;
 class t_state;
 struct t_vcm;
@@ -68,6 +67,7 @@ namespace gmx
 {
 class Constraints;
 class ForceBuffers;
+class MDAtoms;
 class MDLogger;
 class SimulationSignaller;
 class Update;
@@ -129,7 +129,7 @@ void integrateVVFirstStep(int64_t                   step,
                           t_forcerec*               fr,
                           t_commrec*                cr,
                           t_state*                  state,
-                          t_mdatoms*                mdatoms,
+                          const gmx::MDAtoms&       mdatoms,
                           const t_fcdata&           fcdata,
                           t_extmass*                MassQ,
                           t_vcm*                    vcm,
@@ -206,7 +206,7 @@ void integrateVVSecondStep(int64_t                                              
                            t_forcerec*                                              fr,
                            t_commrec*                                               cr,
                            t_state*                                                 state,
-                           t_mdatoms*                                               mdatoms,
+                           const gmx::MDAtoms&                                      mdatoms,
                            const t_fcdata&                                          fcdata,
                            t_extmass*                                               MassQ,
                            t_vcm*                                                   vcm,

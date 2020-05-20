@@ -47,13 +47,13 @@
 
 struct SimulationGroups;
 struct t_inputrec;
-struct t_mdatoms;
 
 namespace gmx
 {
 template<typename T>
 class ArrayRef;
-}
+class MDAtoms;
+} // namespace gmx
 
 //! Center of mass motion removal algorithm.
 enum class ComRemovalAlgorithm : int
@@ -131,7 +131,7 @@ void reportComRemovalInfo(FILE* fp, const t_vcm& vcm);
 
 
 /* Do a per group center of mass things */
-void calc_vcm_grp(const t_mdatoms&               md,
+void calc_vcm_grp(const gmx::MDAtoms&            md,
                   gmx::ArrayRef<const gmx::RVec> x,
                   gmx::ArrayRef<const gmx::RVec> v,
                   t_vcm*                         vcm);
@@ -146,7 +146,7 @@ void calc_vcm_grp(const t_mdatoms&               md,
  */
 void process_and_stopcm_grp(FILE*                    fplog,
                             t_vcm*                   vcm,
-                            const t_mdatoms&         mdatoms,
+                            const gmx::MDAtoms&      mdatoms,
                             gmx::ArrayRef<gmx::RVec> x,
                             gmx::ArrayRef<gmx::RVec> v);
 

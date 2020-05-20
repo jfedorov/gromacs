@@ -100,7 +100,7 @@ public:
                  FILE*                       fplog,
                  const t_commrec*            cr,
                  const t_inputrec*           inputrec,
-                 const MDAtoms*              mdAtoms,
+                 const MDAtoms&              mdAtoms,
                  t_nrnb*                     nrnb,
                  t_forcerec*                 fr,
                  gmx_wallcycle*              wcycle,
@@ -204,7 +204,7 @@ private:
     //! Contains user input mdp options.
     const t_inputrec* inputrec_;
     //! Atom parameters for this domain.
-    const MDAtoms* mdAtoms_;
+    const MDAtoms& mdAtoms_;
     //! Manages flop accounting.
     t_nrnb* nrnb_;
     //! Manages wall cycle accounting.

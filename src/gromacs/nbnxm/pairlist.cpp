@@ -230,7 +230,6 @@ static void resizeAndZeroBufferFlags(std::vector<gmx_bitmask_t>* flags, const in
     flags->resize(sizeNeededForBufferFlags(numAtoms), gmx_bitmask_t{ 0 });
 }
 
-
 /* Returns the pair-list cutoff between a bounding box and a grid cell given an atom-to-atom pair-list cutoff
  *
  * Given a cutoff distance between atoms, this functions returns the cutoff

@@ -59,6 +59,7 @@ namespace gmx
 {
 template<typename T>
 class ArrayRef;
+class MDAtoms;
 
 enum class ConstraintVariable : int;
 

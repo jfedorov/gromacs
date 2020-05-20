@@ -47,6 +47,7 @@
 
 #include "gromacs/domdec/domdec_struct.h"
 #include "gromacs/nbnxm/atomdata.h"
+#include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/timing/wallcycle.h"
 #include "gromacs/utility/message_string_collector.h"
 

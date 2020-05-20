@@ -75,7 +75,7 @@ ComputeGlobalsElement<algorithm>::ComputeGlobalsElement(StatePropagatorData* sta
                                                         const MDLogger&    mdlog,
                                                         t_commrec*         cr,
                                                         const t_inputrec*  inputrec,
-                                                        const MDAtoms*     mdAtoms,
+                                                        const MDAtoms&     mdAtoms,
                                                         t_nrnb*            nrnb,
                                                         gmx_wallcycle*     wcycle,
                                                         t_forcerec*        fr,
@@ -137,9 +137,8 @@ void ComputeGlobalsElement<algorithm>::elementSetup()
         auto x = vcm_.mode == ComRemovalAlgorithm::LinearAccelerationCorrection
                          ? ArrayRefWithPadding<RVec>()
                          : statePropagatorData_->positionsView();
-        process_and_stopcm_grp(
-                fplog_, &vcm_, *mdAtoms_->mdatoms(), x.unpaddedArrayRef(), v.unpaddedArrayRef());
-        inc_nrnb(nrnb_, eNR_STOPCM, mdAtoms_->mdatoms()->homenr);
+        process_and_stopcm_grp(fplog_, &vcm_, mdAtoms_, x.unpaddedArrayRef(), v.unpaddedArrayRef());
+        inc_nrnb(nrnb_, eNR_STOPCM, mdAtoms_.homenr());
     }
 
     unsigned int cglo_flags = (CGLO_TEMPERATURE | CGLO_GSTAT
@@ -293,7 +292,7 @@ void ComputeGlobalsElement<algorithm>::compute(gmx::Step            step,
                     x,
                     v,
                     box,
-                    mdAtoms_->mdatoms(),
+                    mdAtoms_,
                     nrnb_,
                     &vcm_,
                     step != -1 ? wcycle_ : nullptr,
@@ -314,8 +313,8 @@ void ComputeGlobalsElement<algorithm>::compute(gmx::Step            step,
     }
     if (flags & CGLO_STOPCM && !isInit)
     {
-        process_and_stopcm_grp(fplog_, &vcm_, *mdAtoms_->mdatoms(), x, v);
-        inc_nrnb(nrnb_, eNR_STOPCM, mdAtoms_->mdatoms()->homenr);
+        process_and_stopcm_grp(fplog_, &vcm_, mdAtoms_, x, v);
+        inc_nrnb(nrnb_, eNR_STOPCM, mdAtoms_.homenr());
     }
 }
 
@@ -376,7 +375,7 @@ ISimulatorElement* ComputeGlobalsElement<ComputeGlobalsAlgorithm::LeapFrog>::get
                     legacySimulatorData->mdlog,
                     legacySimulatorData->cr,
                     legacySimulatorData->inputrec,
-                    legacySimulatorData->mdAtoms,
+                    *legacySimulatorData->mdAtoms,
                     legacySimulatorData->nrnb,
                     legacySimulatorData->wcycle,
                     legacySimulatorData->fr,
@@ -418,7 +417,7 @@ ISimulatorElement* ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet
                         simulator->mdlog,
                         simulator->cr,
                         simulator->inputrec,
-                        simulator->mdAtoms,
+                        *simulator->mdAtoms,
                         simulator->nrnb,
                         simulator->wcycle,
                         simulator->fr,

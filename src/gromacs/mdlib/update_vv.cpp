@@ -77,7 +77,7 @@ void integrateVVFirstStep(int64_t                   step,
                           t_forcerec*               fr,
                           t_commrec*                cr,
                           t_state*                  state,
-                          t_mdatoms*                mdatoms,
+                          const gmx::MDAtoms&       mdatoms,
                           const t_fcdata&           fcdata,
                           t_extmass*                MassQ,
                           t_vcm*                    vcm,
@@ -138,10 +138,9 @@ void integrateVVFirstStep(int64_t                   step,
                            enerd,
                            state,
                            total_vir,
-                           mdatoms->homenr,
-                           mdatoms->cTC ? gmx::arrayRefFromArray(mdatoms->cTC, mdatoms->nr)
-                                        : gmx::ArrayRef<const unsigned short>(),
-                           gmx::arrayRefFromArray(mdatoms->invmass, mdatoms->nr),
+                           mdatoms.homenr(),
+                           mdatoms.cTC(),
+                           mdatoms.invmass().paddedConstArrayRef(),
                            MassQ,
                            trotter_seq,
                            TrotterSequence::One);
@@ -149,11 +148,11 @@ void integrateVVFirstStep(int64_t                   step,
 
         upd->update_coords(*ir,
                            step,
-                           mdatoms->homenr,
-                           mdatoms->havePartiallyFrozenAtoms,
-                           gmx::arrayRefFromArray(mdatoms->ptype, mdatoms->nr),
-                           gmx::arrayRefFromArray(mdatoms->invmass, mdatoms->nr),
-                           gmx::arrayRefFromArray(mdatoms->invMassPerDim, mdatoms->nr),
+                           mdatoms.homenr(),
+                           mdatoms.havePartiallyFrozenAtoms(),
+                           mdatoms.ptype(),
+                           mdatoms.invmass().paddedConstArrayRef(),
+                           mdatoms.invMassPerDim(),
                            state,
                            f->view().forceWithPadding(),
                            fcdata,
@@ -232,8 +231,8 @@ void integrateVVFirstStep(int64_t                   step,
             if (bStopCM)
             {
                 process_and_stopcm_grp(
-                        fplog, vcm, *mdatoms, makeArrayRef(state->x), makeArrayRef(state->v));
-                inc_nrnb(nrnb, eNR_STOPCM, mdatoms->homenr);
+                        fplog, vcm, mdatoms, makeArrayRef(state->x), makeArrayRef(state->v));
+                inc_nrnb(nrnb, eNR_STOPCM, mdatoms.homenr());
             }
             wallcycle_start(wcycle, WallCycleCounter::Update);
         }
@@ -249,10 +248,9 @@ void integrateVVFirstStep(int64_t                   step,
                                enerd,
                                state,
                                total_vir,
-                               mdatoms->homenr,
-                               mdatoms->cTC ? gmx::arrayRefFromArray(mdatoms->cTC, mdatoms->nr)
-                                            : gmx::ArrayRef<const unsigned short>(),
-                               gmx::arrayRefFromArray(mdatoms->invmass, mdatoms->nr),
+                               mdatoms.homenr(),
+                               mdatoms.cTC(),
+                               mdatoms.invmass().paddedConstArrayRef(),
                                MassQ,
                                trotter_seq,
                                TrotterSequence::Two);
@@ -337,7 +335,7 @@ void integrateVVSecondStep(int64_t                                              
                            t_forcerec*                                              fr,
                            t_commrec*                                               cr,
                            t_state*                                                 state,
-                           t_mdatoms*                                               mdatoms,
+                           const gmx::MDAtoms&                                      mdatoms,
                            const t_fcdata&                                          fcdata,
                            t_extmass*                                               MassQ,
                            t_vcm*                                                   vcm,
@@ -369,11 +367,11 @@ void integrateVVSecondStep(int64_t                                              
     /* velocity half-step update */
     upd->update_coords(*ir,
                        step,
-                       mdatoms->homenr,
-                       mdatoms->havePartiallyFrozenAtoms,
-                       gmx::arrayRefFromArray(mdatoms->ptype, mdatoms->nr),
-                       gmx::arrayRefFromArray(mdatoms->invmass, mdatoms->nr),
-                       gmx::arrayRefFromArray(mdatoms->invMassPerDim, mdatoms->nr),
+                       mdatoms.homenr(),
+                       mdatoms.havePartiallyFrozenAtoms(),
+                       mdatoms.ptype(),
+                       mdatoms.invmass().paddedConstArrayRef(),
+                       mdatoms.invMassPerDim(),
                        state,
                        f->view().forceWithPadding(),
                        fcdata,
@@ -402,11 +400,11 @@ void integrateVVSecondStep(int64_t                                              
 
     upd->update_coords(*ir,
                        step,
-                       mdatoms->homenr,
-                       mdatoms->havePartiallyFrozenAtoms,
-                       gmx::arrayRefFromArray(mdatoms->ptype, mdatoms->nr),
-                       gmx::arrayRefFromArray(mdatoms->invmass, mdatoms->nr),
-                       gmx::arrayRefFromArray(mdatoms->invMassPerDim, mdatoms->nr),
+                       mdatoms.homenr(),
+                       mdatoms.havePartiallyFrozenAtoms(),
+                       mdatoms.ptype(),
+                       mdatoms.invmass().paddedConstArrayRef(),
+                       mdatoms.invMassPerDim(),
                        state,
                        f->view().forceWithPadding(),
                        fcdata,
@@ -424,9 +422,9 @@ void integrateVVSecondStep(int64_t                                              
     upd->update_sd_second_half(*ir,
                                step,
                                dvdl_constr,
-                               mdatoms->homenr,
-                               gmx::arrayRefFromArray(mdatoms->ptype, mdatoms->nr),
-                               gmx::arrayRefFromArray(mdatoms->invmass, mdatoms->nr),
+                               mdatoms.homenr(),
+                               mdatoms.ptype(),
+                               mdatoms.invmass().paddedConstArrayRef(),
                                state,
                                cr,
                                nrnb,
@@ -435,7 +433,7 @@ void integrateVVSecondStep(int64_t                                              
                                do_log,
                                do_ene);
     upd->finish_update(
-            *ir, mdatoms->havePartiallyFrozenAtoms, mdatoms->homenr, state, wcycle, constr != nullptr);
+            *ir, mdatoms.havePartiallyFrozenAtoms(), mdatoms.homenr(), state, wcycle, constr != nullptr);
 
     if (ir->eI == IntegrationAlgorithm::VVAK)
     {
@@ -470,10 +468,9 @@ void integrateVVSecondStep(int64_t                                              
                        enerd,
                        state,
                        total_vir,
-                       mdatoms->homenr,
-                       mdatoms->cTC ? gmx::arrayRefFromArray(mdatoms->cTC, mdatoms->nr)
-                                    : gmx::ArrayRef<const unsigned short>(),
-                       gmx::arrayRefFromArray(mdatoms->invmass, mdatoms->nr),
+                       mdatoms.homenr(),
+                       mdatoms.cTC(),
+                       mdatoms.invmass().paddedConstArrayRef(),
                        MassQ,
                        trotter_seq,
                        TrotterSequence::Four);
@@ -482,11 +479,11 @@ void integrateVVSecondStep(int64_t                                              
 
         upd->update_coords(*ir,
                            step,
-                           mdatoms->homenr,
-                           mdatoms->havePartiallyFrozenAtoms,
-                           gmx::arrayRefFromArray(mdatoms->ptype, mdatoms->nr),
-                           gmx::arrayRefFromArray(mdatoms->invmass, mdatoms->nr),
-                           gmx::arrayRefFromArray(mdatoms->invMassPerDim, mdatoms->nr),
+                           mdatoms.homenr(),
+                           mdatoms.havePartiallyFrozenAtoms(),
+                           mdatoms.ptype(),
+                           mdatoms.invmass().paddedConstArrayRef(),
+                           mdatoms.invMassPerDim(),
                            state,
                            f->view().forceWithPadding(),
                            fcdata,
@@ -502,7 +499,7 @@ void integrateVVSecondStep(int64_t                                              
          * to numerical errors, or are they important
          * physically? I'm thinking they are just errors, but not completely sure.
          * For now, will call without actually constraining, constr=NULL*/
-        upd->finish_update(*ir, mdatoms->havePartiallyFrozenAtoms, mdatoms->homenr, state, wcycle, false);
+        upd->finish_update(*ir, mdatoms.havePartiallyFrozenAtoms(), mdatoms.homenr(), state, wcycle, false);
     }
     /* this factor or 2 correction is necessary
         because half of the constraint force is removed

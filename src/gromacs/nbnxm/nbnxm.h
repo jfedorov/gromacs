@@ -148,6 +148,7 @@ class ForceWithShiftForces;
 class GpuBonded;
 template<typename>
 class ListOfLists;
+class MDAtoms;
 class MDLogger;
 template<typename>
 class Range;

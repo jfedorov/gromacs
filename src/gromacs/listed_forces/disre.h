@@ -48,6 +48,7 @@
 #include <cstdio>
 
 #include "gromacs/topology/ifunc.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/gmxmpi.h"
 
@@ -68,6 +69,7 @@ namespace gmx
 {
 template<typename>
 class ArrayRef;
+class MDAtoms;
 } // namespace gmx
 
 //! Whether distance restraints are called from mdrun or from an analysis tool

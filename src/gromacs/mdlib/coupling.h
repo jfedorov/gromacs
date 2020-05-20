@@ -63,6 +63,7 @@ namespace gmx
 {
 class BoxDeformation;
 class Constraints;
+class MDAtoms;
 class Update;
 template<typename>
 class ArrayRef;

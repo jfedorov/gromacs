@@ -74,17 +74,11 @@ void LeapFrogHostTestRunner::integrate(LeapFrogTestData* testData, int numSteps)
         testData->update_->update_coords(
                 testData->inputRecord_,
                 step,
-                testData->mdAtoms_.homenr,
-                testData->mdAtoms_.havePartiallyFrozenAtoms,
-                testData->mdAtoms_.ptype
-                        ? gmx::arrayRefFromArray(testData->mdAtoms_.ptype, testData->mdAtoms_.nr)
-                        : gmx::ArrayRef<ParticleType>{},
-                testData->mdAtoms_.invmass
-                        ? gmx::arrayRefFromArray(testData->mdAtoms_.invmass, testData->mdAtoms_.nr)
-                        : gmx::ArrayRef<real>{},
-                testData->mdAtoms_.invMassPerDim ? gmx::arrayRefFromArray(
-                        testData->mdAtoms_.invMassPerDim, testData->mdAtoms_.nr)
-                                                 : gmx::ArrayRef<rvec>{},
+                testData->numAtoms_,
+                false, // we don't use partially frozen atoms
+                testData->ptype_,
+                testData->inverseMasses_.arrayRefWithPadding().paddedConstArrayRef(),
+                testData->inverseMassesPerDim_.arrayRefWithPadding().paddedConstArrayRef(),
                 &testData->state_,
                 testData->f_,
                 testData->forceCalculationData_,
@@ -93,12 +87,8 @@ void LeapFrogHostTestRunner::integrate(LeapFrogTestData* testData, int numSteps)
                 etrtNONE,
                 nullptr,
                 false);
-        testData->update_->finish_update(testData->inputRecord_,
-                                         testData->mdAtoms_.havePartiallyFrozenAtoms,
-                                         testData->mdAtoms_.homenr,
-                                         &testData->state_,
-                                         nullptr,
-                                         false);
+        testData->update_->finish_update(
+                testData->inputRecord_, false, testData->numAtoms_, &testData->state_, {}, false);
     }
     const auto xp = makeArrayRef(*testData->update_->xp()).subArray(0, testData->numAtoms_);
     for (int i = 0; i < testData->numAtoms_; i++)

@@ -59,7 +59,6 @@ enum class PbcType : int;
 struct t_commrec;
 struct t_inputrec;
 class t_state;
-struct t_mdatoms;
 struct t_trxframe;
 
 namespace gmx
@@ -70,6 +69,7 @@ class EnergyData;
 class FreeEnergyPerturbationData;
 class GlobalCommunicationHelper;
 class LegacySimulatorData;
+class MDAtoms;
 class ModularSimulatorAlgorithmBuilderHelper;
 
 /*! \internal
@@ -109,7 +109,7 @@ public:
                         bool               writeFinalConfiguration,
                         const std::string& finalConfigurationFilename,
                         const t_inputrec*  inputrec,
-                        const t_mdatoms*   mdatoms,
+                        const MDAtoms&     mdatoms,
                         const gmx_mtop_t&  globalTop);
 
     // Allow access to state

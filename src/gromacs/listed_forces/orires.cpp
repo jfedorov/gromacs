@@ -47,11 +47,11 @@
 #include "gromacs/math/do_fit.h"
 #include "gromacs/math/functions.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdrunutility/multisim.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/fcdata.h"
 #include "gromacs/mdtypes/inputrec.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/pbcutil/pbc.h"
@@ -380,7 +380,7 @@ real calc_orires_dev(const gmx_multisim_t* ms,
                      int                   nfa,
                      const t_iatom         forceatoms[],
                      const t_iparams       ip[],
-                     const t_mdatoms*      md,
+                     const gmx::MDAtoms*   md,
                      ArrayRef<const RVec>  xWholeMolecules,
                      const rvec            x[],
                      const t_pbc*          pbc,
@@ -425,11 +425,11 @@ real calc_orires_dev(const gmx_multisim_t* ms,
     }
 
     clear_rvec(com);
-    mtot        = 0;
-    int   j     = 0;
-    auto* massT = md->massT;
-    auto* cORF  = md->cORF;
-    for (int i = 0; i < md->nr; i++)
+    mtot       = 0;
+    int  j     = 0;
+    auto massT = md->massT();
+    auto cORF  = md->cORF();
+    for (int i = 0; i < md->nr(); i++)
     {
         if (cORF[i] == 0)
         {
@@ -638,7 +638,7 @@ real orires(int             nfa,
             const t_pbc*    pbc,
             real gmx_unused lambda,
             real gmx_unused* dvdlambda,
-            gmx::ArrayRef<const real> /*charge*/,
+            gmx::ArrayRef<const real> /*chargeA*/,
             t_fcdata gmx_unused* fcd,
             t_disresdata gmx_unused* disresdata,
             t_oriresdata*            oriresdata,

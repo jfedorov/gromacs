@@ -163,6 +163,7 @@ public:
      * since AWH needs the current coordinate values (the pull code checks
      * for this).
      *
+     * \param[in]     masses           Atoms masses.
      * \param[in]     pbcType          Type of periodic boundary conditions.
      * \param[in]     masses           Atoms masses.
      * \param[in]     neighborLambdaEnergies An array containing the energy of the system
