@@ -90,6 +90,10 @@ TEST_P(SimulatorComparisonTest, WithinTolerances)
     const auto& pcoupling           = std::get<3>(mdpParams);
     const auto& environmentVariable = std::get<1>(params);
 
+    const bool hasConstraints    = (simulationName != "argon12");
+    const bool isAndersen        = (tcoupling == "andersen-massive" || tcoupling == "andersen");
+    const auto hasConservedField = !(tcoupling == "no" && pcoupling == "no") && !isAndersen;
+
     int maxNumWarnings = 0;
 
     // TODO At some point we should also test PME-only ranks.
@@ -112,8 +116,7 @@ TEST_P(SimulatorComparisonTest, WithinTolerances)
         return;
     }
 
-    const bool systemHasConstraints = (simulationName != "argon12");
-    if (pcoupling == "mttk" && (tcoupling != "nose-hoover" || systemHasConstraints))
+    if (pcoupling == "mttk" && (tcoupling != "nose-hoover" || hasConstraints))
     {
         // Legacy MTTK works only with Nose-Hoover and without constraints
         return;
@@ -131,6 +134,16 @@ TEST_P(SimulatorComparisonTest, WithinTolerances)
             maxNumWarnings++;
         }
     }
+    if (isAndersen && pcoupling == "berendsen")
+    {
+        // "Using Berendsen pressure coupling invalidates the true ensemble for the thermostat"
+        maxNumWarnings++;
+    }
+    if (tcoupling == "andersen" && hasConstraints)
+    {
+        // Constraints are not allowed with non-massive Andersen
+        return;
+    }
 
     const std::string envVariableModSimOn  = "GMX_USE_MODULAR_SIMULATOR";
     const std::string envVariableModSimOff = "GMX_DISABLE_MODULAR_SIMULATOR";
@@ -139,8 +152,6 @@ TEST_P(SimulatorComparisonTest, WithinTolerances)
             environmentVariable == envVariableModSimOn || environmentVariable == envVariableModSimOff,
             ("Expected tested environment variable to be " + envVariableModSimOn + " or " + envVariableModSimOff)
                     .c_str());
-
-    const auto hasConservedField = !(tcoupling == "no" && pcoupling == "no");
 
     SCOPED_TRACE(formatString(
             "Comparing two simulations of '%s' "
@@ -152,8 +163,15 @@ TEST_P(SimulatorComparisonTest, WithinTolerances)
             pcoupling.c_str(),
             environmentVariable.c_str()));
 
-    const auto mdpFieldValues = prepareMdpFieldValues(
+    auto mdpFieldValues = prepareMdpFieldValues(
             simulationName.c_str(), integrator.c_str(), tcoupling.c_str(), pcoupling.c_str());
+    if (tcoupling == "andersen")
+    {
+        // Fixes error "nstcomm must be 1, not 4 for Andersen, as velocities of
+        //              atoms in coupled groups are randomized every time step"
+        mdpFieldValues["nstcomm"]       = "1";
+        mdpFieldValues["nstcalcenergy"] = "1";
+    }
 
     EnergyTermsToCompare energyTermsToCompare{ {
             { interaction_function[F_EPOT].longname, relativeToleranceAsPrecisionDependentUlp(60.0, 200, 160) },
@@ -258,15 +276,21 @@ TEST_P(SimulatorComparisonTest, WithinTolerances)
 // These tests are very sensitive, so we only run them in double precision.
 // As we change call ordering, they might actually become too strict to be useful.
 #if !GMX_GPU_OPENCL && GMX_DOUBLE
-INSTANTIATE_TEST_CASE_P(
-        SimulatorsAreEquivalentDefaultModular,
-        SimulatorComparisonTest,
-        ::testing::Combine(
-                ::testing::Combine(::testing::Values("argon12", "tip3p5"),
-                                   ::testing::Values("md-vv"),
-                                   ::testing::Values("no", "v-rescale", "berendsen", "nose-hoover"),
-                                   ::testing::Values("no", "mttk", "berendsen", "c-rescale")),
-                ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR")));
+INSTANTIATE_TEST_CASE_P(SimulatorsAreEquivalentDefaultModular,
+                        SimulatorComparisonTest,
+                        ::testing::Combine(::testing::Combine(::testing::Values("argon12", "tip3p5"),
+                                                              ::testing::Values("md-vv"),
+                                                              ::testing::Values("no",
+                                                                                "v-rescale",
+                                                                                "berendsen",
+                                                                                "nose-hoover",
+                                                                                "andersen-massive",
+                                                                                "andersen"),
+                                                              ::testing::Values("no",
+                                                                                "mttk",
+                                                                                "berendsen",
+                                                                                "c-rescale")),
+                                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR")));
 INSTANTIATE_TEST_CASE_P(
         SimulatorsAreEquivalentDefaultLegacy,
         SimulatorComparisonTest,
@@ -278,15 +302,21 @@ INSTANTIATE_TEST_CASE_P(
                         ::testing::Values("no", "Parrinello-Rahman", "berendsen", "c-rescale")),
                 ::testing::Values("GMX_USE_MODULAR_SIMULATOR")));
 #else
-INSTANTIATE_TEST_CASE_P(
-        DISABLED_SimulatorsAreEquivalentDefaultModular,
-        SimulatorComparisonTest,
-        ::testing::Combine(
-                ::testing::Combine(::testing::Values("argon12", "tip3p5"),
-                                   ::testing::Values("md-vv"),
-                                   ::testing::Values("no", "v-rescale", "berendsen", "nose-hoover"),
-                                   ::testing::Values("no", "mttk", "berendsen", "c-rescale")),
-                ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR")));
+INSTANTIATE_TEST_CASE_P(DISABLED_SimulatorsAreEquivalentDefaultModular,
+                        SimulatorComparisonTest,
+                        ::testing::Combine(::testing::Combine(::testing::Values("argon12", "tip3p5"),
+                                                              ::testing::Values("md-vv"),
+                                                              ::testing::Values("no",
+                                                                                "v-rescale",
+                                                                                "berendsen",
+                                                                                "nose-hoover",
+                                                                                "andersen-massive",
+                                                                                "andersen"),
+                                                              ::testing::Values("no",
+                                                                                "mttk",
+                                                                                "berendsen",
+                                                                                "c-rescale")),
+                                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR")));
 INSTANTIATE_TEST_CASE_P(
         DISABLED_SimulatorsAreEquivalentDefaultLegacy,
         SimulatorComparisonTest,
