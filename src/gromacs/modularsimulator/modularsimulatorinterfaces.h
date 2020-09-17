@@ -445,6 +445,21 @@ public:
     }
 };
 
+/*! \brief
+ * Exception class signalling an runtime error in modular simulator.
+ *
+ * \internal
+ */
+class ModSimRuntimeError final : public ModularSimulatorError
+{
+public:
+    //! \copydoc FileIOError::FileIOError()
+    explicit ModSimRuntimeError(const ExceptionInitializer& details) :
+        ModularSimulatorError(details)
+    {
+    }
+};
+
 //! Enum allowing builders to store whether they can accept client registrations
 enum class ModularSimulatorBuilderState
 {

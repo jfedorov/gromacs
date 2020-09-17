@@ -461,13 +461,9 @@ VelocityScalingTemperatureCoupling::VelocityScalingTemperatureCoupling(
     couplingTime_(couplingTime, couplingTime + numTemperatureGroups),
     numDegreesOfFreedom_(numDegreesOfFreedom, numDegreesOfFreedom + numTemperatureGroups),
     temperatureCouplingIntegral_(numTemperatureGroups, 0.0),
-    energyData_(energyData)
+    energyData_(energyData),
+    nextEnergyCalculationStep_(-1)
 {
-    if (reportPreviousConservedEnergy_ == ReportPreviousStepConservedEnergy::Yes)
-    {
-        temperatureCouplingIntegralPreviousStep_ = temperatureCouplingIntegral_;
-    }
-    energyData->setVelocityScalingTemperatureCoupling(this);
     if (couplingType == TemperatureCoupling::VRescale)
     {
         temperatureCouplingImpl_ = std::make_unique<VRescaleTemperatureCoupling>(seed);
@@ -486,6 +482,14 @@ VelocityScalingTemperatureCoupling::VelocityScalingTemperatureCoupling(
         throw NotImplementedError("Temperature coupling " + std::string(enumValueToString(couplingType))
                                   + " is not implemented for modular simulator.");
     }
+    energyData->addConservedEnergyContribution([this](Step step, Time /*unused*/) {
+        if (conservedEnergyContributionStep_ != step)
+        {
+            GMX_THROW(ModSimRuntimeError(
+                    "VelocityScalingTemperatureCoupling conserved energy step mismatch."));
+        }
+        return conservedEnergyContribution_;
+    });
 }
 
 void VelocityScalingTemperatureCoupling::connectWithPropagator(const PropagatorThermostatConnection& connectionData,
@@ -522,6 +526,15 @@ void VelocityScalingTemperatureCoupling::scheduleTask(Step step,
      *       of the kinetic energy is needed.
      *
      */
+    if (step == nextEnergyCalculationStep_
+        && reportPreviousConservedEnergy_ == ReportPreviousStepConservedEnergy::Yes)
+    {
+        // add conserved energy before we do T-coupling
+        registerRunFunction([this, step]() {
+            conservedEnergyContribution_     = conservedEnergyContribution();
+            conservedEnergyContributionStep_ = step;
+        });
+    }
     if (do_per_step(step + nstcouple_ + offset_, nstcouple_))
     {
         // do T-coupling this step
@@ -530,16 +543,19 @@ void VelocityScalingTemperatureCoupling::scheduleTask(Step step,
         // Let propagator know that we want to do T-coupling
         propagatorCallback_(step);
     }
+    if (step == nextEnergyCalculationStep_
+        && reportPreviousConservedEnergy_ == ReportPreviousStepConservedEnergy::No)
+    {
+        // add conserved energy after we did T-coupling
+        registerRunFunction([this, step]() {
+            conservedEnergyContribution_     = conservedEnergyContribution();
+            conservedEnergyContributionStep_ = step;
+        });
+    }
 }
 
 void VelocityScalingTemperatureCoupling::setLambda(Step step)
 {
-    // if we report the previous energy, calculate before the step
-    if (reportPreviousConservedEnergy_ == ReportPreviousStepConservedEnergy::Yes)
-    {
-        temperatureCouplingIntegralPreviousStep_ = temperatureCouplingIntegral_;
-    }
-
     const auto*             ekind          = energyData_->ekindata();
     TemperatureCouplingData thermostatData = {
         couplingTimeStep_, referenceTemperature_, couplingTime_, numDegreesOfFreedom_, temperatureCouplingIntegral_
@@ -625,17 +641,16 @@ const std::string& VelocityScalingTemperatureCoupling::clientID()
 
 real VelocityScalingTemperatureCoupling::conservedEnergyContribution() const
 {
-    if (reportPreviousConservedEnergy_ == ReportPreviousStepConservedEnergy::Yes)
+    return std::accumulate(temperatureCouplingIntegral_.begin(), temperatureCouplingIntegral_.end(), 0.0);
+}
+
+std::optional<SignallerCallback> VelocityScalingTemperatureCoupling::registerEnergyCallback(EnergySignallerEvent event)
+{
+    if (event == EnergySignallerEvent::EnergyCalculationStep)
     {
-        return std::accumulate(temperatureCouplingIntegralPreviousStep_.begin(),
-                               temperatureCouplingIntegralPreviousStep_.end(),
-                               0.0);
+        return [this](Step step, Time /*unused*/) { nextEnergyCalculationStep_ = step; };
     }
-    else
-    {
-        return std::accumulate(
-                temperatureCouplingIntegral_.begin(), temperatureCouplingIntegral_.end(), 0.0);
-    }
+    return std::nullopt;
 }
 
 ISimulatorElement* VelocityScalingTemperatureCoupling::getElementPointerImpl(

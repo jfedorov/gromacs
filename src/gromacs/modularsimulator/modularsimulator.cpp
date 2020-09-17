@@ -127,11 +127,11 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
             builder->add<ConstraintsElement<ConstraintVariable::Positions>>();
         }
         builder->add<ComputeGlobalsElement<ComputeGlobalsAlgorithm::LeapFrog>>();
-        builder->add<EnergyData::Element>();
         if (legacySimulatorData_->inputrec->epc == PressureCoupling::ParrinelloRahman)
         {
             builder->add<ParrinelloRahmanBarostat>(-1, PropagatorTag("LeapFrogPropagator"));
         }
+        builder->add<EnergyData::Element>();
     }
     else if (legacySimulatorData_->inputrec->eI == eiVV)
     {
@@ -161,11 +161,11 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
             builder->add<ConstraintsElement<ConstraintVariable::Positions>>();
         }
         builder->add<ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet>>();
-        builder->add<EnergyData::Element>();
         if (legacySimulatorData_->inputrec->epc == PressureCoupling::ParrinelloRahman)
         {
             builder->add<ParrinelloRahmanBarostat>(-1, PropagatorTag("VelocityHalfStep"));
         }
+        builder->add<EnergyData::Element>();
     }
     else
     {
