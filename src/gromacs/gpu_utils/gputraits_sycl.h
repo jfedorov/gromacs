@@ -53,6 +53,15 @@ using DeviceTexture = void*;
 //! \brief Single GPU call timing event, not used with SYCL
 using CommandEvent = void*;
 
+//! Convenience alias for cl::sycl::float4
+typedef cl::sycl::float4 float4;
+
+//! Convenience alias for cl::sycl::float3
+typedef cl::sycl::float3 float3;
+
+//! Convenience alias for cl::sycl::float2
+typedef cl::sycl::float2 float2;
+
 /*! \internal \brief
  * GPU kernels scheduling description. This is same in OpenCL/CUDA.
  * Provides reasonable defaults, one typically only needs to set the GPU stream

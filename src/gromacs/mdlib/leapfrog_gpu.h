@@ -50,6 +50,10 @@
 #    include "gromacs/gpu_utils/devicebuffer.cuh"
 #    include "gromacs/gpu_utils/gputraits.cuh"
 #endif
+#if GMX_GPU_SYCL
+#    include "gromacs/gpu_utils/devicebuffer_sycl.h"
+#    include "gromacs/gpu_utils/gputraits_sycl.h"
+#endif
 
 #include "gromacs/gpu_utils/hostallocator.h"
 #include "gromacs/pbcutil/pbc.h"
