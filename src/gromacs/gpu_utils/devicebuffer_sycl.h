@@ -349,4 +349,40 @@ void destroyParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer, DeviceTextur
     deviceBuffer->buffer_.reset(nullptr);
 }
 
+
+template<typename T, enum cl::sycl::access::mode mode, bool enabled = true>
+struct DeviceAccessor
+{
+    using RetType = std::conditional_t<mode == cl::sycl::access::mode::read, T, T&>;
+    DeviceAccessor(cl::sycl::buffer<T, 1>* buf, cl::sycl::handler& cgh) :
+        accessor(cl::sycl::accessor<T, 1, mode>(*buf, cgh))
+    {
+    }
+    DeviceAccessor(DeviceBuffer<T>& buf, cl::sycl::handler& cgh) :
+        accessor(cl::sycl::accessor<T, 1, mode>(*buf.buffer_.get(), cgh))
+    {
+    }
+    template<typename IndexingType>
+    inline RetType operator[](IndexingType index) const
+    {
+        return accessor[index];
+    }
+    cl::sycl::accessor<T, 1, mode> accessor;
+};
+
+template<typename T, enum cl::sycl::access::mode mode>
+struct DeviceAccessor<T, mode, false>
+{
+    using RetType = std::conditional_t<mode == cl::sycl::access::mode::read, T, T&>;
+    DeviceAccessor(cl::sycl::buffer<T, 1>* /*buf*/, cl::sycl::handler& /*cgh*/) : value() {}
+    DeviceAccessor(DeviceBuffer<T>& /*buf*/, cl::sycl::handler& /*cgh*/) : value() {}
+    template<typename IndexingType>
+    inline RetType operator[](IndexingType /*index*/) const
+    {
+        return value;
+    }
+    T value;
+};
+
+
 #endif // GMX_GPU_UTILS_DEVICEBUFFER_SYCL_H
