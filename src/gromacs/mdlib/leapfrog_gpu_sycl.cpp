@@ -386,15 +386,6 @@ void LeapFrogGpu::set(const int             numAtoms,
         copyToDeviceBuffer(&d_tempScaleGroups_, tempScaleGroups, 0, numAtoms_, deviceStream_,
                            GpuApiCallBehavior::Sync, nullptr);
     }
-    else
-    {
-        /* Unfortunately, we need an initialized buffer to set-up an allocator, and cutting-out
-         * a single function argument would be messy. So, we just set up a buffer of one element
-         * here */
-        int temp = 0;
-        reallocateDeviceBuffer(&d_tempScaleGroups_, 1, &temp, &numTempScaleGroupsAlloc_, deviceContext_);
-        clearDeviceBufferAsync(&d_tempScaleGroups_, 0, 1, deviceStream_);
-    }
 
     // If the temperature coupling is enabled, we need to make space for scaling factors
     if (numTempScaleValues_ > 0)
@@ -402,15 +393,6 @@ void LeapFrogGpu::set(const int             numAtoms,
         h_lambdas_.resize(numTempScaleValues);
         reallocateDeviceBuffer(&d_lambdas_, numTempScaleValues_, &numLambdas_, &numLambdasAlloc_,
                                deviceContext_);
-    }
-    else
-    {
-        /* Unfortunately, we need an initialized buffer to set-up an allocator, and cutting-out
-         * a single function argument would be messy. So, we just set up a buffer of one element
-         * here */
-        int temp = 0;
-        reallocateDeviceBuffer(&d_lambdas_, 1, &temp, &numLambdasAlloc_, deviceContext_);
-        clearDeviceBufferAsync(&d_lambdas_, 0, 1, deviceStream_);
     }
 }
 
