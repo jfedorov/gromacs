@@ -118,6 +118,21 @@ DeviceBuffer<T>& DeviceBuffer<T>::operator=(std::nullptr_t nullPtr)
 
 #endif // #ifndef DOXYGEN
 
+/*! \brief Check the validity of the device buffer.
+ *
+ * Checks if the buffer is valid and if its allocation is big enough.
+ *
+ * \param[in] buffer        Device buffer to be checked.
+ * \param[in] requiredSize  Number of elements that the buffer will have to accommodate.
+ *
+ * \returns Whether the device buffer exists and has enough capacity.
+ */
+template<typename T>
+static gmx_unused bool checkDeviceBuffer(const DeviceBuffer<T>& buffer, int requiredSize)
+{
+    return buffer.buffer_ && (static_cast<int>(buffer.buffer_->get_count()) >= requiredSize);
+}
+
 /*! \libinternal \brief
  * Allocates a device-side buffer.
  * It is currently a caller's responsibility to call it only on not-yet allocated buffers.
@@ -182,8 +197,10 @@ void copyToDeviceBuffer(DeviceBuffer<ValueType>* buffer,
         return; // such calls are actually made with empty domains
     }
     GMX_ASSERT(buffer, "needs a buffer pointer");
-    GMX_ASSERT(buffer->buffer_, "needs an initialized buffer pointer");
     GMX_ASSERT(hostBuffer, "needs a host buffer pointer");
+
+    GMX_ASSERT(checkDeviceBuffer(*buffer, startingOffset + numValues),
+               "buffer too small or not initialized");
 
     cl::sycl::buffer<ValueType>& syclBuffer = *buffer->buffer_;
 
@@ -234,6 +251,9 @@ void copyFromDeviceBuffer(ValueType*               hostBuffer,
     GMX_ASSERT(buffer, "needs a buffer pointer");
     GMX_ASSERT(hostBuffer, "needs a host buffer pointer");
 
+    GMX_ASSERT(checkDeviceBuffer(*buffer, startingOffset + numValues),
+               "buffer too small or not initialized");
+
     cl::sycl::buffer<ValueType>& syclBuffer = *buffer->buffer_;
 
     cl::sycl::event ev = deviceStream.stream().submit([&](cl::sycl::handler& cgh) {
@@ -269,6 +289,9 @@ void clearDeviceBufferAsync(DeviceBuffer<ValueType>* buffer,
     }
     GMX_ASSERT(buffer, "needs a buffer pointer");
 
+    GMX_ASSERT(checkDeviceBuffer(*buffer, startingOffset + numValues),
+               "buffer too small or not initialized");
+
     const ValueType              pattern{};
     cl::sycl::buffer<ValueType>& syclBuffer = *(buffer->buffer_);
 
@@ -278,21 +301,6 @@ void clearDeviceBufferAsync(DeviceBuffer<ValueType>* buffer,
         };
         cgh.fill(d_bufferAccessor, pattern);
     });
-}
-
-/*! \brief Check the validity of the device buffer.
- *
- * Checks if the buffer is valid and if its allocation is big enough.
- *
- * \param[in] buffer        Device buffer to be checked.
- * \param[in] requiredSize  Number of elements that the buffer will have to accommodate.
- *
- * \returns Whether the device buffer exists and has enough capacity.
- */
-template<typename T>
-static gmx_unused bool checkDeviceBuffer(DeviceBuffer<T> buffer, int requiredSize)
-{
-    return buffer.buffer_ && (static_cast<int>(buffer.buffer_->get_count()) >= requiredSize);
 }
 
 /*! \brief Create a texture object for an array of type ValueType.
