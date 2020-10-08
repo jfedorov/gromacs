@@ -53,11 +53,11 @@ using DeviceTexture = void*;
 //! \brief Single GPU call timing event, not used with SYCL
 using CommandEvent = void*;
 
-//! Convenience alias for cl::sycl::float4
+//! Convenience alias.
 typedef cl::sycl::float4 float4;
 
-//! Convenience alias for cl::sycl::float3
-typedef cl::sycl::float3 float3;
+//! Convenience alias. Not using cl::sycl::float3 due to alignment issues.
+typedef gmx::RVec float3;
 
 //! Convenience alias for cl::sycl::float2
 typedef cl::sycl::float2 float2;
