@@ -45,17 +45,15 @@
  *
  * \ingroup module_mdlib
  */
-#include <memory>
-
 #include "gmxpre.h"
 
-#include "leapfrog_gpu.h"
+#include <memory>
 
 #include "gromacs/gpu_utils/devicebuffer.h"
 #include "gromacs/gpu_utils/gmxsycl.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/mdlib/leapfrog_gpu.h"
 #include "gromacs/mdtypes/group.h"
-#include "gromacs/pbcutil/pbc.h"
 #include "gromacs/utility/arrayref.h"
 
 namespace gmx
@@ -166,9 +164,54 @@ public:
 template<NumTempScaleValues numTempScaleValues, VelocityScalingType velocityScaling>
 void SyclLeapFrogKernelFunctor<numTempScaleValues, velocityScaling>::operator()(cl::sycl::id<1> itemIdx) const
 {
-    x_[itemIdx]  = { 0, 1, 2 };
-    xp_[itemIdx] = { 3, 4, 5 };
-    v_[itemIdx]  = { 6, 7, float(itemIdx.get(0)) };
+    const float3 x    = x_[itemIdx];
+    float3       v    = v_[itemIdx];
+    const float3 f    = f_[itemIdx];
+    const float  im   = inverseMasses_[itemIdx];
+    const float  imdt = im * dt_;
+
+    // Swapping places for xp and x so that the x will contain the updated coordinates and xp - the
+    // coordinates before update. This should be taken into account when (if) constraints are
+    // applied after the update: x and xp have to be passed to constraints in the 'wrong' order.
+    xp_[itemIdx] = x;
+
+    if (numTempScaleValues != NumTempScaleValues::None || velocityScaling != VelocityScalingType::None)
+    {
+        float3 vp = v;
+
+        if (numTempScaleValues != NumTempScaleValues::None)
+        {
+            const float lambda = [=]() {
+                if (numTempScaleValues == NumTempScaleValues::Single)
+                {
+                    return lambdas_[0];
+                }
+                else if (numTempScaleValues == NumTempScaleValues::Multiple)
+                {
+                    const int tempScaleGroup = tempScaleGroups_[itemIdx];
+                    return lambdas_[tempScaleGroup];
+                }
+                else
+                {
+                    return 1.0F; // Should be unreachable
+                }
+            }();
+            vp *= lambda;
+        }
+
+        if (velocityScaling == VelocityScalingType::Diagonal)
+        {
+            vp[0] -= prVelocityScalingMatrixDiagonal_[0] * v[0];
+            vp[1] -= prVelocityScalingMatrixDiagonal_[1] * v[1];
+            vp[2] -= prVelocityScalingMatrixDiagonal_[2] * v[2];
+        }
+
+        v = vp;
+    }
+
+    v += f * imdt;
+    v_[itemIdx] = v;
+    x_[itemIdx] = x + v * dt_;
 }
 
 template<NumTempScaleValues numTempScaleValues, VelocityScalingType velocityScaling>
