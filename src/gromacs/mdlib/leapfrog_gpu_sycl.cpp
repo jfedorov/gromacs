@@ -59,6 +59,43 @@
 namespace gmx
 {
 
+template<typename T, enum cl::sycl::access::mode mode, bool condition = true>
+struct OptionalAccessor
+{
+    OptionalAccessor(cl::sycl::buffer<T, 1>* buf, cl::sycl::handler& cgh) :
+        value(cl::sycl::accessor<T, 1, mode>(*buf, cgh))
+    {
+    }
+    template<typename IndexingType>
+    T& operator[](const IndexingType& x)
+    {
+        return value[x];
+    }
+    template<typename IndexingType>
+    const T& operator[](const IndexingType& x) const
+    {
+        return value[x];
+    }
+    cl::sycl::accessor<T, 1, mode> value;
+};
+
+template<typename T, enum cl::sycl::access::mode mode>
+struct OptionalAccessor<T, mode, false>
+{
+    OptionalAccessor(cl::sycl::buffer<T, 1>* /*buf*/, cl::sycl::handler& /*cgh*/) {}
+    template<typename IndexingType>
+    T& operator[](const IndexingType& /*x*/)
+    {
+        return value;
+    }
+    template<typename IndexingType>
+    const T& operator[](const IndexingType& /*x*/) const
+    {
+        return value;
+    }
+    static constexpr T value{ 0 };
+};
+
 /*! \brief Main kernel for Leap-Frog integrator.
  *
  *  The coordinates and velocities are updated on the GPU. Also saves the intermediate values of the coordinates for
@@ -106,23 +143,28 @@ public:
         f_(f.buffer_->get_access<cl::sycl::access::mode::read>(cgh)),
         inverseMasses_(inverseMasses.buffer_->get_access<cl::sycl::access::mode::read>(cgh)),
         dt_(dt),
-        lambdas_(lambdas.buffer_->get_access<cl::sycl::access::mode::read>(cgh)),
-        tempScaleGroups_(tempScaleGroups.buffer_->get_access<cl::sycl::access::mode::read>(cgh)),
+        lambdas_(OptionalAccessor<float, cl::sycl::access::mode::read, _haveLambdas>(lambdas.buffer_.get(),
+                                                                                     cgh)),
+        tempScaleGroups_(OptionalAccessor<unsigned short, cl::sycl::access::mode::read, _haveTempScaleGroups>(
+                tempScaleGroups.buffer_.get(),
+                cgh)),
         prVelocityScalingMatrixDiagonal_(prVelocityScalingMatrixDiagonal)
     {
     }
     void operator()(cl::sycl::id<1> itemIdx) const;
 
 private:
-    int                                                                  numAtoms_;
+    static constexpr bool _haveLambdas         = numTempScaleValues != NumTempScaleValues::None;
+    static constexpr bool _haveTempScaleGroups = numTempScaleValues == NumTempScaleValues::Multiple;
+    int                   numAtoms_;
     cl::sycl::accessor<float3, 1, cl::sycl::access::mode::read_write>    x_;
     cl::sycl::accessor<float3, 1, cl::sycl::access::mode::discard_write> xp_;
     cl::sycl::accessor<float3, 1, cl::sycl::access::mode::read_write>    v_;
     cl::sycl::accessor<float3, 1, cl::sycl::access::mode::read>          f_;
     cl::sycl::accessor<float, 1, cl::sycl::access::mode::read>           inverseMasses_;
     float                                                                dt_;
-    cl::sycl::accessor<float, 1, cl::sycl::access::mode::read>           lambdas_;
-    cl::sycl::accessor<unsigned short, 1, cl::sycl::access::mode::read>  tempScaleGroups_;
+    OptionalAccessor<float, cl::sycl::access::mode::read, _haveLambdas>  lambdas_;
+    OptionalAccessor<unsigned short, cl::sycl::access::mode::read, _haveTempScaleGroups> tempScaleGroups_;
     float3 prVelocityScalingMatrixDiagonal_;
 };
 
