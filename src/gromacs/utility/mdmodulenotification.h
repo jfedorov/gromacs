@@ -76,6 +76,8 @@ struct MdModulesEnergyOutputToDensityFittingRequestChecker
 {
     //! Trigger output to density fitting energy field
     bool energyOutputToDensityFitting_ = false;
+    //! Trigger output to QMMM energy field
+    bool energyOutputToQMMM_ = false;
 };
 
 /*! \libinternal

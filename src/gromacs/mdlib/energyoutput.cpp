@@ -215,7 +215,6 @@ EnergyOutput::EnergyOutput(ener_file*               fp_ene,
 
     bEner_[F_LJ]           = !bBHAM;
     bEner_[F_BHAM]         = bBHAM;
-    bEner_[F_EQM]          = ir->bQMMM;
     bEner_[F_RF_EXCL]      = (EEL_RF(ir->coulombtype) && ir->cutoff_scheme == ecutsGROUP);
     bEner_[F_COUL_RECIP]   = EEL_FULL(ir->coulombtype);
     bEner_[F_LJ_RECIP]     = EVDW_PME(ir->vdwtype);
@@ -248,7 +247,7 @@ EnergyOutput::EnergyOutput(ener_file*               fp_ene,
     mdModulesNotifier.simulationSetupNotifications_.notify(&mdModulesAddOutputToDensityFittingFieldRequest);
 
     bEner_[F_DENSITYFITTING] = mdModulesAddOutputToDensityFittingFieldRequest.energyOutputToDensityFitting_;
-
+    bEner_[F_EQM] = mdModulesAddOutputToDensityFittingFieldRequest.energyOutputToQMMM_;
 
     // Counting the energy terms that will be printed and saving their names
     f_nre_ = 0;
