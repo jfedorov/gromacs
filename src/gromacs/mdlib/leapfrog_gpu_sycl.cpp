@@ -111,7 +111,7 @@ public:
         prVelocityScalingMatrixDiagonal_(prVelocityScalingMatrixDiagonal)
     {
     }
-    void operator()(cl::sycl::id<1> itemIdx);
+    void operator()(cl::sycl::id<1> itemIdx) const;
 
 private:
     static constexpr bool _haveLambdas         = numTempScaleValues != NumTempScaleValues::None;
@@ -164,7 +164,7 @@ public:
 };
 
 template<NumTempScaleValues numTempScaleValues, VelocityScalingType velocityScaling>
-void SyclLeapFrogKernelFunctor<numTempScaleValues, velocityScaling>::operator()(cl::sycl::id<1> itemIdx)
+void SyclLeapFrogKernelFunctor<numTempScaleValues, velocityScaling>::operator()(cl::sycl::id<1> itemIdx) const
 {
     const float3 x    = x_[itemIdx];
     float3       v    = v_[itemIdx];
