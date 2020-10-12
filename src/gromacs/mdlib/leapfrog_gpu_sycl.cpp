@@ -64,24 +64,21 @@ namespace gmx
  *  The coordinates and velocities are updated on the GPU. Also saves the intermediate values of the coordinates for
  *   further use in constraints.
  *
- *  Each GPU thread works with a single particle. Empty declaration is needed to
- *  avoid "no previous prototype for function" clang warning.
- *
- *  \todo Check if the force should be set to zero here.
- *  \todo This kernel can also accumulate incidental temperatures for each atom.
+ *  Each GPU thread works with a single particle.
  *
  * \tparam        numTempScaleValues               The number of different T-couple values.
  * \tparam        velocityScaling                  Type of the Parrinello-Rahman velocity rescaling.
+ * \param         cgh                              SYCL's command group handler.
  * \param[in]     numAtoms                         Total number of atoms.
- * \param[in,out] gm_x                             Coordinates to update upon integration.
- * \param[out]    gm_xp                            A copy of the coordinates before the integration (for constraints).
- * \param[in,out] gm_v                             Velocities to update.
- * \param[in]     gm_f                             Atomic forces.
- * \param[in]     gm_inverseMasses                 Reciprocal masses.
+ * \param[in,out] x                                Coordinates to update upon integration.
+ * \param[out]    xp                               A copy of the coordinates before the integration (for constraints).
+ * \param[in,out] v                                Velocities to update.
+ * \param[in]     f                                Atomic forces.
+ * \param[in]     inverseMasses                    Reciprocal masses.
  * \param[in]     dt                               Timestep.
- * \param[in]     gm_lambdas                       Temperature scaling factors (one per group)
- * \param[in]     gm_tempScaleGroups               Mapping of atoms into groups.
- * \param[in]     dtPressureCouple                 Time step for pressure coupling
+ * \param[in]     lambdas                          Temperature scaling factors (one per group).
+ * \param[in]     tempScaleGroups                  Mapping of atoms into groups.
+ * \param[in]     dtPressureCouple                 Time step for pressure coupling.
  * \param[in]     prVelocityScalingMatrixDiagonal  Diagonal elements of Parrinello-Rahman velocity scaling matrix
  */
 template<NumTempScaleValues numTempScaleValues, VelocityScalingType velocityScaling>
@@ -114,17 +111,17 @@ public:
     void operator()(cl::sycl::id<1> itemIdx) const;
 
 private:
-    static constexpr bool _haveLambdas         = numTempScaleValues != NumTempScaleValues::None;
-    static constexpr bool _haveTempScaleGroups = numTempScaleValues == NumTempScaleValues::Multiple;
+    static constexpr bool sc_haveLambdas_         = numTempScaleValues != NumTempScaleValues::None;
+    static constexpr bool sc_haveTempScaleGroups_ = numTempScaleValues == NumTempScaleValues::Multiple;
     int                   numAtoms_;
-    DeviceAccessor<float3, cl::sycl::access::mode::read_write>        x_;
-    DeviceAccessor<float3, cl::sycl::access::mode::discard_write>     xp_;
-    DeviceAccessor<float3, cl::sycl::access::mode::read_write>        v_;
-    DeviceAccessor<float3, cl::sycl::access::mode::read>              f_;
-    DeviceAccessor<float, cl::sycl::access::mode::read>               inverseMasses_;
-    float                                                             dt_;
-    DeviceAccessor<float, cl::sycl::access::mode::read, _haveLambdas> lambdas_;
-    DeviceAccessor<unsigned short, cl::sycl::access::mode::read, _haveTempScaleGroups> tempScaleGroups_;
+    DeviceAccessor<float3, cl::sycl::access::mode::read_write>            x_;
+    DeviceAccessor<float3, cl::sycl::access::mode::discard_write>         xp_;
+    DeviceAccessor<float3, cl::sycl::access::mode::read_write>            v_;
+    DeviceAccessor<float3, cl::sycl::access::mode::read>                  f_;
+    DeviceAccessor<float, cl::sycl::access::mode::read>                   inverseMasses_;
+    float                                                                 dt_;
+    DeviceAccessor<float, cl::sycl::access::mode::read, !sc_haveLambdas_> lambdas_;
+    DeviceAccessor<unsigned short, cl::sycl::access::mode::read, !sc_haveTempScaleGroups_> tempScaleGroups_;
     float3 prVelocityScalingMatrixDiagonal_;
 };
 
@@ -342,15 +339,8 @@ void LeapFrogGpu::integrate(DeviceBuffer<float3>              d_x,
                 std::make_unique<KernelLauncher<NumTempScaleValues::None, VelocityScalingType::None>>();
     }
 
-    gmx_used_in_debug cl::sycl::event e =
-            kernelLauncher->launch(deviceStream_, numAtoms_, d_x, d_xp, d_v, d_f, d_inverseMasses_, dt,
-                                   d_lambdas_, d_tempScaleGroups_, prVelocityScalingMatrixDiagonal_);
-
-#ifndef NDEBUG
-    /* There will be synchronization when we will copy the data back to host, but for
-     * debug it will be easier to wait right here */
-    e.wait_and_throw();
-#endif
+    kernelLauncher->launch(deviceStream_, numAtoms_, d_x, d_xp, d_v, d_f, d_inverseMasses_, dt,
+                           d_lambdas_, d_tempScaleGroups_, prVelocityScalingMatrixDiagonal_);
 }
 
 LeapFrogGpu::LeapFrogGpu(const DeviceContext& deviceContext, const DeviceStream& deviceStream) :
