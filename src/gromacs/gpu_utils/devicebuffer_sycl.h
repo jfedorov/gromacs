@@ -366,7 +366,7 @@ void destroyParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer, DeviceTextur
  *
  * \tparam T Type of data stored in the buffer.
  * \tparam mode Buffer access mode (from \c cl::sycl::access::mode)
- * \tparam isDummy If set to \true, a dummy struct would be generated, not associated with any
+ * \tparam isDummy If set to \p true, a dummy struct would be generated, not associated with any
  *                 actual SYCL accessor and not intended to be actually used in kernel code.
  */
 template<typename T, enum cl::sycl::access::mode mode, bool isDummy = false>
