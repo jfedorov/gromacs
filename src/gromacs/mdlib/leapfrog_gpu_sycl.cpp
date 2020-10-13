@@ -174,31 +174,30 @@ void SyclLeapFrogKernelFunctor<numTempScaleValues, velocityScaling>::operator()(
     // applied after the update: x and xp have to be passed to constraints in the 'wrong' order.
     xp_[itemIdx] = x;
 
-    if (numTempScaleValues != NumTempScaleValues::None || velocityScaling != VelocityScalingType::None)
+    if constexpr (numTempScaleValues != NumTempScaleValues::None
+                  || velocityScaling != VelocityScalingType::None)
     {
         float3 vp = v;
 
-        if (numTempScaleValues != NumTempScaleValues::None)
+        if constexpr (numTempScaleValues != NumTempScaleValues::None)
         {
             const float lambda = [=]() {
-                if (numTempScaleValues == NumTempScaleValues::Single)
+                if constexpr (numTempScaleValues == NumTempScaleValues::Single)
                 {
                     return lambdas_[0];
                 }
-                else if (numTempScaleValues == NumTempScaleValues::Multiple)
-                {
-                    const int tempScaleGroup = tempScaleGroups_[itemIdx];
-                    return lambdas_[tempScaleGroup];
-                }
                 else
                 {
-                    return 1.0F; // Should be unreachable
+                    static_assert(numTempScaleValues == NumTempScaleValues::Multiple,
+                                  "Invalid value of numTempScaleValues");
+                    const int tempScaleGroup = tempScaleGroups_[itemIdx];
+                    return lambdas_[tempScaleGroup];
                 }
             }();
             vp *= lambda;
         }
 
-        if (velocityScaling == VelocityScalingType::Diagonal)
+        if constexpr (velocityScaling == VelocityScalingType::Diagonal)
         {
             vp[0] -= prVelocityScalingMatrixDiagonal_[0] * v[0];
             vp[1] -= prVelocityScalingMatrixDiagonal_[1] * v[1];

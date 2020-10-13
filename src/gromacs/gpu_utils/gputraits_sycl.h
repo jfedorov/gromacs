@@ -54,13 +54,13 @@ using DeviceTexture = void*;
 using CommandEvent = void*;
 
 //! Convenience alias.
-typedef cl::sycl::float4 float4;
+using float4 = cl::sycl::float4;
 
 //! Convenience alias. Not using cl::sycl::float3 due to alignment issues.
-typedef gmx::RVec float3;
+using float3 = gmx::RVec;
 
 //! Convenience alias for cl::sycl::float2
-typedef cl::sycl::float2 float2;
+using float2 = cl::sycl::float2;
 
 /*! \internal \brief
  * GPU kernels scheduling description. This is same in OpenCL/CUDA.
