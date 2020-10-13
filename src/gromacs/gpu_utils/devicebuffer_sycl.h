@@ -353,7 +353,7 @@ void destroyParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer, DeviceTextur
  *
  * Compared to the cl::sycl::accessor, this class has following benefits:
  *
- * - Can be constructed from \c DeviceBuffer without repeating the \p mode.
+ * - Can be constructed from the \c DeviceBuffer (or pointer to it) directly.
  * - Can be made not to create any actual accessors by setting \p isDummy to \c true.
  *
  * Passing accessors to SYCL kernels requires storing them as functor's members. Since SYCL's
@@ -362,7 +362,7 @@ void destroyParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer, DeviceTextur
  * if they are not used (can happen if the set of kernel arguments depend on the parameters).
  * Setting up an accessor to a real buffer would introduce unnecessary data dependencies.
  * Creating a dummy buffer just to get it's accessor is both a runtime overhead and complicates
- * the code.
+ * the code. For dummy buffer, one can safely pass \c nullptr instead of a buffer.
  *
  * \tparam T Type of data stored in the buffer.
  * \tparam mode Buffer access mode (from \c cl::sycl::access::mode)
