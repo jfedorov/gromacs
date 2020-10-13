@@ -358,10 +358,10 @@ void destroyParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer, DeviceTextur
  *
  * Passing accessors to SYCL kernels requires storing them as functor's members. Since SYCL's
  * accessor has no trivial constructor and does not like getting invalid buffers, having
- * cl::sycl::accessor's as functor members would require always initializing them, even
+ * cl::sycl::accessors as functor members would require always initializing them, even
  * if they are not used (can happen if the set of kernel arguments depend on the parameters).
  * Setting up an accessor to a real buffer would introduce unnecessary data dependencies.
- * Creating a dummy buffer just to get it's accessor is both a runtime overhead and complicates
+ * Creating a dummy buffer just to get its accessor is both a runtime overhead and complicates
  * the code. For dummy buffer, one can safely pass \c nullptr instead of a buffer.
  *
  * \tparam T Type of data stored in the buffer.
