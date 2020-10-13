@@ -125,41 +125,6 @@ private:
     float3 prVelocityScalingMatrixDiagonal_;
 };
 
-class IKernelLauncher
-{
-public:
-    virtual ~IKernelLauncher()                                             = default;
-    virtual cl::sycl::event launch(const DeviceStream&           deviceStream,
-                                   int                           numAtoms,
-                                   DeviceBuffer<float3>&         x,
-                                   DeviceBuffer<float3>&         xp,
-                                   DeviceBuffer<float3>&         v,
-                                   DeviceBuffer<float3>&         f,
-                                   DeviceBuffer<float>&          inverseMasses,
-                                   float                         dt,
-                                   DeviceBuffer<float>&          lambdas,
-                                   DeviceBuffer<unsigned short>& tempScaleGroups,
-                                   float3 prVelocityScalingMatrixDiagonal) = 0;
-};
-
-template<NumTempScaleValues numTempScaleValues, VelocityScalingType velocityScaling>
-class KernelLauncher : public IKernelLauncher
-{
-public:
-    virtual ~KernelLauncher() override = default;
-    virtual cl::sycl::event launch(const DeviceStream&           deviceStream,
-                                   int                           numAtoms,
-                                   DeviceBuffer<float3>&         x,
-                                   DeviceBuffer<float3>&         xp,
-                                   DeviceBuffer<float3>&         v,
-                                   DeviceBuffer<float3>&         f,
-                                   DeviceBuffer<float>&          inverseMasses,
-                                   float                         dt,
-                                   DeviceBuffer<float>&          lambdas,
-                                   DeviceBuffer<unsigned short>& tempScaleGroups,
-                                   float3 prVelocityScalingMatrixDiagonal) final;
-};
-
 template<NumTempScaleValues numTempScaleValues, VelocityScalingType velocityScaling>
 void SyclLeapFrogKernelFunctor<numTempScaleValues, velocityScaling>::operator()(cl::sycl::id<1> itemIdx) const
 {
@@ -213,18 +178,17 @@ void SyclLeapFrogKernelFunctor<numTempScaleValues, velocityScaling>::operator()(
 }
 
 template<NumTempScaleValues numTempScaleValues, VelocityScalingType velocityScaling>
-cl::sycl::event
-KernelLauncher<numTempScaleValues, velocityScaling>::launch(const DeviceStream&   deviceStream,
-                                                            int                   numAtoms,
-                                                            DeviceBuffer<float3>& x,
-                                                            DeviceBuffer<float3>& xp,
-                                                            DeviceBuffer<float3>& v,
-                                                            DeviceBuffer<float3>& f,
-                                                            DeviceBuffer<float>&  inverseMasses,
-                                                            float                 dt,
-                                                            DeviceBuffer<float>&  lambdas,
-                                                            DeviceBuffer<unsigned short>& tempScaleGroups,
-                                                            float3 prVelocityScalingMatrixDiagonal)
+static cl::sycl::event launchKernel(const DeviceStream&           deviceStream,
+                                    int                           numAtoms,
+                                    DeviceBuffer<float3>&         x,
+                                    DeviceBuffer<float3>&         xp,
+                                    DeviceBuffer<float3>&         v,
+                                    DeviceBuffer<float3>&         f,
+                                    DeviceBuffer<float>&          inverseMasses,
+                                    float                         dt,
+                                    DeviceBuffer<float>&          lambdas,
+                                    DeviceBuffer<unsigned short>& tempScaleGroups,
+                                    float3                        prVelocityScalingMatrixDiagonal)
 {
     const cl::sycl::range<1> rangeAllAtoms(numAtoms);
 
@@ -241,9 +205,9 @@ KernelLauncher<numTempScaleValues, velocityScaling>::launch(const DeviceStream& 
 }
 
 /*! \brief Select templated kernel. */
-inline IKernelLauncher* selectLeapFrogKernelLauncher(bool                doTemperatureScaling,
-                                                     int                 numTempScaleValues,
-                                                     VelocityScalingType prVelocityScalingType)
+static inline auto* selectLeapFrogKernelLauncher(bool                doTemperatureScaling,
+                                                 int                 numTempScaleValues,
+                                                 VelocityScalingType prVelocityScalingType)
 {
     // Check input for consistency: if there is temperature coupling, at least one coupling group should be defined.
     GMX_ASSERT(!doTemperatureScaling || (numTempScaleValues > 0),
@@ -253,30 +217,30 @@ inline IKernelLauncher* selectLeapFrogKernelLauncher(bool                doTempe
     {
         if (!doTemperatureScaling)
         {
-            return new KernelLauncher<NumTempScaleValues::None, VelocityScalingType::None>;
+            return launchKernel<NumTempScaleValues::None, VelocityScalingType::None>;
         }
         else if (numTempScaleValues == 1)
         {
-            return new KernelLauncher<NumTempScaleValues::Single, VelocityScalingType::None>;
+            return launchKernel<NumTempScaleValues::Single, VelocityScalingType::None>;
         }
         else if (numTempScaleValues > 1)
         {
-            return new KernelLauncher<NumTempScaleValues::Multiple, VelocityScalingType::None>;
+            return launchKernel<NumTempScaleValues::Multiple, VelocityScalingType::None>;
         }
     }
     else if (prVelocityScalingType == VelocityScalingType::Diagonal)
     {
         if (!doTemperatureScaling)
         {
-            return new KernelLauncher<NumTempScaleValues::None, VelocityScalingType::Diagonal>;
+            return launchKernel<NumTempScaleValues::None, VelocityScalingType::Diagonal>;
         }
         else if (numTempScaleValues == 1)
         {
-            return new KernelLauncher<NumTempScaleValues::Single, VelocityScalingType::Diagonal>;
+            return launchKernel<NumTempScaleValues::Single, VelocityScalingType::Diagonal>;
         }
         else if (numTempScaleValues > 1)
         {
-            return new KernelLauncher<NumTempScaleValues::Multiple, VelocityScalingType::Diagonal>;
+            return launchKernel<NumTempScaleValues::Multiple, VelocityScalingType::Diagonal>;
         }
     }
     else
@@ -284,7 +248,7 @@ inline IKernelLauncher* selectLeapFrogKernelLauncher(bool                doTempe
         GMX_RELEASE_ASSERT(false,
                            "Only isotropic Parrinello-Rahman pressure coupling is supported.");
     }
-    return new KernelLauncher<NumTempScaleValues::None, VelocityScalingType::None>;
+    return launchKernel<NumTempScaleValues::None, VelocityScalingType::None>;
 }
 
 void LeapFrogGpu::integrate(DeviceBuffer<float3>              d_x,
@@ -298,7 +262,7 @@ void LeapFrogGpu::integrate(DeviceBuffer<float3>              d_x,
                             const float                       dtPressureCouple,
                             const matrix                      prVelocityScalingMatrix)
 {
-    std::unique_ptr<IKernelLauncher> kernelLauncher;
+    auto* kernelLauncher = launchKernel<NumTempScaleValues::None, VelocityScalingType::None>;
     if (doTemperatureScaling || doParrinelloRahman)
     {
         if (doTemperatureScaling)
@@ -329,17 +293,12 @@ void LeapFrogGpu::integrate(DeviceBuffer<float3>              d_x,
                             dtPressureCouple * prVelocityScalingMatrix[YY][YY],
                             dtPressureCouple * prVelocityScalingMatrix[ZZ][ZZ] };
         }
-        kernelLauncher.reset(selectLeapFrogKernelLauncher(doTemperatureScaling, numTempScaleValues_,
-                                                          prVelocityScalingType));
-    }
-    else
-    {
-        kernelLauncher =
-                std::make_unique<KernelLauncher<NumTempScaleValues::None, VelocityScalingType::None>>();
+        kernelLauncher = selectLeapFrogKernelLauncher(doTemperatureScaling, numTempScaleValues_,
+                                                      prVelocityScalingType);
     }
 
-    kernelLauncher->launch(deviceStream_, numAtoms_, d_x, d_xp, d_v, d_f, d_inverseMasses_, dt,
-                           d_lambdas_, d_tempScaleGroups_, prVelocityScalingMatrixDiagonal_);
+    kernelLauncher(deviceStream_, numAtoms_, d_x, d_xp, d_v, d_f, d_inverseMasses_, dt, d_lambdas_,
+                   d_tempScaleGroups_, prVelocityScalingMatrixDiagonal_);
 }
 
 LeapFrogGpu::LeapFrogGpu(const DeviceContext& deviceContext, const DeviceStream& deviceStream) :
