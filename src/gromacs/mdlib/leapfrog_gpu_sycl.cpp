@@ -55,6 +55,7 @@
 #include "gromacs/mdlib/leapfrog_gpu.h"
 #include "gromacs/mdtypes/group.h"
 #include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/fatalerror.h"
 
 namespace gmx
 {
@@ -204,51 +205,46 @@ static cl::sycl::event launchKernel(const DeviceStream&           deviceStream,
     return e;
 }
 
+template<enum VelocityScalingType prVelocityScalingType>
+static inline auto* selectLeapFrogKernelLauncher(bool doTemperatureScaling, int numTempScaleValues)
+{
+    if (!doTemperatureScaling)
+    {
+        return launchKernel<NumTempScaleValues::None, prVelocityScalingType>;
+    }
+    else if (numTempScaleValues == 1)
+    {
+        return launchKernel<NumTempScaleValues::Single, prVelocityScalingType>;
+    }
+    else if (numTempScaleValues > 1)
+    {
+        return launchKernel<NumTempScaleValues::Multiple, prVelocityScalingType>;
+    }
+    else
+    {
+        gmx_incons("Temperature coupling was requested with no temperature coupling groups.");
+    }
+}
+
 /*! \brief Select templated kernel. */
 static inline auto* selectLeapFrogKernelLauncher(bool                doTemperatureScaling,
                                                  int                 numTempScaleValues,
                                                  VelocityScalingType prVelocityScalingType)
 {
-    // Check input for consistency: if there is temperature coupling, at least one coupling group should be defined.
-    GMX_ASSERT(!doTemperatureScaling || (numTempScaleValues > 0),
-               "Temperature coupling was requested with no temperature coupling groups.");
-
     if (prVelocityScalingType == VelocityScalingType::None)
     {
-        if (!doTemperatureScaling)
-        {
-            return launchKernel<NumTempScaleValues::None, VelocityScalingType::None>;
-        }
-        else if (numTempScaleValues == 1)
-        {
-            return launchKernel<NumTempScaleValues::Single, VelocityScalingType::None>;
-        }
-        else if (numTempScaleValues > 1)
-        {
-            return launchKernel<NumTempScaleValues::Multiple, VelocityScalingType::None>;
-        }
+        return selectLeapFrogKernelLauncher<VelocityScalingType::None>(doTemperatureScaling,
+                                                                       numTempScaleValues);
     }
     else if (prVelocityScalingType == VelocityScalingType::Diagonal)
     {
-        if (!doTemperatureScaling)
-        {
-            return launchKernel<NumTempScaleValues::None, VelocityScalingType::Diagonal>;
-        }
-        else if (numTempScaleValues == 1)
-        {
-            return launchKernel<NumTempScaleValues::Single, VelocityScalingType::Diagonal>;
-        }
-        else if (numTempScaleValues > 1)
-        {
-            return launchKernel<NumTempScaleValues::Multiple, VelocityScalingType::Diagonal>;
-        }
+        return selectLeapFrogKernelLauncher<VelocityScalingType::Diagonal>(doTemperatureScaling,
+                                                                           numTempScaleValues);
     }
     else
     {
-        GMX_RELEASE_ASSERT(false,
-                           "Only isotropic Parrinello-Rahman pressure coupling is supported.");
+        gmx_incons("Only isotropic Parrinello-Rahman pressure coupling is supported.");
     }
-    return launchKernel<NumTempScaleValues::None, VelocityScalingType::None>;
 }
 
 void LeapFrogGpu::integrate(DeviceBuffer<float3>              d_x,
