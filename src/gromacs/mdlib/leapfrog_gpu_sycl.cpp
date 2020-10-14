@@ -169,27 +169,16 @@ auto syclLeapFrogKernel(cl::sycl::handler&            cgh,
 
 template<NumTempScaleValues numTempScaleValues, VelocityScalingType velocityScaling>
 class SyclLeapFrogKernelName;
-template<NumTempScaleValues numTempScaleValues, VelocityScalingType velocityScaling>
-static cl::sycl::event launchKernel(const DeviceStream&           deviceStream,
-                                    int                           numAtoms,
-                                    DeviceBuffer<float3>&         x,
-                                    DeviceBuffer<float3>&         xp,
-                                    DeviceBuffer<float3>&         v,
-                                    DeviceBuffer<float3>&         f,
-                                    DeviceBuffer<float>&          inverseMasses,
-                                    float                         dt,
-                                    DeviceBuffer<float>&          lambdas,
-                                    DeviceBuffer<unsigned short>& tempScaleGroups,
-                                    float3                        prVelocityScalingMatrixDiagonal)
+template<NumTempScaleValues numTempScaleValues, VelocityScalingType velocityScaling, class... T>
+static cl::sycl::event launchKernel(const DeviceStream& deviceStream, int numAtoms, T&&... args)
 {
     const cl::sycl::range<1> rangeAllAtoms(numAtoms);
 
     cl::sycl::queue q = deviceStream.stream();
 
     cl::sycl::event e = q.submit([&](cl::sycl::handler& cgh) {
-        auto kernel = syclLeapFrogKernel<numTempScaleValues, velocityScaling>(
-                cgh, x, xp, v, f, inverseMasses, dt, lambdas, tempScaleGroups,
-                prVelocityScalingMatrixDiagonal);
+        auto kernel =
+                syclLeapFrogKernel<numTempScaleValues, velocityScaling>(cgh, std::forward<T>(args)...);
         // QUESTION: Is it OK for us to compile with -fsycl-unnamed-kernel?
         cgh.parallel_for<SyclLeapFrogKernelName<numTempScaleValues, velocityScaling>>(rangeAllAtoms, kernel);
     });
@@ -197,8 +186,35 @@ static cl::sycl::event launchKernel(const DeviceStream&           deviceStream,
     return e;
 }
 
+template<class F, class... Args>
+struct replace_fn_args;
+template<class RO, class T, class... Ts, class R, class... Args>
+struct replace_fn_args<RO(T, Ts...), R, Args...>
+{
+    using type = R(Args..., const Ts&...);
+};
+
+#if 1
+using LaunchKernelFn =
+        replace_fn_args<decltype(syclLeapFrogKernel<NumTempScaleValues::None, VelocityScalingType::None>),
+                        cl::sycl::event,
+                        const DeviceStream&,
+                        int>::type;
+#else
+using LaunchKernelFn = cl::sycl::event(const DeviceStream&,
+                                       int,
+                                       DeviceBuffer<float3>&,
+                                       DeviceBuffer<float3>&,
+                                       DeviceBuffer<float3>&,
+                                       DeviceBuffer<float3>&,
+                                       DeviceBuffer<float>&,
+                                       const float&,
+                                       DeviceBuffer<float>&,
+                                       DeviceBuffer<unsigned short>&,
+                                       const float3&);
+#endif
 template<enum VelocityScalingType prVelocityScalingType>
-static inline auto* selectLeapFrogKernelLauncher(bool doTemperatureScaling, int numTempScaleValues)
+static inline LaunchKernelFn& selectLeapFrogKernelLauncher(bool doTemperatureScaling, int numTempScaleValues)
 {
     if (!doTemperatureScaling)
     {
@@ -219,9 +235,9 @@ static inline auto* selectLeapFrogKernelLauncher(bool doTemperatureScaling, int 
 }
 
 /*! \brief Select templated kernel. */
-static inline auto* selectLeapFrogKernelLauncher(bool                doTemperatureScaling,
-                                                 int                 numTempScaleValues,
-                                                 VelocityScalingType prVelocityScalingType)
+static inline LaunchKernelFn& selectLeapFrogKernelLauncher(bool                doTemperatureScaling,
+                                                           int                 numTempScaleValues,
+                                                           VelocityScalingType prVelocityScalingType)
 {
     if (prVelocityScalingType == VelocityScalingType::None)
     {
@@ -250,7 +266,7 @@ void LeapFrogGpu::integrate(DeviceBuffer<float3>              d_x,
                             const float                       dtPressureCouple,
                             const matrix                      prVelocityScalingMatrix)
 {
-    auto* kernelLauncher = launchKernel<NumTempScaleValues::None, VelocityScalingType::None>;
+    LaunchKernelFn* kernelLauncher = launchKernel<NumTempScaleValues::None, VelocityScalingType::None>;
     if (doTemperatureScaling || doParrinelloRahman)
     {
         if (doTemperatureScaling)
