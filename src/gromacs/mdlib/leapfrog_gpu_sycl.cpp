@@ -186,47 +186,20 @@ static cl::sycl::event launchKernel(const DeviceStream& deviceStream, int numAto
     return e;
 }
 
-template<class F, class... Args>
-struct replace_fn_args;
-template<class RO, class T, class... Ts, class R, class... Args>
-struct replace_fn_args<RO(T, Ts...), R, Args...>
-{
-    using type = R(Args..., const Ts&...);
-};
-
-#if 1
-using LaunchKernelFn =
-        replace_fn_args<decltype(syclLeapFrogKernel<NumTempScaleValues::None, VelocityScalingType::None>),
-                        cl::sycl::event,
-                        const DeviceStream&,
-                        int>::type;
-#else
-using LaunchKernelFn = cl::sycl::event(const DeviceStream&,
-                                       int,
-                                       DeviceBuffer<float3>&,
-                                       DeviceBuffer<float3>&,
-                                       DeviceBuffer<float3>&,
-                                       DeviceBuffer<float3>&,
-                                       DeviceBuffer<float>&,
-                                       const float&,
-                                       DeviceBuffer<float>&,
-                                       DeviceBuffer<unsigned short>&,
-                                       const float3&);
-#endif
-template<enum VelocityScalingType prVelocityScalingType>
-static inline LaunchKernelFn& selectLeapFrogKernelLauncher(bool doTemperatureScaling, int numTempScaleValues)
+template<enum VelocityScalingType prVelocityScalingType, class... T>
+static inline auto leapFrogKernelLauncher(bool doTemperatureScaling, int numTempScaleValues, T&&... args)
 {
     if (!doTemperatureScaling)
     {
-        return launchKernel<NumTempScaleValues::None, prVelocityScalingType>;
+        return launchKernel<NumTempScaleValues::None, prVelocityScalingType>(std::forward<T>(args)...);
     }
     else if (numTempScaleValues == 1)
     {
-        return launchKernel<NumTempScaleValues::Single, prVelocityScalingType>;
+        return launchKernel<NumTempScaleValues::Single, prVelocityScalingType>(std::forward<T>(args)...);
     }
     else if (numTempScaleValues > 1)
     {
-        return launchKernel<NumTempScaleValues::Multiple, prVelocityScalingType>;
+        return launchKernel<NumTempScaleValues::Multiple, prVelocityScalingType>(std::forward<T>(args)...);
     }
     else
     {
@@ -235,19 +208,21 @@ static inline LaunchKernelFn& selectLeapFrogKernelLauncher(bool doTemperatureSca
 }
 
 /*! \brief Select templated kernel. */
-static inline LaunchKernelFn& selectLeapFrogKernelLauncher(bool                doTemperatureScaling,
-                                                           int                 numTempScaleValues,
-                                                           VelocityScalingType prVelocityScalingType)
+template<class... T>
+static inline auto leapFrogKernelLauncher(bool                doTemperatureScaling,
+                                          int                 numTempScaleValues,
+                                          VelocityScalingType prVelocityScalingType,
+                                          T&&... args)
 {
     if (prVelocityScalingType == VelocityScalingType::None)
     {
-        return selectLeapFrogKernelLauncher<VelocityScalingType::None>(doTemperatureScaling,
-                                                                       numTempScaleValues);
+        return leapFrogKernelLauncher<VelocityScalingType::None>(
+                doTemperatureScaling, numTempScaleValues, std::forward<T>(args)...);
     }
     else if (prVelocityScalingType == VelocityScalingType::Diagonal)
     {
-        return selectLeapFrogKernelLauncher<VelocityScalingType::Diagonal>(doTemperatureScaling,
-                                                                           numTempScaleValues);
+        return leapFrogKernelLauncher<VelocityScalingType::Diagonal>(
+                doTemperatureScaling, numTempScaleValues, std::forward<T>(args)...);
     }
     else
     {
@@ -266,7 +241,6 @@ void LeapFrogGpu::integrate(DeviceBuffer<float3>              d_x,
                             const float                       dtPressureCouple,
                             const matrix                      prVelocityScalingMatrix)
 {
-    LaunchKernelFn* kernelLauncher = launchKernel<NumTempScaleValues::None, VelocityScalingType::None>;
     if (doTemperatureScaling || doParrinelloRahman)
     {
         if (doTemperatureScaling)
@@ -297,12 +271,13 @@ void LeapFrogGpu::integrate(DeviceBuffer<float3>              d_x,
                             dtPressureCouple * prVelocityScalingMatrix[YY][YY],
                             dtPressureCouple * prVelocityScalingMatrix[ZZ][ZZ] };
         }
-        kernelLauncher = selectLeapFrogKernelLauncher(doTemperatureScaling, numTempScaleValues_,
-                                                      prVelocityScalingType);
+        leapFrogKernelLauncher(doTemperatureScaling, numTempScaleValues_, prVelocityScalingType,
+                               deviceStream_, numAtoms_, d_x, d_xp, d_v, d_f, d_inverseMasses_, dt,
+                               d_lambdas_, d_tempScaleGroups_, prVelocityScalingMatrixDiagonal_);
     }
-
-    kernelLauncher(deviceStream_, numAtoms_, d_x, d_xp, d_v, d_f, d_inverseMasses_, dt, d_lambdas_,
-                   d_tempScaleGroups_, prVelocityScalingMatrixDiagonal_);
+    launchKernel<NumTempScaleValues::None, VelocityScalingType::None>(
+            deviceStream_, numAtoms_, d_x, d_xp, d_v, d_f, d_inverseMasses_, dt, d_lambdas_,
+            d_tempScaleGroups_, prVelocityScalingMatrixDiagonal_);
 }
 
 LeapFrogGpu::LeapFrogGpu(const DeviceContext& deviceContext, const DeviceStream& deviceStream) :
