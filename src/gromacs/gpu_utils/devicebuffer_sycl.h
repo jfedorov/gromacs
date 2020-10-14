@@ -118,6 +118,12 @@ DeviceBuffer<T>& DeviceBuffer<T>::operator=(std::nullptr_t nullPtr)
 
 #endif // #ifndef DOXYGEN
 
+template<cl::sycl::access::mode mode, class T>
+auto get_access(const DeviceBuffer<T>& buffer, cl::sycl::handler& h)
+{
+    return buffer.buffer_->template get_access<mode>(h);
+}
+
 /*! \brief Check the validity of the device buffer.
  *
  * Checks if the buffer is valid and if its allocation is big enough.
@@ -348,68 +354,5 @@ void destroyParamLookupTable(DeviceBuffer<ValueType>* deviceBuffer, DeviceTextur
 {
     deviceBuffer->buffer_.reset(nullptr);
 }
-
-/*! \brief Wrapper around cl::sycl::accessor.
- *
- * Compared to the cl::sycl::accessor, this class has following benefits:
- *
- * - Can be constructed from the \c DeviceBuffer (or pointer to it) directly.
- * - Can be made not to create any actual accessors by setting \p isDummy to \c true.
- *
- * Passing accessors to SYCL kernels requires storing them as functor's members. Since SYCL's
- * accessor has no trivial constructor and does not like getting invalid buffers, having
- * cl::sycl::accessors as functor members would require always initializing them, even
- * if they are not used (can happen if the set of kernel arguments depend on the parameters).
- * Setting up an accessor to a real buffer would introduce unnecessary data dependencies.
- * Creating a dummy buffer just to get its accessor is both a runtime overhead and complicates
- * the code. For dummy buffer, one can safely pass \c nullptr instead of a buffer.
- *
- * \tparam T Type of data stored in the buffer.
- * \tparam mode Buffer access mode (from \c cl::sycl::access::mode)
- * \tparam isDummy If set to \p true, a dummy struct would be generated, not associated with any
- *                 actual SYCL accessor and not intended to be actually used in kernel code.
- */
-template<typename T, enum cl::sycl::access::mode mode, bool isDummy = false>
-struct DeviceAccessor
-{
-    using ReturnType = typename DeviceAccessor<T, mode, true>::ReturnType;
-    DeviceAccessor(cl::sycl::buffer<T, 1>* buf, cl::sycl::handler& cgh) :
-        accessor_(cl::sycl::accessor<T, 1, mode>(*buf, cgh))
-    {
-    }
-    DeviceAccessor(DeviceBuffer<T>& buf, cl::sycl::handler& cgh) :
-        accessor_(cl::sycl::accessor<T, 1, mode>(*buf.buffer_.get(), cgh))
-    {
-    }
-    template<typename IndexingType>
-    inline ReturnType operator[](IndexingType index) const
-    {
-        return accessor_[index];
-    }
-    cl::sycl::accessor<T, 1, mode> accessor_;
-};
-
-/*! \brief Template instantiation of DeviceAccessor for cases when we don't need an accessor.
- *
- * Helpful if we want to get an accessor in some instantiations of kernel functor, but not
- * in others.
- *
- * \warning While this class provides `operator[]`, it is not intended to be used.
- *
- */
-template<typename T, enum cl::sycl::access::mode mode>
-struct DeviceAccessor<T, mode, true>
-{
-    using ReturnType = std::conditional_t<mode == cl::sycl::access::mode::read, T, T&>;
-    DeviceAccessor(cl::sycl::buffer<T, 1>* /*buf*/, cl::sycl::handler& /*cgh*/) : value_() {}
-    DeviceAccessor(DeviceBuffer<T>& /*buf*/, cl::sycl::handler& /*cgh*/) : value_() {}
-    template<typename IndexingType>
-    inline ReturnType operator[](IndexingType /*index*/) const
-    {
-        return value_;
-    }
-    T value_;
-};
-
 
 #endif // GMX_GPU_UTILS_DEVICEBUFFER_SYCL_H

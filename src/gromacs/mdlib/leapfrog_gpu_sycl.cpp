@@ -70,7 +70,6 @@ namespace gmx
  * \tparam        numTempScaleValues               The number of different T-couple values.
  * \tparam        velocityScaling                  Type of the Parrinello-Rahman velocity rescaling.
  * \param         cgh                              SYCL's command group handler.
- * \param[in]     numAtoms                         Total number of atoms.
  * \param[in,out] x                                Coordinates to update upon integration.
  * \param[out]    xp                               A copy of the coordinates before the integration (for constraints).
  * \param[in,out] v                                Velocities to update.
@@ -83,101 +82,93 @@ namespace gmx
  * \param[in]     prVelocityScalingMatrixDiagonal  Diagonal elements of Parrinello-Rahman velocity scaling matrix
  */
 template<NumTempScaleValues numTempScaleValues, VelocityScalingType velocityScaling>
-class SyclLeapFrogKernelFunctor
+auto syclLeapFrogKernel(cl::sycl::handler&            cgh,
+                        DeviceBuffer<float3>&         x,
+                        DeviceBuffer<float3>&         xp,
+                        DeviceBuffer<float3>&         v,
+                        DeviceBuffer<float3>&         f,
+                        DeviceBuffer<float>&          inverseMasses,
+                        float                         dt,
+                        DeviceBuffer<float>&          lambdas,
+                        DeviceBuffer<unsigned short>& tempScaleGroups,
+                        float3                        prVelocityScalingMatrixDiagonal)
 {
-public:
-    SyclLeapFrogKernelFunctor(cl::sycl::handler&            cgh,
-                              int                           numAtoms,
-                              DeviceBuffer<float3>&         x,
-                              DeviceBuffer<float3>&         xp,
-                              DeviceBuffer<float3>&         v,
-                              DeviceBuffer<float3>&         f,
-                              DeviceBuffer<float>&          inverseMasses,
-                              float                         dt,
-                              DeviceBuffer<float>&          lambdas,
-                              DeviceBuffer<unsigned short>& tempScaleGroups,
-                              float3                        prVelocityScalingMatrixDiagonal) :
-        numAtoms_(numAtoms),
-        x_(x, cgh),
-        xp_(xp, cgh),
-        v_(v, cgh),
-        f_(f, cgh),
-        inverseMasses_(inverseMasses, cgh),
-        dt_(dt),
-        lambdas_(lambdas, cgh),
-        tempScaleGroups_(tempScaleGroups, cgh),
-        prVelocityScalingMatrixDiagonal_(prVelocityScalingMatrixDiagonal)
-    {
-    }
-    void operator()(cl::sycl::id<1> itemIdx) const;
-
-private:
-    static constexpr bool sc_haveLambdas_         = numTempScaleValues != NumTempScaleValues::None;
-    static constexpr bool sc_haveTempScaleGroups_ = numTempScaleValues == NumTempScaleValues::Multiple;
-    int                   numAtoms_;
-    DeviceAccessor<float3, cl::sycl::access::mode::read_write>            x_;
-    DeviceAccessor<float3, cl::sycl::access::mode::discard_write>         xp_;
-    DeviceAccessor<float3, cl::sycl::access::mode::read_write>            v_;
-    DeviceAccessor<float3, cl::sycl::access::mode::read>                  f_;
-    DeviceAccessor<float, cl::sycl::access::mode::read>                   inverseMasses_;
-    float                                                                 dt_;
-    DeviceAccessor<float, cl::sycl::access::mode::read, !sc_haveLambdas_> lambdas_;
-    DeviceAccessor<unsigned short, cl::sycl::access::mode::read, !sc_haveTempScaleGroups_> tempScaleGroups_;
-    float3 prVelocityScalingMatrixDiagonal_;
-};
-
-template<NumTempScaleValues numTempScaleValues, VelocityScalingType velocityScaling>
-void SyclLeapFrogKernelFunctor<numTempScaleValues, velocityScaling>::operator()(cl::sycl::id<1> itemIdx) const
-{
-    const float3 x    = x_[itemIdx];
-    float3       v    = v_[itemIdx];
-    const float3 f    = f_[itemIdx];
-    const float  im   = inverseMasses_[itemIdx];
-    const float  imdt = im * dt_;
-
-    // Swapping places for xp and x so that the x will contain the updated coordinates and xp - the
-    // coordinates before update. This should be taken into account when (if) constraints are
-    // applied after the update: x and xp have to be passed to constraints in the 'wrong' order.
-    xp_[itemIdx] = x;
-
-    if constexpr (numTempScaleValues != NumTempScaleValues::None
-                  || velocityScaling != VelocityScalingType::None)
-    {
-        float3 vp = v;
-
+    using cl::sycl::access::mode;
+    auto x_             = get_access<mode::read_write>(x, cgh);
+    auto xp_            = get_access<mode::discard_write>(xp, cgh);
+    auto v_             = get_access<mode::read_write>(v, cgh);
+    auto f_             = get_access<mode::read>(f, cgh);
+    auto inverseMasses_ = get_access<mode::read>(inverseMasses, cgh);
+    auto lambdas_       = [&]() {
         if constexpr (numTempScaleValues != NumTempScaleValues::None)
         {
-            const float lambda = [=]() {
-                if constexpr (numTempScaleValues == NumTempScaleValues::Single)
-                {
-                    return lambdas_[0];
-                }
-                else
-                {
-                    static_assert(numTempScaleValues == NumTempScaleValues::Multiple,
-                                  "Invalid value of numTempScaleValues");
-                    const int tempScaleGroup = tempScaleGroups_[itemIdx];
-                    return lambdas_[tempScaleGroup];
-                }
-            }();
-            vp *= lambda;
+            return get_access<mode::read>(lambdas, cgh);
         }
-
-        if constexpr (velocityScaling == VelocityScalingType::Diagonal)
+        else
+            return nullptr;
+    }();
+    auto tempScaleGroups_ = [&]() {
+        if constexpr (numTempScaleValues == NumTempScaleValues::Multiple)
         {
-            vp[0] -= prVelocityScalingMatrixDiagonal_[0] * v[0];
-            vp[1] -= prVelocityScalingMatrixDiagonal_[1] * v[1];
-            vp[2] -= prVelocityScalingMatrixDiagonal_[2] * v[2];
+            return get_access<mode::read>(tempScaleGroups, cgh);
+        }
+        else
+            return nullptr;
+    }();
+
+    return [=](cl::sycl::id<1> itemIdx) {
+        const float3 x    = x_[itemIdx];
+        float3       v    = v_[itemIdx];
+        const float3 f    = f_[itemIdx];
+        const float  im   = inverseMasses_[itemIdx];
+        const float  imdt = im * dt;
+
+        // Swapping places for xp and x so that the x will contain the updated coordinates and xp - the
+        // coordinates before update. This should be taken into account when (if) constraints are
+        // applied after the update: x and xp have to be passed to constraints in the 'wrong' order.
+        xp_[itemIdx] = x;
+
+        if constexpr (numTempScaleValues != NumTempScaleValues::None
+                      || velocityScaling != VelocityScalingType::None)
+        {
+            float3 vp = v;
+
+            if constexpr (numTempScaleValues != NumTempScaleValues::None)
+            {
+                const float lambda = [=]() {
+                    if constexpr (numTempScaleValues == NumTempScaleValues::Single)
+                    {
+                        return lambdas_[0];
+                    }
+                    else
+                    {
+                        static_assert(numTempScaleValues == NumTempScaleValues::Multiple,
+                                      "Invalid value of numTempScaleValues");
+                        const int tempScaleGroup = tempScaleGroups_[itemIdx];
+                        return lambdas_[tempScaleGroup];
+                    }
+                }();
+                vp *= lambda;
+            }
+
+            if constexpr (velocityScaling == VelocityScalingType::Diagonal)
+            {
+                vp[0] -= prVelocityScalingMatrixDiagonal[0] * v[0];
+                vp[1] -= prVelocityScalingMatrixDiagonal[1] * v[1];
+                vp[2] -= prVelocityScalingMatrixDiagonal[2] * v[2];
+            }
+
+            v = vp;
         }
 
-        v = vp;
-    }
-
-    v += f * imdt;
-    v_[itemIdx] = v;
-    x_[itemIdx] = x + v * dt_;
+        v += f * imdt;
+        v_[itemIdx] = v;
+        x_[itemIdx] = x + v * dt;
+    };
 }
 
+template<NumTempScaleValues numTempScaleValues, VelocityScalingType velocityScaling>
+class SyclLeapFrogKernelName;
 template<NumTempScaleValues numTempScaleValues, VelocityScalingType velocityScaling>
 static cl::sycl::event launchKernel(const DeviceStream&           deviceStream,
                                     int                           numAtoms,
@@ -196,10 +187,11 @@ static cl::sycl::event launchKernel(const DeviceStream&           deviceStream,
     cl::sycl::queue q = deviceStream.stream();
 
     cl::sycl::event e = q.submit([&](cl::sycl::handler& cgh) {
-        auto kernel = SyclLeapFrogKernelFunctor<numTempScaleValues, velocityScaling>(
-                cgh, numAtoms, x, xp, v, f, inverseMasses, dt, lambdas, tempScaleGroups,
+        auto kernel = syclLeapFrogKernel<numTempScaleValues, velocityScaling>(
+                cgh, x, xp, v, f, inverseMasses, dt, lambdas, tempScaleGroups,
                 prVelocityScalingMatrixDiagonal);
-        cgh.parallel_for(rangeAllAtoms, kernel);
+        // QUESTION: Is it OK for us to compile with -fsycl-unnamed-kernel?
+        cgh.parallel_for<SyclLeapFrogKernelName<numTempScaleValues, velocityScaling>>(rangeAllAtoms, kernel);
     });
 
     return e;
