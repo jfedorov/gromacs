@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -88,10 +88,14 @@ ParrinelloRahmanBarostat::ParrinelloRahmanBarostat(int                  nstpcoup
     energyData->setParrinelloRahamnBarostat(this);
 }
 
-void ParrinelloRahmanBarostat::connectWithPropagator(const PropagatorBarostatConnection& connectionData)
+void ParrinelloRahmanBarostat::connectWithPropagator(const PropagatorBarostatConnection& connectionData,
+                                                     const PropagatorTag& propagatorTag)
 {
-    scalingTensor_      = connectionData.getViewOnPRScalingMatrix();
-    propagatorCallback_ = connectionData.getPRScalingCallback();
+    if (connectionData.tag == propagatorTag)
+    {
+        scalingTensor_      = connectionData.getViewOnPRScalingMatrix();
+        propagatorCallback_ = connectionData.getPRScalingCallback();
+    }
 }
 
 void ParrinelloRahmanBarostat::scheduleTask(Step step,
@@ -300,7 +304,8 @@ ISimulatorElement* ParrinelloRahmanBarostat::getElementPointerImpl(
         EnergyData*                             energyData,
         FreeEnergyPerturbationData gmx_unused* freeEnergyPerturbationData,
         GlobalCommunicationHelper gmx_unused* globalCommunicationHelper,
-        int                                   offset)
+        int                                   offset,
+        const PropagatorTag&                  propagatorTag)
 {
     auto* element  = builderHelper->storeElement(std::make_unique<ParrinelloRahmanBarostat>(
             legacySimulatorData->inputrec->nstpcouple,
@@ -313,8 +318,8 @@ ISimulatorElement* ParrinelloRahmanBarostat::getElementPointerImpl(
             legacySimulatorData->inputrec,
             legacySimulatorData->mdAtoms));
     auto* barostat = static_cast<ParrinelloRahmanBarostat*>(element);
-    builderHelper->registerBarostat([barostat](const PropagatorBarostatConnection& connection) {
-        barostat->connectWithPropagator(connection);
+    builderHelper->registerBarostat([barostat, propagatorTag](const PropagatorBarostatConnection& connection) {
+        barostat->connectWithPropagator(connection, propagatorTag);
     });
     return element;
 }
