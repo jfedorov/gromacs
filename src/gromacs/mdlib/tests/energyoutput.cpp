@@ -200,8 +200,6 @@ public:
         // Input record
         inputrec_.delta_t = 0.001;
 
-        // F_EQM
-        inputrec_.bQMMM = true;
         // F_RF_EXCL will not be tested - group scheme is not supported any more
         inputrec_.cutoff_scheme = ecutsVERLET;
         // F_COUL_RECIP
