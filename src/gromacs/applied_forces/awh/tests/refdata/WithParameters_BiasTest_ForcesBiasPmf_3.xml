@@ -2,10 +2,11 @@
 <?xml-stylesheet type="text/xsl" href="referencedata.xsl"?>
 <ReferenceData>
   <Sequence Name="Properties">
-    <Int Name="Length">3</Int>
+    <Int Name="Length">4</Int>
     <String>stage:           final</String>
-    <String>convolve forces: yes</String>
+    <String>convolve forces: no</String>
     <String>skip updates:    yes</String>
+    <String>symmetric:       no</String>
   </Sequence>
   <Sequence Name="Force">
     <Int Name="Length">21</Int>
@@ -57,10 +58,23 @@
   </Sequence>
   <Sequence Name="PotentialJump">
     <Int Name="Length">21</Int>
+    <Real>-4.4999999999999973</Real>
+    <Real>-2.4999999999999991</Real>
+    <Real>0</Real>
+    <Real>-7.4999999999999991</Real>
+    <Real>-1.0000000000000115</Real>
+    <Real>-11.999999999999986</Real>
+    <Real>-36.99999999999995</Real>
+    <Real>-1.9999999999999978</Real>
+    <Real>-15.000000000000009</Real>
+    <Real>-3.4999999999999987</Real>
     <Real>0</Real>
     <Real>0</Real>
     <Real>0</Real>
-    <Real>0</Real>
+    <Real>-3.5000000000000058</Real>
+    <Real>2.4999999999999964</Real>
+    <Real>-10.499999999999986</Real>
+    <Real>-3.5000000000000058</Real>
     <Real>0</Real>
     <Real>0</Real>
     <Real>0</Real>

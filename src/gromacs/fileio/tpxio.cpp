@@ -139,6 +139,7 @@ enum tpxv
     tpxv_RemovedConstantAcceleration, /**< Removed support for constant acceleration NEMD. */
     tpxv_TransformationPullCoord,     /**< Support for transformation pull coordinates */
     tpxv_SoftcoreGapsys,              /**< Added gapsys softcore function */
+    tpxv_AWHSymmetry,                 /**< Added AWH option to symmetrise bias dimensions */
     tpxv_Count                        /**< the total number of tpxv versions */
 };
 

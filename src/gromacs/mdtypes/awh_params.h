@@ -152,6 +152,8 @@ public:
     void setInitialCoordinate(double initialCoordinate) { coordValueInit_ = initialCoordinate; }
     //! Diameter needed to be sampled.
     double coverDiameter() const { return coverDiameter_; }
+    //! Whether the dimension is symmetric or not.
+    bool isSymmetric() const { return isSymmetric_; }
     //! Write datastructure.
     void serialize(ISerializer* serializer);
 
@@ -174,6 +176,8 @@ private:
     double coordValueInit_ = 0.0;
     //! The diameter that needs to be sampled around a point before it is considered covered.
     double coverDiameter_ = 0.0;
+    //! Whether the dimension is symmetric or not.
+    bool isSymmetric_ = false;
 };
 
 class AwhBiasParams

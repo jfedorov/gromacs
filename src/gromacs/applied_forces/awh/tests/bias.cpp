@@ -97,6 +97,9 @@ public:
          *   disableUpdateSkips (should not affect the results):
          *     BiasParams::DisableUpdateSkips::yes: update the point state for every sample
          *     BiasParams::DisableUpdateSkips::no:  update the point state at an interval > 1 sample
+         *   symmetricBias:
+         *     true:                 The sampling and the bias is symmetrized around the origin.
+         *     false:                The sampling and the bias is not symmetrized around the origin.
          *
          * Note: It would be nice to explicitly check that eawhpotential
          *       and disableUpdateSkips do not affect the point state.
@@ -105,7 +108,7 @@ public:
         AwhHistogramGrowthType         eawhgrowth;
         AwhPotentialType               eawhpotential;
         BiasParams::DisableUpdateSkips disableUpdateSkips;
-        std::tie(eawhgrowth, eawhpotential, disableUpdateSkips) = GetParam();
+        std::tie(eawhgrowth, eawhpotential, disableUpdateSkips, symmetricBias) = GetParam();
 
         /* Set up a basic AWH setup with a single, 1D bias with parameters
          * such that we can measure the effects of different parameters.
@@ -148,6 +151,11 @@ TEST_P(BiasTest, ForcesBiasPmf)
 
     Bias& bias = *bias_;
 
+    const AwhTestParameters params =
+            getAwhTestParameters(eawhgrowthEXP_LINEAR, eawhpotentialCONVOLVED, false);
+    const AwhDimParams& awhDimParams = params.awhParams.awhBiasParams[0].dimParams[0];
+    const bool          isSymmetric  = awhDimParams.isSymmetric;
+
     /* Make strings with the properties we expect to be different in the tests.
      * These also helps to interpret the reference data.
      */
@@ -155,6 +163,7 @@ TEST_P(BiasTest, ForcesBiasPmf)
     props.push_back(formatString("stage:           %s", bias.state().inInitialStage() ? "initial" : "final"));
     props.push_back(formatString("convolve forces: %s", bias.params().convolveForce ? "yes" : "no"));
     props.push_back(formatString("skip updates:    %s", bias.params().skipUpdates() ? "yes" : "no"));
+    props.push_back(formatString("symmetric:       %s", isSymmetric ? "yes" : "no"));
 
     SCOPED_TRACE(gmx::formatString("%s, %s, %s", props[0].c_str(), props[1].c_str(), props[2].c_str()));
 
@@ -165,6 +174,10 @@ TEST_P(BiasTest, ForcesBiasPmf)
     int64_t step          = 0;
     for (auto& coord : coordinates_)
     {
+        if (isSymmetric)
+        {
+            coord = -coord;
+        }
         coordMaxValue = std::max(coordMaxValue, std::abs(coord));
 
         awh_dvec                    coordValue = { coord, 0, 0, 0 };
