@@ -101,8 +101,8 @@ public:
     [[nodiscard]] const rvec* boxVelocities() const;
 
     //! Connect this to propagator
-    void connectWithPropagator(const PropagatorBarostatConnection& connectionData,
-                               const PropagatorTag&                propagatorTag);
+    void connectWithPropagator(const PropagatorConnection& connectionData,
+                               const PropagatorTag&        propagatorTag);
 
     //! ICheckpointHelperClient write checkpoint implementation
     void saveCheckpointState(std::optional<WriteCheckpointData> checkpointData, const t_commrec* cr) override;

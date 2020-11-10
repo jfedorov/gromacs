@@ -861,6 +861,48 @@ PropagatorCallback Propagator<algorithm>::prScalingCallback()
 }
 
 template<IntegrationStep algorithm>
+static PropagatorConnection getConnection(Propagator<algorithm>* propagator, const PropagatorTag& propagatorTag)
+{
+    PropagatorConnection propagatorConnection{ propagatorTag };
+
+    propagatorConnection.startVelocityScaling    = hasStartVelocityScaling<algorithm>();
+    propagatorConnection.endVelocityScaling      = hasEndVelocityScaling<algorithm>();
+    propagatorConnection.positionScaling         = hasPositionScaling<algorithm>();
+    propagatorConnection.parrinelloRahmanScaling = hasParrinelloRahmanScaling<algorithm>();
+
+    propagatorConnection.setNumVelocityScalingVariables =
+            [propagator](int num, ScaleVelocities scaleVelocities) {
+                propagator->setNumVelocityScalingVariables(num, scaleVelocities);
+            };
+    propagatorConnection.setNumPositionScalingVariables = [propagator](int num) {
+        propagator->setNumPositionScalingVariables(num);
+    };
+    propagatorConnection.getViewOnStartVelocityScaling = [propagator]() {
+        return propagator->viewOnStartVelocityScaling();
+    };
+    propagatorConnection.getViewOnEndVelocityScaling = [propagator]() {
+        return propagator->viewOnEndVelocityScaling();
+    };
+    propagatorConnection.getViewOnPositionScaling = [propagator]() {
+        return propagator->viewOnPositionScaling();
+    };
+    propagatorConnection.getVelocityScalingCallback = [propagator]() {
+        return propagator->velocityScalingCallback();
+    };
+    propagatorConnection.getPositionScalingCallback = [propagator]() {
+        return propagator->positionScalingCallback();
+    };
+    propagatorConnection.getViewOnPRScalingMatrix = [propagator]() {
+        return propagator->viewOnPRScalingMatrix();
+    };
+    propagatorConnection.getPRScalingCallback = [propagator]() {
+        return propagator->prScalingCallback();
+    };
+
+    return propagatorConnection;
+}
+
+template<IntegrationStep algorithm>
 ISimulatorElement* Propagator<algorithm>::getElementPointerImpl(
         LegacySimulatorData*                    legacySimulatorData,
         ModularSimulatorAlgorithmBuilderHelper* builderHelper,
@@ -878,18 +920,7 @@ ISimulatorElement* Propagator<algorithm>::getElementPointerImpl(
     auto* element    = builderHelper->storeElement(std::make_unique<Propagator<algorithm>>(
             timestep, statePropagatorData, legacySimulatorData->mdAtoms, legacySimulatorData->wcycle));
     auto* propagator = static_cast<Propagator<algorithm>*>(element);
-    builderHelper->registerWithThermostat(
-            { [propagator](int num, ScaleVelocities scaleVelocities) {
-                 propagator->setNumVelocityScalingVariables(num, scaleVelocities);
-             },
-              [propagator]() { return propagator->viewOnStartVelocityScaling(); },
-              [propagator]() { return propagator->viewOnEndVelocityScaling(); },
-              [propagator]() { return propagator->velocityScalingCallback(); },
-              propagatorTag });
-    builderHelper->registerWithBarostat(
-            { [propagator]() { return propagator->viewOnPRScalingMatrix(); },
-              [propagator]() { return propagator->prScalingCallback(); },
-              propagatorTag });
+    builderHelper->registerPropagator(getConnection<algorithm>(propagator, propagatorTag));
     return element;
 }
 

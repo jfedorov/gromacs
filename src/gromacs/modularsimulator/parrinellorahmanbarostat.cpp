@@ -96,11 +96,13 @@ ParrinelloRahmanBarostat::ParrinelloRahmanBarostat(int                  nstpcoup
     });
 }
 
-void ParrinelloRahmanBarostat::connectWithPropagator(const PropagatorBarostatConnection& connectionData,
-                                                     const PropagatorTag& propagatorTag)
+void ParrinelloRahmanBarostat::connectWithPropagator(const PropagatorConnection& connectionData,
+                                                     const PropagatorTag&        propagatorTag)
 {
     if (connectionData.tag == propagatorTag)
     {
+        GMX_RELEASE_ASSERT(connectionData.parrinelloRahmanScaling,
+                           "Connection data lacks Parrinello-Rahman scaling");
         scalingTensor_      = connectionData.getViewOnPRScalingMatrix();
         propagatorCallback_ = connectionData.getPRScalingCallback();
     }
@@ -344,9 +346,10 @@ ISimulatorElement* ParrinelloRahmanBarostat::getElementPointerImpl(
             legacySimulatorData->inputrec,
             legacySimulatorData->mdAtoms));
     auto* barostat = static_cast<ParrinelloRahmanBarostat*>(element);
-    builderHelper->registerBarostat([barostat, propagatorTag](const PropagatorBarostatConnection& connection) {
-        barostat->connectWithPropagator(connection, propagatorTag);
-    });
+    builderHelper->registerTemperaturePressureControl(
+            [barostat, propagatorTag](const PropagatorConnection& connection) {
+                barostat->connectWithPropagator(connection, propagatorTag);
+            });
     return element;
 }
 

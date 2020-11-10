@@ -490,33 +490,38 @@ private:
 };
 
 /*! \internal
- * \brief Information needed to connect a propagator to a thermostat
+ * \brief Information needed to connect a propagator to a temperature and / or pressure coupling element
  */
-struct PropagatorThermostatConnection
+struct PropagatorConnection
 {
+    //! The tag of the creating propagator
+    PropagatorTag tag;
+    //! Whether there is start velocity scaling
+    bool startVelocityScaling;
+    //! Whether there is end velocity scaling
+    bool endVelocityScaling;
+    //! Whether there is position scaling
+    bool positionScaling;
+    //! Whether there is Parrinello-Rahman scaling
+    bool parrinelloRahmanScaling;
     //! Function variable for setting velocity scaling variables.
     std::function<void(int, ScaleVelocities)> setNumVelocityScalingVariables;
+    //! Function variable for setting velocity scaling variables.
+    std::function<void(int)> setNumPositionScalingVariables;
     //! Function variable for receiving view on velocity scaling (before step).
     std::function<ArrayRef<real>()> getViewOnStartVelocityScaling;
     //! Function variable for receiving view on velocity scaling (after step).
     std::function<ArrayRef<real>()> getViewOnEndVelocityScaling;
+    //! Function variable for receiving view on position scaling.
+    std::function<ArrayRef<real>()> getViewOnPositionScaling;
     //! Function variable for callback.
     std::function<PropagatorCallback()> getVelocityScalingCallback;
-    //! The tag of the creating propagator
-    PropagatorTag tag;
-};
-
-/*! \internal
- * \brief Information needed to connect a propagator to a barostat
- */
-struct PropagatorBarostatConnection
-{
+    //! Function variable for callback.
+    std::function<PropagatorCallback()> getPositionScalingCallback;
     //! Function variable for receiving view on pressure scaling matrix.
     std::function<ArrayRef<rvec>()> getViewOnPRScalingMatrix;
     //! Function variable for callback.
     std::function<PropagatorCallback()> getPRScalingCallback;
-    //! The tag of the creating propagator
-    PropagatorTag tag;
 };
 
 //! /}

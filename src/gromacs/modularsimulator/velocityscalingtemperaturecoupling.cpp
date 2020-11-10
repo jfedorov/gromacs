@@ -88,8 +88,8 @@ class ITemperatureCouplingImpl
 {
 public:
     //! Allow access to the scaling vectors
-    virtual void connectWithPropagator(const PropagatorThermostatConnection& connectionData,
-                                       int numTemperatureGroups) = 0;
+    virtual void connectWithPropagator(const PropagatorConnection& connectionData,
+                                       int                         numTemperatureGroups) = 0;
 
     /*! \brief Make a temperature control step
      *
@@ -177,9 +177,10 @@ public:
     }
 
     //! Connect with propagator - v-rescale only scales start step velocities
-    void connectWithPropagator(const PropagatorThermostatConnection& connectionData,
-                               int                                   numTemperatureGroups) override
+    void connectWithPropagator(const PropagatorConnection& connectionData, int numTemperatureGroups) override
     {
+        GMX_RELEASE_ASSERT(connectionData.startVelocityScaling,
+                           "V-Rescale requires start velocity scaling.");
         connectionData.setNumVelocityScalingVariables(numTemperatureGroups, ScaleVelocities::PreStepOnly);
         lambdaStartVelocities_ = connectionData.getViewOnStartVelocityScaling();
     }
@@ -249,9 +250,10 @@ public:
     }
 
     //! Connect with propagator - Berendsen only scales start step velocities
-    void connectWithPropagator(const PropagatorThermostatConnection& connectionData,
-                               int                                   numTemperatureGroups) override
+    void connectWithPropagator(const PropagatorConnection& connectionData, int numTemperatureGroups) override
     {
+        GMX_RELEASE_ASSERT(connectionData.startVelocityScaling,
+                           "Berendsen T-coupling requires start velocity scaling.");
         connectionData.setNumVelocityScalingVariables(numTemperatureGroups, ScaleVelocities::PreStepOnly);
         lambdaStartVelocities_ = connectionData.getViewOnStartVelocityScaling();
     }
@@ -363,9 +365,10 @@ public:
     }
 
     //! Connect with propagator - Nose-Hoover scales start and end step velocities
-    void connectWithPropagator(const PropagatorThermostatConnection& connectionData,
-                               int                                   numTemperatureGroups) override
+    void connectWithPropagator(const PropagatorConnection& connectionData, int numTemperatureGroups) override
     {
+        GMX_RELEASE_ASSERT(connectionData.startVelocityScaling && connectionData.endVelocityScaling,
+                           "Nose-Hoover T-coupling requires both start and end velocity scaling.");
         connectionData.setNumVelocityScalingVariables(numTemperatureGroups,
                                                       ScaleVelocities::PreStepAndPostStep);
         lambdaStartVelocities_ = connectionData.getViewOnStartVelocityScaling();
@@ -492,7 +495,7 @@ VelocityScalingTemperatureCoupling::VelocityScalingTemperatureCoupling(
     });
 }
 
-void VelocityScalingTemperatureCoupling::connectWithPropagator(const PropagatorThermostatConnection& connectionData,
+void VelocityScalingTemperatureCoupling::connectWithPropagator(const PropagatorConnection& connectionData,
                                                                const PropagatorTag& propagatorTag)
 {
     if (connectionData.tag == propagatorTag)
@@ -681,8 +684,8 @@ ISimulatorElement* VelocityScalingTemperatureCoupling::getElementPointerImpl(
             legacySimulatorData->inputrec->etc));
     auto* thermostat = static_cast<VelocityScalingTemperatureCoupling*>(element);
     // Capturing pointer is safe because lifetime is handled by caller
-    builderHelper->registerThermostat(
-            [thermostat, propagatorTag](const PropagatorThermostatConnection& connection) {
+    builderHelper->registerTemperaturePressureControl(
+            [thermostat, propagatorTag](const PropagatorConnection& connection) {
                 thermostat->connectWithPropagator(connection, propagatorTag);
             });
     return element;
