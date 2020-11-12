@@ -77,6 +77,7 @@
 
 #include "computeglobalselement.h"
 #include "constraintelement.h"
+#include "firstorderpressurecoupling.h"
 #include "forceelement.h"
 #include "mttk.h"
 #include "nosehooverchains.h"
@@ -135,6 +136,11 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
         {
             builder->add<ParrinelloRahmanBarostat>(Offset(-1), PropagatorTag("LeapFrogPropagator"));
         }
+        else if (legacySimulatorData_->inputrec->epc == PressureCoupling::Berendsen
+                 || legacySimulatorData_->inputrec->epc == PressureCoupling::CRescale)
+        {
+            builder->add<FirstOrderPressureCoupling>(0, ReportPreviousStepConservedEnergy::No);
+        }
         builder->add<EnergyData::Element>();
     }
     else if (legacySimulatorData_->inputrec->eI == eiVV && !isTrotter)
@@ -169,6 +175,11 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
         if (legacySimulatorData_->inputrec->epc == PressureCoupling::ParrinelloRahman)
         {
             builder->add<ParrinelloRahmanBarostat>(Offset(-1), PropagatorTag("VelocityHalfStep"));
+        }
+        else if (legacySimulatorData_->inputrec->epc == PressureCoupling::Berendsen
+                 || legacySimulatorData_->inputrec->epc == PressureCoupling::CRescale)
+        {
+            builder->add<FirstOrderPressureCoupling>(0, ReportPreviousStepConservedEnergy::Yes);
         }
         builder->add<EnergyData::Element>();
     }
@@ -294,6 +305,10 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
         {
             builder->add<MttkBoxScaling>();
         }
+        else if (legacySimulatorData_->inputrec->epc == PressureCoupling::CRescale)
+        {
+            builder->add<FirstOrderPressureCoupling>(0, ReportPreviousStepConservedEnergy::Yes);
+        }
         builder->add<EnergyData::Element>();
     }
     else
@@ -364,12 +379,6 @@ bool ModularSimulator::isInputCompatible(bool                             exitOn
                                                      || inputrec->etc == TemperatureCoupling::NoseHoover,
                                              "Only v-rescale, Berendsen and Nose-Hoover "
                                              "thermostats are supported by the modular simulator.");
-    isInputCompatible = isInputCompatible
-                        && conditionalAssert(inputrec->epc == PressureCoupling::No
-                                                     || inputrec->epc == PressureCoupling::ParrinelloRahman
-                                                     || inputrec->epc == PressureCoupling::Mttk,
-                                             "Only Parrinello-Rahman and MTTK barostat are "
-                                             "supported by the modular simulator.");
     isInputCompatible = isInputCompatible
                         && conditionalAssert(inputrec->efep == efepNO || inputrec->efep == efepYES
                                                      || inputrec->efep == efepSLOWGROWTH,

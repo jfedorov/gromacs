@@ -554,6 +554,14 @@ struct PropagatorConnection
     std::function<PropagatorCallback()> getPRScalingCallback;
 };
 
+//! Enum describing whether an element is reporting conserved energy from the previous step
+enum class ReportPreviousStepConservedEnergy
+{
+    Yes,
+    No,
+    Count
+};
+
 //! /}
 } // namespace gmx
 
