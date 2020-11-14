@@ -189,8 +189,10 @@ private:
     std::vector<std::unique_ptr<ISignaller>> signallerList_;
     //! List of schedulerElements (ownership)
     std::vector<std::unique_ptr<ISimulatorElement>> elementsOwnershipList_;
-    //! List of schedulerElements (calling sequence)
+    //! List of schedulerElements (run calling sequence)
     std::vector<ISimulatorElement*> elementCallList_;
+    //! List of schedulerElements (setup / teardown calling sequence)
+    std::vector<ISimulatorElement*> elementSetupTeardownList_;
 
     // Infrastructure elements
     //! The domain decomposition element
@@ -325,7 +327,8 @@ public:
     //! Constructor
     ModularSimulatorAlgorithmBuilderHelper(ModularSimulatorAlgorithmBuilder* builder);
     //! Store an element to the ModularSimulatorAlgorithmBuilder
-    ISimulatorElement* storeElement(std::unique_ptr<ISimulatorElement> element);
+    template<typename Element>
+    Element* storeElement(std::unique_ptr<Element> element);
     //! Check if an element is stored in the ModularSimulatorAlgorithmBuilder
     bool elementIsStored(const ISimulatorElement* element) const;
     /*! \brief Set arbitrary data in the ModularSimulatorAlgorithmBuilder
@@ -449,15 +452,33 @@ private:
      *
      * This function returns a non-owning pointer to the new location of that
      * element, allowing further usage (e.g. adding the element to the call list).
-     * Note that simply addin an element using this function will not call it
+     * This will also add the element to the setup / teardown list, and register
+     * it with all applicable signallers and infrastructure objects.
+     * Note that simply adding an element using this function will not call it
      * during the simulation - it needs to be added to the call list separately.
-     * Note that generally, users will want to add elements to the call list, but
-     * it might not be practical to do this in the same order.
+     * Also note that generally, users will want to add elements to the call list,
+     * but it might not be practical to do this in the same order.
      *
+     * \tparam Element  Type of the Element
      * \param element  A unique pointer to the element
      * \return  A non-owning (raw) pointer to the element for further usage
      */
-    ISimulatorElement* addElementToSimulatorAlgorithm(std::unique_ptr<ISimulatorElement> element);
+    template<typename Element>
+    Element* addElementToSimulatorAlgorithm(std::unique_ptr<Element> element);
+
+    /*! \brief Register existing element to infrastructure
+     *
+     * This function adds existing elements to the setup / teardown list, and
+     * registers them with all applicable signallers and infrastructure objects.
+     * This is only permissible for elements owned directly by the builder or
+     * indirectly through data objects. Before registering the element, the function
+     * checks that the element is owned by the builder or a known object.
+     *
+     * \tparam Element  Type of the Element
+     * \param element   A non-owning (raw) pointer to the element
+     */
+    template<typename Element>
+    void registerExistingElement(Element* element);
 
     /*! \brief Check if element is owned by *this
      *
@@ -465,12 +486,6 @@ private:
      * \return  Bool indicating whether element is owned by *this
      */
     [[nodiscard]] bool elementExists(const ISimulatorElement* element) const;
-
-    /*! \brief Add element to setupAndTeardownList_ if it's not already there
-     *
-     * \param element  Element pointer to be added
-     */
-    void addElementToSetupTeardownList(ISimulatorElement* element);
 
     //! Vector to store elements, allowing the SimulatorAlgorithm to control their lifetime
     std::vector<std::unique_ptr<ISimulatorElement>> elements_;
@@ -607,10 +622,6 @@ void ModularSimulatorAlgorithmBuilder::add(Args&&... args)
     }
     // Add to call list
     callList_.emplace_back(element);
-    // Add to setup / teardown list if element hasn't been added yet
-    addElementToSetupTeardownList(element);
-    // Register element to all applicable signallers
-    registerWithInfrastructureAndSignallers(element);
 }
 
 //! Returns a pointer casted to type Base if the Element is derived from Base
@@ -644,6 +655,41 @@ void ModularSimulatorAlgorithmBuilder::registerWithInfrastructureAndSignallers(E
     topologyHolderBuilder_.registerClient(castOrNull<ITopologyHolderClient, Element>(element));
     // Register element to checkpoint client (if applicable)
     checkpointHelperBuilder_.registerClient(castOrNull<ICheckpointHelperClient, Element>(element));
+}
+
+template<typename Element>
+Element* ModularSimulatorAlgorithmBuilder::addElementToSimulatorAlgorithm(std::unique_ptr<Element> element)
+{
+    // Store element
+    elements_.emplace_back(std::move(element));
+    // Get non-owning pointer for further use
+    Element* elementPtr = static_cast<Element*>(elements_.back().get());
+    // Register element to infrastructure
+    registerExistingElement(elementPtr);
+
+    return elementPtr;
+}
+
+template<typename Element>
+void ModularSimulatorAlgorithmBuilder::registerExistingElement(Element* element)
+{
+    // Make sure the element pointer is owned by *this
+    // Ensuring this makes sure we can control the life time
+    if (!elementExists(element))
+    {
+        throw ElementNotFoundError("Tried to register non-existing element to infrastructure.");
+    }
+
+    // Add to setup / teardown list
+    setupAndTeardownList_.emplace_back(element);
+    // Register element to all applicable signallers
+    registerWithInfrastructureAndSignallers(element);
+}
+
+template<typename Element>
+Element* ModularSimulatorAlgorithmBuilderHelper::storeElement(std::unique_ptr<Element> element)
+{
+    return builder_->addElementToSimulatorAlgorithm(std::move(element));
 }
 
 template<typename ValueType>
