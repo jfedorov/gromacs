@@ -4,7 +4,7 @@
  * Copyright (c) 1991-2000, University of Groningen, The Netherlands.
  * Copyright (c) 2001-2004, The GROMACS development team.
  * Copyright (c) 2013,2014,2015,2016,2017 by the GROMACS development team.
- * Copyright (c) 2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -193,7 +193,7 @@ public:
  *
  * \todo Split out into microstate and observables history.
  */
-typedef struct df_history_t
+struct df_history_t
 {
     int nlambda; //!< total number of lambda states - for history
 
@@ -215,7 +215,14 @@ typedef struct df_history_t
     real** Tij;           //!< transition matrix
     real** Tij_empirical; //!< Empirical transition matrix
 
-} df_history_t;
+    /*! \brief Allows to read and write checkpoint within modular simulator
+     * \tparam operation  Whether we're reading or writing
+     * \param checkpointData  The CheckpointData object
+     * \param elamstats  How the lambda weights are calculated
+     */
+    template<gmx::CheckpointDataOperation operation>
+    void doCheckpoint(gmx::CheckpointData<operation> checkpointData, int elamstats);
+};
 
 
 /*! \brief The microstate of the system
