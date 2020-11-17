@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -79,9 +79,22 @@ void FreeEnergyPerturbationData::Element::scheduleTask(Step step,
                                                        Time gmx_unused            time,
                                                        const RegisterRunFunction& registerRunFunction)
 {
-    if (lambdasChange_)
+    // If we do slow growth, we update lambda every step
+    // If it's set externally, we get notified, so we only update when necessary (at nextLambdaSettingStep_)
+    // However, if we reload from checkpoint, it might be that checkpointing happened right between the
+    // external caller setting the state and us applying it, so we also check newFepStateStep_.
+    const bool needToSetExternalState =
+            externalLambdaSetting_ && ((step == nextLambdaSettingStep_) || (step == newFepStateStep_));
+    if (doSlowGrowth_)
     {
         registerRunFunction([this, step]() { freeEnergyPerturbationData_->updateLambdas(step); });
+    }
+    else if (needToSetExternalState)
+    {
+        registerRunFunction([this, step]() {
+            GMX_RELEASE_ASSERT(step == newFepStateStep_, "FEP state setting step mismatch");
+            freeEnergyPerturbationData_->setLambdaState(step, newFepState_);
+        });
     }
 }
 
@@ -92,17 +105,23 @@ void FreeEnergyPerturbationData::updateLambdas(Step step)
     updateMDAtoms();
 }
 
+void FreeEnergyPerturbationData::setLambdaState(Step step, int newState)
+{
+    currentFEPState_ = newState;
+    updateLambdas(step);
+}
+
 ArrayRef<real> FreeEnergyPerturbationData::lambdaView()
 {
     return lambda_;
 }
 
-ArrayRef<const real> FreeEnergyPerturbationData::constLambdaView()
+ArrayRef<const real> FreeEnergyPerturbationData::constLambdaView() const
 {
     return lambda_;
 }
 
-int FreeEnergyPerturbationData::currentFEPState()
+int FreeEnergyPerturbationData::currentFEPState() const
 {
     return currentFEPState_;
 }
@@ -110,6 +129,11 @@ int FreeEnergyPerturbationData::currentFEPState()
 void FreeEnergyPerturbationData::updateMDAtoms()
 {
     update_mdatoms(mdAtoms_->mdatoms(), lambda_[efptMASS]);
+}
+
+std::tuple<SignalFepStateSetting, SetFepState> FreeEnergyPerturbationData::fepStateCallbacks() const
+{
+    return element_->fepStateCallbacks();
 }
 
 namespace
@@ -122,8 +146,9 @@ namespace
  */
 enum class CheckpointVersion
 {
-    Base, //!< First version of modular checkpointing
-    Count //!< Number of entries. Add new versions right above this!
+    Base,                       //!< First version of modular checkpointing
+    AddedExternalLambdaSetting, //!< Additional values to ensure no state setting info is lost
+    Count                       //!< Number of entries. Add new versions right above this!
 };
 constexpr auto c_currentVersion = CheckpointVersion(int(CheckpointVersion::Count) - 1);
 } // namespace
@@ -137,6 +162,30 @@ void FreeEnergyPerturbationData::doCheckpointData(CheckpointData<operation>* che
     checkpointData->arrayRef("lambda vector", makeCheckpointArrayRef<operation>(lambda_));
 }
 
+template<CheckpointDataOperation operation>
+void FreeEnergyPerturbationData::Element::doCheckpointData(CheckpointData<operation>* checkpointData)
+{
+    CheckpointVersion fileVersion = CheckpointVersion::Base;
+    if (operation == CheckpointDataOperation::Read)
+    {
+        // We can read the same key as above - we can only write it once, though!
+        fileVersion = checkpointVersion(
+                checkpointData, "FreeEnergyPerturbationData version", c_currentVersion);
+    }
+    else
+    {
+        fileVersion = c_currentVersion;
+    }
+
+    if (fileVersion > CheckpointVersion::AddedExternalLambdaSetting)
+    {
+        // If checkpointing happens between receiving the request and actually setting the new
+        // lambda state, we need to preserve this information.
+        checkpointData->scalar("Requested new FEP state", &newFepState_);
+        checkpointData->scalar("Step at which new FEP state is applied", &newFepStateStep_);
+    }
+}
+
 void FreeEnergyPerturbationData::Element::saveCheckpointState(std::optional<WriteCheckpointData> checkpointData,
                                                               const t_commrec*                   cr)
 {
@@ -144,6 +193,7 @@ void FreeEnergyPerturbationData::Element::saveCheckpointState(std::optional<Writ
     {
         freeEnergyPerturbationData_->doCheckpointData<CheckpointDataOperation::Write>(
                 &checkpointData.value());
+        doCheckpointData<CheckpointDataOperation::Write>(&checkpointData.value());
     }
 }
 
@@ -154,13 +204,19 @@ void FreeEnergyPerturbationData::Element::restoreCheckpointState(std::optional<R
     {
         freeEnergyPerturbationData_->doCheckpointData<CheckpointDataOperation::Read>(
                 &checkpointData.value());
+        doCheckpointData<CheckpointDataOperation::Read>(&checkpointData.value());
     }
     if (DOMAINDECOMP(cr))
     {
-        dd_bcast(cr->dd, sizeof(int), &freeEnergyPerturbationData_->currentFEPState_);
         dd_bcast(cr->dd,
-                 ssize(freeEnergyPerturbationData_->lambda_) * int(sizeof(real)),
+                 sizeof(freeEnergyPerturbationData_->currentFEPState_),
+                 &freeEnergyPerturbationData_->currentFEPState_);
+        dd_bcast(cr->dd,
+                 ssize(freeEnergyPerturbationData_->lambda_)
+                         * int(sizeof(freeEnergyPerturbationData_->lambda_.front())),
                  freeEnergyPerturbationData_->lambda_.data());
+        dd_bcast(cr->dd, sizeof(newFepState_), &newFepState_);
+        dd_bcast(cr->dd, sizeof(newFepStateStep_), &newFepStateStep_);
     }
 }
 
@@ -172,7 +228,11 @@ const std::string& FreeEnergyPerturbationData::Element::clientID()
 FreeEnergyPerturbationData::Element::Element(FreeEnergyPerturbationData* freeEnergyPerturbationElement,
                                              double                      deltaLambda) :
     freeEnergyPerturbationData_(freeEnergyPerturbationElement),
-    lambdasChange_(deltaLambda != 0)
+    doSlowGrowth_(deltaLambda != 0),
+    externalLambdaSetting_(false),
+    nextLambdaSettingStep_(-1),
+    newFepState_(-1),
+    newFepStateStep_(-1)
 {
 }
 
@@ -184,6 +244,22 @@ void FreeEnergyPerturbationData::Element::elementSetup()
 FreeEnergyPerturbationData::Element* FreeEnergyPerturbationData::element()
 {
     return element_.get();
+}
+
+std::tuple<SignalFepStateSetting, SetFepState> FreeEnergyPerturbationData::Element::fepStateCallbacks()
+{
+    GMX_RELEASE_ASSERT(!doSlowGrowth_,
+                       "External FEP state setting is incompatible with slow growth.");
+    // This could be implemented with some sanity checks, but there's no use case right now
+    GMX_RELEASE_ASSERT(!externalLambdaSetting_,
+                       "External FEP state setting by more than one element not supported.");
+    externalLambdaSetting_ = true;
+    auto signalCallback    = [this](Step step) { nextLambdaSettingStep_ = step; };
+    auto setLambdaCallback = [this](int lambda, Step step) {
+        newFepState_     = lambda;
+        newFepStateStep_ = step;
+    };
+    return { std::move(signalCallback), std::move(setLambdaCallback) };
 }
 
 ISimulatorElement* FreeEnergyPerturbationData::Element::getElementPointerImpl(

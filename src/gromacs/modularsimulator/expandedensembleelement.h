@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
+ * Copyright (c) 2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -33,7 +33,7 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 /*! \internal \file
- * \brief Declares the free energy perturbation element for the modular simulator
+ * \brief Declares the expanded ensemble element for the modular simulator
  *
  * \author Pascal Merz <pascal.merz@me.com>
  * \ingroup module_modularsimulator
@@ -41,17 +41,13 @@
  * This header is only used within the modular simulator module
  */
 
-#ifndef GMX_MODULARSIMULATOR_FREEENERGYPERTURBATIONELEMENT_H
-#define GMX_MODULARSIMULATOR_FREEENERGYPERTURBATIONELEMENT_H
+#ifndef GMX_MODULARSIMULATOR_EXPANDEDENSEMBLEELEMENT_H
+#define GMX_MODULARSIMULATOR_EXPANDEDENSEMBLEELEMENT_H
 
-#include "gromacs/mdtypes/md_enums.h"
-#include "gromacs/utility/arrayref.h"
-#include "gromacs/utility/real.h"
+#include "freeenergyperturbationdata.h"
 
-#include "modularsimulatorinterfaces.h"
-
+struct df_history_t;
 struct t_inputrec;
-struct t_trxframe;
 
 namespace gmx
 {
@@ -65,90 +61,27 @@ class StatePropagatorData;
 
 /*! \internal
  * \ingroup module_modularsimulator
- * \brief The free energy perturbation data
+ * \brief The expanded ensemble element
  *
- * The lambda vector and the current FEP state are held by the
- * FreeEnergyPerturbationData, offering access to its values via getter
- * functions. The FreeEnergyPerturbationData::Element is responsible for
- * lambda update (if applicable) and checkpointing.
+ * This element periodically attempts Monte Carlo moves in lambda
+ * space and sets the new lambda state in FreeEnergyPerturbationData::Element.
  */
-class FreeEnergyPerturbationData final
+class ExpandedEnsembleElement final : public ISimulatorElement, public ICheckpointHelperClient, public ILoggingSignallerClient
 {
 public:
     //! Constructor
-    FreeEnergyPerturbationData(FILE* fplog, const t_inputrec* inputrec, MDAtoms* mdAtoms);
+    explicit ExpandedEnsembleElement(bool                              isMasterRank,
+                                     Step                              initialStep,
+                                     int                               frequency,
+                                     const EnergyData*                 energyData,
+                                     const FreeEnergyPerturbationData* freeEnergyPerturbationData,
+                                     FILE*                             fplog,
+                                     const t_inputrec*                 inputrec);
 
-    //! Get a view of the current lambda vector
-    ArrayRef<real> lambdaView();
-    //! Get a const view of the current lambda vector
-    ArrayRef<const real> constLambdaView() const;
-    //! Get the current FEP state
-    int currentFEPState() const;
-    //! Update MDAtoms (public because it's called by DomDec - see #3700)
-    void updateMDAtoms();
-    //! Get a callback to change the lambda state
-    std::tuple<SignalFepStateSetting, SetFepState> fepStateCallbacks() const;
-
-    //! The element taking part in the simulator loop
-    class Element;
-    //! Get pointer to element (whose lifetime is managed by this)
-    Element* element();
-
-    //! Read everything that can be stored in t_trxframe from a checkpoint file
-    static void readCheckpointToTrxFrame(t_trxframe*                       trxFrame,
-                                         std::optional<ReadCheckpointData> readCheckpointData);
-    //! CheckpointHelper identifier
-    static const std::string& checkpointID();
-
-private:
-    //! Default constructor - only used internally
-    FreeEnergyPerturbationData() = default;
-    //! Update the lambda values
-    void updateLambdas(Step step);
-    //! Update the lambda values
-    void setLambdaState(Step step, int newState);
-    //! Helper function to read from / write to CheckpointData
-    template<CheckpointDataOperation operation>
-    void doCheckpointData(CheckpointData<operation>* checkpointData);
-
-    //! The element
-    std::unique_ptr<Element> element_;
-
-    //! The lambda vector
-    std::array<real, efptNR> lambda_;
-    //! The current free energy state
-    int currentFEPState_;
-
-    //! Handles logging.
-    FILE* fplog_;
-    //! Contains user input mdp options.
-    const t_inputrec* inputrec_;
-    //! Atom parameters for this domain.
-    MDAtoms* mdAtoms_;
-};
-
-
-/*! \internal
- * \ingroup module_modularsimulator
- * \brief The free energy perturbation data element
- *
- * The FreeEnergyPerturbationData::Element does update the lambda
- * values during the simulation run if lambda is non-static. It does
- * implement the checkpointing client interface to save its current
- * state for restart.
- */
-class FreeEnergyPerturbationData::Element final : public ISimulatorElement, public ICheckpointHelperClient
-{
-public:
-    //! Constructor
-    explicit Element(FreeEnergyPerturbationData* freeEnergyPerturbationElement, double deltaLambda);
-
-    //! Update lambda and mdatoms
+    //! Attempt lambda MC step and write log
     void scheduleTask(Step step, Time time, const RegisterRunFunction& registerRunFunction) override;
-
-    //! Update the MdAtoms object
+    //! Set up FEP history object
     void elementSetup() override;
-
     //! No teardown needed
     void elementTeardown() override{};
 
@@ -177,29 +110,50 @@ public:
                                                     FreeEnergyPerturbationData* freeEnergyPerturbationData,
                                                     GlobalCommunicationHelper* globalCommunicationHelper);
 
-    //! Get a callback to change the lambda state
-    std::tuple<SignalFepStateSetting, SetFepState> fepStateCallbacks();
-
 private:
-    //! The free energy data
-    FreeEnergyPerturbationData* freeEnergyPerturbationData_;
-    //! Whether lambda values change continuously
-    const bool doSlowGrowth_;
+    //! Use expanded ensemble to determine new FEP state or write log
+    void apply(Step step, bool doLambdaStep, bool doLog);
 
-    //! Whether lambda can be set externally
-    bool externalLambdaSetting_;
-    //! The next external lambda setting step
-    Step nextLambdaSettingStep_;
-    //! The new FEP state set externally
-    int newFepState_;
-    //! The step at which the new FEP state gets used
-    Step newFepStateStep_;
+    //! Callback to set a new lambda state
+    SetFepState setFepState_;
+    //! Callback to announce setting a new lambda state at scheduling time
+    SignalFepStateSetting signalFepStateSetting_;
+    //! Whether this runs on master
+    const bool isMasterRank_;
+    //! The initial Step
+    const Step initialStep_;
+    //! The frequency of lambda MC steps
+    const int frequency_;
 
+    //! ILoggingSignallerClient implementation
+    std::optional<SignallerCallback> registerLoggingCallback() override;
+    //! The next logging step
+    Step nextLogWritingStep_;
+
+    //! The free energy sampling history
+    std::unique_ptr<df_history_t> dfhist_;
+
+    //! CheckpointHelper identifier
+    const std::string identifier_ = "ExpandedEnsembleElement";
     //! Helper function to read from / write to CheckpointData
     template<CheckpointDataOperation operation>
     void doCheckpointData(CheckpointData<operation>* checkpointData);
+    //! Whether this object was restored from checkpoint
+    bool restoredFromCheckpoint_;
+
+    // TODO: Clarify relationship to data objects and find a more robust alternative to raw pointers (#3583)
+    //! Pointer to the energy data
+    const EnergyData* energyData_;
+    //! Pointer to the free energy perturbation data
+    const FreeEnergyPerturbationData* freeEnergyPerturbationData_;
+
+    // Access to ISimulator data
+    //! Handles logging.
+    FILE* fplog_;
+    //! Contains user input mdp options.
+    const t_inputrec* inputrec_;
 };
 
 } // namespace gmx
 
-#endif // GMX_MODULARSIMULATOR_FREEENERGYPERTURBATIONELEMENT_H
+#endif // GMX_MODULARSIMULATOR_EXPANDEDENSEMBLEELEMENT_H

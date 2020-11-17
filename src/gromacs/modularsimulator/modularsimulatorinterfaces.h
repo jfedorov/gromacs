@@ -78,6 +78,7 @@ class EnergySignaller;
 class LastStepSignaller;
 class LoggingSignaller;
 class NeighborSearchSignaller;
+enum class ReferenceTemperatureChangeAlgorithm;
 enum class ScaleVelocities;
 template<class Signaller>
 class SignallerBuilder;
@@ -97,6 +98,8 @@ typedef std::function<void()> SimulatorRunFunction;
 
 //! The function type that allows to register run functions
 typedef std::function<void(SimulatorRunFunction)> RegisterRunFunction;
+//! The function type scheduling run functions
+typedef std::function<void(Step, Time, const RegisterRunFunction&)> SchedulingFunction;
 
 /*! \internal
  * \brief The general interface for elements of the modular simulator
@@ -561,6 +564,15 @@ enum class ReportPreviousStepConservedEnergy
     No,
     Count
 };
+
+//! Callback to signal the FEP element that state will be set
+using SignalFepStateSetting = std::function<void(Step)>;
+//! Callback to communicate new FEP state to FEP element
+using SetFepState = std::function<void(int, Step)>;
+
+//! Callback updating the reference temperature
+using ReferenceTemperatureCallback =
+        std::function<void(ArrayRef<const real>, ReferenceTemperatureChangeAlgorithm algorithm)>;
 
 //! /}
 } // namespace gmx

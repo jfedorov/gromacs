@@ -78,6 +78,7 @@
 #include "andersentemperaturecoupling.h"
 #include "computeglobalselement.h"
 #include "constraintelement.h"
+#include "expandedensembleelement.h"
 #include "firstorderpressurecoupling.h"
 #include "forceelement.h"
 #include "mttk.h"
@@ -155,7 +156,12 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
             builder->add<ConstraintsElement<ConstraintVariable::Velocities>>();
         }
         builder->add<ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet>>();
+        // Here, we have x / v / f at the full time step
         builder->add<StatePropagatorData::Element>();
+        if (legacySimulatorData_->inputrec->bExpanded)
+        {
+            builder->add<ExpandedEnsembleElement>();
+        }
         if (legacySimulatorData_->inputrec->etc == TemperatureCoupling::VRescale
             || legacySimulatorData_->inputrec->etc == TemperatureCoupling::Berendsen)
         {
@@ -248,6 +254,10 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
         }
         // We have a full state at time t here
         builder->add<StatePropagatorData::Element>();
+        if (legacySimulatorData_->inputrec->bExpanded)
+        {
+            builder->add<ExpandedEnsembleElement>();
+        }
 
         // Propagate extended system variables from t to t+dt/2
         if (legacySimulatorData_->inputrec->epc == PressureCoupling::Mttk)
@@ -378,11 +388,6 @@ bool ModularSimulator::isInputCompatible(bool                             exitOn
             isInputCompatible
             && conditionalAssert(!doRerun, "Rerun is not supported by the modular simulator.");
     isInputCompatible = isInputCompatible
-                        && conditionalAssert(inputrec->efep == efepNO || inputrec->efep == efepYES
-                                                     || inputrec->efep == efepSLOWGROWTH,
-                                             "Expanded ensemble free energy calculation is not "
-                                             "supported by the modular simulator.");
-    isInputCompatible = isInputCompatible
                         && conditionalAssert(!inputrec->bPull,
                                              "Pulling is not supported by the modular simulator.");
     isInputCompatible =
@@ -454,10 +459,6 @@ bool ModularSimulator::isInputCompatible(bool                             exitOn
             isInputCompatible
             && conditionalAssert(!inputrec->bSimTemp,
                                  "Simulated tempering is not supported by the modular simulator.");
-    isInputCompatible = isInputCompatible
-                        && conditionalAssert(!inputrec->bExpanded,
-                                             "Expanded ensemble simulations are not supported by "
-                                             "the modular simulator.");
     isInputCompatible =
             isInputCompatible
             && conditionalAssert(!doEssentialDynamics,

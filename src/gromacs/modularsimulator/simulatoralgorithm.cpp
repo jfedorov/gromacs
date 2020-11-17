@@ -43,6 +43,8 @@
 
 #include "simulatoralgorithm.h"
 
+#include <numeric>
+
 #include "gromacs/commandline/filenm.h"
 #include "gromacs/domdec/domdec.h"
 #include "gromacs/ewald/pme.h"
@@ -61,6 +63,7 @@
 #include "gromacs/mdrun/shellfc.h"
 #include "gromacs/mdrunutility/handlerestart.h"
 #include "gromacs/mdrunutility/printtime.h"
+#include "gromacs/mdtypes/awh_params.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/fcdata.h"
 #include "gromacs/mdtypes/forcerec.h"
@@ -445,6 +448,31 @@ ModularSimulatorAlgorithmBuilder::ModularSimulatorAlgorithmBuilder(
     registerExistingElement(energyData_->element());
 }
 
+static int computeFepFrequency(const t_inputrec& inputrec, const ReplicaExchangeParameters& replExParams)
+{
+    if (inputrec.efep == efepNO)
+    {
+        return 0;
+    }
+
+    /* Set free energy calculation frequency as the greatest common
+     * denominator of nstdhdl and repl_ex_nst. */
+    int nstfep = inputrec.fepvals->nstdhdl;
+    if (inputrec.bExpanded)
+    {
+        nstfep = std::gcd(inputrec.expandedvals->nstexpanded, nstfep);
+    }
+    if (replExParams.exchangeInterval > 0)
+    {
+        nstfep = std::gcd(replExParams.exchangeInterval, nstfep);
+    }
+    if (inputrec.bDoAwh)
+    {
+        nstfep = std::gcd(inputrec.awhParams->nstSampleCoord, nstfep);
+    }
+    return nstfep;
+}
+
 ModularSimulatorAlgorithm ModularSimulatorAlgorithmBuilder::build()
 {
     if (algorithmHasBeenBuilt_)
@@ -636,7 +664,10 @@ ModularSimulatorAlgorithm ModularSimulatorAlgorithmBuilder::build()
             }
         }
         addSignaller(energySignallerBuilder_.build(
-                inputrec->nstcalcenergy, inputrec->fepvals->nstdhdl, inputrec->nstpcouple, virialMode));
+                inputrec->nstcalcenergy,
+                computeFepFrequency(*inputrec, legacySimulatorData_->replExParams),
+                inputrec->nstpcouple,
+                virialMode));
         addSignaller(trajectorySignallerBuilder_.build(inputrec->nstxout,
                                                        inputrec->nstvout,
                                                        inputrec->nstfout,
