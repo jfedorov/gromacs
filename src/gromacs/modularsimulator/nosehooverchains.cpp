@@ -308,10 +308,13 @@ bool NoseHooverChainsData::isAtFullCouplingTimeStep(int temperatureGroup) const
 }
 
 void NoseHooverChainsData::updateReferenceTemperature(ArrayRef<const real> temperatures,
-                                                      ReferenceTemperatureChangeAlgorithm gmx_unused algorithm)
+                                                      ReferenceTemperatureChangeAlgorithm algorithm)
 {
-    GMX_THROW(NotImplementedError(
-            "NoseHooverChainsData: Unknown ReferenceTemperatureChangeAlgorithm."));
+    if (algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedTempering)
+    {
+        GMX_THROW(NotImplementedError(
+                "NoseHooverChainsData: Unknown ReferenceTemperatureChangeAlgorithm."));
+    }
     for (auto temperatureGroup = 0; temperatureGroup < numTemperatureGroups_; ++temperatureGroup)
     {
         const bool newTemperatureIsValid =

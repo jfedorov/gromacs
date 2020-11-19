@@ -221,10 +221,12 @@ rvec* MttkData::boxVelocities()
     return boxVelocity_;
 }
 
-void MttkData::updateReferenceTemperature(real                                temperature,
-                                          ReferenceTemperatureChangeAlgorithm gmx_unused algorithm)
+void MttkData::updateReferenceTemperature(real temperature, ReferenceTemperatureChangeAlgorithm algorithm)
 {
-    GMX_THROW(NotImplementedError("MttkData: Unknown ReferenceTemperatureChangeAlgorithm."));
+    if (algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedTempering)
+    {
+        GMX_THROW(NotImplementedError("MttkData: Unknown ReferenceTemperatureChangeAlgorithm."));
+    }
     invMass_ *= temperature / referenceTemperature_;
     referenceTemperature_ = temperature;
 }

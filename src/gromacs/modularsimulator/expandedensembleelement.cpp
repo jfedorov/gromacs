@@ -69,6 +69,29 @@ void ExpandedEnsembleElement::apply(Step step, bool doLambdaStep, bool doLog)
                                                   freeEnergyPerturbationData_->currentFEPState(),
                                                   dfhist_.get(),
                                                   step);
+        // If we're doing simulated tempering, we need to adjust the temperatures when changing lambda state
+        if (doSimulatedTempering_ && (newFepState != freeEnergyPerturbationData_->currentFEPState()))
+        {
+            std::vector<real> newTemperatures(inputrec_->opts.ngtc,
+                                              inputrec_->simtempvals->temperatures[newFepState]);
+
+            auto referenceTemperatures =
+                    constArrayRefFromArray(inputrec_->opts.ref_t, inputrec_->opts.ngtc);
+            if (std::any_of(referenceTemperatures.begin(),
+                            referenceTemperatures.end(),
+                            [](const real& temperature) { return temperature <= 0; }))
+            {
+                for (int temperatureGroup = 0; temperatureGroup < inputrec_->opts.ngtc; ++temperatureGroup)
+                {
+                    if (referenceTemperatures[temperatureGroup] <= 0)
+                    {
+                        newTemperatures[temperatureGroup] = 0;
+                    }
+                }
+            }
+            setReferenceTemperature_(newTemperatures,
+                                     ReferenceTemperatureChangeAlgorithm::SimulatedTempering);
+        }
         // Set new state at next step
         setFepState_(newFepState, step + 1);
     }
@@ -179,13 +202,16 @@ std::optional<SignallerCallback> ExpandedEnsembleElement::registerLoggingCallbac
     }
 }
 
-ExpandedEnsembleElement::ExpandedEnsembleElement(bool                              isMasterRank,
-                                                 Step                              initialStep,
-                                                 int                               frequency,
-                                                 const EnergyData*                 energyData,
+ExpandedEnsembleElement::ExpandedEnsembleElement(bool              doSimulatedTempering,
+                                                 bool              isMasterRank,
+                                                 Step              initialStep,
+                                                 int               frequency,
+                                                 const EnergyData* energyData,
                                                  const FreeEnergyPerturbationData* freeEnergyPerturbationData,
                                                  FILE*                             fplog,
-                                                 const t_inputrec*                 inputrec) :
+                                                 const t_inputrec*                 inputrec,
+                                                 std::optional<ReferenceTemperatureCallback> setReferenceTemperature) :
+    doSimulatedTempering_(doSimulatedTempering),
     isMasterRank_(isMasterRank),
     initialStep_(initialStep),
     frequency_(frequency),
@@ -197,6 +223,12 @@ ExpandedEnsembleElement::ExpandedEnsembleElement(bool                           
     fplog_(fplog),
     inputrec_(inputrec)
 {
+    GMX_RELEASE_ASSERT(!doSimulatedTempering || setReferenceTemperature.has_value(),
+                       "Simulated tempering needs a callback to set new reference temperatures.");
+    if (doSimulatedTempering_)
+    {
+        setReferenceTemperature_ = setReferenceTemperature.value();
+    }
     init_df_history(dfhist_.get(), inputrec_->fepvals->n_lambda);
     std::tie(signalFepStateSetting_, setFepState_) = freeEnergyPerturbationData->fepStateCallbacks();
 }
@@ -209,14 +241,21 @@ ISimulatorElement* ExpandedEnsembleElement::getElementPointerImpl(
         FreeEnergyPerturbationData*     freeEnergyPerturbationData,
         GlobalCommunicationHelper* gmx_unused globalCommunicationHelper)
 {
+    const bool doSimulatedTempering = legacySimulatorData->inputrec->bSimTemp;
+    auto       setReferenceTemperature =
+            doSimulatedTempering
+                    ? std::make_optional(builderHelper->changeReferenceTemperatureCallback())
+                    : std::nullopt;
     return builderHelper->storeElement(std::make_unique<ExpandedEnsembleElement>(
+            doSimulatedTempering,
             MASTER(legacySimulatorData->cr),
             legacySimulatorData->inputrec->init_step,
             legacySimulatorData->inputrec->expandedvals->nstexpanded,
             energyData,
             freeEnergyPerturbationData,
             legacySimulatorData->fplog,
-            legacySimulatorData->inputrec));
+            legacySimulatorData->inputrec,
+            setReferenceTemperature));
 }
 
 } // namespace gmx

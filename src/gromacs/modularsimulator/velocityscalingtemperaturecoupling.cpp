@@ -461,12 +461,15 @@ public:
     //! Adapt masses
     real updateReferenceTemperatureAndIntegral(int  temperatureGroup,
                                                real gmx_unused                     newTemperature,
-                                               ReferenceTemperatureChangeAlgorithm gmx_unused algorithm,
+                                               ReferenceTemperatureChangeAlgorithm algorithm,
                                                const TemperatureCouplingData& temperatureCouplingData) override
     {
-        GMX_THROW(
-                NotImplementedError("NoseHooverTemperatureCoupling: Unknown "
-                                    "ReferenceTemperatureChangeAlgorithm."));
+        if (algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedTempering)
+        {
+            GMX_THROW(
+                    NotImplementedError("NoseHooverTemperatureCoupling: Unknown "
+                                        "ReferenceTemperatureChangeAlgorithm."));
+        }
         const bool newTemperatureIsValid =
                 (newTemperature > 0 && temperatureCouplingData.couplingTime[temperatureGroup] > 0
                  && temperatureCouplingData.numDegreesOfFreedom[temperatureGroup] > 0);
@@ -651,9 +654,12 @@ void VelocityScalingTemperatureCoupling::updateReferenceTemperature(ArrayRef<con
                 temperatureCouplingImpl_->updateReferenceTemperatureAndIntegral(
                         temperatureGroup, temperatures[temperatureGroup], algorithm, thermostatData);
     }
-    GMX_THROW(
-            NotImplementedError("VelocityScalingTemperatureCoupling: Unknown "
-                                "ReferenceTemperatureChangeAlgorithm."));
+    if (algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedTempering)
+    {
+        GMX_THROW(
+                NotImplementedError("VelocityScalingTemperatureCoupling: Unknown "
+                                    "ReferenceTemperatureChangeAlgorithm."));
+    }
     std::copy(temperatures.begin(), temperatures.end(), referenceTemperature_.begin());
 }
 

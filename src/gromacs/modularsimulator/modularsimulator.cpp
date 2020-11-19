@@ -457,10 +457,6 @@ bool ModularSimulator::isInputCompatible(bool                             exitOn
                                  "Simulated annealing is not supported by the modular simulator.");
     isInputCompatible =
             isInputCompatible
-            && conditionalAssert(!inputrec->bSimTemp,
-                                 "Simulated tempering is not supported by the modular simulator.");
-    isInputCompatible =
-            isInputCompatible
             && conditionalAssert(!doEssentialDynamics,
                                  "Essential dynamics is not supported by the modular simulator.");
     isInputCompatible = isInputCompatible

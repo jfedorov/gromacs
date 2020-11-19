@@ -407,7 +407,7 @@ ModularSimulatorAlgorithmBuilder::ModularSimulatorAlgorithmBuilder(
                              legacySimulatorData->startingBehavior,
                              legacySimulatorData->cr)
 {
-    if (legacySimulatorData->inputrec->efep != efepNO)
+    if (legacySimulatorData->inputrec->efep != efepNO || legacySimulatorData->inputrec->bSimTemp)
     {
         freeEnergyPerturbationData_ = std::make_unique<FreeEnergyPerturbationData>(
                 legacySimulatorData->fplog, legacySimulatorData->inputrec, legacySimulatorData->mdAtoms);
@@ -465,7 +465,7 @@ ModularSimulatorAlgorithmBuilder::ModularSimulatorAlgorithmBuilder(
 
 static int computeFepFrequency(const t_inputrec& inputrec, const ReplicaExchangeParameters& replExParams)
 {
-    if (inputrec.efep == efepNO)
+    if (inputrec.efep == efepNO && !inputrec.bSimTemp)
     {
         return 0;
     }

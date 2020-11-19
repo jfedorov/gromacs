@@ -97,10 +97,13 @@ public:
      * \param temperatures  New reference temperatures
      */
     void updateReferenceTemperature(ArrayRef<const real>                temperatures,
-                                    ReferenceTemperatureChangeAlgorithm gmx_unused algorithm)
+                                    ReferenceTemperatureChangeAlgorithm algorithm)
     {
-        GMX_THROW(NotImplementedError(
-                "StatePropagatorData: Unknown ReferenceTemperatureChangeAlgorithm."));
+        if (algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedTempering)
+        {
+            GMX_THROW(NotImplementedError(
+                    "StatePropagatorData: Unknown ReferenceTemperatureChangeAlgorithm."));
+        }
         std::vector<real> velocityScalingFactors(numTemperatureGroups_);
         for (int temperatureGroup = 0; temperatureGroup < numTemperatureGroups_; ++temperatureGroup)
         {
