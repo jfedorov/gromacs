@@ -2091,67 +2091,84 @@ bool initSimulatedAnnealing(t_inputrec* ir, gmx::Update* upd)
     return doSimAnnealing;
 }
 
-/* set target temperatures if we are annealing */
-void update_annealing_target_temp(t_inputrec* ir, real t, gmx::Update* upd)
+/*!
+ * \brief Compute the new annealing temperature for a temperature group
+ *
+ * \param ir  The input record
+ * \param temperatureGroup  The temperature group
+ * \param time  The current time
+ * \return  The new reference temperature for the group
+ */
+static real computeAnnealingTargetTemperature(const t_inputrec* ir, int temperatureGroup, real time)
 {
-    int  i, j, n, npoints;
-    real pert, thist = 0, x;
+    GMX_RELEASE_ASSERT(temperatureGroup >= 0 && temperatureGroup < ir->opts.ngtc,
+                       "Invalid temperature group.");
+    // Alias to avoid unnecessary line changes
+    const int i       = temperatureGroup;
+    int       npoints = ir->opts.anneal_npoints[i];
+    real      thist   = 0.0;
 
-    for (i = 0; i < ir->opts.ngtc; i++)
+    switch (ir->opts.annealing[i])
     {
-        npoints = ir->opts.anneal_npoints[i];
-        switch (ir->opts.annealing[i])
+        case eannNO: return ir->opts.ref_t[i];
+        case eannPERIODIC:
         {
-            case eannNO: continue;
-            case eannPERIODIC:
-                /* calculate time modulo the period */
-                pert  = ir->opts.anneal_time[i][npoints - 1];
-                n     = static_cast<int>(t / pert);
-                thist = t - n * pert; /* modulo time */
-                /* Make sure rounding didn't get us outside the interval */
-                if (std::fabs(thist - pert) < GMX_REAL_EPS * 100)
-                {
-                    thist = 0;
-                }
-                break;
-            case eannSINGLE: thist = t; break;
-            default:
-                gmx_fatal(FARGS,
-                          "Death horror in update_annealing_target_temp (i=%d/%d npoints=%d)",
-                          i,
-                          ir->opts.ngtc,
-                          npoints);
-        }
-        /* We are doing annealing for this group if we got here,
-         * and we have the (relative) time as thist.
-         * calculate target temp */
-        j = 0;
-        while ((j < npoints - 1) && (thist > (ir->opts.anneal_time[i][j + 1])))
-        {
-            j++;
-        }
-        if (j < npoints - 1)
-        {
-            /* Found our position between points j and j+1.
-             * Interpolate: x is the amount from j+1, (1-x) from point j
-             * First treat possible jumps in temperature as a special case.
-             */
-            if ((ir->opts.anneal_time[i][j + 1] - ir->opts.anneal_time[i][j]) < GMX_REAL_EPS * 100)
+            /* calculate time modulo the period */
+            real pert = ir->opts.anneal_time[i][npoints - 1];
+            auto n    = static_cast<int>(time / pert);
+            thist     = time - n * pert; /* modulo time */
+            /* Make sure rounding didn't get us outside the interval */
+            if (std::fabs(thist - pert) < GMX_REAL_EPS * 100)
             {
-                ir->opts.ref_t[i] = ir->opts.anneal_temp[i][j + 1];
+                thist = 0;
             }
-            else
-            {
-                x = ((thist - ir->opts.anneal_time[i][j])
-                     / (ir->opts.anneal_time[i][j + 1] - ir->opts.anneal_time[i][j]));
-                ir->opts.ref_t[i] =
-                        x * ir->opts.anneal_temp[i][j + 1] + (1 - x) * ir->opts.anneal_temp[i][j];
-            }
+            break;
+        }
+        case eannSINGLE: thist = time; break;
+        default:
+            gmx_fatal(FARGS,
+                      "Death horror in update_annealing_target_temp (i=%d/%d npoints=%d)",
+                      i,
+                      ir->opts.ngtc,
+                      npoints);
+    }
+    /* We are doing annealing for this group if we got here,
+     * and we have the (relative) time as thist.
+     * calculate target temp */
+    int j = 0;
+    while ((j < npoints - 1) && (thist > (ir->opts.anneal_time[i][j + 1])))
+    {
+        j++;
+    }
+    if (j < npoints - 1)
+    {
+        /* Found our position between points j and j+1.
+         * Interpolate: x is the amount from j+1, (1-x) from point j
+         * First treat possible jumps in temperature as a special case.
+         */
+        if ((ir->opts.anneal_time[i][j + 1] - ir->opts.anneal_time[i][j]) < GMX_REAL_EPS * 100)
+        {
+            return ir->opts.anneal_temp[i][j + 1];
         }
         else
         {
-            ir->opts.ref_t[i] = ir->opts.anneal_temp[i][npoints - 1];
+            const real x = ((thist - ir->opts.anneal_time[i][j])
+                            / (ir->opts.anneal_time[i][j + 1] - ir->opts.anneal_time[i][j]));
+            return x * ir->opts.anneal_temp[i][j + 1] + (1 - x) * ir->opts.anneal_temp[i][j];
         }
+    }
+    else
+    {
+        return ir->opts.anneal_temp[i][npoints - 1];
+    }
+}
+
+/* set target temperatures if we are annealing */
+void update_annealing_target_temp(t_inputrec* ir, real t, gmx::Update* upd)
+{
+    for (int temperatureGroup = 0; temperatureGroup < ir->opts.ngtc; temperatureGroup++)
+    {
+        ir->opts.ref_t[temperatureGroup] = computeAnnealingTargetTemperature(ir, temperatureGroup, t);
     }
 
     upd->update_temperature_constants(*ir);
