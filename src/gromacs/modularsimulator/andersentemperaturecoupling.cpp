@@ -145,6 +145,14 @@ int AndersenTemperatureCoupling::frequency() const
     return couplingFrequency_;
 }
 
+void AndersenTemperatureCoupling::updateReferenceTemperature(ArrayRef<const real> temperatures,
+                                                             ReferenceTemperatureChangeAlgorithm gmx_unused algorithm)
+{
+    GMX_THROW(NotImplementedError(
+            "AndersenTemperatureCoupling: Unknown ReferenceTemperatureChangeAlgorithm."));
+    std::copy(temperatures.begin(), temperatures.end(), referenceTemperature_.begin());
+}
+
 void               AndersenTemperatureCoupling::elementSetup() {}
 ISimulatorElement* AndersenTemperatureCoupling::getElementPointerImpl(
         LegacySimulatorData*                    legacySimulatorData,
@@ -167,6 +175,12 @@ ISimulatorElement* AndersenTemperatureCoupling::getElementPointerImpl(
             statePropagatorData,
             legacySimulatorData->mdAtoms,
             legacySimulatorData->cr);
+    auto* andersenThermostatPtr = andersenThermostat.get();
+    builderHelper->registerReferenceTemperatureUpdate(
+            [andersenThermostatPtr](ArrayRef<const real>                temperatures,
+                                    ReferenceTemperatureChangeAlgorithm algorithm) {
+                andersenThermostatPtr->updateReferenceTemperature(temperatures, algorithm);
+            });
 
     // T-coupling frequency will be composite element frequency
     const auto frequency = andersenThermostat->frequency();

@@ -117,6 +117,11 @@ void MttkData::build(LegacySimulatorData*                    legacySimulatorData
                     legacySimulatorData->inputrec->compress,
                     energyData,
                     statePropagatorData));
+    auto* mttkDataPtr = builderHelper->simulationData<MttkData>(MttkData::dataID()).value();
+    builderHelper->registerReferenceTemperatureUpdate(
+            [mttkDataPtr](ArrayRef<const real> temperatures, ReferenceTemperatureChangeAlgorithm algorithm) {
+                mttkDataPtr->updateReferenceTemperature(temperatures[0], algorithm);
+            });
 }
 
 std::string MttkData::dataID()
@@ -141,6 +146,7 @@ MttkData::MttkData(real                       referenceTemperature,
     integralTime_(0.0),
     referencePressure_(referencePressure),
     boxVelocity_{ { 0 } },
+    referenceTemperature_(referenceTemperature),
     statePropagatorData_(statePropagatorData)
 {
     energyData->addConservedEnergyContribution(
@@ -213,6 +219,14 @@ real MttkData::referencePressure() const
 rvec* MttkData::boxVelocities()
 {
     return boxVelocity_;
+}
+
+void MttkData::updateReferenceTemperature(real                                temperature,
+                                          ReferenceTemperatureChangeAlgorithm gmx_unused algorithm)
+{
+    GMX_THROW(NotImplementedError("MttkData: Unknown ReferenceTemperatureChangeAlgorithm."));
+    invMass_ *= temperature / referenceTemperature_;
+    referenceTemperature_ = temperature;
 }
 
 namespace

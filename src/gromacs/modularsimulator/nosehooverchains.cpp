@@ -206,6 +206,14 @@ void NoseHooverChainsData::build(NhcUsage                                nhcUsag
                         energyData,
                         nhcUsage));
     }
+    auto* nhcDataPtr =
+            builderHelper
+                    ->simulationData<NoseHooverChainsData>(NoseHooverChainsData::dataID(nhcUsage))
+                    .value();
+    builderHelper->registerReferenceTemperatureUpdate(
+            [nhcDataPtr](ArrayRef<const real> temperatures, ReferenceTemperatureChangeAlgorithm algorithm) {
+                nhcDataPtr->updateReferenceTemperature(temperatures, algorithm);
+            });
 }
 
 NhcCoordinateView NoseHooverChainsData::coordinateView(int temperatureGroup)
@@ -297,6 +305,43 @@ bool NoseHooverChainsData::isAtFullCouplingTimeStep(int temperatureGroup) const
     // Check whether coordinate time divided by the time step is close to integer
     return timesClose(lround(coordinateTime_[temperatureGroup] / couplingTimeStep_) * couplingTimeStep_,
                       coordinateTime_[temperatureGroup]);
+}
+
+void NoseHooverChainsData::updateReferenceTemperature(ArrayRef<const real> temperatures,
+                                                      ReferenceTemperatureChangeAlgorithm gmx_unused algorithm)
+{
+    GMX_THROW(NotImplementedError(
+            "NoseHooverChainsData: Unknown ReferenceTemperatureChangeAlgorithm."));
+    for (auto temperatureGroup = 0; temperatureGroup < numTemperatureGroups_; ++temperatureGroup)
+    {
+        const bool newTemperatureIsValid =
+                (temperatures[temperatureGroup] > 0 && couplingTime_[temperatureGroup] > 0
+                 && numDegreesOfFreedom_[temperatureGroup] > 0);
+        const bool oldTemperatureIsValid =
+                (referenceTemperature_[temperatureGroup] > 0 && couplingTime_[temperatureGroup] > 0
+                 && numDegreesOfFreedom_[temperatureGroup] > 0);
+        GMX_RELEASE_ASSERT(newTemperatureIsValid == oldTemperatureIsValid,
+                           "Cannot turn temperature coupling on / off during simulation run.");
+        if (oldTemperatureIsValid && newTemperatureIsValid)
+        {
+            const real velocityFactor =
+                    std::sqrt(temperatures[temperatureGroup] / referenceTemperature_[temperatureGroup]);
+            for (auto chainPosition = 0; chainPosition < chainLength_; ++chainPosition)
+            {
+                invXiMass_[temperatureGroup][chainPosition] *=
+                        (referenceTemperature_[temperatureGroup] / temperatures[temperatureGroup]);
+                xiVelocities_[temperatureGroup][chainPosition] *= velocityFactor;
+            }
+        }
+    }
+    std::copy(temperatures.begin(), temperatures.end(), referenceTemperature_.begin());
+    for (auto temperatureGroup = 0; temperatureGroup < numTemperatureGroups_; ++temperatureGroup)
+    {
+        if (isAtFullCouplingTimeStep(temperatureGroup))
+        {
+            calculateIntegral(temperatureGroup);
+        }
+    }
 }
 
 namespace

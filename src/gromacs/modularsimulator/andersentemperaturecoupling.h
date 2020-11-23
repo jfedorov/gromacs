@@ -110,6 +110,10 @@ public:
     [[nodiscard]] int frequency() const;
 
 private:
+    //! Update the reference temperature
+    void updateReferenceTemperature(ArrayRef<const real>                temperatures,
+                                    ReferenceTemperatureChangeAlgorithm algorithm);
+
     //! Whether we're doing massive Andersen thermostatting
     const bool doMassive_;
     //! The rate
@@ -119,7 +123,7 @@ private:
     //! The random seed
     const int64_t seed_;
     //! Coupling temperature per group
-    const std::vector<real> referenceTemperature_;
+    std::vector<real> referenceTemperature_;
     //! Coupling time per group
     const std::vector<real> couplingTime_;
 

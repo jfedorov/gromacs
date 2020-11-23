@@ -155,6 +155,9 @@ private:
     double temperatureCouplingIntegral(Time time) const;
     //! Whether a temperature group dof is at a full coupling time step
     bool isAtFullCouplingTimeStep(int temperatureGroup) const;
+    //! Update the reference temperature
+    void updateReferenceTemperature(ArrayRef<const real>                temperatures,
+                                    ReferenceTemperatureChangeAlgorithm algorithm);
 
     //! CheckpointHelper identifier
     const std::string identifier_;
@@ -184,7 +187,7 @@ private:
     //! The number of temperature groups
     const int numTemperatureGroups_;
     //! Coupling temperature per group
-    const std::vector<real> referenceTemperature_;
+    std::vector<real> referenceTemperature_;
     //! Coupling time per group
     const std::vector<real> couplingTime_;
     //! Number of degrees of freedom per group

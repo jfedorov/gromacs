@@ -63,6 +63,7 @@
 #include "freeenergyperturbationdata.h"
 #include "modularsimulatorinterfaces.h"
 #include "pmeloadbalancehelper.h"
+#include "referencetemperaturemanager.h"
 #include "signallers.h"
 #include "topologyholder.h"
 #include "trajectoryelement.h"
@@ -350,6 +351,10 @@ public:
     void registerTemperaturePressureControl(std::function<void(const PropagatorConnection&)> registrationFunction);
     //! Register a propagator for thermostat / barostat use
     void registerPropagator(PropagatorConnection connectionData);
+    //! Register for reference temperature update callback
+    void registerReferenceTemperatureUpdate(ReferenceTemperatureCallback referenceTemperatureCallback);
+    //! Get a callback to change reference temperature
+    ReferenceTemperatureCallback changeReferenceTemperatureCallback();
 
 private:
     //! Pointer to the associated ModularSimulatorAlgorithmBuilder

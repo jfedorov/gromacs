@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -112,6 +112,9 @@ public:
                         const t_mdatoms*   mdatoms,
                         const gmx_mtop_t*  globalTop);
 
+    //! Destructor (allows forward declaration of internal type)
+    ~StatePropagatorData();
+
     // Allow access to state
     //! Get write access to position vector
     ArrayRefWithPadding<RVec> positionsView();
@@ -148,6 +151,12 @@ public:
     Element* element();
     //! Initial set up for the associated element
     void setup();
+
+    //! Update the reference temperature
+    void updateReferenceTemperature(ArrayRef<const real>                temperatures,
+                                    ReferenceTemperatureChangeAlgorithm algorithm);
+    //! Helper class handling reference temperature change
+    class ReferenceTemperatureHelper;
 
     //! Read everything that can be stored in t_trxframe from a checkpoint file
     static void readCheckpointToTrxFrame(t_trxframe* trxFrame, ReadCheckpointData readCheckpointData);
@@ -197,6 +206,8 @@ private:
 
     //! The element
     std::unique_ptr<Element> element_;
+    //! Instance of reference temperature helper
+    std::unique_ptr<ReferenceTemperatureHelper> referenceTemperatureHelper_;
 
     //! Move x_ to previousX_
     void copyPosition();

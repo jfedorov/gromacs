@@ -85,6 +85,7 @@
 #include "modularsimulator.h"
 #include "pmeloadbalancehelper.h"
 #include "propagator.h"
+#include "referencetemperaturemanager.h"
 #include "statepropagatordata.h"
 
 namespace gmx
@@ -446,6 +447,20 @@ ModularSimulatorAlgorithmBuilder::ModularSimulatorAlgorithmBuilder(
                                                legacySimulatorData->startingBehavior,
                                                simulationsShareState);
     registerExistingElement(energyData_->element());
+
+    storeSimulationData("ReferenceTemperatureManager",
+                        std::make_unique<ReferenceTemperatureManager>(
+                                const_cast<t_inputrec*>(legacySimulatorData->inputrec)));
+    auto* referenceTemperatureManager =
+            simulationData<ReferenceTemperatureManager>("ReferenceTemperatureManager").value();
+
+    // State propagator data is scaling velocities if reference temperature is updated
+    auto* statePropagatorDataPtr = statePropagatorData_.get();
+    referenceTemperatureManager->registerUpdateCallback(
+            [statePropagatorDataPtr](ArrayRef<const real>                temperatures,
+                                     ReferenceTemperatureChangeAlgorithm algorithm) {
+                statePropagatorDataPtr->updateReferenceTemperature(temperatures, algorithm);
+            });
 }
 
 static int computeFepFrequency(const t_inputrec& inputrec, const ReplicaExchangeParameters& replExParams)
@@ -802,6 +817,26 @@ void ModularSimulatorAlgorithmBuilderHelper::registerTemperaturePressureControl(
         std::function<void(const PropagatorConnection&)> registrationFunction)
 {
     builder_->ptControlRegistrationFunctions_.emplace_back(std::move(registrationFunction));
+}
+
+void ModularSimulatorAlgorithmBuilderHelper::registerReferenceTemperatureUpdate(
+        ReferenceTemperatureCallback referenceTemperatureCallback)
+{
+    auto* referenceTemperatureManager =
+            simulationData<ReferenceTemperatureManager>("ReferenceTemperatureManager").value();
+    referenceTemperatureManager->registerUpdateCallback(std::move(referenceTemperatureCallback));
+}
+
+ReferenceTemperatureCallback ModularSimulatorAlgorithmBuilderHelper::changeReferenceTemperatureCallback()
+{
+    // Capture is safe because SimulatorAlgorithm will manage life time of both the
+    // recipient of the callback and the reference temperature manager
+    auto* referenceTemperatureManager =
+            simulationData<ReferenceTemperatureManager>("ReferenceTemperatureManager").value();
+    return [referenceTemperatureManager](ArrayRef<const real>                temperatures,
+                                         ReferenceTemperatureChangeAlgorithm algorithm) {
+        referenceTemperatureManager->setReferenceTemperature(temperatures, algorithm);
+    };
 }
 
 } // namespace gmx
