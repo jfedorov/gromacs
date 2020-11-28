@@ -413,7 +413,7 @@ ISimulatorElement* ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet
     // actual element built
     static const std::string key("vvComputeGlobalsElement");
 
-    const std::optional<std::any> cachedValue = builderHelper->getStoredValue(key);
+    const std::optional<std::any> cachedValue = builderHelper->builderData(key);
 
     if (cachedValue)
     {
@@ -445,7 +445,7 @@ ISimulatorElement* ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet
                         vvComputeGlobalsElement);
         globalCommunicationHelper->setCheckBondedInteractionsCallback(
                 castedElement->getCheckNumberOfBondedInteractionsCallback());
-        builderHelper->storeValue(key, vvComputeGlobalsElement);
+        builderHelper->storeBuilderData(key, vvComputeGlobalsElement);
         return vvComputeGlobalsElement;
     }
 }

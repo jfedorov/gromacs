@@ -474,6 +474,7 @@ ModularSimulatorAlgorithm ModularSimulatorAlgorithmBuilder::build()
     algorithm.energyData_                 = std::move(energyData_);
     algorithm.freeEnergyPerturbationData_ = std::move(freeEnergyPerturbationData_);
     algorithm.signals_                    = std::move(signals_);
+    algorithm.simulationData_             = std::move(simulationData_);
 
     // Multi sim is turned off
     const bool simulationsShareState = false;
@@ -760,10 +761,10 @@ bool ModularSimulatorAlgorithmBuilderHelper::elementIsStored(const ISimulatorEle
     return builder_->elementExists(element);
 }
 
-std::optional<std::any> ModularSimulatorAlgorithmBuilderHelper::getStoredValue(const std::string& key) const
+std::optional<std::any> ModularSimulatorAlgorithmBuilderHelper::builderData(const std::string& key) const
 {
-    const auto iter = values_.find(key);
-    if (iter == values_.end())
+    const auto iter = builder_->builderData_.find(key);
+    if (iter == builder_->builderData_.end())
     {
         return std::nullopt;
     }

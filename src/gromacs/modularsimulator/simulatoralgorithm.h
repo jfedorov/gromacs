@@ -215,6 +215,8 @@ private:
     std::unique_ptr<EnergyData> energyData_;
     //! The free energy data
     std::unique_ptr<FreeEnergyPerturbationData> freeEnergyPerturbationData_;
+    //! Arbitrary data with lifetime equal to the simulation (used to share data between elements)
+    std::map<std::string, std::unique_ptr<std::any>> simulationData_;
 
     //! The current step
     Step step_;
@@ -326,11 +328,21 @@ public:
     ISimulatorElement* storeElement(std::unique_ptr<ISimulatorElement> element);
     //! Check if an element is stored in the ModularSimulatorAlgorithmBuilder
     bool elementIsStored(const ISimulatorElement* element) const;
-    //! Set arbitrary data in the ModularSimulatorAlgorithmBuilder. Helpful for stateful elements.
+    /*! \brief Set arbitrary data in the ModularSimulatorAlgorithmBuilder
+     *
+     * Allows to store arbitrary data with lifetime equal to the builder. Functionality is used
+     * by stateful static builder functions.
+     */
     template<typename ValueType>
-    void storeValue(const std::string& key, const ValueType& value);
-    //! Get previously stored data. Returns std::nullopt if key is not found.
-    std::optional<std::any> getStoredValue(const std::string& key) const;
+    void storeBuilderData(const std::string& key, const ValueType& value);
+    //! Get previously stored builder data. Returns std::nullopt if key is not found.
+    std::optional<std::any> builderData(const std::string& key) const;
+    //! \copydoc ModularSimulatorAlgorithmBuilder::storeSimulationData()
+    template<typename ValueType>
+    void storeSimulationData(const std::string& key, std::unique_ptr<ValueType> value);
+    //! \copydoc ModularSimulatorAlgorithmBuilder::simulationData()
+    template<typename ValueType>
+    std::optional<ValueType*> simulationData(const std::string& key);
     //! Register a propagator for thermostat / barostat use
     void registerTemperaturePressureControl(std::function<void(const PropagatorConnection&)> registrationFunction);
     //! Register a propagator for thermostat / barostat use
@@ -339,7 +351,6 @@ public:
 private:
     //! Pointer to the associated ModularSimulatorAlgorithmBuilder
     ModularSimulatorAlgorithmBuilder* builder_;
-    std::map<std::string, std::any>   values_;
 };
 
 /*!\internal
@@ -394,6 +405,10 @@ private:
     std::unique_ptr<EnergyData> energyData_;
     //! The free energy data
     std::unique_ptr<FreeEnergyPerturbationData> freeEnergyPerturbationData_;
+    //! Arbitrary data with lifetime equal to the builder (used by stateful static builder functions)
+    std::map<std::string, std::any> builderData_;
+    //! Arbitrary data with lifetime equal to the simulation (used to share data between elements)
+    std::map<std::string, std::unique_ptr<std::any>> simulationData_;
 
     //! Pointer to the LegacySimulatorData object
     compat::not_null<LegacySimulatorData*> legacySimulatorData_;
@@ -405,6 +420,22 @@ private:
     ModularSimulatorAlgorithmBuilderHelper elementAdditionHelper_;
     //! Container for global computation data
     GlobalCommunicationHelper globalCommunicationHelper_;
+
+    /*! \brief Set arbitrary data in the ModularSimulatorAlgorithm
+     *
+     * Allows to store arbitrary data with lifetime equal to the simulator algorithm.
+     * Functionality allows elements to share arbitrary data.
+     * Throws SimulationAlgorithmSetupError if key already exists.
+     */
+    template<typename ValueType>
+    void storeSimulationData(const std::string& key, std::unique_ptr<ValueType> value);
+    /*! \brief Get previously stored simulation data.
+     *
+     * Returns std::nullopt if key is not found.
+     * Throws SimulationAlgorithmSetupError if key is found, but cast fails (wrong data type).
+     */
+    template<typename ValueType>
+    std::optional<ValueType*> simulationData(const std::string& key);
 
     /*! \brief  Register an element to all applicable signallers and infrastructure elements
      *
@@ -615,11 +646,54 @@ void ModularSimulatorAlgorithmBuilder::registerWithInfrastructureAndSignallers(E
     checkpointHelperBuilder_.registerClient(castOrNull<ICheckpointHelperClient, Element>(element));
 }
 
+template<typename ValueType>
+void ModularSimulatorAlgorithmBuilderHelper::storeBuilderData(const std::string& key, const ValueType& value)
+{
+    builder_->builderData_[key] = std::any(value);
+}
 
 template<typename ValueType>
-void ModularSimulatorAlgorithmBuilderHelper::storeValue(const std::string& key, const ValueType& value)
+void ModularSimulatorAlgorithmBuilderHelper::storeSimulationData(const std::string&         key,
+                                                                 std::unique_ptr<ValueType> value)
 {
-    values_[key] = std::any(value);
+    builder_->storeSimulationData(key, std::move(value));
+}
+
+template<typename ValueType>
+std::optional<ValueType*> ModularSimulatorAlgorithmBuilderHelper::simulationData(const std::string& key)
+{
+    return builder_->simulationData<ValueType>(key);
+}
+
+template<typename ValueType>
+void ModularSimulatorAlgorithmBuilder::storeSimulationData(const std::string&         key,
+                                                           std::unique_ptr<ValueType> value)
+{
+    if (simulationData_.count(key) > 0)
+    {
+        GMX_THROW(SimulationAlgorithmSetupError("Key " + key + " was already stored in simulation data."));
+    }
+    registerWithInfrastructureAndSignallers(value.get());
+    simulationData_[key] = std::make_unique<std::any>(value.release());
+}
+
+template<typename ValueType>
+std::optional<ValueType*> ModularSimulatorAlgorithmBuilder::simulationData(const std::string& key)
+{
+    const auto iter = simulationData_.find(key);
+    if (iter == simulationData_.end())
+    {
+        return std::nullopt;
+    }
+    else
+    {
+        ValueType** data = std::any_cast<ValueType*>(iter->second.get());
+        if (data == nullptr)
+        {
+            GMX_THROW(SimulationAlgorithmSetupError("Key " + key + " does not have the expected type."));
+        }
+        return *data;
+    }
 }
 
 
