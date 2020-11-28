@@ -911,7 +911,7 @@ ISimulatorElement* Propagator<algorithm>::getElementPointerImpl(
         FreeEnergyPerturbationData gmx_unused* freeEnergyPerturbationData,
         GlobalCommunicationHelper gmx_unused* globalCommunicationHelper,
         const PropagatorTag&                  propagatorTag,
-        double                                timestep)
+        TimeStep                              timestep)
 {
     GMX_RELEASE_ASSERT(!(algorithm == IntegrationStep::ScaleVelocities
                          || algorithm == IntegrationStep::ScalePositions)
@@ -944,7 +944,7 @@ Propagator<algorithm>::getElementPointerImpl(LegacySimulatorData* legacySimulato
                                  freeEnergyPerturbationData,
                                  globalCommunicationHelper,
                                  propagatorTag,
-                                 0.0);
+                                 TimeStep(0.0));
 }
 
 // Explicit template initializations

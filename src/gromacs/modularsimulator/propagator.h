@@ -188,7 +188,7 @@ public:
                                                     FreeEnergyPerturbationData* freeEnergyPerturbationData,
                                                     GlobalCommunicationHelper* globalCommunicationHelper,
                                                     const PropagatorTag&       propagatorTag,
-                                                    double                     timestep);
+                                                    TimeStep                   timestep);
 
     /*! \brief Factory method implementation
      *
