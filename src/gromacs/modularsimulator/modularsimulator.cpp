@@ -57,7 +57,6 @@
 #include "gromacs/mdlib/energyoutput.h"
 #include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/resethandler.h"
-#include "gromacs/mdlib/update.h"
 #include "gromacs/mdrun/replicaexchange.h"
 #include "gromacs/mdrun/shellfc.h"
 #include "gromacs/mdrunutility/handlerestart.h"
@@ -79,6 +78,8 @@
 #include "computeglobalselement.h"
 #include "constraintelement.h"
 #include "forceelement.h"
+#include "mttk.h"
+#include "nosehooverchains.h"
 #include "parrinellorahmanbarostat.h"
 #include "simulatoralgorithm.h"
 #include "statepropagatordata.h"
@@ -106,6 +107,9 @@ void ModularSimulator::run()
 
 void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* builder)
 {
+    const bool isTrotter = inputrecNvtTrotter(legacySimulatorData_->inputrec)
+                           || inputrecNptTrotter(legacySimulatorData_->inputrec)
+                           || inputrecNphTrotter(legacySimulatorData_->inputrec);
     if (legacySimulatorData_->inputrec->eI == eiMD)
     {
         // The leap frog integration algorithm
@@ -133,7 +137,7 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
         }
         builder->add<EnergyData::Element>();
     }
-    else if (legacySimulatorData_->inputrec->eI == eiVV)
+    else if (legacySimulatorData_->inputrec->eI == eiVV && !isTrotter)
     {
         // The velocity verlet integration algorithm
         builder->add<ForceElement>();
@@ -165,6 +169,130 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
         if (legacySimulatorData_->inputrec->epc == PressureCoupling::ParrinelloRahman)
         {
             builder->add<ParrinelloRahmanBarostat>(Offset(-1), PropagatorTag("VelocityHalfStep"));
+        }
+        builder->add<EnergyData::Element>();
+    }
+    else if (legacySimulatorData_->inputrec->eI == eiVV && isTrotter)
+    {
+        // For a new simulation, avoid the first Trotter half step
+        const auto scheduleTrotterFirstHalfOnInitStep =
+                ((legacySimulatorData_->startingBehavior == StartingBehavior::NewSimulation)
+                         ? ScheduleOnInitStep::No
+                         : ScheduleOnInitStep::Yes);
+
+        builder->add<ForceElement>();
+        // Propagate velocities from t-dt/2 to t
+        if (legacySimulatorData_->inputrec->epc == PressureCoupling::Mttk)
+        {
+            builder->add<Propagator<IntegrationStep::ScaleVelocities>>(
+                    PropagatorTag("ScaleMTTKVPre1"));
+        }
+        builder->add<Propagator<IntegrationStep::VelocitiesOnly>>(
+                PropagatorTag("VelocityHalfStep1"),
+                TimeStep(0.5 * legacySimulatorData_->inputrec->delta_t));
+        if (legacySimulatorData_->inputrec->epc == PressureCoupling::Mttk)
+        {
+            builder->add<Propagator<IntegrationStep::ScaleVelocities>>(
+                    PropagatorTag("ScaleMTTKVPost1"));
+        }
+        if (legacySimulatorData_->constr)
+        {
+            builder->add<ConstraintsElement<ConstraintVariable::Velocities>>();
+        }
+        builder->add<ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet>>();
+
+        // Propagate extended system variables from t-dt/2 to t
+        if (legacySimulatorData_->inputrec->epc == PressureCoupling::Mttk)
+        {
+            builder->add<MttkElement>(Offset(-1),
+                                      scheduleTrotterFirstHalfOnInitStep,
+                                      PropagatorTag("ScaleMTTKXPre"),
+                                      PropagatorTag("ScaleMTTKXPost"),
+                                      Offset(0),
+                                      PropagatorTag("ScaleMTTKVPre1"),
+                                      PropagatorTag("ScaleMTTKVPost1"),
+                                      Offset(1),
+                                      PropagatorTag("ScaleMTTKVPre2"),
+                                      PropagatorTag("ScaleMTTKVPost2"),
+                                      Offset(0));
+        }
+        if (legacySimulatorData_->inputrec->etc == TemperatureCoupling::NoseHoover)
+        {
+            builder->add<NoseHooverChainsElement>(NhcUsage::System,
+                                                  Offset(-1),
+                                                  UseFullStepKE::Yes,
+                                                  scheduleTrotterFirstHalfOnInitStep,
+                                                  PropagatorTag("ScaleNHC"));
+            builder->add<Propagator<IntegrationStep::ScaleVelocities>>(PropagatorTag("ScaleNHC"));
+        }
+        if (legacySimulatorData_->inputrec->epc == PressureCoupling::Mttk)
+        {
+            builder->add<NoseHooverChainsElement>(
+                    NhcUsage::Barostat, Offset(-1), UseFullStepKE::Yes, scheduleTrotterFirstHalfOnInitStep);
+        }
+        // We have a full state at time t here
+        builder->add<StatePropagatorData::Element>();
+
+        // Propagate extended system variables from t to t+dt/2
+        if (legacySimulatorData_->inputrec->epc == PressureCoupling::Mttk)
+        {
+            builder->add<NoseHooverChainsElement>(
+                    NhcUsage::Barostat, Offset(0), UseFullStepKE::Yes, ScheduleOnInitStep::Yes);
+        }
+        if (legacySimulatorData_->inputrec->etc == TemperatureCoupling::NoseHoover)
+        {
+            builder->add<NoseHooverChainsElement>(NhcUsage::System,
+                                                  Offset(0),
+                                                  UseFullStepKE::Yes,
+                                                  ScheduleOnInitStep::Yes,
+                                                  PropagatorTag("VelocityHalfStep2"));
+        }
+        if (legacySimulatorData_->inputrec->epc == PressureCoupling::Mttk)
+        {
+            builder->add<MttkElement>(Offset(0),
+                                      ScheduleOnInitStep::Yes,
+                                      PropagatorTag("ScaleMTTKXPre"),
+                                      PropagatorTag("ScaleMTTKXPost"),
+                                      Offset(0),
+                                      PropagatorTag("ScaleMTTKVPre1"),
+                                      PropagatorTag("ScaleMTTKVPost1"),
+                                      Offset(1),
+                                      PropagatorTag("ScaleMTTKVPre2"),
+                                      PropagatorTag("ScaleMTTKVPost2"),
+                                      Offset(0));
+            builder->add<Propagator<IntegrationStep::ScaleVelocities>>(
+                    PropagatorTag("ScaleMTTKVPre2"));
+        }
+
+        // Propagate velocities from t to t+dt/2
+        builder->add<Propagator<IntegrationStep::VelocitiesOnly>>(
+                PropagatorTag("VelocityHalfStep2"),
+                TimeStep(0.5 * legacySimulatorData_->inputrec->delta_t));
+        if (legacySimulatorData_->inputrec->epc == PressureCoupling::Mttk)
+        {
+            builder->add<Propagator<IntegrationStep::ScaleVelocities>>(
+                    PropagatorTag("ScaleMTTKVPost2"));
+            builder->add<Propagator<IntegrationStep::ScalePositions>>(
+                    PropagatorTag("ScaleMTTKXPre"));
+        }
+        // Propagate positions from t to t+dt
+        builder->add<Propagator<IntegrationStep::PositionsOnly>>(
+                PropagatorTag("PositionFullStep"), TimeStep(legacySimulatorData_->inputrec->delta_t));
+        if (legacySimulatorData_->inputrec->epc == PressureCoupling::Mttk)
+        {
+            builder->add<Propagator<IntegrationStep::ScalePositions>>(
+                    PropagatorTag("ScaleMTTKXPost"));
+        }
+        if (legacySimulatorData_->constr)
+        {
+            builder->add<ConstraintsElement<ConstraintVariable::Positions>>();
+        }
+        builder->add<ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet>>();
+
+        // Propagate box from t to t+dt
+        if (legacySimulatorData_->inputrec->epc == PressureCoupling::Mttk)
+        {
+            builder->add<MttkBoxScaling>();
         }
         builder->add<EnergyData::Element>();
     }
@@ -236,18 +364,12 @@ bool ModularSimulator::isInputCompatible(bool                             exitOn
                                                      || inputrec->etc == TemperatureCoupling::NoseHoover,
                                              "Only v-rescale, Berendsen and Nose-Hoover "
                                              "thermostats are supported by the modular simulator.");
-    isInputCompatible =
-            isInputCompatible
-            && conditionalAssert(
-                       inputrec->epc == PressureCoupling::No
-                               || inputrec->epc == PressureCoupling::ParrinelloRahman,
-                       "Only Parrinello-Rahman barostat is supported by the modular simulator.");
-    isInputCompatible =
-            isInputCompatible
-            && conditionalAssert(
-                       !(inputrecNptTrotter(inputrec) || inputrecNphTrotter(inputrec)
-                         || inputrecNvtTrotter(inputrec)),
-                       "Legacy Trotter decomposition is not supported by the modular simulator.");
+    isInputCompatible = isInputCompatible
+                        && conditionalAssert(inputrec->epc == PressureCoupling::No
+                                                     || inputrec->epc == PressureCoupling::ParrinelloRahman
+                                                     || inputrec->epc == PressureCoupling::Mttk,
+                                             "Only Parrinello-Rahman and MTTK barostat are "
+                                             "supported by the modular simulator.");
     isInputCompatible = isInputCompatible
                         && conditionalAssert(inputrec->efep == efepNO || inputrec->efep == efepYES
                                                      || inputrec->efep == efepSLOWGROWTH,
