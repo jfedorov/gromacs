@@ -713,7 +713,7 @@ void ModularSimulatorAlgorithmBuilder::storeSimulationData(const std::string&   
                                                            std::unique_ptr<ValueType> value)
 {
     GMX_RELEASE_ASSERT(simulationData_.count(key) == 0,
-                       "Key " + key + " was already stored in simulation data.");
+                       formatString("Key %s was already stored in simulation data.", key.c_str()).c_str());
     registerWithInfrastructureAndSignallers(value.get());
     simulationData_[key] = std::make_unique<std::any>(value.release());
 }
@@ -727,7 +727,8 @@ std::optional<ValueType*> ModularSimulatorAlgorithmBuilder::simulationData(const
         return std::nullopt;
     }
     ValueType** data = std::any_cast<ValueType*>(iter->second.get());
-    GMX_RELEASE_ASSERT(data != nullptr, "Key " + key + " does not have the expected type.");
+    GMX_RELEASE_ASSERT(data != nullptr,
+                       formatString("Key %s was already stored in simulation data.", key.c_str()).c_str());
     return *data;
 }
 

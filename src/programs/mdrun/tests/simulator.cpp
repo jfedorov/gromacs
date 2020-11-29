@@ -140,6 +140,13 @@ TEST_P(SimulatorComparisonTest, WithinTolerances)
         }
     }
 
+    const bool systemHasConstraints = (simulationName != "argon12");
+    if (pcoupling == "mttk" && (tcoupling != "nose-hoover" || systemHasConstraints))
+    {
+        // Legacy mttk works only with Nose-Hoover and without constraints
+        return;
+    }
+
     const std::string envVariableModSimOn  = "GMX_USE_MODULAR_SIMULATOR";
     const std::string envVariableModSimOff = "GMX_DISABLE_MODULAR_SIMULATOR";
 
@@ -282,9 +289,10 @@ INSTANTIATE_TEST_CASE_P(
                                               ::testing::Values("no",
                                                                 "v-rescale",
                                                                 "berendsen",
+                                                                "nose-hoover",
                                                                 "andersen-massive",
                                                                 "andersen"),
-                                              ::testing::Values("no", "berendsen", "c-rescale")),
+                                              ::testing::Values("no", "berendsen", "c-rescale", "mttk")),
                            ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR")));
 INSTANTIATE_TEST_CASE_P(
         SimulatorsAreEquivalentDefaultLegacy,
@@ -306,8 +314,9 @@ INSTANTIATE_TEST_CASE_P(
                                                                 "v-rescale",
                                                                 "berendsen",
                                                                 "andersen-massive",
-                                                                "andersen"),
-                                              ::testing::Values("no", "berendsen", "c-rescale")),
+                                                                "andersen",
+                                                                "nose-hoover"),
+                                              ::testing::Values("no", "berendsen", "c-rescale", "mttk")),
                            ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR")));
 INSTANTIATE_TEST_CASE_P(
         DISABLED_SimulatorsAreEquivalentDefaultLegacy,
