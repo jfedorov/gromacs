@@ -2091,15 +2091,7 @@ bool initSimulatedAnnealing(t_inputrec* ir, gmx::Update* upd)
     return doSimAnnealing;
 }
 
-/*!
- * \brief Compute the new annealing temperature for a temperature group
- *
- * \param ir  The input record
- * \param temperatureGroup  The temperature group
- * \param time  The current time
- * \return  The new reference temperature for the group
- */
-static real computeAnnealingTargetTemperature(const t_inputrec* ir, int temperatureGroup, real time)
+real computeAnnealingTargetTemperature(const t_inputrec* ir, int temperatureGroup, real time)
 {
     GMX_RELEASE_ASSERT(temperatureGroup >= 0 && temperatureGroup < ir->opts.ngtc,
                        "Invalid temperature group.");

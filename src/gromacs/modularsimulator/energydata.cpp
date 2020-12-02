@@ -150,6 +150,7 @@ void EnergyData::teardown()
     if (inputrec_->nstcalcenergy > 0 && isMasterRank_)
     {
         energyOutput_->printEnergyConservation(fplog_, inputrec_->simulation_part, EI_MD(inputrec_->eI));
+        gmx::EnergyOutput::printAnnealingTemperatures(fplog_, groups_, &(inputrec_->opts));
         energyOutput_->printAverages(fplog_, groups_);
     }
 }
@@ -285,7 +286,6 @@ void EnergyData::write(gmx_mdoutf* outf, Step step, Time time, bool writeTraject
     bool do_dr = do_per_step(step, inputrec_->nstdisreout);
     bool do_or = do_per_step(step, inputrec_->nstorireout);
 
-    // energyOutput_->printAnnealingTemperatures(writeLog ? fplog_ : nullptr, groups_, &(inputrec_->opts));
     Awh* awh = nullptr;
     energyOutput_->printStepToEnergyFile(
             mdoutf_get_fp_ene(outf), writeTrajectory, do_dr, do_or, writeLog ? fplog_ : nullptr, step, time, fcd_, awh);

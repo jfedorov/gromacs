@@ -148,7 +148,8 @@ int AndersenTemperatureCoupling::frequency() const
 void AndersenTemperatureCoupling::updateReferenceTemperature(ArrayRef<const real> temperatures,
                                                              ReferenceTemperatureChangeAlgorithm algorithm)
 {
-    if (algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedTempering)
+    if (algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedTempering
+        && algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedAnnealing)
     {
         GMX_THROW(NotImplementedError(
                 "AndersenTemperatureCoupling: Unknown ReferenceTemperatureChangeAlgorithm."));

@@ -223,11 +223,17 @@ rvec* MttkData::boxVelocities()
 
 void MttkData::updateReferenceTemperature(real temperature, ReferenceTemperatureChangeAlgorithm algorithm)
 {
-    if (algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedTempering)
+    if (algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedTempering
+        && algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedAnnealing)
     {
         GMX_THROW(NotImplementedError("MttkData: Unknown ReferenceTemperatureChangeAlgorithm."));
     }
-    invMass_ *= temperature / referenceTemperature_;
+    if (algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedAnnealing)
+    {
+        /* Not changing the masses for simulated annealing for compatibility
+         * with the legacy simulator */
+        invMass_ *= temperature / referenceTemperature_;
+    }
     referenceTemperature_ = temperature;
 }
 

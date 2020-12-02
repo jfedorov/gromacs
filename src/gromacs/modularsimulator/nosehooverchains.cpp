@@ -310,30 +310,36 @@ bool NoseHooverChainsData::isAtFullCouplingTimeStep(int temperatureGroup) const
 void NoseHooverChainsData::updateReferenceTemperature(ArrayRef<const real> temperatures,
                                                       ReferenceTemperatureChangeAlgorithm algorithm)
 {
-    if (algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedTempering)
+    if (algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedTempering
+        && algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedAnnealing)
     {
         GMX_THROW(NotImplementedError(
                 "NoseHooverChainsData: Unknown ReferenceTemperatureChangeAlgorithm."));
     }
-    for (auto temperatureGroup = 0; temperatureGroup < numTemperatureGroups_; ++temperatureGroup)
+    if (algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedAnnealing)
     {
-        const bool newTemperatureIsValid =
-                (temperatures[temperatureGroup] > 0 && couplingTime_[temperatureGroup] > 0
-                 && numDegreesOfFreedom_[temperatureGroup] > 0);
-        const bool oldTemperatureIsValid =
-                (referenceTemperature_[temperatureGroup] > 0 && couplingTime_[temperatureGroup] > 0
-                 && numDegreesOfFreedom_[temperatureGroup] > 0);
-        GMX_RELEASE_ASSERT(newTemperatureIsValid == oldTemperatureIsValid,
-                           "Cannot turn temperature coupling on / off during simulation run.");
-        if (oldTemperatureIsValid && newTemperatureIsValid)
+        /* Not changing the masses for simulated annealing for compatibility
+         * with the legacy simulator */
+        for (auto temperatureGroup = 0; temperatureGroup < numTemperatureGroups_; ++temperatureGroup)
         {
-            const real velocityFactor =
-                    std::sqrt(temperatures[temperatureGroup] / referenceTemperature_[temperatureGroup]);
-            for (auto chainPosition = 0; chainPosition < chainLength_; ++chainPosition)
+            const bool newTemperatureIsValid =
+                    (temperatures[temperatureGroup] > 0 && couplingTime_[temperatureGroup] > 0
+                     && numDegreesOfFreedom_[temperatureGroup] > 0);
+            const bool oldTemperatureIsValid =
+                    (referenceTemperature_[temperatureGroup] > 0 && couplingTime_[temperatureGroup] > 0
+                     && numDegreesOfFreedom_[temperatureGroup] > 0);
+            GMX_RELEASE_ASSERT(newTemperatureIsValid == oldTemperatureIsValid,
+                               "Cannot turn temperature coupling on / off during simulation run.");
+            if (oldTemperatureIsValid && newTemperatureIsValid)
             {
-                invXiMass_[temperatureGroup][chainPosition] *=
-                        (referenceTemperature_[temperatureGroup] / temperatures[temperatureGroup]);
-                xiVelocities_[temperatureGroup][chainPosition] *= velocityFactor;
+                const real velocityFactor = std::sqrt(temperatures[temperatureGroup]
+                                                      / referenceTemperature_[temperatureGroup]);
+                for (auto chainPosition = 0; chainPosition < chainLength_; ++chainPosition)
+                {
+                    invXiMass_[temperatureGroup][chainPosition] *=
+                            (referenceTemperature_[temperatureGroup] / temperatures[temperatureGroup]);
+                    xiVelocities_[temperatureGroup][chainPosition] *= velocityFactor;
+                }
             }
         }
     }

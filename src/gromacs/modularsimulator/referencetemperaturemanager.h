@@ -67,6 +67,7 @@ namespace gmx
 enum class ReferenceTemperatureChangeAlgorithm
 {
     SimulatedTempering, //!< Temperatures changed via MC step
+    SimulatedAnnealing, //!< Slowly varying temperatures
     Count               //!< The number of enum entries
 };
 

@@ -61,6 +61,14 @@ namespace test
 {
 namespace
 {
+//! Denotes a local database of mdp parameters
+enum class MdpParameterDatabase
+{
+    Default,
+    Andersen,
+    SimulatedAnnealing,
+    Count
+};
 
 /*! \brief Test fixture base for two equivalent simulators
  *
@@ -73,12 +81,49 @@ namespace
  * are equivalent.
  */
 using SimulatorComparisonTestParams =
-        std::tuple<std::tuple<std::string, std::string, std::string, std::string>, std::string>;
+        std::tuple<std::tuple<std::string, std::string, std::string, std::string>, std::string, MdpParameterDatabase>;
 class SimulatorComparisonTest :
     public MdrunTestFixture,
     public ::testing::WithParamInterface<SimulatorComparisonTestParams>
 {
 };
+
+MdpFieldValues additionalMdpParametersDatabase(MdpParameterDatabase databaseEntry)
+{
+    switch (databaseEntry)
+    {
+        case MdpParameterDatabase::Default: return {};
+        case MdpParameterDatabase::Andersen:
+            // Fixes error "nstcomm must be 1, not 4 for Andersen, as velocities of
+            //              atoms in coupled groups are randomized every time step"
+            return { { "nstcomm", "1" }, { "nstcalcenergy", "1" } };
+        case MdpParameterDatabase::SimulatedAnnealing:
+            return {
+                { "tc-grps", "Methanol SOL" },
+                { "tau-t", "0.1 0.1" },
+                { "ref-t", "298 298" },
+                { "annealing", "single periodic" },
+                { "annealing-npoints", "3 4" },
+                { "annealing-time", "0 0.004 0.008 0 0.004 0.008 0.012" },
+                { "annealing-temp", "298 280 270 298 320 320 298" },
+            };
+        default: GMX_THROW(InvalidInputError("Unknown additional parameters."));
+    }
+}
+
+MdpFieldValues prepareMdpFieldValues(const std::string&   simulationName,
+                                     const std::string&   integrator,
+                                     const std::string&   tcoupling,
+                                     const std::string&   pcoupling,
+                                     MdpParameterDatabase additionalMdpParameters)
+{
+    auto mdpFieldValues = test::prepareMdpFieldValues(simulationName, integrator, tcoupling, pcoupling);
+    for (auto const& [key, value] : additionalMdpParametersDatabase(additionalMdpParameters))
+    {
+        mdpFieldValues[key] = value;
+    }
+    return mdpFieldValues;
+}
 
 TEST_P(SimulatorComparisonTest, WithinTolerances)
 {
@@ -89,6 +134,7 @@ TEST_P(SimulatorComparisonTest, WithinTolerances)
     const auto& tcoupling           = std::get<2>(mdpParams);
     const auto& pcoupling           = std::get<3>(mdpParams);
     const auto& environmentVariable = std::get<1>(params);
+    auto        additionalParams    = std::get<2>(params);
 
     const bool hasConstraints    = (simulationName != "argon12");
     const bool isAndersen        = (tcoupling == "andersen-massive" || tcoupling == "andersen");
@@ -163,15 +209,12 @@ TEST_P(SimulatorComparisonTest, WithinTolerances)
             pcoupling.c_str(),
             environmentVariable.c_str()));
 
-    auto mdpFieldValues = prepareMdpFieldValues(
-            simulationName.c_str(), integrator.c_str(), tcoupling.c_str(), pcoupling.c_str());
-    if (tcoupling == "andersen")
+    if (tcoupling == "andersen" && additionalParams == MdpParameterDatabase::Default)
     {
-        // Fixes error "nstcomm must be 1, not 4 for Andersen, as velocities of
-        //              atoms in coupled groups are randomized every time step"
-        mdpFieldValues["nstcomm"]       = "1";
-        mdpFieldValues["nstcalcenergy"] = "1";
+        additionalParams = MdpParameterDatabase::Andersen;
     }
+    const auto mdpFieldValues =
+            prepareMdpFieldValues(simulationName, integrator, tcoupling, pcoupling, additionalParams);
 
     EnergyTermsToCompare energyTermsToCompare{ {
             { interaction_function[F_EPOT].longname, relativeToleranceAsPrecisionDependentUlp(60.0, 200, 160) },
@@ -290,7 +333,8 @@ INSTANTIATE_TEST_CASE_P(SimulatorsAreEquivalentDefaultModular,
                                                                                 "mttk",
                                                                                 "berendsen",
                                                                                 "c-rescale")),
-                                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR")));
+                                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR"),
+                                           ::testing::Values(MdpParameterDatabase::Default)));
 INSTANTIATE_TEST_CASE_P(
         SimulatorsAreEquivalentDefaultLegacy,
         SimulatorComparisonTest,
@@ -300,7 +344,27 @@ INSTANTIATE_TEST_CASE_P(
                         ::testing::Values("md"),
                         ::testing::Values("no", "v-rescale", "berendsen", "nose-hoover"),
                         ::testing::Values("no", "Parrinello-Rahman", "berendsen", "c-rescale")),
-                ::testing::Values("GMX_USE_MODULAR_SIMULATOR")));
+                ::testing::Values("GMX_USE_MODULAR_SIMULATOR"),
+                ::testing::Values(MdpParameterDatabase::Default)));
+INSTANTIATE_TEST_CASE_P(
+        SimulatorsAreEquivalentDefaultModularSimulatedAnnealing,
+        SimulatorComparisonTest,
+        ::testing::Combine(::testing::Combine(::testing::Values("spc-and-methanol"),
+                                              ::testing::Values("md-vv"),
+                                              ::testing::Values("v-rescale", "nose-hoover"),
+                                              ::testing::Values("no", "c-rescale", "mttk")),
+                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR"),
+                           ::testing::Values(MdpParameterDatabase::SimulatedAnnealing)));
+INSTANTIATE_TEST_CASE_P(
+        SimulatorsAreEquivalentDefaultLegacySimulatedAnnealing,
+        SimulatorComparisonTest,
+        ::testing::Combine(
+                ::testing::Combine(::testing::Values("spc-and-methanol"),
+                                   ::testing::Values("md"),
+                                   ::testing::Values("no", "v-rescale", "nose-hoover"),
+                                   ::testing::Values("no", "parrinello-rahman", "c-rescale")),
+                ::testing::Values("GMX_USE_MODULAR_SIMULATOR"),
+                ::testing::Values(MdpParameterDatabase::SimulatedAnnealing)));
 #else
 INSTANTIATE_TEST_CASE_P(DISABLED_SimulatorsAreEquivalentDefaultModular,
                         SimulatorComparisonTest,
@@ -316,7 +380,8 @@ INSTANTIATE_TEST_CASE_P(DISABLED_SimulatorsAreEquivalentDefaultModular,
                                                                                 "mttk",
                                                                                 "berendsen",
                                                                                 "c-rescale")),
-                                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR")));
+                                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR"),
+                                           ::testing::Values(MdpParameterDatabase::Default)));
 INSTANTIATE_TEST_CASE_P(
         DISABLED_SimulatorsAreEquivalentDefaultLegacy,
         SimulatorComparisonTest,
@@ -326,7 +391,27 @@ INSTANTIATE_TEST_CASE_P(
                         ::testing::Values("md"),
                         ::testing::Values("no", "v-rescale", "berendsen", "nose-hoover"),
                         ::testing::Values("no", "Parrinello-Rahman", "berendsen", "c-rescale")),
-                ::testing::Values("GMX_USE_MODULAR_SIMULATOR")));
+                ::testing::Values("GMX_USE_MODULAR_SIMULATOR"),
+                ::testing::Values(MdpParameterDatabase::Default)));
+INSTANTIATE_TEST_CASE_P(
+        DISABLED_SimulatorsAreEquivalentDefaultModularSimulatedAnnealing,
+        SimulatorComparisonTest,
+        ::testing::Combine(::testing::Combine(::testing::Values("spc-and-methanol"),
+                                              ::testing::Values("md-vv"),
+                                              ::testing::Values("v-rescale", "nose-hoover"),
+                                              ::testing::Values("no", "c-rescale", "mttk")),
+                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR"),
+                           ::testing::Values(MdpParameterDatabase::SimulatedAnnealing)));
+INSTANTIATE_TEST_CASE_P(
+        DISABLED_SimulatorsAreEquivalentDefaultLegacySimulatedAnnealing,
+        SimulatorComparisonTest,
+        ::testing::Combine(
+                ::testing::Combine(::testing::Values("spc-and-methanol"),
+                                   ::testing::Values("md"),
+                                   ::testing::Values("no", "v-rescale", "nose-hoover"),
+                                   ::testing::Values("no", "parrinello-rahman", "c-rescale")),
+                ::testing::Values("GMX_USE_MODULAR_SIMULATOR"),
+                ::testing::Values(MdpParameterDatabase::SimulatedAnnealing)));
 #endif
 
 } // namespace

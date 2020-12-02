@@ -155,6 +155,16 @@ void vrescale_tcoupl(const t_inputrec* ir, int64_t step, gmx_ekindata_t* ekind, 
 void rescale_velocities(const gmx_ekindata_t* ekind, const t_mdatoms* mdatoms, int start, int end, rvec v[]);
 /* Rescale the velocities with the scaling factor in ekind */
 
+/*!
+ * \brief Compute the new annealing temperature for a temperature group
+ *
+ * \param ir  The input record
+ * \param temperatureGroup  The temperature group
+ * \param time  The current time
+ * \return  The new reference temperature for the group
+ */
+real computeAnnealingTargetTemperature(const t_inputrec* ir, int temperatureGroup, real time);
+
 //! Check whether we do simulated annealing.
 bool doSimulatedAnnealing(const t_inputrec* ir);
 

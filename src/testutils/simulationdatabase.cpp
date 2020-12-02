@@ -155,6 +155,8 @@ const MdpFileValues mdpFileValueDatabase_g{
     { "one-tip5p", { {}, { 1, 2, 3, 4, 5, 6 } } },
     // ICE-Binding protein for NMA
     { "ice-binding", { {}, { 1, 2, 3, 4, 5, 6 } } },
+    // United-atom methanol molecule with nearby water molecule
+    { "spc-and-methanol", { {}, { 1, 2, 3, 4, 5, 6, 7, 8, 9 } } },
     // Nonanol molecule in vacuo, topology suitable for testing FEP
     // on KE, angles, dihedral restraints, coulomb and vdw
     { "nonanol_vacuo",
