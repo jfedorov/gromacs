@@ -194,6 +194,10 @@ private:
     std::vector<ISimulatorElement*> elementCallList_;
     //! List of schedulerElements (setup / teardown calling sequence)
     std::vector<ISimulatorElement*> elementSetupTeardownList_;
+    //! List of pre-step scheduling functions
+    std::vector<SchedulingFunction> preStepScheduling_;
+    //! List of post-step scheduling functions
+    std::vector<SchedulingFunction> postStepScheduling_;
 
     // Infrastructure elements
     //! The domain decomposition element
@@ -332,6 +336,16 @@ public:
     Element* storeElement(std::unique_ptr<Element> element);
     //! Check if an element is stored in the ModularSimulatorAlgorithmBuilder
     bool elementIsStored(const ISimulatorElement* element) const;
+    /*! \brief Register callback to schedule a pre-step run
+     *
+     * This allows elements to schedule a function call before the integration step.
+     */
+    [[maybe_unused]] void registerPreStepScheduling(SchedulingFunction schedulingFunction);
+    /*! \brief Register callback to schedule a post-step run
+     *
+     * This allows elements to schedule a function call after the integration step.
+     */
+    [[maybe_unused]] void registerPostStepScheduling(SchedulingFunction schedulingFunction);
     /*! \brief Set arbitrary data in the ModularSimulatorAlgorithmBuilder
      *
      * Allows to store arbitrary data with lifetime equal to the builder. Functionality is used
@@ -504,6 +518,10 @@ private:
      * Elements should only appear once in this list
      */
     std::vector<ISimulatorElement*> setupAndTeardownList_;
+    //! List of pre-step scheduling functions
+    std::vector<SchedulingFunction> preStepScheduling_;
+    //! List of post-step scheduling functions
+    std::vector<SchedulingFunction> postStepScheduling_;
 
     //! Builder for the NeighborSearchSignaller
     SignallerBuilder<NeighborSearchSignaller> neighborSearchSignallerBuilder_;
