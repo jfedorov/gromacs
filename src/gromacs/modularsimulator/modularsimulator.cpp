@@ -84,6 +84,7 @@
 #include "mttk.h"
 #include "nosehooverchains.h"
 #include "parrinellorahmanbarostat.h"
+#include "pullelement.h"
 #include "simulatoralgorithm.h"
 #include "simulatedannealing.h"
 #include "statepropagatordata.h"
@@ -138,6 +139,12 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
         {
             builder->add<ConstraintsElement<ConstraintVariable::Positions>>();
         }
+
+        if (legacySimulatorData_->inputrec->bPull)
+        {
+            builder->add<PullElement>();
+        }
+
         builder->add<ComputeGlobalsElement<ComputeGlobalsAlgorithm::LeapFrog>>();
         if (legacySimulatorData_->inputrec->epc == PressureCoupling::ParrinelloRahman)
         {
@@ -187,6 +194,12 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
         {
             builder->add<ConstraintsElement<ConstraintVariable::Positions>>();
         }
+
+        if (legacySimulatorData_->inputrec->bPull)
+        {
+            builder->add<PullElement>();
+        }
+
         builder->add<ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet>>();
         if (legacySimulatorData_->inputrec->epc == PressureCoupling::ParrinelloRahman)
         {
@@ -318,6 +331,12 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
         {
             builder->add<ConstraintsElement<ConstraintVariable::Positions>>();
         }
+
+        if (legacySimulatorData_->inputrec->bPull)
+        {
+            builder->add<PullElement>();
+        }
+
         builder->add<ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet>>();
 
         // Propagate box from t to t+dt
@@ -392,9 +411,6 @@ bool ModularSimulator::isInputCompatible(bool                             exitOn
     isInputCompatible =
             isInputCompatible
             && conditionalAssert(!doRerun, "Rerun is not supported by the modular simulator.");
-    isInputCompatible = isInputCompatible
-                        && conditionalAssert(!inputrec->bPull,
-                                             "Pulling is not supported by the modular simulator.");
     isInputCompatible =
             isInputCompatible
             && conditionalAssert(inputrec->cos_accel == 0.0,

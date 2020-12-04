@@ -455,7 +455,8 @@ ModularSimulatorAlgorithmBuilder::ModularSimulatorAlgorithmBuilder(
                                                MASTER(legacySimulatorData->cr),
                                                legacySimulatorData->observablesHistory,
                                                legacySimulatorData->startingBehavior,
-                                               simulationsShareState);
+                                               simulationsShareState,
+                                               legacySimulatorData->pull_work);
     registerExistingElement(energyData_->element());
 
     storeSimulationData("ReferenceTemperatureManager",

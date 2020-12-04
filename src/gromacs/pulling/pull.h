@@ -4,7 +4,7 @@
  * Copyright (c) 1991-2000, University of Groningen, The Netherlands.
  * Copyright (c) 2001-2004, The GROMACS development team.
  * Copyright (c) 2013,2014,2015,2016,2017 by the GROMACS development team.
- * Copyright (c) 2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -359,10 +359,34 @@ real max_pull_distance2(const pull_coord_work_t* pcrd, const t_pbc* pbc);
 
 /*! \brief Sets the previous step COM in pull to the current COM and updates the pull_com_prev_step in the state
  *
- * \param[in]   pull  The COM pull force calculation data structure
- * \param[in]   state The local (to this rank) state.
+ * \param[in] pull  The COM pull force calculation data structure
+ * \param[in] state The local (to this rank) state.
  */
-void updatePrevStepPullCom(struct pull_t* pull, t_state* state);
+void updatePrevStepPullCom(pull_t* pull, t_state* state);
+
+/*! \brief Sets the previous step COM in pull to the current COM (no storing in state)
+ *
+ * \param[in] pull  The COM pull force calculation data structure
+ */
+void updatePrevStepPullCom(pull_t* pull);
+
+/*! \brief Returns a copy of the previous step pull COM as flat vector
+ *
+ * Used for modular simulator checkpointing.
+ *
+ * \param[in] pull  The COM pull force calculation data structure
+ * \return A copy of the previous step COM
+ */
+std::vector<double> prevStepPullCom(const pull_t* pull);
+
+/*! \brief Set the previous step pull COM from a flat vector
+ *
+ * Used to restore modular simulator checkpoints.
+ *
+ * \param[in] pull  The COM pull force calculation data structure
+ * \param[in] prevStepPullCom  The previous step COM to set
+ */
+void setPrevStepPullCom(pull_t* pull, gmx::ArrayRef<const double> prevStepPullCom);
 
 /*! \brief Allocates, initializes and communicates the previous step pull COM (if that option is set to true).
  *

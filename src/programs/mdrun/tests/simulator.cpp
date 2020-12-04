@@ -67,6 +67,7 @@ enum class MdpParameterDatabase
     Default,
     Andersen,
     SimulatedAnnealing,
+    Pull,
     Count
 };
 
@@ -107,6 +108,20 @@ MdpFieldValues additionalMdpParametersDatabase(MdpParameterDatabase databaseEntr
                 { "annealing-time", "0 0.004 0.008 0 0.004 0.008 0.012" },
                 { "annealing-temp", "298 280 270 298 320 320 298" },
             };
+        case MdpParameterDatabase::Pull:
+            return { { "coulombtype", "reaction-field" },
+                     { "pull", "yes" },
+                     // Prev step reference is scheduled by element
+                     { "pull-pbc-ref-prev-step-com", "yes" },
+                     { "pull-ngroups", "2" },
+                     { "pull-group1-name", "FirstWaterMolecule" },
+                     { "pull-group2-name", "SecondWaterMolecule" },
+                     { "pull-ncoords", "1" },
+                     { "pull-coord1-type", "umbrella" },
+                     { "pull-coord1-geometry", "distance" },
+                     { "pull-coord1-groups", "1 2" },
+                     { "pull-coord1-init", "1" },
+                     { "pull-coord1-k", "10000" } };
         default: GMX_THROW(InvalidInputError("Unknown additional parameters."));
     }
 }
@@ -365,6 +380,22 @@ INSTANTIATE_TEST_CASE_P(
                                    ::testing::Values("no", "parrinello-rahman", "c-rescale")),
                 ::testing::Values("GMX_USE_MODULAR_SIMULATOR"),
                 ::testing::Values(MdpParameterDatabase::SimulatedAnnealing)));
+INSTANTIATE_TEST_CASE_P(SimulatorsAreEquivalentDefaultModularPull,
+                        SimulatorComparisonTest,
+                        ::testing::Combine(::testing::Combine(::testing::Values("spc2"),
+                                                              ::testing::Values("md-vv"),
+                                                              ::testing::Values("no"),
+                                                              ::testing::Values("no")),
+                                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR"),
+                                           ::testing::Values(MdpParameterDatabase::Pull)));
+INSTANTIATE_TEST_CASE_P(SimulatorsAreEquivalentDefaultLegacyPull,
+                        SimulatorComparisonTest,
+                        ::testing::Combine(::testing::Combine(::testing::Values("spc2"),
+                                                              ::testing::Values("md"),
+                                                              ::testing::Values("no"),
+                                                              ::testing::Values("no")),
+                                           ::testing::Values("GMX_USE_MODULAR_SIMULATOR"),
+                                           ::testing::Values(MdpParameterDatabase::Pull)));
 #else
 INSTANTIATE_TEST_CASE_P(DISABLED_SimulatorsAreEquivalentDefaultModular,
                         SimulatorComparisonTest,
