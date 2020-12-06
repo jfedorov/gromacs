@@ -68,6 +68,8 @@ enum class MdpParameterDatabase
     Andersen,
     SimulatedAnnealing,
     Pull,
+    Pull2,
+    Awh,
     Count
 };
 
@@ -122,6 +124,51 @@ MdpFieldValues additionalMdpParametersDatabase(MdpParameterDatabase databaseEntr
                      { "pull-coord1-groups", "1 2" },
                      { "pull-coord1-init", "1" },
                      { "pull-coord1-k", "10000" } };
+        case MdpParameterDatabase::Pull2:
+            return { { "pull", "yes" },
+                     { "pull-ngroups", "5" },
+                     { "pull-ncoords", "2" },
+                     { "pull-group1-name", "C_&_r_1" },
+                     { "pull-group2-name", "N_&_r_2" },
+                     { "pull-group3-name", "CA" },
+                     { "pull-group4-name", "C_&_r_2" },
+                     { "pull-group5-name", "N_&_r_3" },
+                     { "pull-coord1-geometry", "dihedral" },
+                     { "pull-coord1-groups", "1 2 2 3 3 4" },
+                     { "pull-coord1-k", "4000" },
+                     { "pull-coord1-kB", "1000" },
+                     { "pull-coord2-geometry", "dihedral" },
+                     { "pull-coord2-groups", "2 3 3 4 4 5" },
+                     { "pull-coord2-k", "4000" },
+                     { "pull-coord2-kB", "1000" } };
+        case MdpParameterDatabase::Awh:
+        {
+            auto pull2Params = additionalMdpParametersDatabase(MdpParameterDatabase::Pull2);
+            pull2Params.insert({ { "pull-coord1-type", "external-potential" },
+                                 { "pull-coord1-potential-provider", "awh" },
+                                 { "pull-coord2-type", "external-potential" },
+                                 { "pull-coord2-potential-provider", "awh" },
+                                 { "awh", "yes" },
+                                 { "awh-potential", "convolved" },
+                                 { "awh-nstout", "4" },
+                                 { "awh-nstsample", "4" },
+                                 { "awh-nsamples-update", "1" },
+                                 { "awh-share-multisim", "no" },
+                                 { "awh-nbias", "2" },
+                                 { "awh1-ndim", "1" },
+                                 { "awh1-dim1-coord-index", "2" },
+                                 { "awh1-dim1-start", "150" },
+                                 { "awh1-dim1-end", "180" },
+                                 { "awh1-dim1-force-constant", "4000" },
+                                 { "awh1-dim1-diffusion", "0.1" },
+                                 { "awh2-ndim", "1" },
+                                 { "awh2-dim1-coord-index", "1" },
+                                 { "awh2-dim1-start", "178" },
+                                 { "awh2-dim1-end", "-178" },
+                                 { "awh2-dim1-force-constant", "4000" },
+                                 { "awh2-dim1-diffusion", "0.1" } });
+            return pull2Params;
+        }
         default: GMX_THROW(InvalidInputError("Unknown additional parameters."));
     }
 }
@@ -396,6 +443,22 @@ INSTANTIATE_TEST_CASE_P(SimulatorsAreEquivalentDefaultLegacyPull,
                                                               ::testing::Values("no")),
                                            ::testing::Values("GMX_USE_MODULAR_SIMULATOR"),
                                            ::testing::Values(MdpParameterDatabase::Pull)));
+INSTANTIATE_TEST_CASE_P(SimulatorsAreEquivalentDefaultModularAwh,
+                        SimulatorComparisonTest,
+                        ::testing::Combine(::testing::Combine(::testing::Values("alanine_vacuo"),
+                                                              ::testing::Values("md-vv"),
+                                                              ::testing::Values("v-rescale"),
+                                                              ::testing::Values("no")),
+                                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR"),
+                                           ::testing::Values(MdpParameterDatabase::Awh)));
+INSTANTIATE_TEST_CASE_P(SimulatorsAreEquivalentDefaultLegacyAwh,
+                        SimulatorComparisonTest,
+                        ::testing::Combine(::testing::Combine(::testing::Values("alanine_vacuo"),
+                                                              ::testing::Values("md"),
+                                                              ::testing::Values("v-rescale"),
+                                                              ::testing::Values("no")),
+                                           ::testing::Values("GMX_USE_MODULAR_SIMULATOR"),
+                                           ::testing::Values(MdpParameterDatabase::Awh)));
 #else
 INSTANTIATE_TEST_CASE_P(DISABLED_SimulatorsAreEquivalentDefaultModular,
                         SimulatorComparisonTest,

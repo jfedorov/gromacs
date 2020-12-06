@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -109,7 +109,8 @@ public:
                  pull_t*                     pull_work,
                  Constraints*                constr,
                  const gmx_mtop_t*           globalTopology,
-                 gmx_enfrot*                 enforcedRotation);
+                 gmx_enfrot*                 enforcedRotation,
+                 Awh*                        awh);
 
     /*! \brief Register force calculation for step / time
      *
@@ -141,6 +142,9 @@ public:
                                                     EnergyData*                 energyData,
                                                     FreeEnergyPerturbationData* freeEnergyPerturbationData,
                                                     GlobalCommunicationHelper* globalCommunicationHelper);
+
+    //! Whether the simulation input contains shells or flexible constraints
+    static bool doShellFC(LegacySimulatorData* legacySimulatorData);
 
 private:
     //! ITopologyHolderClient implementation
@@ -174,6 +178,8 @@ private:
     EnergyData* energyData_;
     //! Pointer to the free energy perturbation data
     FreeEnergyPerturbationData* freeEnergyPerturbationData_;
+    //! The Awh object
+    Awh* awh_;
 
     //! The local topology - updated by Topology via Client system
     const gmx_localtop_t* localTopology_;

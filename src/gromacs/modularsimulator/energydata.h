@@ -59,6 +59,7 @@ struct SimulationGroups;
 
 namespace gmx
 {
+class Awh;
 enum class StartingBehavior;
 class Constraints;
 class EnergyOutput;
@@ -112,7 +113,8 @@ public:
                ObservablesHistory*         observablesHistory,
                StartingBehavior            startingBehavior,
                bool                        simulationsShareState,
-               pull_t*                     pullWork);
+               pull_t*                     pullWork,
+               Awh*                        awh);
 
     /*! \brief Final output
      *
@@ -301,6 +303,8 @@ private:
     StatePropagatorData* statePropagatorData_;
     //! Pointer to the free energy perturbation data
     FreeEnergyPerturbationData* freeEnergyPerturbationData_;
+    //! The Awh object
+    Awh* awh_;
 
     //! Callbacks contributing to the conserved energy term
     std::vector<EnergyContribution> conservedEnergyContributions_;

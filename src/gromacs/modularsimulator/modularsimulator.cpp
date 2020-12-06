@@ -76,6 +76,7 @@
 #include "gromacs/utility/int64_to_int.h"
 
 #include "andersentemperaturecoupling.h"
+#include "awhelement.h"
 #include "computeglobalselement.h"
 #include "constraintelement.h"
 #include "expandedensembleelement.h"
@@ -354,6 +355,10 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
     {
         gmx_fatal(FARGS, "Integrator not implemented for the modular simulator.");
     }
+    if (legacySimulatorData_->inputrec->bDoAwh)
+    {
+        builder->add<AwhElement>();
+    }
 }
 
 bool ModularSimulator::isInputCompatible(bool                             exitOnFailure,
@@ -434,9 +439,6 @@ bool ModularSimulator::isInputCompatible(bool                             exitOn
             isInputCompatible
             && conditionalAssert(gmx_mtop_interaction_count(globalTopology, IF_VSITE) == 0,
                                  "Virtual sites are not supported by the modular simulator.");
-    isInputCompatible = isInputCompatible
-                        && conditionalAssert(!inputrec->bDoAwh,
-                                             "AWH is not supported by the modular simulator.");
     isInputCompatible =
             isInputCompatible
             && conditionalAssert(gmx_mtop_ftype_count(globalTopology, F_DISRES) == 0,

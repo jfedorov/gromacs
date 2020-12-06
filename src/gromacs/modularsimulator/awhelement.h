@@ -33,7 +33,7 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 /*! \internal \file
- * \brief Declares the expanded ensemble element for the modular simulator
+ * \brief Declares the AWH element for the modular simulator
  *
  * \author Pascal Merz <pascal.merz@me.com>
  * \ingroup module_modularsimulator
@@ -41,17 +41,15 @@
  * This header is only used within the modular simulator module
  */
 
-#ifndef GMX_MODULARSIMULATOR_EXPANDEDENSEMBLEELEMENT_H
-#define GMX_MODULARSIMULATOR_EXPANDEDENSEMBLEELEMENT_H
+#ifndef GMX_MODULARSIMULATOR_AWHELEMENT_H
+#define GMX_MODULARSIMULATOR_AWHELEMENT_H
 
 #include "modularsimulatorinterfaces.h"
 
-struct df_history_t;
-struct t_inputrec;
-
 namespace gmx
 {
-enum class CheckpointDataOperation;
+class Awh;
+struct AwhHistory;
 class EnergyData;
 class FreeEnergyPerturbationData;
 class GlobalCommunicationHelper;
@@ -60,33 +58,17 @@ class MDAtoms;
 class ModularSimulatorAlgorithmBuilderHelper;
 class StatePropagatorData;
 
-/*! \internal
- * \ingroup module_modularsimulator
- * \brief The expanded ensemble element
- *
- * This element periodically attempts Monte Carlo moves in lambda
- * space and sets the new lambda state in FreeEnergyPerturbationData::Element.
- */
-class ExpandedEnsembleElement final : public ISimulatorElement, public ICheckpointHelperClient, public ILoggingSignallerClient
+class AwhElement : public ISimulatorElement, public ICheckpointHelperClient, public ILoggingSignallerClient
 {
 public:
     //! Constructor
-    explicit ExpandedEnsembleElement(bool                              doSimulatedTempering,
-                                     bool                              isMasterRank,
-                                     Step                              initialStep,
-                                     int                               frequency,
-                                     const EnergyData*                 energyData,
-                                     const FreeEnergyPerturbationData* freeEnergyPerturbationData,
-                                     FILE*                             fplog,
-                                     const t_inputrec*                 inputrec,
-                                     std::optional<ReferenceTemperatureCallback> setReferenceTemperature);
-
-    //! Attempt lambda MC step and write log
+    AwhElement(Awh* awh, FreeEnergyPerturbationData* freeEnergyPerturbationData, bool isMasterRank);
+    //! Update annealing temperature
     void scheduleTask(Step step, Time time, const RegisterRunFunction& registerRunFunction) override;
-    //! Set up FEP history object
+    //! Set initial annealing temperature
     void elementSetup() override;
     //! No teardown needed
-    void elementTeardown() override{};
+    void elementTeardown() override {}
 
     //! ICheckpointHelperClient write checkpoint implementation
     void saveCheckpointState(std::optional<WriteCheckpointData> checkpointData, const t_commrec* cr) override;
@@ -113,54 +95,43 @@ public:
                                                     FreeEnergyPerturbationData* freeEnergyPerturbationData,
                                                     GlobalCommunicationHelper* globalCommunicationHelper);
 
+    //! Retrieve Awh instance from builder, build if non-existent
+    static Awh* getAwhObject(LegacySimulatorData*                    legacySimulatorData,
+                             ModularSimulatorAlgorithmBuilderHelper* builderHelper);
+
 private:
-    //! Use expanded ensemble to determine new FEP state or write log
-    void apply(Step step, bool doLambdaStep, bool doLog);
+    //! The history object for checkpointing
+    std::shared_ptr<AwhHistory> awhHistory_;
 
     //! Callback to set a new lambda state
     SetFepState setFepState_;
     //! Callback to announce setting a new lambda state at scheduling time
     SignalFepStateSetting signalFepStateSetting_;
-    //! Callback to set new reference temperature (simulated tempering only)
-    ReferenceTemperatureCallback setReferenceTemperature_;
-    //! Whether we're changing the reference temperature
-    const bool doSimulatedTempering_;
-    //! Whether this runs on master
+
+    // TODO: Clarify relationship to data objects and find a more robust alternative to raw pointers (#3583)
+    //! The Awh object
+    Awh* awh_;
+    //! Pointer to the free energy perturbation data
+    const FreeEnergyPerturbationData* freeEnergyPerturbationData_;
+
+    //! Whether this is running on master rank
     const bool isMasterRank_;
-    //! The initial Step
-    const Step initialStep_;
-    //! The frequency of lambda MC steps
-    const int frequency_;
+
+    //! CheckpointHelper identifier
+    const std::string identifier_ = "AwhElement";
+    //! Whether this object was restored from checkpoint
+    bool restoredFromCheckpoint_;
 
     //! ILoggingSignallerClient implementation
     std::optional<SignallerCallback> registerLoggingCallback() override;
     //! The next logging step
     Step nextLogWritingStep_;
 
-    //! The free energy sampling history
-    std::unique_ptr<df_history_t> dfhist_;
-
-    //! CheckpointHelper identifier
-    const std::string identifier_ = "ExpandedEnsembleElement";
-    //! Helper function to read from / write to CheckpointData
-    template<CheckpointDataOperation operation>
-    void doCheckpointData(CheckpointData<operation>* checkpointData);
-    //! Whether this object was restored from checkpoint
-    bool restoredFromCheckpoint_;
-
-    // TODO: Clarify relationship to data objects and find a more robust alternative to raw pointers (#3583)
-    //! Pointer to the energy data
-    const EnergyData* energyData_;
-    //! Pointer to the free energy perturbation data
-    const FreeEnergyPerturbationData* freeEnergyPerturbationData_;
-
     // Access to ISimulator data
     //! Handles logging.
     FILE* fplog_;
-    //! Contains user input mdp options.
-    const t_inputrec* inputrec_;
 };
 
 } // namespace gmx
 
-#endif // GMX_MODULARSIMULATOR_EXPANDEDENSEMBLEELEMENT_H
+#endif // GMX_MODULARSIMULATOR_AWHELEMENT_H

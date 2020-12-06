@@ -77,6 +77,7 @@
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/fatalerror.h"
 
+#include "awhelement.h"
 #include "checkpointhelper.h"
 #include "domdechelper.h"
 #include "energydata.h"
@@ -441,22 +442,24 @@ ModularSimulatorAlgorithmBuilder::ModularSimulatorAlgorithmBuilder(
     // Multi sim is turned off
     const bool simulationsShareState = false;
 
-    energyData_ = std::make_unique<EnergyData>(statePropagatorData_.get(),
-                                               freeEnergyPerturbationData_.get(),
-                                               legacySimulatorData->top_global,
-                                               legacySimulatorData->inputrec,
-                                               legacySimulatorData->mdAtoms,
-                                               legacySimulatorData->enerd,
-                                               legacySimulatorData->ekind,
-                                               legacySimulatorData->constr,
-                                               legacySimulatorData->fplog,
-                                               legacySimulatorData->fr->fcdata.get(),
-                                               legacySimulatorData->mdModulesNotifier,
-                                               MASTER(legacySimulatorData->cr),
-                                               legacySimulatorData->observablesHistory,
-                                               legacySimulatorData->startingBehavior,
-                                               simulationsShareState,
-                                               legacySimulatorData->pull_work);
+    energyData_ = std::make_unique<EnergyData>(
+            statePropagatorData_.get(),
+            freeEnergyPerturbationData_.get(),
+            legacySimulatorData->top_global,
+            legacySimulatorData->inputrec,
+            legacySimulatorData->mdAtoms,
+            legacySimulatorData->enerd,
+            legacySimulatorData->ekind,
+            legacySimulatorData->constr,
+            legacySimulatorData->fplog,
+            legacySimulatorData->fr->fcdata.get(),
+            legacySimulatorData->mdModulesNotifier,
+            MASTER(legacySimulatorData->cr),
+            legacySimulatorData->observablesHistory,
+            legacySimulatorData->startingBehavior,
+            simulationsShareState,
+            legacySimulatorData->pull_work,
+            AwhElement::getAwhObject(legacySimulatorData, &elementAdditionHelper_));
     registerExistingElement(energyData_->element());
 
     storeSimulationData("ReferenceTemperatureManager",

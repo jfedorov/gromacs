@@ -90,7 +90,8 @@ EnergyData::EnergyData(StatePropagatorData*        statePropagatorData,
                        ObservablesHistory*         observablesHistory,
                        StartingBehavior            startingBehavior,
                        bool                        simulationsShareState,
-                       pull_t*                     pullWork) :
+                       pull_t*                     pullWork,
+                       Awh*                        awh) :
     element_(std::make_unique<Element>(this, isMasterRank)),
     isMasterRank_(isMasterRank),
     forceVirialStep_(-1),
@@ -102,6 +103,7 @@ EnergyData::EnergyData(StatePropagatorData*        statePropagatorData,
     startingBehavior_(startingBehavior),
     statePropagatorData_(statePropagatorData),
     freeEnergyPerturbationData_(freeEnergyPerturbationData),
+    awh_(awh),
     inputrec_(inputrec),
     top_global_(globalTopology),
     mdAtoms_(mdAtoms),
@@ -287,9 +289,8 @@ void EnergyData::write(gmx_mdoutf* outf, Step step, Time time, bool writeTraject
     bool do_dr = do_per_step(step, inputrec_->nstdisreout);
     bool do_or = do_per_step(step, inputrec_->nstorireout);
 
-    Awh* awh = nullptr;
     energyOutput_->printStepToEnergyFile(
-            mdoutf_get_fp_ene(outf), writeTrajectory, do_dr, do_or, writeLog ? fplog_ : nullptr, step, time, fcd_, awh);
+            mdoutf_get_fp_ene(outf), writeTrajectory, do_dr, do_or, writeLog ? fplog_ : nullptr, step, time, fcd_, awh_);
 }
 
 void EnergyData::addToForceVirial(const tensor virial, Step step)

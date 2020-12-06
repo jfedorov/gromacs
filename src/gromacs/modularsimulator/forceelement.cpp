@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -56,7 +56,9 @@
 #include "gromacs/mdtypes/mdrunoptions.h"
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/topology/mtop_util.h"
 
+#include "awhelement.h"
 #include "energydata.h"
 #include "freeenergyperturbationdata.h"
 #include "modularsimulator.h"
@@ -70,6 +72,14 @@ class history_t;
 
 namespace gmx
 {
+bool ForceElement::doShellFC(LegacySimulatorData* legacySimulatorData)
+{
+    const int numFlexibleConstraints =
+            legacySimulatorData->constr ? legacySimulatorData->constr->numFlexibleConstraints() : 0;
+    const int numShellParticles = gmx_mtop_particletype_count(*legacySimulatorData->top_global)[eptShell];
+    return (numFlexibleConstraints != 0 || numShellParticles != 0);
+}
+
 ForceElement::ForceElement(StatePropagatorData*        statePropagatorData,
                            EnergyData*                 energyData,
                            FreeEnergyPerturbationData* freeEnergyPerturbationData,
@@ -81,15 +91,15 @@ ForceElement::ForceElement(StatePropagatorData*        statePropagatorData,
                            const MDAtoms*              mdAtoms,
                            t_nrnb*                     nrnb,
                            t_forcerec*                 fr,
-
-                           gmx_wallcycle*         wcycle,
-                           MdrunScheduleWorkload* runScheduleWork,
-                           VirtualSitesHandler*   vsite,
-                           ImdSession*            imdSession,
-                           pull_t*                pull_work,
-                           Constraints*           constr,
-                           const gmx_mtop_t*      globalTopology,
-                           gmx_enfrot*            enforcedRotation) :
+                           gmx_wallcycle*              wcycle,
+                           MdrunScheduleWorkload*      runScheduleWork,
+                           VirtualSitesHandler*        vsite,
+                           ImdSession*                 imdSession,
+                           pull_t*                     pull_work,
+                           Constraints*                constr,
+                           const gmx_mtop_t*           globalTopology,
+                           gmx_enfrot*                 enforcedRotation,
+                           Awh*                        awh) :
     shellfc_(init_shell_flexcon(fplog,
                                 globalTopology,
                                 constr ? constr->numFlexibleConstraints() : 0,
@@ -104,6 +114,7 @@ ForceElement::ForceElement(StatePropagatorData*        statePropagatorData,
     statePropagatorData_(statePropagatorData),
     energyData_(energyData),
     freeEnergyPerturbationData_(freeEnergyPerturbationData),
+    awh_(awh),
     localTopology_(nullptr),
     isDynamicBox_(isDynamicBox),
     isVerbose_(isVerbose),
@@ -143,16 +154,14 @@ void ForceElement::scheduleTask(Step step, Time time, const RegisterRunFunction&
              | (nextFreeEnergyCalculationStep_ == step ? GMX_FORCE_DHDL : 0)
              | (!doShellFC_ && nextNSStep_ == step ? GMX_FORCE_NS : 0));
 
-    registerRunFunction([this, step, time, flags]() {
-        if (doShellFC_)
-        {
-            run<true>(step, time, flags);
-        }
-        else
-        {
-            run<false>(step, time, flags);
-        }
-    });
+    if (doShellFC_)
+    {
+        registerRunFunction([this, step, time, flags]() { run<true>(step, time, flags); });
+    }
+    else
+    {
+        registerRunFunction([this, step, time, flags]() { run<false>(step, time, flags); });
+    }
 }
 
 void ForceElement::elementSetup()
@@ -160,7 +169,7 @@ void ForceElement::elementSetup()
     GMX_ASSERT(localTopology_, "Setup called before local topology was set.");
 }
 
-template<bool doShellFC>
+template<bool executeShellFC>
 void ForceElement::run(Step step, Time time, unsigned int flags)
 {
     // Disabled functionality
@@ -190,7 +199,7 @@ void ForceElement::run(Step step, Time time, unsigned int flags)
     ArrayRef<real> lambda =
             freeEnergyPerturbationData_ ? freeEnergyPerturbationData_->lambdaView() : lambda_;
 
-    if (doShellFC)
+    if (executeShellFC)
     {
         auto v = statePropagatorData_->velocitiesView();
 
@@ -231,14 +240,13 @@ void ForceElement::run(Step step, Time time, unsigned int flags)
     else
     {
         // Disabled functionality
-        Awh*       awh = nullptr;
-        gmx_edsam* ed  = nullptr;
+        gmx_edsam* ed = nullptr;
 
         do_force(fplog_,
                  cr_,
                  ms,
                  inputrec_,
-                 awh,
+                 awh_,
                  enforcedRotation_,
                  imdSession_,
                  pull_work_,
@@ -311,25 +319,26 @@ ForceElement::getElementPointerImpl(LegacySimulatorData*                    lega
 {
     const bool isVerbose    = legacySimulatorData->mdrunOptions.verbose;
     const bool isDynamicBox = inputrecDynamicBox(legacySimulatorData->inputrec);
-    return builderHelper->storeElement(
-            std::make_unique<ForceElement>(statePropagatorData,
-                                           energyData,
-                                           freeEnergyPerturbationData,
-                                           isVerbose,
-                                           isDynamicBox,
-                                           legacySimulatorData->fplog,
-                                           legacySimulatorData->cr,
-                                           legacySimulatorData->inputrec,
-                                           legacySimulatorData->mdAtoms,
-                                           legacySimulatorData->nrnb,
-                                           legacySimulatorData->fr,
-                                           legacySimulatorData->wcycle,
-                                           legacySimulatorData->runScheduleWork,
-                                           legacySimulatorData->vsite,
-                                           legacySimulatorData->imdSession,
-                                           legacySimulatorData->pull_work,
-                                           legacySimulatorData->constr,
-                                           legacySimulatorData->top_global,
-                                           legacySimulatorData->enforcedRotation));
+    return builderHelper->storeElement(std::make_unique<ForceElement>(
+            statePropagatorData,
+            energyData,
+            freeEnergyPerturbationData,
+            isVerbose,
+            isDynamicBox,
+            legacySimulatorData->fplog,
+            legacySimulatorData->cr,
+            legacySimulatorData->inputrec,
+            legacySimulatorData->mdAtoms,
+            legacySimulatorData->nrnb,
+            legacySimulatorData->fr,
+            legacySimulatorData->wcycle,
+            legacySimulatorData->runScheduleWork,
+            legacySimulatorData->vsite,
+            legacySimulatorData->imdSession,
+            legacySimulatorData->pull_work,
+            legacySimulatorData->constr,
+            legacySimulatorData->top_global,
+            legacySimulatorData->enforcedRotation,
+            AwhElement::getAwhObject(legacySimulatorData, builderHelper)));
 }
 } // namespace gmx
