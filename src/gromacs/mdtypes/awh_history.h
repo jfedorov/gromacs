@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2015,2016,2017,2018,2019, by the GROMACS development team, led by
+ * Copyright (c) 2015,2016,2017,2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -54,6 +54,9 @@
 
 namespace gmx
 {
+enum class CheckpointDataOperation;
+template<CheckpointDataOperation operation>
+class CheckpointData;
 
 /*! \cond INTERNAL */
 
@@ -118,6 +121,13 @@ struct AwhHistory
 
     /*! \brief Constructor. */
     AwhHistory() : potentialOffset(0) {}
+
+    /*! \brief Allows to read and write checkpoint within modular simulator
+     * \tparam operation  Whether we're reading or writing
+     * \param checkpointData  The CheckpointData object
+     */
+    template<CheckpointDataOperation operation>
+    void doCheckpoint(CheckpointData<operation> checkpointData);
 };
 
 /*! \endcond */
