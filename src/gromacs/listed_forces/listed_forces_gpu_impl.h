@@ -95,6 +95,18 @@ struct BondedCudaKernelParameters
 
     //! Force parameters (on GPU)
     t_iparams* d_forceParams;
+    //! Coordinates before the timestep (on GPU)
+    int d_cmapGridSpacing;
+    //! CMAP parameters (on GPU). Note, this is a flat array instead of vec of vec
+    DeviceBuffer<float> d_cmapData;
+    //! CMAP grid index mapping, gives starting positions into d_cmapData.
+    DeviceBuffer<int> d_cmapGridIndices;
+    //! Coordinates before the timestep (on GPU)
+    const float4* d_xq;
+    //! Forces on atoms (on GPU)
+    float3* d_f;
+    //! Force shifts on atoms (on GPU)
+    float3* d_fShift;
     //! Total Energy (on GPU)
     float* d_vTot;
     //! Interaction list atoms (on GPU)
@@ -108,6 +120,10 @@ struct BondedCudaKernelParameters
 
         electrostaticsScaleFactor = 1.0;
         d_forceParams             = nullptr;
+        d_cmapGridSpacing         = 0;
+        d_xq                      = nullptr;
+        d_f                       = nullptr;
+        d_fShift                  = nullptr;
         d_vTot                    = nullptr;
     }
 };
@@ -174,6 +190,12 @@ private:
     t_ilist d_iLists_[F_NRE] = {};
     //! Bonded parameters for device-side use.
     t_iparams* d_forceParams_ = nullptr;
+    //! CMAP grid spacing for device-side use.
+    int d_cmapGridSpacing_ = 0;
+    //! CMAP parameters for device-side use. Note, flat array!
+    DeviceBuffer<float> d_cmapData_;
+    //! CMAP grid index mapping, gives starting positions into d_cmapData.
+    DeviceBuffer<int> d_cmapGridIndices_;
     //! Position-charge vector on the device.
     const float4* d_xq_ = nullptr;
     //! Force vector on the device.

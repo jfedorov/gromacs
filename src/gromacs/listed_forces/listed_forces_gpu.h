@@ -74,7 +74,7 @@ class ArrayRef;
 class StepWorkload;
 
 /*! \brief The number on bonded function types supported on GPUs */
-static constexpr int numFTypesOnGpu = 8;
+static constexpr int numFTypesOnGpu = 9;
 
 /*! \brief List of all bonded function types supported on GPUs
  *
@@ -85,7 +85,7 @@ static constexpr int numFTypesOnGpu = 8;
  */
 constexpr std::array<int, numFTypesOnGpu> fTypesOnGpu = { F_BONDS,  F_ANGLES, F_UREY_BRADLEY,
                                                           F_PDIHS,  F_RBDIHS, F_IDIHS,
-                                                          F_PIDIHS, F_LJ14 };
+                                                          F_PIDIHS, F_CMAP,   F_LJ14 };
 
 /*! \brief Checks whether the GROMACS build allows to compute bonded interactions on a GPU.
  *
