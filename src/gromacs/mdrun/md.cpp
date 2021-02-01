@@ -551,7 +551,7 @@ void gmx::LegacySimulator::do_md()
             /* Set the velocities of vsites, shells and frozen atoms to zero */
             for (i = 0; i < mdatoms->homenr; i++)
             {
-                if (mdatoms->ptype[i] == eptVSite || mdatoms->ptype[i] == eptShell)
+                if (mdatoms->ptype[i] == eptShell)
                 {
                     clear_rvec(v[i]);
                 }
@@ -580,11 +580,6 @@ void gmx::LegacySimulator::do_md()
                                state->v.arrayRefWithPadding(),
                                state->box,
                                state->lambda[efptBONDED]);
-        }
-        if (vsite)
-        {
-            /* Construct the virtual sites for the initial configuration */
-            vsite->construct(state->x, ir->delta_t, {}, state->box);
         }
     }
 
@@ -954,6 +949,25 @@ void gmx::LegacySimulator::do_md()
             stateGpu->waitCoordinatesReadyOnHost(AtomLocality::Local);
         }
 
+        // We only need to calculate virtual velocities if we are writing them in the current step
+        const bool needVirtualVelocitiesThisStep =
+                (vsite != nullptr)
+                && (do_per_step(step, ir->nstvout) || checkpointHandler->isCheckpointingStep());
+
+        if (vsite != nullptr)
+        {
+            // Virtual sites need to be updated before domain decomposition and forces are calculated
+            wallcycle_start(wcycle, ewcVSITECONSTR);
+            // md-vv calculates virtual velocities once it has full-step real velocities
+            vsite->construct(state->x,
+                             state->v,
+                             state->box,
+                             (!EI_VV(inputrec->eI) && needVirtualVelocitiesThisStep)
+                                     ? VSiteOperation::PositionsAndVelocities
+                                     : VSiteOperation::Positions);
+            wallcycle_stop(wcycle, ewcVSITECONSTR);
+        }
+
         if (bNS && !(bFirstStep && ir->bContinuation))
         {
             bMasterState = FALSE;
@@ -1239,6 +1253,13 @@ void gmx::LegacySimulator::do_md()
                                  mdlog,
                                  fplog,
                                  wcycle);
+            if (vsite != nullptr && needVirtualVelocitiesThisStep)
+            {
+                // Positions were calculated earlier
+                wallcycle_start(wcycle, ewcVSITECONSTR);
+                vsite->construct(state->x, state->v, state->box, VSiteOperation::Velocities);
+                wallcycle_stop(wcycle, ewcVSITECONSTR);
+            }
         }
 
         /* ########  END FIRST UPDATE STEP  ############## */
@@ -1562,13 +1583,6 @@ void gmx::LegacySimulator::do_md()
             }
 
             enerd->term[F_DVDL_CONSTR] += dvdl_constr;
-        }
-
-        if (vsite != nullptr)
-        {
-            wallcycle_start(wcycle, ewcVSITECONSTR);
-            vsite->construct(state->x, ir->delta_t, state->v, state->box);
-            wallcycle_stop(wcycle, ewcVSITECONSTR);
         }
 
         /* ############## IF NOT VV, Calculate globals HERE  ############ */
