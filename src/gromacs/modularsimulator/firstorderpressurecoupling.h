@@ -53,6 +53,7 @@ enum class PressureCoupling;
 
 namespace gmx
 {
+class BoxDeformation;
 class EnergyData;
 class FreeEnergyPerturbationData;
 class GlobalCommunicationHelper;
@@ -79,6 +80,7 @@ public:
                                const t_inputrec*                 inputrec,
                                const MDAtoms*                    mdAtoms,
                                t_nrnb*                           nrnb,
+                               BoxDeformation*                   boxDeformation,
                                ReportPreviousStepConservedEnergy reportPreviousStepConservedEnergy);
 
     void scheduleTask(Step step, Time time, const RegisterRunFunction& function) override;
@@ -124,6 +126,8 @@ private:
     //! Scale the box and coordinates according to the current scaling matrix
     template<PressureCoupling pressureCouplingType>
     void scaleBoxAndCoordinates();
+    //! Apply box deformation
+    void applyBoxDeformation(Step step);
     //! Helper function returning the conserved energy contribution
     real conservedEnergyContribution(Step step);
 
@@ -164,6 +168,8 @@ private:
     const MDAtoms* mdAtoms_;
     //! Manages flop accounting.
     t_nrnb* nrnb_;
+    //! Handles box deformation.
+    BoxDeformation* boxDeformation_;
 
     //! CheckpointHelper identifier
     const std::string identifier_;

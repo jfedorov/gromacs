@@ -54,6 +54,7 @@ struct t_commrec;
 
 namespace gmx
 {
+class BoxDeformation;
 enum class CheckpointDataOperation;
 class EnergyData;
 class LegacySimulatorData;
@@ -82,7 +83,8 @@ public:
                              EnergyData*          energyData,
                              FILE*                fplog,
                              const t_inputrec*    inputrec,
-                             const MDAtoms*       mdAtoms);
+                             const MDAtoms*       mdAtoms,
+                             BoxDeformation*      boxDeformation);
 
     /*! \brief Register run function for step / time
      *
@@ -171,6 +173,8 @@ private:
     void integrateBoxVelocityEquations(Step step);
     //! Scale box and positions
     void scaleBoxAndPositions();
+    //! Apply box deformation
+    void applyBoxDeformation(Step step);
 
     //! CheckpointHelper identifier
     const std::string identifier_ = "ParrinelloRahmanBarostat";
@@ -193,6 +197,8 @@ private:
     const t_inputrec* inputrec_;
     //! Atom parameters for this domain.
     const MDAtoms* mdAtoms_;
+    //! Handles box deformation.
+    BoxDeformation* boxDeformation_;
 };
 
 } // namespace gmx

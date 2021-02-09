@@ -428,15 +428,6 @@ bool ModularSimulator::isInputCompatible(bool                             exitOn
                                  "Freeze groups are not supported by the modular simulator.");
     isInputCompatible =
             isInputCompatible
-            && conditionalAssert(
-                       inputrec->deform[XX][XX] == 0.0 && inputrec->deform[XX][YY] == 0.0
-                               && inputrec->deform[XX][ZZ] == 0.0 && inputrec->deform[YY][XX] == 0.0
-                               && inputrec->deform[YY][YY] == 0.0 && inputrec->deform[YY][ZZ] == 0.0
-                               && inputrec->deform[ZZ][XX] == 0.0 && inputrec->deform[ZZ][YY] == 0.0
-                               && inputrec->deform[ZZ][ZZ] == 0.0,
-                       "Deformation is not supported by the modular simulator.");
-    isInputCompatible =
-            isInputCompatible
             && conditionalAssert(gmx_mtop_interaction_count(globalTopology, IF_VSITE) == 0,
                                  "Virtual sites are not supported by the modular simulator.");
     isInputCompatible =

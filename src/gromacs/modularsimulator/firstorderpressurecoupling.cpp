@@ -44,6 +44,7 @@
 #include "firstorderpressurecoupling.h"
 
 #include "gromacs/domdec/domdec_network.h"
+#include "gromacs/mdlib/boxdeformation.h"
 #include "gromacs/mdlib/coupling.h"
 #include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/stat.h"
@@ -104,6 +105,14 @@ void FirstOrderPressureCoupling::scaleBoxAndCoordinates()
             inputrec_, boxScalingMatrix_, box, boxRel_, startAtom, numAtoms, positions, velocities, cFreeze, nrnb_, scaleCoordinates);
 }
 
+void FirstOrderPressureCoupling::applyBoxDeformation(Step step)
+{
+    auto* box    = statePropagatorData_->box();
+    auto  localX = statePropagatorData_->positionsView().unpaddedArrayRef().subArray(
+            0, mdAtoms_->mdatoms()->homenr);
+    boxDeformation_->apply(localX, box, step);
+}
+
 void FirstOrderPressureCoupling::scheduleTask(Step step, Time /*unused*/, const RegisterRunFunction& registerRunFunction)
 {
     if (do_per_step(step + couplingFrequency_ + couplingOffset_, couplingFrequency_))
@@ -122,6 +131,10 @@ void FirstOrderPressureCoupling::scheduleTask(Step step, Time /*unused*/, const 
                 scaleBoxAndCoordinates<PressureCoupling::CRescale>();
             });
         }
+    }
+    if (boxDeformation_ != nullptr)
+    {
+        registerRunFunction([this, step]() { applyBoxDeformation(step); });
     }
 }
 
@@ -209,6 +222,7 @@ FirstOrderPressureCoupling::FirstOrderPressureCoupling(int                  coup
                                                        const t_inputrec*    inputrec,
                                                        const MDAtoms*       mdAtoms,
                                                        t_nrnb*              nrnb,
+                                                       BoxDeformation*      boxDeformation,
                                                        ReportPreviousStepConservedEnergy reportPreviousStepConservedEnergy) :
     pressureCouplingType_(inputrec->epc),
     couplingTimeStep_(couplingTimeStep),
@@ -226,6 +240,7 @@ FirstOrderPressureCoupling::FirstOrderPressureCoupling(int                  coup
     inputrec_(inputrec),
     mdAtoms_(mdAtoms),
     nrnb_(nrnb),
+    boxDeformation_(boxDeformation),
     identifier_("FirstOrderPressureCoupling-" + std::string(enumValueToString(pressureCouplingType_)))
 {
     energyData->addConservedEnergyContribution(
@@ -252,6 +267,7 @@ ISimulatorElement* FirstOrderPressureCoupling::getElementPointerImpl(
             legacySimulatorData->inputrec,
             legacySimulatorData->mdAtoms,
             legacySimulatorData->nrnb,
+            legacySimulatorData->deform,
             reportPreviousStepConservedEnergy));
 }
 

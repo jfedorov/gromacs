@@ -49,12 +49,15 @@
 #include "gromacs/math/functions.h"
 #include "gromacs/math/units.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/mdlib/boxdeformation.h"
 #include "gromacs/mdlib/coupling.h"
+#include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/stat.h"
 #include "gromacs/topology/ifunc.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/group.h"
 #include "gromacs/mdtypes/enerdata.h"
+#include "gromacs/mdtypes/mdatom.h"
 
 #include "energydata.h"
 #include "velocityscalingtemperaturecoupling.h"
@@ -620,21 +623,23 @@ MttkElement::getElementPointerImpl(LegacySimulatorData*                    legac
 
 MttkBoxScaling::MttkBoxScaling(real                 simulationTimeStep,
                                StatePropagatorData* statePropagatorData,
-                               MttkData*            mttkData) :
+                               MttkData*            mttkData,
+                               const MDAtoms*       mdAtoms,
+                               BoxDeformation*      boxDeformation) :
     simulationTimeStep_(simulationTimeStep),
     statePropagatorData_(statePropagatorData),
-    mttkData_(mttkData)
+    mttkData_(mttkData),
+    mdAtoms_(mdAtoms),
+    boxDeformation_(boxDeformation)
 {
 }
 
-void MttkBoxScaling::scheduleTask(Step gmx_unused step,
-                                  gmx_unused Time            time,
-                                  const RegisterRunFunction& registerRunFunction)
+void MttkBoxScaling::scheduleTask(Step step, Time gmx_unused time, const RegisterRunFunction& registerRunFunction)
 {
-    registerRunFunction([this]() { scaleBox(); });
+    registerRunFunction([this, step]() { scaleBox(step); });
 }
 
-void MttkBoxScaling::scaleBox()
+void MttkBoxScaling::scaleBox(Step step)
 {
     auto* box = statePropagatorData_->box();
 
@@ -652,6 +657,13 @@ void MttkBoxScaling::scaleBox()
        (det(dB/dT)/det(B))^(1/3).  Then since M =
        B_new*(vol_new)^(1/3), dB/dT_new = (veta_new)*B(new). */
     msmul(box, mttkData_->etaVelocity(), mttkData_->boxVelocities());
+
+    if (boxDeformation_ != nullptr)
+    {
+        auto localX = statePropagatorData_->positionsView().unpaddedArrayRef().subArray(
+                0, mdAtoms_->mdatoms()->homenr);
+        boxDeformation_->apply(localX, box, step);
+    }
 }
 
 ISimulatorElement*
@@ -671,7 +683,9 @@ MttkBoxScaling::getElementPointerImpl(LegacySimulatorData*                    le
     return builderHelper->storeElement(std::make_unique<MttkBoxScaling>(
             legacySimulatorData->inputrec->delta_t,
             statePropagatorData,
-            builderHelper->simulationData<MttkData>(MttkData::dataID()).value()));
+            builderHelper->simulationData<MttkData>(MttkData::dataID()).value(),
+            legacySimulatorData->mdAtoms,
+            legacySimulatorData->deform));
 }
 
 } // namespace gmx

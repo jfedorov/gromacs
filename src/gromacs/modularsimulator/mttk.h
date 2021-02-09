@@ -51,6 +51,7 @@
 
 namespace gmx
 {
+class BoxDeformation;
 class EnergyData;
 enum class ScheduleOnInitStep;
 
@@ -335,7 +336,11 @@ class MttkBoxScaling final : public ISimulatorElement
 {
 public:
     //! Constructor
-    MttkBoxScaling(real simulationTimeStep, StatePropagatorData* statePropagatorData, MttkData* mttkData);
+    MttkBoxScaling(real                 simulationTimeStep,
+                   StatePropagatorData* statePropagatorData,
+                   MttkData*            mttkData,
+                   const MDAtoms*       mdAtoms,
+                   BoxDeformation*      boxDeformation);
 
     /*! \brief Register run function for step / time
      *
@@ -370,7 +375,7 @@ public:
 
 private:
     //! Scale the box
-    void scaleBox();
+    void scaleBox(Step step);
     //! The simulation time step
     const real simulationTimeStep_;
 
@@ -379,6 +384,12 @@ private:
     StatePropagatorData* statePropagatorData_;
     //! Pointer to the MTTK data (nullptr if this is not connected to barostat)
     MttkData* mttkData_;
+
+    // Access to ISimulator data
+    //! Atom parameters for this domain.
+    const MDAtoms* mdAtoms_;
+    //! Handles box deformation.
+    BoxDeformation* boxDeformation_;
 };
 
 } // namespace gmx

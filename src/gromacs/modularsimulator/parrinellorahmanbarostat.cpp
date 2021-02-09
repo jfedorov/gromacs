@@ -46,6 +46,7 @@
 #include "gromacs/domdec/domdec_network.h"
 #include "gromacs/math/units.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/mdlib/boxdeformation.h"
 #include "gromacs/mdlib/coupling.h"
 #include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/stat.h"
@@ -71,7 +72,8 @@ ParrinelloRahmanBarostat::ParrinelloRahmanBarostat(int                  nstpcoup
                                                    EnergyData*          energyData,
                                                    FILE*                fplog,
                                                    const t_inputrec*    inputrec,
-                                                   const MDAtoms*       mdAtoms) :
+                                                   const MDAtoms*       mdAtoms,
+                                                   BoxDeformation*      boxDeformation) :
     nstpcouple_(nstpcouple),
     offset_(offset),
     couplingTimeStep_(couplingTimeStep),
@@ -84,7 +86,8 @@ ParrinelloRahmanBarostat::ParrinelloRahmanBarostat(int                  nstpcoup
     nextEnergyCalculationStep_(-1),
     fplog_(fplog),
     inputrec_(inputrec),
-    mdAtoms_(mdAtoms)
+    mdAtoms_(mdAtoms),
+    boxDeformation_(boxDeformation)
 {
     energyData->setParrinelloRahmanBoxVelocities([this]() { return boxVelocity_; });
     energyData->addConservedEnergyContribution([this](Step step, Time /*unused*/) {
@@ -134,6 +137,10 @@ void ParrinelloRahmanBarostat::scheduleTask(Step step,
         // let propagator know that it will have to scale on next step
         propagatorCallback_(step + 1);
     }
+    if (boxDeformation_ != nullptr)
+    {
+        registerRunFunction([this, step]() { applyBoxDeformation(step); });
+    }
 }
 
 void ParrinelloRahmanBarostat::integrateBoxVelocityEquations(Step step)
@@ -175,6 +182,14 @@ void ParrinelloRahmanBarostat::scaleBoxAndPositions()
     {
         tmvmul_ur0(mu_, x[n], x[n]);
     }
+}
+
+void ParrinelloRahmanBarostat::applyBoxDeformation(Step step)
+{
+    auto* box    = statePropagatorData_->box();
+    auto  localX = statePropagatorData_->positionsView().unpaddedArrayRef().subArray(
+            0, mdAtoms_->mdatoms()->homenr);
+    boxDeformation_->apply(localX, box, step);
 }
 
 void ParrinelloRahmanBarostat::elementSetup()
@@ -344,7 +359,8 @@ ISimulatorElement* ParrinelloRahmanBarostat::getElementPointerImpl(
             energyData,
             legacySimulatorData->fplog,
             legacySimulatorData->inputrec,
-            legacySimulatorData->mdAtoms));
+            legacySimulatorData->mdAtoms,
+            legacySimulatorData->deform));
     auto* barostat = static_cast<ParrinelloRahmanBarostat*>(element);
     builderHelper->registerTemperaturePressureControl(
             [barostat, propagatorTag](const PropagatorConnection& connection) {
