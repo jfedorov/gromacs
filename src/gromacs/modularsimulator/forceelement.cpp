@@ -49,6 +49,7 @@
 #include "gromacs/mdlib/force.h"
 #include "gromacs/mdlib/force_flags.h"
 #include "gromacs/mdlib/mdatoms.h"
+#include "gromacs/mdlib/vsite.h"
 #include "gromacs/mdrun/shellfc.h"
 #include "gromacs/mdtypes/forcebuffers.h"
 #include "gromacs/mdtypes/inputrec.h"
@@ -175,6 +176,10 @@ void ForceElement::run(Step step, Time time, unsigned int flags)
     // Disabled functionality
     gmx_multisim_t* ms = nullptr;
 
+    if (vsite_ != nullptr)
+    {
+        statePropagatorData_->ensureVirtualSitesAreValid(VSiteOperation::Positions);
+    }
 
     if (!DOMAINDECOMP(cr_) && (flags & GMX_FORCE_NS) && inputrecDynamicBox(inputrec_))
     {

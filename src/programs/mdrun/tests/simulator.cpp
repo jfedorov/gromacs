@@ -184,6 +184,11 @@ MdpFieldValues prepareMdpFieldValues(const std::string&   simulationName,
     {
         mdpFieldValues[key] = value;
     }
+    if (tcoupling == "nose-hoover" && pcoupling == "parrinello-rahman")
+    {
+        // Default value yields warning (tau-p needs to be twice as large as tau-t)
+        mdpFieldValues["tau-p"] = "2";
+    }
     return mdpFieldValues;
 }
 
@@ -409,6 +414,25 @@ INSTANTIATE_TEST_CASE_P(
                 ::testing::Values("GMX_USE_MODULAR_SIMULATOR"),
                 ::testing::Values(MdpParameterDatabase::Default)));
 INSTANTIATE_TEST_CASE_P(
+        SimulatorsAreEquivalentDefaultModularVirtualSites,
+        SimulatorComparisonTest,
+        ::testing::Combine(::testing::Combine(::testing::Values("vsite_test"),
+                                              ::testing::Values("md-vv"),
+                                              ::testing::Values("no", "v-rescale", "nose-hoover"),
+                                              ::testing::Values("no", "c-rescale", "mttk")),
+                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR"),
+                           ::testing::Values(MdpParameterDatabase::Default)));
+INSTANTIATE_TEST_CASE_P(
+        SimulatorsAreEquivalentDefaultLegacyVirtualSites,
+        SimulatorComparisonTest,
+        ::testing::Combine(
+                ::testing::Combine(::testing::Values("vsite_test"),
+                                   ::testing::Values("md"),
+                                   ::testing::Values("no", "v-rescale", "nose-hoover"),
+                                   ::testing::Values("no", "parrinello-rahman", "c-rescale")),
+                ::testing::Values("GMX_USE_MODULAR_SIMULATOR"),
+                ::testing::Values(MdpParameterDatabase::Default)));
+INSTANTIATE_TEST_CASE_P(
         SimulatorsAreEquivalentDefaultModularSimulatedAnnealing,
         SimulatorComparisonTest,
         ::testing::Combine(::testing::Combine(::testing::Values("spc-and-methanol"),
@@ -485,6 +509,25 @@ INSTANTIATE_TEST_CASE_P(
                         ::testing::Values("md"),
                         ::testing::Values("no", "v-rescale", "berendsen", "nose-hoover"),
                         ::testing::Values("no", "Parrinello-Rahman", "berendsen", "c-rescale")),
+                ::testing::Values("GMX_USE_MODULAR_SIMULATOR"),
+                ::testing::Values(MdpParameterDatabase::Default)));
+INSTANTIATE_TEST_CASE_P(
+        DISABLED_SimulatorsAreEquivalentDefaultModularVirtualSites,
+        SimulatorComparisonTest,
+        ::testing::Combine(::testing::Combine(::testing::Values("vsite_test"),
+                                              ::testing::Values("md-vv"),
+                                              ::testing::Values("no", "v-rescale", "nose-hoover"),
+                                              ::testing::Values("no", "c-rescale", "mttk")),
+                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR"),
+                           ::testing::Values(MdpParameterDatabase::Default)));
+INSTANTIATE_TEST_CASE_P(
+        DISABLED_SimulatorsAreEquivalentDefaultLegacyVirtualSites,
+        SimulatorComparisonTest,
+        ::testing::Combine(
+                ::testing::Combine(::testing::Values("vsite_test"),
+                                   ::testing::Values("md"),
+                                   ::testing::Values("no", "v-rescale", "nose-hoover"),
+                                   ::testing::Values("no", "parrinello-rahman", "c-rescale")),
                 ::testing::Values("GMX_USE_MODULAR_SIMULATOR"),
                 ::testing::Values(MdpParameterDatabase::Default)));
 INSTANTIATE_TEST_CASE_P(

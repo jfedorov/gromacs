@@ -428,10 +428,6 @@ bool ModularSimulator::isInputCompatible(bool                             exitOn
                                  "Freeze groups are not supported by the modular simulator.");
     isInputCompatible =
             isInputCompatible
-            && conditionalAssert(gmx_mtop_interaction_count(globalTopology, IF_VSITE) == 0,
-                                 "Virtual sites are not supported by the modular simulator.");
-    isInputCompatible =
-            isInputCompatible
             && conditionalAssert(gmx_mtop_ftype_count(globalTopology, F_DISRES) == 0,
                                  "Distance restraints are not supported by the modular simulator.");
     isInputCompatible =

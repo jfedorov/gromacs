@@ -132,6 +132,7 @@ void ModularSimulatorAlgorithm::setup()
     {
         domDecHelper_->setup();
     }
+    statePropagatorData_->zeroShellAndFrozenVelocities();
 
     for (auto& element : elementSetupTeardownList_)
     {
@@ -436,7 +437,9 @@ ModularSimulatorAlgorithmBuilder::ModularSimulatorAlgorithmBuilder(
             opt2fn("-c", legacySimulatorData->nfile, legacySimulatorData->fnm),
             legacySimulatorData->inputrec,
             legacySimulatorData->mdAtoms->mdatoms(),
-            legacySimulatorData->top_global);
+            legacySimulatorData->top_global,
+            legacySimulatorData->vsite,
+            legacySimulatorData->wcycle);
     registerExistingElement(statePropagatorData_->element());
 
     // Multi sim is turned off

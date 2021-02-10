@@ -55,6 +55,7 @@
 #include "topologyholder.h"
 
 struct gmx_mdoutf;
+struct gmx_wallcycle;
 enum class PbcType : int;
 struct t_commrec;
 struct t_inputrec;
@@ -71,6 +72,7 @@ class FreeEnergyPerturbationData;
 class GlobalCommunicationHelper;
 class LegacySimulatorData;
 class ModularSimulatorAlgorithmBuilderHelper;
+enum class VSiteOperation;
 
 /*! \internal
  * \ingroup module_modularsimulator
@@ -100,17 +102,19 @@ class StatePropagatorData final
 {
 public:
     //! Constructor
-    StatePropagatorData(int                numAtoms,
-                        FILE*              fplog,
-                        const t_commrec*   cr,
-                        t_state*           globalState,
-                        bool               useGPU,
-                        bool               canMoleculesBeDistributedOverPBC,
-                        bool               writeFinalConfiguration,
-                        const std::string& finalConfigurationFilename,
-                        const t_inputrec*  inputrec,
-                        const t_mdatoms*   mdatoms,
-                        const gmx_mtop_t*  globalTop);
+    StatePropagatorData(int                        numAtoms,
+                        FILE*                      fplog,
+                        const t_commrec*           cr,
+                        t_state*                   globalState,
+                        bool                       useGPU,
+                        bool                       canMoleculesBeDistributedOverPBC,
+                        bool                       writeFinalConfiguration,
+                        const std::string&         finalConfigurationFilename,
+                        const t_inputrec*          inputrec,
+                        const t_mdatoms*           mdatoms,
+                        const gmx_mtop_t*          globalTop,
+                        const VirtualSitesHandler* vsite,
+                        gmx_wallcycle*             wallcycle);
 
     //! Destructor (allows forward declaration of internal type)
     ~StatePropagatorData();
@@ -144,6 +148,10 @@ public:
     int localNumAtoms() const;
     //! Get the total number of atoms
     int totalNumAtoms() const;
+    //! Function updating virtual sites if necessary
+    void ensureVirtualSitesAreValid(VSiteOperation operation);
+    //! Zero the initial velocities of shell particles and freeze groups
+    void zeroShellAndFrozenVelocities();
 
     //! The element taking part in the simulator loop
     class Element;
@@ -235,14 +243,22 @@ private:
     //! Function resetting the velocities
     void resetVelocities();
 
-    //! Whether planned total number of steps was reached (used for final output only)
-    bool isRegularSimulationEnd_;
-    //! The signalled last step (used for final output only)
-    Step lastStep_;
+    //! The step at which virtual positions currently are
+    bool virtualPositionsValid_;
+    //! The step at which virtual velocities currently are
+    bool virtualVelocitiesValid_;
 
     // Access to ISimulator data
     //! Full simulation state (only non-nullptr on master rank).
     t_state* globalState_;
+    //! Atom parameters for this domain
+    const t_mdatoms* mdatoms_;
+    //! Contains user input mdp options.
+    const t_inputrec* inputrec_;
+    //! Handles virtual sites.
+    const VirtualSitesHandler* vsite_;
+    //! Manages wall cycle accounting.
+    gmx_wallcycle* wallcycle_;
 };
 
 /*! \internal

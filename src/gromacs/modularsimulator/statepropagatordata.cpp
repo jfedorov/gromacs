@@ -53,6 +53,7 @@
 #include "gromacs/mdlib/mdoutf.h"
 #include "gromacs/mdlib/stat.h"
 #include "gromacs/mdlib/update.h"
+#include "gromacs/mdlib/vsite.h"
 #include "gromacs/mdtypes/checkpointdata.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/forcebuffers.h"
@@ -158,7 +159,9 @@ StatePropagatorData::StatePropagatorData(int                numAtoms,
                                          const std::string& finalConfigurationFilename,
                                          const t_inputrec*  inputrec,
                                          const t_mdatoms*   mdatoms,
-                                         const gmx_mtop_t*  globalTop) :
+                                         const gmx_mtop_t*  globalTop,
+                                         const VirtualSitesHandler* vsite,
+                                         gmx_wallcycle*             wallcycle) :
     totalNumAtoms_(numAtoms),
     localNAtoms_(0),
     box_{ { 0 } },
@@ -178,17 +181,19 @@ StatePropagatorData::StatePropagatorData(int                numAtoms,
                                        globalTop)),
     referenceTemperatureHelper_(std::make_unique<ReferenceTemperatureHelper>(inputrec, this, mdatoms)),
     vvResetVelocities_(false),
-    isRegularSimulationEnd_(false),
-    lastStep_(-1),
-    globalState_(globalState)
+    virtualPositionsValid_(false),
+    virtualVelocitiesValid_(false),
+    globalState_(globalState),
+    mdatoms_(mdatoms),
+    inputrec_(inputrec),
+    vsite_(vsite),
+    wallcycle_(wallcycle)
 {
-    bool stateHasVelocities;
     // Local state only becomes valid now.
     if (DOMAINDECOMP(cr))
     {
         auto localState = std::make_unique<t_state>();
         dd_init_local_state(cr->dd, globalState, localState.get());
-        stateHasVelocities = ((static_cast<unsigned int>(localState->flags) & (1U << estV)) != 0U);
         setLocalState(std::move(localState));
     }
     else
@@ -199,7 +204,6 @@ StatePropagatorData::StatePropagatorData(int                numAtoms,
         x_           = globalState->x;
         v_           = globalState->v;
         copy_mat(globalState->box, box_);
-        stateHasVelocities = ((static_cast<unsigned int>(globalState->flags) & (1U << estV)) != 0U);
         previousX_.resizeWithPadding(localNAtoms_);
         ddpCount_ = globalState->ddp_count;
         copyPosition();
@@ -217,33 +221,31 @@ StatePropagatorData::StatePropagatorData(int                numAtoms,
         fGlobal_.resizeWithPadding(totalNumAtoms_);
     }
 
-    if (!inputrec->bContinuation)
+    if (!inputrec->bContinuation && inputrec->eI == eiVV)
     {
-        if (stateHasVelocities)
+        vvResetVelocities_ = true;
+    }
+}
+
+void StatePropagatorData::zeroShellAndFrozenVelocities()
+{
+    auto v = velocitiesView().paddedArrayRef();
+    // Set the velocities of shells and frozen atoms to zero
+    for (int i = 0; i < mdatoms_->homenr; i++)
+    {
+        if (mdatoms_->ptype[i] == eptShell)
         {
-            auto v = velocitiesView().paddedArrayRef();
-            // Set the velocities of vsites, shells and frozen atoms to zero
-            for (int i = 0; i < mdatoms->homenr; i++)
+            clear_rvec(v[i]);
+        }
+        else if (mdatoms_->cFREEZE)
+        {
+            for (int m = 0; m < DIM; m++)
             {
-                if (mdatoms->ptype[i] == eptShell)
+                if (inputrec_->opts.nFreeze[mdatoms_->cFREEZE[i]][m])
                 {
-                    clear_rvec(v[i]);
-                }
-                else if (mdatoms->cFREEZE)
-                {
-                    for (int m = 0; m < DIM; m++)
-                    {
-                        if (inputrec->opts.nFreeze[mdatoms->cFREEZE[i]][m])
-                        {
-                            v[i][m] = 0;
-                        }
-                    }
+                    v[i][m] = 0;
                 }
             }
-        }
-        if (inputrec->eI == eiVV)
-        {
-            vvResetVelocities_ = true;
         }
     }
 }
@@ -265,6 +267,7 @@ void StatePropagatorData::setup()
 
 ArrayRefWithPadding<RVec> StatePropagatorData::positionsView()
 {
+    virtualPositionsValid_ = false;
     return x_.arrayRefWithPadding();
 }
 
@@ -285,6 +288,7 @@ ArrayRefWithPadding<const RVec> StatePropagatorData::constPreviousPositionsView(
 
 ArrayRefWithPadding<RVec> StatePropagatorData::velocitiesView()
 {
+    virtualVelocitiesValid_ = false;
     return v_.arrayRefWithPadding();
 }
 
@@ -335,6 +339,14 @@ int StatePropagatorData::totalNumAtoms() const
 
 std::unique_ptr<t_state> StatePropagatorData::localState()
 {
+    if (vsite_ != nullptr)
+    {
+        ensureVirtualSitesAreValid(VSiteOperation::PositionsAndVelocities);
+    }
+    GMX_ASSERT(vsite_ == nullptr || (virtualPositionsValid_ && virtualVelocitiesValid_)
+                       || (localNAtoms_ == 0),
+               "Need valid virtual coordinates");
+
     auto state   = std::make_unique<t_state>();
     state->flags = (1U << estX) | (1U << estV) | (1U << estBOX);
     state_change_natoms(state.get(), localNAtoms_);
@@ -434,6 +446,37 @@ void StatePropagatorData::Element::scheduleTask(Step step,
     {
         registerRunFunction([this]() { saveState(); });
     }
+}
+
+void StatePropagatorData::ensureVirtualSitesAreValid(gmx::VSiteOperation operation)
+{
+    if (localNAtoms_ == 0)
+    {
+        // Local state wasn't initialized yet
+        return;
+    }
+    const auto positionsRequested  = (operation == VSiteOperation::Positions
+                                     || operation == VSiteOperation::PositionsAndVelocities);
+    const auto velocitiesRequested = (operation == VSiteOperation::Velocities
+                                      || operation == VSiteOperation::PositionsAndVelocities);
+    if ((virtualPositionsValid_ || !positionsRequested) && (virtualVelocitiesValid_ || !velocitiesRequested))
+    {
+        return;
+    }
+    wallcycle_start(wallcycle_, ewcVSITECONSTR);
+
+    auto velocities = (velocitiesRequested ? velocitiesView().paddedArrayRef() : ArrayRef<RVec>());
+    vsite_->construct(positionsView().paddedArrayRef(), velocities, constBox(), operation);
+
+    if (positionsRequested)
+    {
+        virtualPositionsValid_ = true;
+    }
+    if (velocitiesRequested)
+    {
+        virtualVelocitiesValid_ = true;
+    }
+    wallcycle_stop(wallcycle_, ewcVSITECONSTR);
 }
 
 void StatePropagatorData::Element::saveState()
@@ -597,6 +640,13 @@ void StatePropagatorData::doCheckpointData(CheckpointData<operation>* checkpoint
 void StatePropagatorData::Element::saveCheckpointState(std::optional<WriteCheckpointData> checkpointData,
                                                        const t_commrec*                   cr)
 {
+    if (statePropagatorData_->vsite_ != nullptr)
+    {
+        // To reproduce legacy, we need virtual sites in the checkpoint
+        // Virtual sites can be recalculated, so are not strictly necessary in checkpoints
+        // However, this guarantees that the checkpoint has a fully valid configuration
+        statePropagatorData_->ensureVirtualSitesAreValid(VSiteOperation::PositionsAndVelocities);
+    }
     if (DOMAINDECOMP(cr))
     {
         // Collect state from all ranks into global vectors
