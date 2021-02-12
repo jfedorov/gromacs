@@ -70,6 +70,7 @@ enum class MdpParameterDatabase
     Pull,
     Pull2,
     Awh,
+    Freeze,
     Count
 };
 
@@ -169,6 +170,14 @@ MdpFieldValues additionalMdpParametersDatabase(MdpParameterDatabase databaseEntr
                                  { "awh2-dim1-diffusion", "0.1" } });
             return pull2Params;
         }
+        case MdpParameterDatabase::Freeze:
+            // One fully frozen, one partially frozen group
+            // Constraints because these may be problematic with partially frozen groups
+            // COMM removal is wrong with partially frozen atoms, so turn off
+            return { { "freezegrps", "Backbone SideChain" },
+                     { "freezedim", "Y Y Y N N Y" },
+                     { "constraints", "all-bonds" },
+                     { "comm-mode", "none" } };
         default: GMX_THROW(InvalidInputError("Unknown additional parameters."));
     }
 }
@@ -483,6 +492,22 @@ INSTANTIATE_TEST_CASE_P(SimulatorsAreEquivalentDefaultLegacyAwh,
                                                               ::testing::Values("no")),
                                            ::testing::Values("GMX_USE_MODULAR_SIMULATOR"),
                                            ::testing::Values(MdpParameterDatabase::Awh)));
+INSTANTIATE_TEST_CASE_P(SimulatorsAreEquivalentDefaultModularFreeze,
+                        SimulatorComparisonTest,
+                        ::testing::Combine(::testing::Combine(::testing::Values("alanine_vacuo"),
+                                                              ::testing::Values("md-vv"),
+                                                              ::testing::Values("v-rescale"),
+                                                              ::testing::Values("no")),
+                                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR"),
+                                           ::testing::Values(MdpParameterDatabase::Freeze)));
+INSTANTIATE_TEST_CASE_P(SimulatorsAreEquivalentDefaultLegacyFreeze,
+                        SimulatorComparisonTest,
+                        ::testing::Combine(::testing::Combine(::testing::Values("alanine_vacuo"),
+                                                              ::testing::Values("md"),
+                                                              ::testing::Values("v-rescale"),
+                                                              ::testing::Values("no")),
+                                           ::testing::Values("GMX_USE_MODULAR_SIMULATOR"),
+                                           ::testing::Values(MdpParameterDatabase::Freeze)));
 #else
 INSTANTIATE_TEST_CASE_P(DISABLED_SimulatorsAreEquivalentDefaultModular,
                         SimulatorComparisonTest,
@@ -549,6 +574,22 @@ INSTANTIATE_TEST_CASE_P(
                                    ::testing::Values("no", "parrinello-rahman", "c-rescale")),
                 ::testing::Values("GMX_USE_MODULAR_SIMULATOR"),
                 ::testing::Values(MdpParameterDatabase::SimulatedAnnealing)));
+INSTANTIATE_TEST_CASE_P(DISABLED_SimulatorsAreEquivalentDefaultModularFreeze,
+                        SimulatorComparisonTest,
+                        ::testing::Combine(::testing::Combine(::testing::Values("alanine_vacuo"),
+                                                              ::testing::Values("md-vv"),
+                                                              ::testing::Values("v-rescale"),
+                                                              ::testing::Values("no")),
+                                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR"),
+                                           ::testing::Values(MdpParameterDatabase::Freeze)));
+INSTANTIATE_TEST_CASE_P(DISABLED_SimulatorsAreEquivalentDefaultLegacyFreeze,
+                        SimulatorComparisonTest,
+                        ::testing::Combine(::testing::Combine(::testing::Values("alanine_vacuo"),
+                                                              ::testing::Values("md"),
+                                                              ::testing::Values("v-rescale"),
+                                                              ::testing::Values("no")),
+                                           ::testing::Values("GMX_USE_MODULAR_SIMULATOR"),
+                                           ::testing::Values(MdpParameterDatabase::Freeze)));
 #endif
 
 } // namespace

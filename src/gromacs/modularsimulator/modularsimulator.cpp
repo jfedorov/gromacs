@@ -422,12 +422,6 @@ bool ModularSimulator::isInputCompatible(bool                             exitOn
                                  "Acceleration is not supported by the modular simulator.");
     isInputCompatible =
             isInputCompatible
-            && conditionalAssert(inputrec->opts.ngfrz == 1 && inputrec->opts.nFreeze[0][XX] == 0
-                                         && inputrec->opts.nFreeze[0][YY] == 0
-                                         && inputrec->opts.nFreeze[0][ZZ] == 0,
-                                 "Freeze groups are not supported by the modular simulator.");
-    isInputCompatible =
-            isInputCompatible
             && conditionalAssert(gmx_mtop_ftype_count(globalTopology, F_DISRES) == 0,
                                  "Distance restraints are not supported by the modular simulator.");
     isInputCompatible =

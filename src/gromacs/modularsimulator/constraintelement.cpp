@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -176,6 +176,30 @@ void ConstraintsElement<variable>::apply(Step step, bool calculateVirial, bool w
                    calculateVirial,
                    vir_con,
                    variable);
+
+    if (variable == ConstraintVariable::Positions)
+    {
+        if (mdAtoms_->havePartiallyFrozenAtoms)
+        {
+            // Fully frozen atoms have infinite mass, so can't be moved
+            // Partially frozen atoms don't, so might be moved by constraining
+            // This copies back the frozen dimensions to avoid moving them
+            const auto* nFreeze = inputrec_->opts.nFreeze;
+            auto        xNew    = xprime.unpaddedArrayRef();
+            const auto  xOld    = x.unpaddedConstArrayRef();
+            for (int atomIdx = 0; atomIdx < mdAtoms_->homenr; atomIdx++)
+            {
+                const auto freezeGroup = mdAtoms_->cFREEZE[atomIdx];
+                for (int dim = 0; dim < DIM; dim++)
+                {
+                    if (nFreeze[freezeGroup][dim] != 0)
+                    {
+                        xNew[atomIdx][dim] = xOld[atomIdx][dim];
+                    }
+                }
+            }
+        }
+    }
 
     if (calculateVirial)
     {
