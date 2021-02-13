@@ -57,6 +57,7 @@
 #include "topologyholder.h"
 
 struct gmx_enfrot;
+struct gmx_multisim_t;
 struct gmx_shellfc_t;
 struct gmx_wallcycle;
 struct pull_t;
@@ -110,7 +111,8 @@ public:
                  Constraints*                constr,
                  const gmx_mtop_t*           globalTopology,
                  gmx_enfrot*                 enforcedRotation,
-                 Awh*                        awh);
+                 Awh*                        awh,
+                 const gmx_multisim_t*       multisim);
 
     /*! \brief Register force calculation for step / time
      *
@@ -206,6 +208,8 @@ private:
     FILE* fplog_;
     //! Handles communication.
     const t_commrec* cr_;
+    //! Coordinates multi-simulations.
+    const gmx_multisim_t* multisim_;
     //! Contains user input mdp options.
     const t_inputrec* inputrec_;
     //! Atom parameters for this domain.

@@ -62,6 +62,7 @@
 #include "gromacs/mdrun/replicaexchange.h"
 #include "gromacs/mdrun/shellfc.h"
 #include "gromacs/mdrunutility/handlerestart.h"
+#include "gromacs/mdrunutility/multisim.h"
 #include "gromacs/mdrunutility/printtime.h"
 #include "gromacs/mdtypes/awh_params.h"
 #include "gromacs/mdtypes/commrec.h"
@@ -100,7 +101,8 @@ ModularSimulatorAlgorithm::ModularSimulatorAlgorithm(std::string              to
                                                      t_nrnb*                  nrnb,
                                                      gmx_wallcycle*           wcycle,
                                                      t_forcerec*              fr,
-                                                     gmx_walltime_accounting* walltime_accounting) :
+                                                     gmx_walltime_accounting* walltime_accounting,
+                                                     const gmx_multisim_t*    multisim) :
     taskIterator_(taskQueue_.end()),
     statePropagatorData_(nullptr),
     energyData_(nullptr),
@@ -110,6 +112,7 @@ ModularSimulatorAlgorithm::ModularSimulatorAlgorithm(std::string              to
     topologyName_(std::move(topologyName)),
     fplog(fplog),
     cr(cr),
+    multisim(multisim),
     mdlog(mdlog),
     mdrunOptions(mdrunOptions),
     inputrec(inputrec),
@@ -300,7 +303,7 @@ void ModularSimulatorAlgorithm::postStep(Step step, Time gmx_unused time)
                             && (step % mdrunOptions.verboseStepPrintInterval == 0
                                 || step == inputrec->init_step || step == signalHelper_->lastStep_);
     // Print the remaining wall clock time for the run
-    if (MASTER(cr) && (do_verbose || gmx_got_usr_signal())
+    if (isMasterSimMasterRank(multisim, MASTER(cr)) && (do_verbose || gmx_got_usr_signal())
         && !(pmeLoadBalanceHelper_ && pmeLoadBalanceHelper_->pmePrinting()))
     {
         print_time(stderr, walltime_accounting, step, inputrec, cr);
@@ -405,6 +408,24 @@ void ModularSimulatorAlgorithm::populateTaskQueue()
     }
 }
 
+static bool multipleSimsShareState(const LegacySimulatorData& legacySimulatorData)
+{
+    const bool useReplicaExchange      = (legacySimulatorData.replExParams.exchangeInterval > 0);
+    const bool usingEnsembleRestraints = (legacySimulatorData.fr->fcdata->disres->nsystems > 1)
+                                         || ((legacySimulatorData.ms != nullptr)
+                                             && (legacySimulatorData.fr->fcdata->orires->nr != 0));
+    const bool awhUsesMultiSim = (legacySimulatorData.inputrec->bDoAwh
+                                  && legacySimulatorData.inputrec->awhParams->shareBiasMultisim
+                                  && (legacySimulatorData.ms != nullptr));
+
+    // Replica exchange, ensemble restraints and AWH need all
+    // simulations to remain synchronized, so they need
+    // checkpoints and stop conditions to act on the same step, so
+    // the propagation of such signals must take place between
+    // simulations, not just within simulations.
+    return useReplicaExchange || usingEnsembleRestraints || awhUsesMultiSim;
+}
+
 ModularSimulatorAlgorithmBuilder::ModularSimulatorAlgorithmBuilder(
         compat::not_null<LegacySimulatorData*>    legacySimulatorData,
         std::unique_ptr<ReadCheckpointDataHolder> checkpointDataHolder) :
@@ -414,7 +435,8 @@ ModularSimulatorAlgorithmBuilder::ModularSimulatorAlgorithmBuilder(
     globalCommunicationHelper_(computeGlobalCommunicationPeriod(legacySimulatorData->mdlog,
                                                                 legacySimulatorData->inputrec,
                                                                 legacySimulatorData->cr),
-                               signals_.get()),
+                               signals_.get(),
+                               multipleSimsShareState(*legacySimulatorData)),
     checkpointHelperBuilder_(std::move(checkpointDataHolder),
                              legacySimulatorData->startingBehavior,
                              legacySimulatorData->cr)
@@ -442,9 +464,6 @@ ModularSimulatorAlgorithmBuilder::ModularSimulatorAlgorithmBuilder(
             legacySimulatorData->wcycle);
     registerExistingElement(statePropagatorData_->element());
 
-    // Multi sim is turned off
-    const bool simulationsShareState = false;
-
     energyData_ = std::make_unique<EnergyData>(
             statePropagatorData_.get(),
             freeEnergyPerturbationData_.get(),
@@ -460,7 +479,7 @@ ModularSimulatorAlgorithmBuilder::ModularSimulatorAlgorithmBuilder(
             MASTER(legacySimulatorData->cr),
             legacySimulatorData->observablesHistory,
             legacySimulatorData->startingBehavior,
-            simulationsShareState,
+            globalCommunicationHelper_.doInterSimulationCommunication(),
             legacySimulatorData->pull_work,
             AwhElement::getAwhObject(legacySimulatorData, &elementAdditionHelper_));
     registerExistingElement(energyData_->element());
@@ -532,7 +551,8 @@ ModularSimulatorAlgorithm ModularSimulatorAlgorithmBuilder::build()
                                         legacySimulatorData_->nrnb,
                                         legacySimulatorData_->wcycle,
                                         legacySimulatorData_->fr,
-                                        legacySimulatorData_->walltime_accounting);
+                                        legacySimulatorData_->walltime_accounting,
+                                        legacySimulatorData_->ms);
     registerWithInfrastructureAndSignallers(algorithm.signalHelper_.get());
     algorithm.statePropagatorData_        = std::move(statePropagatorData_);
     algorithm.energyData_                 = std::move(energyData_);
@@ -540,18 +560,15 @@ ModularSimulatorAlgorithm ModularSimulatorAlgorithmBuilder::build()
     algorithm.signals_                    = std::move(signals_);
     algorithm.simulationData_             = std::move(simulationData_);
 
-    // Multi sim is turned off
-    const bool simulationsShareState = false;
-
     // Build stop handler
     algorithm.stopHandler_ = legacySimulatorData_->stopHandlerBuilder->getStopHandlerMD(
             compat::not_null<SimulationSignal*>(
                     &(*globalCommunicationHelper_.simulationSignals())[eglsSTOPCOND]),
-            simulationsShareState,
+            globalCommunicationHelper_.doInterSimulationCommunication(),
             MASTER(legacySimulatorData_->cr),
             legacySimulatorData_->inputrec->nstlist,
             legacySimulatorData_->mdrunOptions.reproducible,
-            globalCommunicationHelper_.nstglobalcomm(),
+            globalCommunicationHelper_.nstSignalComm(),
             legacySimulatorData_->mdrunOptions.maximumHoursToRun,
             legacySimulatorData_->inputrec->nstlist == 0,
             legacySimulatorData_->fplog,
@@ -625,26 +642,28 @@ ModularSimulatorAlgorithm ModularSimulatorAlgorithmBuilder::build()
     }
 
     // Build trajectory element
-    auto trajectoryElement = trajectoryElementBuilder_.build(legacySimulatorData_->fplog,
-                                                             legacySimulatorData_->nfile,
-                                                             legacySimulatorData_->fnm,
-                                                             legacySimulatorData_->mdrunOptions,
-                                                             legacySimulatorData_->cr,
-                                                             legacySimulatorData_->outputProvider,
-                                                             legacySimulatorData_->mdModulesNotifier,
-                                                             legacySimulatorData_->inputrec,
-                                                             legacySimulatorData_->top_global,
-                                                             legacySimulatorData_->oenv,
-                                                             legacySimulatorData_->wcycle,
-                                                             legacySimulatorData_->startingBehavior,
-                                                             simulationsShareState);
+    auto trajectoryElement = trajectoryElementBuilder_.build(
+            legacySimulatorData_->fplog,
+            legacySimulatorData_->nfile,
+            legacySimulatorData_->fnm,
+            legacySimulatorData_->mdrunOptions,
+            legacySimulatorData_->cr,
+            legacySimulatorData_->outputProvider,
+            legacySimulatorData_->mdModulesNotifier,
+            legacySimulatorData_->inputrec,
+            legacySimulatorData_->top_global,
+            legacySimulatorData_->oenv,
+            legacySimulatorData_->wcycle,
+            legacySimulatorData_->startingBehavior,
+            globalCommunicationHelper_.doInterSimulationCommunication(),
+            legacySimulatorData_->ms);
     registerWithInfrastructureAndSignallers(trajectoryElement.get());
 
     // Build checkpoint helper (do this last so everyone else can be a checkpoint client!)
     {
         checkpointHelperBuilder_.setCheckpointHandler(std::make_unique<CheckpointHandler>(
                 compat::make_not_null<SimulationSignal*>(&(*algorithm.signals_)[eglsCHKPT]),
-                simulationsShareState,
+                globalCommunicationHelper_.doInterSimulationCommunication(),
                 legacySimulatorData_->inputrec->nstlist == 0,
                 MASTER(legacySimulatorData_->cr),
                 legacySimulatorData_->mdrunOptions.writeConfout,
@@ -773,8 +792,12 @@ std::optional<SignallerCallback> ModularSimulatorAlgorithm::SignalHelper::regist
     return [this](Step step, Time gmx_unused time) { this->nextNSStep_ = step; };
 }
 
-GlobalCommunicationHelper::GlobalCommunicationHelper(int nstglobalcomm, SimulationSignals* simulationSignals) :
+GlobalCommunicationHelper::GlobalCommunicationHelper(int                nstglobalcomm,
+                                                     SimulationSignals* simulationSignals,
+                                                     bool               multipleSimsShareState) :
     nstglobalcomm_(nstglobalcomm),
+    nstSignalComm_(calculateInterSimulationCommunicationPeriod(nstglobalcomm, multipleSimsShareState)),
+    doInterSimulationCommunication_(multipleSimsShareState),
     simulationSignals_(simulationSignals)
 {
 }
@@ -782,6 +805,16 @@ GlobalCommunicationHelper::GlobalCommunicationHelper(int nstglobalcomm, Simulati
 int GlobalCommunicationHelper::nstglobalcomm() const
 {
     return nstglobalcomm_;
+}
+
+int GlobalCommunicationHelper::nstSignalComm() const
+{
+    return nstSignalComm_;
+}
+
+bool GlobalCommunicationHelper::doInterSimulationCommunication() const
+{
+    return doInterSimulationCommunication_;
 }
 
 SimulationSignals* GlobalCommunicationHelper::simulationSignals()

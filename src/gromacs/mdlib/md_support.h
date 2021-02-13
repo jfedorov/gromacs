@@ -101,6 +101,18 @@ int computeGlobalCommunicationPeriod(const t_inputrec* ir);
  * Calls computeGlobalCommunicationPeriod(ir) internally. */
 int computeGlobalCommunicationPeriod(const gmx::MDLogger& mdlog, const t_inputrec* ir, const t_commrec* cr);
 
+/*! \brief Return the number of steps between signal communication
+ *
+ * If no communication between simulations is needed, this is identical
+ * to nstglobalcomm. If inter-simulation communication is required, the
+ * signal communication is reduced to avoid overhead.
+ *
+ * \param nstglobalcomm           The intra-simulation communication period
+ * \param multipleSimsShareState  Whether multiple simulation need to stay in sync
+ * \return                        The signal communication period
+ */
+int calculateInterSimulationCommunicationPeriod(int nstglobalcomm, bool multipleSimsShareState);
+
 void rerun_parallel_comm(t_commrec* cr, t_trxframe* fr, gmx_bool* bLastStep);
 
 //! \brief Allocate and initialize node-local state entries

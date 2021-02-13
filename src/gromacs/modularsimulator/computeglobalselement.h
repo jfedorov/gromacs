@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -119,7 +119,11 @@ public:
                           gmx_wallcycle*              wcycle,
                           t_forcerec*                 fr,
                           const gmx_mtop_t*           global_top,
-                          Constraints*                constr);
+                          Constraints*                constr,
+                          const gmx_multisim_t*       multisim,
+                          int                         nstSignalComm,
+                          bool                        doInterSimulationCommunication,
+                          bool                        doReplicaExchange);
 
     //! Destructor
     ~ComputeGlobalsElement() override;
@@ -241,6 +245,12 @@ private:
     t_vcm vcm_;
     //! Signals
     SimulationSignals* signals_;
+    //! Simulation signal communication period
+    const int nstSignalComm_;
+    //! Whether the simulation(s) require inter-sim communication
+    const bool doInterSimulationCommunication_;
+    //! Whether the current simulation involves replica exchange
+    const bool doReplicaExchange_;
 
     // Access to ISimulator data
     //! Handles logging.
@@ -249,6 +259,8 @@ private:
     const MDLogger& mdlog_;
     //! Handles communication.
     t_commrec* cr_;
+    //! Coordinates multi-simulations.
+    const gmx_multisim_t* multisim_;
     //! Contains user input mdp options.
     const t_inputrec* inputrec_;
     //! Full system topology - only needed for checkNumberOfBondedInteractions.

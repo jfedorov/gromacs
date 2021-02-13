@@ -100,7 +100,8 @@ ForceElement::ForceElement(StatePropagatorData*        statePropagatorData,
                            Constraints*                constr,
                            const gmx_mtop_t*           globalTopology,
                            gmx_enfrot*                 enforcedRotation,
-                           Awh*                        awh) :
+                           Awh*                        awh,
+                           const gmx_multisim_t*       multisim) :
     shellfc_(init_shell_flexcon(fplog,
                                 globalTopology,
                                 constr ? constr->numFlexibleConstraints() : 0,
@@ -124,6 +125,7 @@ ForceElement::ForceElement(StatePropagatorData*        statePropagatorData,
     lambda_(),
     fplog_(fplog),
     cr_(cr),
+    multisim_(multisim),
     inputrec_(inputrec),
     mdAtoms_(mdAtoms),
     nrnb_(nrnb),
@@ -173,9 +175,6 @@ void ForceElement::elementSetup()
 template<bool executeShellFC>
 void ForceElement::run(Step step, Time time, unsigned int flags)
 {
-    // Disabled functionality
-    gmx_multisim_t* ms = nullptr;
-
     if (vsite_ != nullptr)
     {
         statePropagatorData_->ensureVirtualSitesAreValid(VSiteOperation::Positions);
@@ -210,7 +209,7 @@ void ForceElement::run(Step step, Time time, unsigned int flags)
 
         relax_shell_flexcon(fplog_,
                             cr_,
-                            ms,
+                            multisim_,
                             isVerbose_,
                             enforcedRotation_,
                             step,
@@ -249,7 +248,7 @@ void ForceElement::run(Step step, Time time, unsigned int flags)
 
         do_force(fplog_,
                  cr_,
-                 ms,
+                 multisim_,
                  inputrec_,
                  awh_,
                  enforcedRotation_,
@@ -344,6 +343,7 @@ ForceElement::getElementPointerImpl(LegacySimulatorData*                    lega
             legacySimulatorData->constr,
             legacySimulatorData->top_global,
             legacySimulatorData->enforcedRotation,
-            AwhElement::getAwhObject(legacySimulatorData, builderHelper)));
+            AwhElement::getAwhObject(legacySimulatorData, builderHelper),
+            legacySimulatorData->ms));
 }
 } // namespace gmx

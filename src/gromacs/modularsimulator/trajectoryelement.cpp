@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -62,7 +62,8 @@ TrajectoryElement::TrajectoryElement(std::vector<ITrajectoryWriterClient*> write
                                      const gmx_output_env_t*               oenv,
                                      gmx_wallcycle*                        wcycle,
                                      StartingBehavior                      startingBehavior,
-                                     const bool                            simulationsShareState) :
+                                     const bool                            simulationsShareState,
+                                     const gmx_multisim_t*                 multisim) :
     writeEnergyStep_(-1),
     writeStateStep_(-1),
     writeLogStep_(-1),
@@ -79,7 +80,7 @@ TrajectoryElement::TrajectoryElement(std::vector<ITrajectoryWriterClient*> write
                       wcycle,
                       startingBehavior,
                       simulationsShareState,
-                      nullptr)),
+                      multisim)),
     writerClients_(std::move(writerClients))
 {
 }

@@ -431,10 +431,6 @@ bool ModularSimulator::isInputCompatible(bool                             exitOn
                        "Orientation restraints are not supported by the modular simulator.");
     isInputCompatible =
             isInputCompatible
-            && conditionalAssert(ms == nullptr,
-                                 "Multi-sim are not supported by the modular simulator.");
-    isInputCompatible =
-            isInputCompatible
             && conditionalAssert(replExParams.exchangeInterval == 0,
                                  "Replica exchange is not supported by the modular simulator.");
 

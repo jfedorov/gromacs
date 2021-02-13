@@ -496,6 +496,22 @@ int computeGlobalCommunicationPeriod(const gmx::MDLogger& mdlog, const t_inputre
     return nstglobalcomm;
 }
 
+int calculateInterSimulationCommunicationPeriod(int nstglobalcomm, bool multipleSimsShareState)
+{
+    if (multipleSimsShareState)
+    {
+        // Inter-simulation signal communication does not need to happen
+        // often, so we use a minimum of 200 steps to reduce overhead.
+        const int c_minimumInterSimulationSignallingInterval = 200;
+        return ((c_minimumInterSimulationSignallingInterval + nstglobalcomm - 1) / nstglobalcomm)
+               * nstglobalcomm;
+    }
+    else
+    {
+        return nstglobalcomm;
+    }
+}
+
 void rerun_parallel_comm(t_commrec* cr, t_trxframe* fr, gmx_bool* bLastStep)
 {
     rvec *xp, *vp;

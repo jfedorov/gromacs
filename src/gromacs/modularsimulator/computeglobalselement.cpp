@@ -52,6 +52,8 @@
 #include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/stat.h"
 #include "gromacs/mdlib/update.h"
+#include "gromacs/mdrun/replicaexchange.h"
+#include "gromacs/mdrunutility/multisim.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/group.h"
 #include "gromacs/mdtypes/inputrec.h"
@@ -69,18 +71,22 @@ template<ComputeGlobalsAlgorithm algorithm>
 ComputeGlobalsElement<algorithm>::ComputeGlobalsElement(StatePropagatorData* statePropagatorData,
                                                         EnergyData*          energyData,
                                                         FreeEnergyPerturbationData* freeEnergyPerturbationData,
-                                                        SimulationSignals* signals,
-                                                        int                nstglobalcomm,
-                                                        FILE*              fplog,
-                                                        const MDLogger&    mdlog,
-                                                        t_commrec*         cr,
-                                                        const t_inputrec*  inputrec,
-                                                        const MDAtoms*     mdAtoms,
-                                                        t_nrnb*            nrnb,
-                                                        gmx_wallcycle*     wcycle,
-                                                        t_forcerec*        fr,
-                                                        const gmx_mtop_t*  global_top,
-                                                        Constraints*       constr) :
+                                                        SimulationSignals*    signals,
+                                                        int                   nstglobalcomm,
+                                                        FILE*                 fplog,
+                                                        const MDLogger&       mdlog,
+                                                        t_commrec*            cr,
+                                                        const t_inputrec*     inputrec,
+                                                        const MDAtoms*        mdAtoms,
+                                                        t_nrnb*               nrnb,
+                                                        gmx_wallcycle*        wcycle,
+                                                        t_forcerec*           fr,
+                                                        const gmx_mtop_t*     global_top,
+                                                        Constraints*          constr,
+                                                        const gmx_multisim_t* multisim,
+                                                        int                   nstSignalComm,
+                                                        bool doInterSimulationCommunication,
+                                                        bool doReplicaExchange) :
     energyReductionStep_(-1),
     virialReductionStep_(-1),
     vvSchedulingStep_(-1),
@@ -98,9 +104,13 @@ ComputeGlobalsElement<algorithm>::ComputeGlobalsElement(StatePropagatorData* sta
     freeEnergyPerturbationData_(freeEnergyPerturbationData),
     vcm_(global_top->groups, *inputrec),
     signals_(signals),
+    nstSignalComm_(nstSignalComm),
+    doInterSimulationCommunication_(doInterSimulationCommunication),
+    doReplicaExchange_(doReplicaExchange),
     fplog_(fplog),
     mdlog_(mdlog),
     cr_(cr),
+    multisim_(multisim),
     inputrec_(inputrec),
     top_global_(global_top),
     mdAtoms_(mdAtoms),
@@ -158,6 +168,16 @@ void ComputeGlobalsElement<algorithm>::elementSetup()
     {
         copy_mat(energyData_->ekindata()->tcstat[i].ekinh, energyData_->ekindata()->tcstat[i].ekinh_old);
     }
+
+    if (MASTER(cr_) && isMultiSim(multisim_) && !doReplicaExchange_)
+    {
+        logInitialMultisimStatus(multisim_,
+                                 cr_,
+                                 mdlog_,
+                                 doInterSimulationCommunication_,
+                                 inputrec_->nsteps,
+                                 inputrec_->init_step);
+    }
 }
 
 template<ComputeGlobalsAlgorithm algorithm>
@@ -201,12 +221,13 @@ void ComputeGlobalsElement<algorithm>::scheduleTask(Step step,
         // choosing the value of nstglobalcomm which satisfies
         // the need of the different signallers.
         const bool doIntraSimSignal = true;
-        // Disable functionality
-        const bool doInterSimSignal = false;
+        // Do inter-sim communication when needed
+        const bool doInterSimSignal =
+                (doInterSimulationCommunication_ && do_per_step(step, nstSignalComm_));
 
         // Make signaller to signal stop / reset / checkpointing signals
         auto signaller = std::make_shared<SimulationSignaller>(
-                signals_, cr_, nullptr, doInterSimSignal, doIntraSimSignal);
+                signals_, cr_, multisim_, doInterSimSignal, doIntraSimSignal);
 
         registerRunFunction([this, step, flags, signaller = std::move(signaller)]() {
             compute(step, flags, signaller.get(), true);
@@ -258,11 +279,12 @@ void ComputeGlobalsElement<algorithm>::scheduleTask(Step step,
             // choosing the value of nstglobalcomm which satisfies
             // the need of the different signallers.
             const bool doIntraSimSignal = true;
-            // Disable functionality
-            const bool doInterSimSignal = false;
+            // Do inter-sim communication when needed
+            const bool doInterSimSignal =
+                    (doInterSimulationCommunication_ && do_per_step(step, nstSignalComm_));
 
             auto signaller = std::make_shared<SimulationSignaller>(
-                    signals_, cr_, nullptr, doInterSimSignal, doIntraSimSignal);
+                    signals_, cr_, multisim_, doInterSimSignal, doIntraSimSignal);
 
             registerRunFunction([this, step, flags, signaller = std::move(signaller)]() {
                 compute(step, flags, signaller.get(), true);
@@ -392,7 +414,11 @@ ISimulatorElement* ComputeGlobalsElement<ComputeGlobalsAlgorithm::LeapFrog>::get
                     legacySimulatorData->wcycle,
                     legacySimulatorData->fr,
                     legacySimulatorData->top_global,
-                    legacySimulatorData->constr));
+                    legacySimulatorData->constr,
+                    legacySimulatorData->ms,
+                    globalCommunicationHelper->nstSignalComm(),
+                    globalCommunicationHelper->doInterSimulationCommunication(),
+                    (legacySimulatorData->replExParams.exchangeInterval > 0)));
 
     // TODO: Remove this when DD can reduce bonded interactions independently (#3421)
     auto* castedElement = static_cast<ComputeGlobalsElement<ComputeGlobalsAlgorithm::LeapFrog>*>(element);
@@ -404,7 +430,7 @@ ISimulatorElement* ComputeGlobalsElement<ComputeGlobalsAlgorithm::LeapFrog>::get
 
 template<>
 ISimulatorElement* ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet>::getElementPointerImpl(
-        LegacySimulatorData*                    simulator,
+        LegacySimulatorData*                    legacySimulatorData,
         ModularSimulatorAlgorithmBuilderHelper* builderHelper,
         StatePropagatorData*                    statePropagatorData,
         EnergyData*                             energyData,
@@ -430,16 +456,20 @@ ISimulatorElement* ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet
                         freeEnergyPerturbationData,
                         globalCommunicationHelper->simulationSignals(),
                         globalCommunicationHelper->nstglobalcomm(),
-                        simulator->fplog,
-                        simulator->mdlog,
-                        simulator->cr,
-                        simulator->inputrec,
-                        simulator->mdAtoms,
-                        simulator->nrnb,
-                        simulator->wcycle,
-                        simulator->fr,
-                        simulator->top_global,
-                        simulator->constr));
+                        legacySimulatorData->fplog,
+                        legacySimulatorData->mdlog,
+                        legacySimulatorData->cr,
+                        legacySimulatorData->inputrec,
+                        legacySimulatorData->mdAtoms,
+                        legacySimulatorData->nrnb,
+                        legacySimulatorData->wcycle,
+                        legacySimulatorData->fr,
+                        legacySimulatorData->top_global,
+                        legacySimulatorData->constr,
+                        legacySimulatorData->ms,
+                        globalCommunicationHelper->nstSignalComm(),
+                        globalCommunicationHelper->doInterSimulationCommunication(),
+                        (legacySimulatorData->replExParams.exchangeInterval > 0)));
 
         // TODO: Remove this when DD can reduce bonded interactions independently (#3421)
         auto* castedElement =

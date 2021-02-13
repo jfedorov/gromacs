@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -51,6 +51,7 @@
 #include "modularsimulatorinterfaces.h"
 
 struct gmx_mtop_t;
+struct gmx_multisim_t;
 struct gmx_output_env_t;
 struct gmx_wallcycle;
 struct t_commrec;
@@ -141,7 +142,8 @@ private:
                       const gmx_output_env_t*               oenv,
                       gmx_wallcycle*                        wcycle,
                       StartingBehavior                      startingBehavior,
-                      bool                                  simulationsSharingState);
+                      bool                                  simulationsSharingState,
+                      const gmx_multisim_t*                 multisim);
 
     //! The next energy writing step
     Step writeEnergyStep_;

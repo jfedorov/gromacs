@@ -281,7 +281,6 @@ void gmx::LegacySimulator::do_md()
     const t_fcdata& fcdata = *fr->fcdata;
 
     bool simulationsShareState = false;
-    int  nstSignalComm         = nstglobalcomm;
     {
         // TODO This implementation of ensemble orientation restraints is nasty because
         // a user can't just do multi-sim with single-sim orientation restraints.
@@ -296,16 +295,9 @@ void gmx::LegacySimulator::do_md()
         // simulations, not just within simulations.
         // TODO: Make algorithm initializers set these flags.
         simulationsShareState = useReplicaExchange || usingEnsembleRestraints || awhUsesMultiSim;
-
-        if (simulationsShareState)
-        {
-            // Inter-simulation signal communication does not need to happen
-            // often, so we use a minimum of 200 steps to reduce overhead.
-            const int c_minimumInterSimulationSignallingInterval = 200;
-            nstSignalComm = ((c_minimumInterSimulationSignallingInterval + nstglobalcomm - 1) / nstglobalcomm)
-                            * nstglobalcomm;
-        }
     }
+    const int nstSignalComm =
+            calculateInterSimulationCommunicationPeriod(nstglobalcomm, simulationsShareState);
 
     if (startingBehavior != StartingBehavior::RestartWithAppending)
     {
