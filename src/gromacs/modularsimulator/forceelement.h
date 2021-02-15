@@ -60,6 +60,7 @@ struct gmx_enfrot;
 struct gmx_multisim_t;
 struct gmx_shellfc_t;
 struct gmx_wallcycle;
+class history_t;
 struct pull_t;
 struct t_nrnb;
 
@@ -77,6 +78,8 @@ class ModularSimulatorAlgorithmBuilderHelper;
 class StatePropagatorData;
 class VirtualSitesHandler;
 
+// TODO: Checkpointing, history update
+
 /*! \internal
  * \ingroup module_modularsimulator
  * \brief Force element
@@ -88,7 +91,8 @@ class ForceElement final :
     public ISimulatorElement,
     public ITopologyHolderClient,
     public INeighborSearchSignallerClient,
-    public IEnergySignallerClient
+    public IEnergySignallerClient,
+    public ICheckpointHelperClient
 {
 public:
     //! Constructor
@@ -112,7 +116,8 @@ public:
                  const gmx_mtop_t*           globalTopology,
                  gmx_enfrot*                 enforcedRotation,
                  Awh*                        awh,
-                 const gmx_multisim_t*       multisim);
+                 const gmx_multisim_t*       multisim,
+                 std::optional<history_t*>   restrainingHistory);
 
     /*! \brief Register force calculation for step / time
      *
@@ -148,6 +153,13 @@ public:
     //! Whether the simulation input contains shells or flexible constraints
     static bool doShellFC(LegacySimulatorData* legacySimulatorData);
 
+    //! ICheckpointHelperClient write checkpoint implementation
+    void saveCheckpointState(std::optional<WriteCheckpointData> checkpointData, const t_commrec* cr) override;
+    //! ICheckpointHelperClient read checkpoint implementation
+    void restoreCheckpointState(std::optional<ReadCheckpointData> checkpointData, const t_commrec* cr) override;
+    //! ICheckpointHelperClient key implementation
+    const std::string& clientID() override;
+
 private:
     //! ITopologyHolderClient implementation
     void setTopology(const gmx_localtop_t* top) override;
@@ -158,6 +170,12 @@ private:
     //! The actual do_force call
     template<bool doShellFC>
     void run(Step step, Time time, unsigned int flags);
+
+    //! CheckpointHelper identifier
+    const std::string identifier_ = "ForceElement";
+    //! Checkpoint reading / writing
+    template<CheckpointDataOperation operation>
+    void doCheckpoint(CheckpointData<operation>* checkpointData);
 
     //! The shell / FC helper struct
     gmx_shellfc_t* shellfc_;
@@ -192,6 +210,10 @@ private:
     const bool isVerbose_;
     //! The number of shell relaxation steps we did
     Step nShellRelaxationSteps_;
+    //! Whether the system has NMR distance restraints
+    const bool haveNmrDistanceRestraints_;
+    //! Whether the system has NMR orientation restraints
+    const bool haveNmrOrientationRestraints_;
 
     //! DD / DLB helper object
     const DDBalanceRegionHandler ddBalanceRegionHandler_;
@@ -232,6 +254,8 @@ private:
     Constraints* constr_;
     //! Handles enforced rotation.
     gmx_enfrot* enforcedRotation_;
+    //! Records the history of NMR restraints (only non-nullptr on master rank)
+    history_t* restrainingHistory_;
 };
 
 } // namespace gmx

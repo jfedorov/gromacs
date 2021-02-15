@@ -39,6 +39,8 @@
  * \ingroup module_modularsimulator
  */
 
+#include <gromacs/listed_forces/disre.h>
+#include <gromacs/listed_forces/orires.h>
 #include "gmxpre.h"
 
 #include "forceelement.h"
@@ -51,7 +53,9 @@
 #include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/vsite.h"
 #include "gromacs/mdrun/shellfc.h"
+#include "gromacs/mdtypes/fcdata.h"
 #include "gromacs/mdtypes/forcebuffers.h"
+#include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/mdrunoptions.h"
@@ -101,7 +105,8 @@ ForceElement::ForceElement(StatePropagatorData*        statePropagatorData,
                            const gmx_mtop_t*           globalTopology,
                            gmx_enfrot*                 enforcedRotation,
                            Awh*                        awh,
-                           const gmx_multisim_t*       multisim) :
+                           const gmx_multisim_t*       multisim,
+                           std::optional<history_t*>   restrainingHistory) :
     shellfc_(init_shell_flexcon(fplog,
                                 globalTopology,
                                 constr ? constr->numFlexibleConstraints() : 0,
@@ -121,6 +126,8 @@ ForceElement::ForceElement(StatePropagatorData*        statePropagatorData,
     isDynamicBox_(isDynamicBox),
     isVerbose_(isVerbose),
     nShellRelaxationSteps_(0),
+    haveNmrDistanceRestraints_(fr->fcdata->disres->nres > 0),
+    haveNmrOrientationRestraints_(fr->fcdata->orires->nr > 0),
     ddBalanceRegionHandler_(cr),
     lambda_(),
     fplog_(fplog),
@@ -136,7 +143,8 @@ ForceElement::ForceElement(StatePropagatorData*        statePropagatorData,
     pull_work_(pull_work),
     runScheduleWork_(runScheduleWork),
     constr_(constr),
-    enforcedRotation_(enforcedRotation)
+    enforcedRotation_(enforcedRotation),
+    restrainingHistory_(restrainingHistory.value_or(nullptr))
 {
     lambda_.fill(0);
 
@@ -146,6 +154,13 @@ ForceElement::ForceElement(StatePropagatorData*        statePropagatorData,
         // won't be available outside this element.
         make_local_shells(cr, mdAtoms->mdatoms(), shellfc_);
     }
+
+    // This is checked earlier in init_disres and init_orires, but
+    // adding this here since this file would need to be adapted if this changes
+    GMX_RELEASE_ASSERT(!PAR(cr) || !(haveNmrDistanceRestraints_ || haveNmrOrientationRestraints_),
+                       "NMR restraints are not implemented with MPI");
+    GMX_RELEASE_ASSERT(!(MASTER(cr) && restrainingHistory_ == nullptr),
+                       "Restraining history is expected to be non-null on master rank.");
 }
 
 void ForceElement::scheduleTask(Step step, Time time, const RegisterRunFunction& registerRunFunction)
@@ -193,10 +208,9 @@ void ForceElement::run(Step step, Time time, unsigned int flags)
      * This is parallelized as well, and does communication too.
      * Check comments in sim_util.c
      */
-    auto       x      = statePropagatorData_->positionsView();
-    auto&      forces = statePropagatorData_->forcesView();
-    auto       box    = statePropagatorData_->constBox();
-    history_t* hist   = nullptr; // disabled
+    auto  x      = statePropagatorData_->positionsView();
+    auto& forces = statePropagatorData_->forcesView();
+    auto  box    = statePropagatorData_->constBox();
 
     tensor force_vir = { { 0 } };
     // TODO: Make lambda const (needs some adjustments in lower force routines)
@@ -226,7 +240,7 @@ void ForceElement::run(Step step, Time time, unsigned int flags)
                             v,
                             box,
                             lambda,
-                            hist,
+                            restrainingHistory_,
                             &forces,
                             force_vir,
                             mdAtoms_->mdatoms(),
@@ -260,7 +274,7 @@ void ForceElement::run(Step step, Time time, unsigned int flags)
                  localTopology_,
                  box,
                  x,
-                 hist,
+                 restrainingHistory_,
                  &forces,
                  force_vir,
                  mdAtoms_->mdatoms(),
@@ -276,6 +290,18 @@ void ForceElement::run(Step step, Time time, unsigned int flags)
                  ddBalanceRegionHandler_);
     }
     energyData_->addToForceVirial(force_vir, step);
+    if (haveNmrDistanceRestraints_)
+    {
+        GMX_ASSERT(restrainingHistory_ != nullptr,
+                   "Distance restraining needs valid restraining history");
+        update_disres_history(*fr_->fcdata->disres, restrainingHistory_);
+    }
+    if (haveNmrOrientationRestraints_)
+    {
+        GMX_ASSERT(restrainingHistory_ != nullptr,
+                   "Orientation restraining needs valid restraining history");
+        update_orires_history(*fr_->fcdata->orires, restrainingHistory_);
+    }
 }
 
 void ForceElement::elementTeardown()
@@ -313,6 +339,71 @@ std::optional<SignallerCallback> ForceElement::registerEnergyCallback(EnergySign
     return std::nullopt;
 }
 
+namespace
+{
+/*!
+ * \brief Enum describing the contents EnergyData::Element writes to modular checkpoint
+ *
+ * When changing the checkpoint content, add a new element just above Count, and adjust the
+ * checkpoint functionality.
+ */
+enum class CheckpointVersion
+{
+    Base, //!< First version of modular checkpointing
+    Count //!< Number of entries. Add new versions right above this!
+};
+constexpr auto c_currentVersion = CheckpointVersion(int(CheckpointVersion::Count) - 1);
+} // namespace
+
+template<CheckpointDataOperation operation>
+void ForceElement::doCheckpoint(CheckpointData<operation>* checkpointData)
+{
+    checkpointVersion(checkpointData, "ForceElement version", c_currentVersion);
+    restrainingHistory_->doCheckpoint<operation>(
+            checkpointData->subCheckpointData("restraining history"));
+}
+
+void ForceElement::saveCheckpointState(std::optional<WriteCheckpointData> checkpointData,
+                                       const t_commrec*                   cr)
+{
+    // This is currently only checkpointing the restraining history,
+    // which only exists on master, so no communication needed
+    if (MASTER(cr))
+    {
+        doCheckpoint<CheckpointDataOperation::Write>(&checkpointData.value());
+    }
+}
+
+void ForceElement::restoreCheckpointState(std::optional<ReadCheckpointData> checkpointData,
+                                          const t_commrec*                  cr)
+{
+    // This is currently only checkpointing the restraining history,
+    // which only exists on master, so no communication needed
+    if (MASTER(cr))
+    {
+        if (!checkpointData.has_value())
+        {
+            // We're reading a modular checkpoint written before NMR restraints
+            // were introduced in modular simulator. If the current simulation
+            // doesn't use NMR restraints, we can proceed, otherwise we need to abort.
+            if (!(haveNmrDistanceRestraints_ || haveNmrOrientationRestraints_))
+            {
+                return;
+            }
+            throw SimulationAlgorithmSetupError(
+                    "The current modular checkpoint file does not contain NMR restraint "
+                    "information. It was likely created with a prior version of GROMACS. "
+                    "Try using the original GROMACS version or start a new simulation.");
+        }
+        doCheckpoint<CheckpointDataOperation::Read>(&checkpointData.value());
+    }
+}
+
+const std::string& ForceElement::clientID()
+{
+    return identifier_;
+}
+
 ISimulatorElement*
 ForceElement::getElementPointerImpl(LegacySimulatorData*                    legacySimulatorData,
                                     ModularSimulatorAlgorithmBuilderHelper* builderHelper,
@@ -344,6 +435,8 @@ ForceElement::getElementPointerImpl(LegacySimulatorData*                    lega
             legacySimulatorData->top_global,
             legacySimulatorData->enforcedRotation,
             AwhElement::getAwhObject(legacySimulatorData, builderHelper),
-            legacySimulatorData->ms));
+            legacySimulatorData->ms,
+            MASTER(legacySimulatorData->cr) ? std::make_optional(&legacySimulatorData->state_global->hist)
+                                            : std::nullopt));
 }
 } // namespace gmx

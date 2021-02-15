@@ -151,6 +151,10 @@ private:
     Step writeStateStep_;
     //! The next communicated log writing step
     Step writeLogStep_;
+    //! The next NMR distance restraints writing step
+    Step writeNmrDistanceRestraintStep_;
+    //! The next NMR orientation restraints writing step
+    Step writeNmrOrientationRestraintStep_;
 
     //! The output object
     gmx_mdoutf* outf_;
@@ -170,7 +174,13 @@ private:
     std::vector<ITrajectoryWriterCallback> trajectoryWritingCallbacks_;
 
     //! The writing function - calls the clients to get their contributions
-    void write(Step step, Time time, WriteState writeState, WriteEnergy writeEnergy, WriteLog writeLog);
+    void write(Step                          step,
+               Time                          time,
+               WriteState                    writeState,
+               WriteEnergy                   writeEnergy,
+               WriteLog                      writeLog,
+               WriteNmrDistanceRestraints    writeNmrDistanceRestraints,
+               WriteNmrOrientationRestraints writeNmrOrientationRestraints);
 };
 
 /*! \internal
@@ -240,6 +250,34 @@ class WriteEnergy final
 public:
     //! Explicit constructor
     explicit WriteEnergy(bool value) : value_(value) {}
+    //! Implicit conversion to bool
+    [[nodiscard]] operator bool() const { return value_; }
+
+private:
+    //! Internal state
+    const bool value_;
+};
+
+//! Strong type indicating whether NMR distance restraining writing is happening
+class WriteNmrDistanceRestraints final
+{
+public:
+    //! Explicit constructor
+    explicit WriteNmrDistanceRestraints(bool value) : value_(value) {}
+    //! Implicit conversion to bool
+    [[nodiscard]] operator bool() const { return value_; }
+
+private:
+    //! Internal state
+    const bool value_;
+};
+
+//! Strong type indicating whether NMR orientation restraining writing is happening
+class WriteNmrOrientationRestraints final
+{
+public:
+    //! Explicit constructor
+    explicit WriteNmrOrientationRestraints(bool value) : value_(value) {}
     //! Implicit conversion to bool
     [[nodiscard]] operator bool() const { return value_; }
 

@@ -67,6 +67,8 @@ TrajectoryElement::TrajectoryElement(std::vector<ITrajectoryWriterClient*> write
     writeEnergyStep_(-1),
     writeStateStep_(-1),
     writeLogStep_(-1),
+    writeNmrDistanceRestraintStep_(-1),
+    writeNmrOrientationRestraintStep_(-1),
     outf_(init_mdoutf(fplog,
                       nfile,
                       fnm,
@@ -120,10 +122,28 @@ void TrajectoryElement::scheduleTask(Step step, Time time, const RegisterRunFunc
     const auto writeEnergyThisStep = WriteEnergy(writeEnergyStep_ == step);
     const auto writeStateThisStep  = WriteState(writeStateStep_ == step);
     const auto writeLogThisStep    = WriteLog(writeLogStep_ == step);
-    if (writeEnergyThisStep || writeStateThisStep || writeLogThisStep)
+    const auto writeDistanceRestraintsThisStep =
+            WriteNmrDistanceRestraints(writeNmrDistanceRestraintStep_ == step);
+    const auto writeOrientationRestraintsThisStep =
+            WriteNmrOrientationRestraints(writeNmrOrientationRestraintStep_ == step);
+    if (writeEnergyThisStep || writeStateThisStep || writeLogThisStep
+        || writeDistanceRestraintsThisStep || writeOrientationRestraintsThisStep)
     {
-        registerRunFunction([this, step, time, writeStateThisStep, writeEnergyThisStep, writeLogThisStep]() {
-            write(step, time, writeStateThisStep, writeEnergyThisStep, writeLogThisStep);
+        registerRunFunction([this,
+                             step,
+                             time,
+                             writeStateThisStep,
+                             writeEnergyThisStep,
+                             writeLogThisStep,
+                             writeDistanceRestraintsThisStep,
+                             writeOrientationRestraintsThisStep]() {
+            write(step,
+                  time,
+                  writeStateThisStep,
+                  writeEnergyThisStep,
+                  writeLogThisStep,
+                  writeDistanceRestraintsThisStep,
+                  writeOrientationRestraintsThisStep);
         });
     }
 }
@@ -138,11 +158,17 @@ void TrajectoryElement::elementTeardown()
     done_mdoutf(outf_);
 }
 
-void TrajectoryElement::write(Step step, Time time, WriteState writeState, WriteEnergy writeEnergy, WriteLog writeLog)
+void TrajectoryElement::write(Step                          step,
+                              Time                          time,
+                              WriteState                    writeState,
+                              WriteEnergy                   writeEnergy,
+                              WriteLog                      writeLog,
+                              WriteNmrDistanceRestraints    writeNmrDistanceRestraints,
+                              WriteNmrOrientationRestraints writeNmrOrientationRestraints)
 {
     for (auto& callback : trajectoryWritingCallbacks_)
     {
-        callback(outf_, step, time, writeState, writeEnergy, writeLog);
+        callback(outf_, step, time, writeState, writeEnergy, writeLog, writeNmrDistanceRestraints, writeNmrOrientationRestraints);
     }
 }
 
@@ -160,6 +186,14 @@ std::optional<SignallerCallback> TrajectoryElement::registerTrajectorySignallerC
     if (event == TrajectoryEvent::EnergyWritingStep)
     {
         return [this](Step step, Time /*unused*/) { this->writeEnergyStep_ = step; };
+    }
+    if (event == TrajectoryEvent::NmrDistanceRestrainingStep)
+    {
+        return [this](Step step, Time /*unused*/) { this->writeNmrDistanceRestraintStep_ = step; };
+    }
+    if (event == TrajectoryEvent::NmrOrientationRestrainingStep)
+    {
+        return [this](Step step, Time /*unused*/) { this->writeNmrOrientationRestraintStep_ = step; };
     }
     return std::nullopt;
 }

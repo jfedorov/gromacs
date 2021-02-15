@@ -962,15 +962,8 @@ int Mdrunner::mdrunner()
     const DevelopmentFeatureFlags devFlags =
             manageDevelopmentFeatures(mdlog, useGpuForNonbonded, pmeRunMode);
 
-    const bool useModularSimulator = checkUseModularSimulator(false,
-                                                              inputrec.get(),
-                                                              doRerun,
-                                                              mtop,
-                                                              ms,
-                                                              replExParams,
-                                                              nullptr,
-                                                              doEssentialDynamics,
-                                                              membedHolder.doMembed());
+    const bool useModularSimulator = checkUseModularSimulator(
+            false, inputrec.get(), doRerun, replExParams, doEssentialDynamics, membedHolder.doMembed());
 
     // Build restraints.
     // TODO: hide restraint implementation details from Mdrunner.

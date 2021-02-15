@@ -364,10 +364,7 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
 bool ModularSimulator::isInputCompatible(bool                             exitOnFailure,
                                          const t_inputrec*                inputrec,
                                          bool                             doRerun,
-                                         const gmx_mtop_t&                globalTopology,
-                                         const gmx_multisim_t*            ms,
                                          const ReplicaExchangeParameters& replExParams,
-                                         const t_fcdata*                  fcd,
                                          bool                             doEssentialDynamics,
                                          bool                             doMembed)
 {
@@ -422,35 +419,8 @@ bool ModularSimulator::isInputCompatible(bool                             exitOn
                                  "Acceleration is not supported by the modular simulator.");
     isInputCompatible =
             isInputCompatible
-            && conditionalAssert(gmx_mtop_ftype_count(globalTopology, F_DISRES) == 0,
-                                 "Distance restraints are not supported by the modular simulator.");
-    isInputCompatible =
-            isInputCompatible
-            && conditionalAssert(
-                       gmx_mtop_ftype_count(globalTopology, F_ORIRES) == 0,
-                       "Orientation restraints are not supported by the modular simulator.");
-    isInputCompatible =
-            isInputCompatible
             && conditionalAssert(replExParams.exchangeInterval == 0,
                                  "Replica exchange is not supported by the modular simulator.");
-
-    int numEnsembleRestraintSystems;
-    if (fcd)
-    {
-        numEnsembleRestraintSystems = fcd->disres->nsystems;
-    }
-    else
-    {
-        auto distantRestraintEnsembleEnvVar = getenv("GMX_DISRE_ENSEMBLE_SIZE");
-        numEnsembleRestraintSystems =
-                (ms != nullptr && distantRestraintEnsembleEnvVar != nullptr)
-                        ? static_cast<int>(strtol(distantRestraintEnsembleEnvVar, nullptr, 10))
-                        : 0;
-    }
-    isInputCompatible =
-            isInputCompatible
-            && conditionalAssert(numEnsembleRestraintSystems <= 1,
-                                 "Ensemble restraints are not supported by the modular simulator.");
     isInputCompatible =
             isInputCompatible
             && conditionalAssert(!doEssentialDynamics,
@@ -505,10 +475,7 @@ void ModularSimulator::checkInputForDisabledFunctionality()
     isInputCompatible(true,
                       legacySimulatorData_->inputrec,
                       legacySimulatorData_->mdrunOptions.rerun,
-                      *legacySimulatorData_->top_global,
-                      legacySimulatorData_->ms,
                       legacySimulatorData_->replExParams,
-                      legacySimulatorData_->fr->fcdata.get(),
                       opt2bSet("-ei", legacySimulatorData_->nfile, legacySimulatorData_->fnm),
                       legacySimulatorData_->membed != nullptr);
     if (legacySimulatorData_->observablesHistory->edsamHistory)

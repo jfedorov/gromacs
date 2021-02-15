@@ -259,8 +259,11 @@ protected:
 //! The trajectory writing events
 enum class TrajectoryEvent
 {
-    StateWritingStep,
-    EnergyWritingStep
+    StateWritingStep,              //!< Write positions, velocities, forces, and the box this step
+    EnergyWritingStep,             //!< Write energies this step
+    NmrDistanceRestrainingStep,    //!< Write NMR distance restraining information this step
+    NmrOrientationRestrainingStep, //!< Write NMR orientation restraining information this step
+    Count                          //!< The number of trajectory events
 };
 
 /*! \internal
@@ -289,6 +292,8 @@ protected:
 class WriteLog;
 class WriteState;
 class WriteEnergy;
+class WriteNmrDistanceRestraints;
+class WriteNmrOrientationRestraints;
 
 /* Trajectory writing clients are handed a pointer to the output file handler,
  * allowing them to write their own trajectory contribution.
@@ -298,7 +303,8 @@ class WriteEnergy;
  * and / or a log-writing step.
  */
 //! Function type for trajectory writing clients
-typedef std::function<void(gmx_mdoutf*, Step, Time, WriteState, WriteEnergy, WriteLog)> ITrajectoryWriterCallback;
+typedef std::function<void(gmx_mdoutf*, Step, Time, WriteState, WriteEnergy, WriteLog, WriteNmrDistanceRestraints, WriteNmrOrientationRestraints)>
+        ITrajectoryWriterCallback;
 
 /*! \internal
  * \brief Interface for writer clients of the TrajectoryElement

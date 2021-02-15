@@ -505,7 +505,14 @@ std::optional<SignallerCallback> StatePropagatorData::Element::registerTrajector
 
 std::optional<ITrajectoryWriterCallback> StatePropagatorData::Element::registerTrajectoryWriterCallback()
 {
-    return [this](gmx_mdoutf* outf, Step step, Time time, WriteState writeState, WriteEnergy /*unused*/, WriteLog /*unused*/) {
+    return [this](gmx_mdoutf* outf,
+                  Step        step,
+                  Time        time,
+                  WriteState  writeState,
+                  WriteEnergy /*unused*/,
+                  WriteLog /*unused*/,
+                  WriteNmrDistanceRestraints /*unused*/,
+                  WriteNmrOrientationRestraints /*unused*/) {
         if (writeState)
         {
             write(outf, step, time);

@@ -75,6 +75,60 @@ history_t::history_t() :
 {
 }
 
+namespace
+{
+/*!
+ * \brief Enum describing the contents history_t writes to modular checkpoint
+ *
+ * When changing the checkpoint content, add a new element just above Count, and adjust the
+ * checkpoint functionality.
+ */
+enum class RestrainingHistoryCheckpointVersion
+{
+    Base, //!< First version of modular checkpointing
+    Count //!< Number of entries. Add new versions right above this!
+};
+constexpr auto c_currentRestrainingHistoryCheckpointVersion =
+        RestrainingHistoryCheckpointVersion(int(RestrainingHistoryCheckpointVersion::Count) - 1);
+} // namespace
+
+template<gmx::CheckpointDataOperation operation>
+void history_t::doCheckpoint(gmx::CheckpointData<operation> checkpointData)
+{
+    gmx::checkpointVersion(
+            &checkpointData, "history_t version", c_currentRestrainingHistoryCheckpointVersion);
+    checkpointData.scalar("disre_initf", &disre_initf);
+    auto numOfDistanceRestraintPairs = ndisrepairs;
+    checkpointData.scalar("ndisrepairs", &numOfDistanceRestraintPairs);
+    if (operation == gmx::CheckpointDataOperation::Read)
+    {
+        // If this isn't matching, we haven't allocated the right amount of data
+        GMX_RELEASE_ASSERT(
+                numOfDistanceRestraintPairs == ndisrepairs,
+                "history_t checkpoint reading: Number of distance restraint pairs mismatch.");
+    }
+    checkpointData.arrayRef(
+            "disre_rm3tav",
+            gmx::makeCheckpointArrayRefFromArray<operation>(disre_rm3tav, numOfDistanceRestraintPairs));
+
+    checkpointData.scalar("orire_initf", &orire_initf);
+    auto numOfOrientationTensors = norire_Dtav;
+    checkpointData.scalar("norire_Dtav", &numOfOrientationTensors);
+    if (operation == gmx::CheckpointDataOperation::Read)
+    {
+        // If this isn't matching, we haven't allocated the right amount of data
+        GMX_RELEASE_ASSERT(numOfOrientationTensors == norire_Dtav,
+                           "history_t checkpoint reading: Number of orientation tensors mismatch.");
+    }
+    checkpointData.arrayRef(
+            "orire_Dtav",
+            gmx::makeCheckpointArrayRefFromArray<operation>(orire_Dtav, numOfOrientationTensors));
+}
+
+// Explicit template instantiation
+template void history_t::doCheckpoint(gmx::CheckpointData<gmx::CheckpointDataOperation::Read> checkpointData);
+template void history_t::doCheckpoint(gmx::CheckpointData<gmx::CheckpointDataOperation::Write> checkpointData);
+
 ekinstate_t::ekinstate_t() :
     bUpToDate(FALSE),
     ekin_n(0),

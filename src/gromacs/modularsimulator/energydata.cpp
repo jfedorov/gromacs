@@ -213,9 +213,12 @@ std::optional<ITrajectoryWriterCallback> EnergyData::Element::registerTrajectory
                       Step        step,
                       Time        time,
                       WriteState /*unused*/,
-                      WriteEnergy writeEnergy,
-                      WriteLog    writeLog) {
-            energyData_->write(mdoutf, step, time, writeEnergy, writeLog);
+                      WriteEnergy                   writeEnergy,
+                      WriteLog                      writeLog,
+                      WriteNmrDistanceRestraints    writeNmrDistanceRestraints,
+                      WriteNmrOrientationRestraints writeNmrOrientationRestraints) {
+            energyData_->write(
+                    mdoutf, step, time, writeEnergy, writeLog, writeNmrDistanceRestraints, writeNmrOrientationRestraints);
         };
     }
     return std::nullopt;
@@ -284,18 +287,28 @@ void EnergyData::doStep(Step step, Time time, bool isEnergyCalculationStep, bool
             constr_);
 }
 
-void EnergyData::write(gmx_mdoutf* outf, Step step, Time time, WriteEnergy writeEnergy, WriteLog writeLog)
+void EnergyData::write(gmx_mdoutf*                   outf,
+                       Step                          step,
+                       Time                          time,
+                       WriteEnergy                   writeEnergy,
+                       WriteLog                      writeLog,
+                       WriteNmrDistanceRestraints    writeNmrDistanceRestraints,
+                       WriteNmrOrientationRestraints writeNmrOrientationRestraints)
 {
     if (writeLog)
     {
         energyOutput_->printHeader(fplog_, step, time);
     }
 
-    bool do_dr = do_per_step(step, inputrec_->nstdisreout);
-    bool do_or = do_per_step(step, inputrec_->nstorireout);
-
-    energyOutput_->printStepToEnergyFile(
-            mdoutf_get_fp_ene(outf), writeEnergy, do_dr, do_or, writeLog ? fplog_ : nullptr, step, time, fcd_, awh_);
+    energyOutput_->printStepToEnergyFile(mdoutf_get_fp_ene(outf),
+                                         writeEnergy,
+                                         writeNmrDistanceRestraints,
+                                         writeNmrOrientationRestraints,
+                                         writeLog ? fplog_ : nullptr,
+                                         step,
+                                         time,
+                                         fcd_,
+                                         awh_);
 }
 
 void EnergyData::addToForceVirial(const tensor virial, Step step)

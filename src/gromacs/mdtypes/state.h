@@ -148,6 +148,13 @@ public:
     real  orire_initf;  //!< The scaling factor for initializing the time av.
     int   norire_Dtav;  //!< The number of matrix element in dtav (npair*5)
     real* orire_Dtav;   //!< The time averaged orientation tensors
+
+    /*! \brief Allows to read and write checkpoint within modular simulator
+     * \tparam operation  Whether we're reading or writing
+     * \param checkpointData  The CheckpointData object
+     */
+    template<gmx::CheckpointDataOperation operation>
+    void doCheckpoint(gmx::CheckpointData<operation> checkpointData);
 };
 
 /*! \libinternal \brief Struct used for checkpointing only

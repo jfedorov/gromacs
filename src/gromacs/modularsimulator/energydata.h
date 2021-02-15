@@ -252,7 +252,13 @@ private:
      *
      * This is only called by master - writes energy to trajectory and to log.
      */
-    void write(gmx_mdoutf* outf, Step step, Time time, WriteEnergy writeEnergy, WriteLog writeLog);
+    void write(gmx_mdoutf*                   outf,
+               Step                          step,
+               Time                          time,
+               WriteEnergy                   writeEnergy,
+               WriteLog                      writeLog,
+               WriteNmrDistanceRestraints    writeNmrDistanceRestraints,
+               WriteNmrOrientationRestraints writeNmrOrientationRestraints);
 
     /*
      * Data owned by EnergyData

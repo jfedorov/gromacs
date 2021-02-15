@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -164,18 +164,12 @@ void CheckpointHelperBuilder::registerClient(ICheckpointHelperClient* client)
     clientsMap_[key] = client;
     if (resetFromCheckpoint_)
     {
-        if (MASTER(cr_) && !checkpointDataHolder_->keyExists(key))
-        {
-            throw SimulationAlgorithmSetupError(
-                    formatString(
-                            "CheckpointHelper client with key %s registered for checkpointing, "
-                            "but %s does not exist in the input checkpoint file.",
-                            key.c_str(),
-                            key.c_str())
-                            .c_str());
-        }
+        // Checkpoint data is only read on master rank
+        // If a key isn't available, the client needs to decide if we can proceed with the simulation
+        const bool checkpointDataExists = (MASTER(cr_) && checkpointDataHolder_->keyExists(key));
         client->restoreCheckpointState(
-                MASTER(cr_) ? std::make_optional(checkpointDataHolder_->checkpointData(key)) : std::nullopt,
+                checkpointDataExists ? std::make_optional(checkpointDataHolder_->checkpointData(key))
+                                     : std::nullopt,
                 cr_);
     }
 }
