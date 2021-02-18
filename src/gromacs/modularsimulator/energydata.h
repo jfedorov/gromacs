@@ -252,7 +252,7 @@ private:
      *
      * This is only called by master - writes energy to trajectory and to log.
      */
-    void write(gmx_mdoutf* outf, Step step, Time time, bool writeTrajectory, bool writeLog);
+    void write(gmx_mdoutf* outf, Step step, Time time, WriteEnergy writeEnergy, WriteLog writeLog);
 
     /*
      * Data owned by EnergyData
@@ -428,7 +428,7 @@ private:
     //! ITrajectoryWriterClient implementation.
     std::optional<SignallerCallback> registerTrajectorySignallerCallback(TrajectoryEvent event) override;
     //! ITrajectorySignallerClient implementation
-    std::optional<ITrajectoryWriterCallback> registerTrajectoryWriterCallback(TrajectoryEvent event) override;
+    std::optional<ITrajectoryWriterCallback> registerTrajectoryWriterCallback() override;
     //! IEnergySignallerClient implementation
     std::optional<SignallerCallback> registerEnergyCallback(EnergySignallerEvent event) override;
 

@@ -167,13 +167,10 @@ private:
     std::vector<ITrajectoryWriterClient*> writerClients_;
 
     //! Callbacks to write trajectory
-    //! {
-    std::vector<ITrajectoryWriterCallback> runStateCallbacks_;
-    std::vector<ITrajectoryWriterCallback> runEnergyCallbacks_;
-    //! }
+    std::vector<ITrajectoryWriterCallback> trajectoryWritingCallbacks_;
 
     //! The writing function - calls the clients to get their contributions
-    void write(Step step, Time time, bool writeState, bool writeEnergy, bool writeLog);
+    void write(Step step, Time time, WriteState writeState, WriteEnergy writeEnergy, WriteLog writeLog);
 };
 
 /*! \internal
@@ -208,6 +205,48 @@ std::unique_ptr<TrajectoryElement> TrajectoryElementBuilder::build(Args&&... arg
     return std::unique_ptr<TrajectoryElement>(
             new TrajectoryElement(std::move(writerClients_), std::forward<Args>(args)...));
 }
+
+//! Strong type indicating whether log writing is happening
+class WriteLog final
+{
+public:
+    //! Explicit constructor
+    explicit WriteLog(bool value) : value_(value) {}
+    //! Implicit conversion to bool
+    [[nodiscard]] operator bool() const { return value_; }
+
+private:
+    //! Internal state
+    const bool value_;
+};
+
+//! Strong type indicating whether state writing is happening
+class WriteState final
+{
+public:
+    //! Explicit constructor
+    explicit WriteState(bool value) : value_(value) {}
+    //! Implicit conversion to bool
+    [[nodiscard]] operator bool() const { return value_; }
+
+private:
+    //! Internal state
+    const bool value_;
+};
+
+//! Strong type indicating whether energy writing is happening
+class WriteEnergy final
+{
+public:
+    //! Explicit constructor
+    explicit WriteEnergy(bool value) : value_(value) {}
+    //! Implicit conversion to bool
+    [[nodiscard]] operator bool() const { return value_; }
+
+private:
+    //! Internal state
+    const bool value_;
+};
 
 } // namespace gmx
 

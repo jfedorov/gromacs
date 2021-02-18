@@ -285,6 +285,11 @@ protected:
     virtual std::optional<SignallerCallback> registerTrajectorySignallerCallback(TrajectoryEvent) = 0;
 };
 
+// Forward declaration of trajectory writing flags
+class WriteLog;
+class WriteState;
+class WriteEnergy;
+
 /* Trajectory writing clients are handed a pointer to the output file handler,
  * allowing them to write their own trajectory contribution.
  *
@@ -293,7 +298,7 @@ protected:
  * and / or a log-writing step.
  */
 //! Function type for trajectory writing clients
-typedef std::function<void(gmx_mdoutf*, Step, Time, bool, bool)> ITrajectoryWriterCallback;
+typedef std::function<void(gmx_mdoutf*, Step, Time, WriteState, WriteEnergy, WriteLog)> ITrajectoryWriterCallback;
 
 /*! \internal
  * \brief Interface for writer clients of the TrajectoryElement
@@ -321,7 +326,7 @@ protected:
     virtual void trajectoryWriterTeardown(gmx_mdoutf* outf) = 0;
 
     //! Return callback to TrajectoryElement
-    virtual std::optional<ITrajectoryWriterCallback> registerTrajectoryWriterCallback(TrajectoryEvent) = 0;
+    virtual std::optional<ITrajectoryWriterCallback> registerTrajectoryWriterCallback() = 0;
 };
 
 /*! \internal

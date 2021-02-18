@@ -106,15 +106,10 @@ void TrajectoryElement::elementSetup()
 {
     for (auto& client : writerClients_)
     {
-        auto callback = client->registerTrajectoryWriterCallback(TrajectoryEvent::StateWritingStep);
+        auto callback = client->registerTrajectoryWriterCallback();
         if (callback)
         {
-            runStateCallbacks_.emplace_back(std::move(*callback));
-        }
-        callback = client->registerTrajectoryWriterCallback(TrajectoryEvent::EnergyWritingStep);
-        if (callback)
-        {
-            runEnergyCallbacks_.emplace_back(std::move(*callback));
+            trajectoryWritingCallbacks_.emplace_back(std::move(*callback));
         }
         client->trajectoryWriterSetup(outf_);
     }
@@ -122,9 +117,9 @@ void TrajectoryElement::elementSetup()
 
 void TrajectoryElement::scheduleTask(Step step, Time time, const RegisterRunFunction& registerRunFunction)
 {
-    const bool writeEnergyThisStep = writeEnergyStep_ == step;
-    const bool writeStateThisStep  = writeStateStep_ == step;
-    const bool writeLogThisStep    = writeLogStep_ == step;
+    const auto writeEnergyThisStep = WriteEnergy(writeEnergyStep_ == step);
+    const auto writeStateThisStep  = WriteState(writeStateStep_ == step);
+    const auto writeLogThisStep    = WriteLog(writeLogStep_ == step);
     if (writeEnergyThisStep || writeStateThisStep || writeLogThisStep)
     {
         registerRunFunction([this, step, time, writeStateThisStep, writeEnergyThisStep, writeLogThisStep]() {
@@ -143,21 +138,11 @@ void TrajectoryElement::elementTeardown()
     done_mdoutf(outf_);
 }
 
-void TrajectoryElement::write(Step step, Time time, bool writeState, bool writeEnergy, bool writeLog)
+void TrajectoryElement::write(Step step, Time time, WriteState writeState, WriteEnergy writeEnergy, WriteLog writeLog)
 {
-    if (writeState || writeLog)
+    for (auto& callback : trajectoryWritingCallbacks_)
     {
-        for (auto& callback : runStateCallbacks_)
-        {
-            callback(outf_, step, time, writeState, writeLog);
-        }
-    }
-    if (writeEnergy || writeLog)
-    {
-        for (auto& callback : runEnergyCallbacks_)
-        {
-            callback(outf_, step, time, writeEnergy, writeLog);
-        }
+        callback(outf_, step, time, writeState, writeEnergy, writeLog);
     }
 }
 

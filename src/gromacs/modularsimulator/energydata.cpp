@@ -205,12 +205,17 @@ void EnergyData::setup(gmx_mdoutf* outf)
     }
 }
 
-std::optional<ITrajectoryWriterCallback> EnergyData::Element::registerTrajectoryWriterCallback(TrajectoryEvent event)
+std::optional<ITrajectoryWriterCallback> EnergyData::Element::registerTrajectoryWriterCallback()
 {
-    if (event == TrajectoryEvent::EnergyWritingStep && isMasterRank_)
+    if (isMasterRank_)
     {
-        return [this](gmx_mdoutf* mdoutf, Step step, Time time, bool writeTrajectory, bool writeLog) {
-            energyData_->write(mdoutf, step, time, writeTrajectory, writeLog);
+        return [this](gmx_mdoutf* mdoutf,
+                      Step        step,
+                      Time        time,
+                      WriteState /*unused*/,
+                      WriteEnergy writeEnergy,
+                      WriteLog    writeLog) {
+            energyData_->write(mdoutf, step, time, writeEnergy, writeLog);
         };
     }
     return std::nullopt;
@@ -279,7 +284,7 @@ void EnergyData::doStep(Step step, Time time, bool isEnergyCalculationStep, bool
             constr_);
 }
 
-void EnergyData::write(gmx_mdoutf* outf, Step step, Time time, bool writeTrajectory, bool writeLog)
+void EnergyData::write(gmx_mdoutf* outf, Step step, Time time, WriteEnergy writeEnergy, WriteLog writeLog)
 {
     if (writeLog)
     {
@@ -290,7 +295,7 @@ void EnergyData::write(gmx_mdoutf* outf, Step step, Time time, bool writeTraject
     bool do_or = do_per_step(step, inputrec_->nstorireout);
 
     energyOutput_->printStepToEnergyFile(
-            mdoutf_get_fp_ene(outf), writeTrajectory, do_dr, do_or, writeLog ? fplog_ : nullptr, step, time, fcd_, awh_);
+            mdoutf_get_fp_ene(outf), writeEnergy, do_dr, do_or, writeLog ? fplog_ : nullptr, step, time, fcd_, awh_);
 }
 
 void EnergyData::addToForceVirial(const tensor virial, Step step)

@@ -503,19 +503,14 @@ std::optional<SignallerCallback> StatePropagatorData::Element::registerTrajector
     return std::nullopt;
 }
 
-std::optional<ITrajectoryWriterCallback>
-StatePropagatorData::Element::registerTrajectoryWriterCallback(TrajectoryEvent event)
+std::optional<ITrajectoryWriterCallback> StatePropagatorData::Element::registerTrajectoryWriterCallback()
 {
-    if (event == TrajectoryEvent::StateWritingStep)
-    {
-        return [this](gmx_mdoutf* outf, Step step, Time time, bool writeTrajectory, bool gmx_unused writeLog) {
-            if (writeTrajectory)
-            {
-                write(outf, step, time);
-            }
-        };
-    }
-    return std::nullopt;
+    return [this](gmx_mdoutf* outf, Step step, Time time, WriteState writeState, WriteEnergy /*unused*/, WriteLog /*unused*/) {
+        if (writeState)
+        {
+            write(outf, step, time);
+        }
+    };
 }
 
 void StatePropagatorData::Element::write(gmx_mdoutf_t outf, Step currentStep, Time currentTime)

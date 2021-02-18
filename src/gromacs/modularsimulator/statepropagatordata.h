@@ -384,7 +384,7 @@ private:
     std::optional<SignallerCallback> registerTrajectorySignallerCallback(TrajectoryEvent event) override;
 
     //! ITrajectoryWriterClient implementation
-    std::optional<ITrajectoryWriterCallback> registerTrajectoryWriterCallback(TrajectoryEvent event) override;
+    std::optional<ITrajectoryWriterCallback> registerTrajectoryWriterCallback() override;
 
     //! ILastStepSignallerClient implementation (used for final output only)
     std::optional<SignallerCallback> registerLastStepCallback() override;
