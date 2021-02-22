@@ -3193,7 +3193,7 @@ void dd_partition_system(FILE*                     fplog,
         np[dd->dim[i]] = comm->cd[i].numPulses();
     }
     dd_make_local_top(dd,
-                      &comm->zones,
+                      comm->zones,
                       dd->unitCellInfo.npbcdim,
                       state_local->box,
                       comm->cellsize_min,
