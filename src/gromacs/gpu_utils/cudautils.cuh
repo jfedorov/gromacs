@@ -50,6 +50,8 @@
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/stringutil.h"
 
+class DeviceEvent;
+
 namespace gmx
 {
 namespace
@@ -278,7 +280,7 @@ template<typename... Args>
 void launchGpuKernel(void (*kernel)(Args...),
                      const KernelLaunchConfig& config,
                      const DeviceStream&       deviceStream,
-                     CommandEvent* /*timingEvent */,
+                     DeviceEvent* /*timingEvent */,
                      const char*                               kernelName,
                      const std::array<void*, sizeof...(Args)>& kernelArgs)
 {

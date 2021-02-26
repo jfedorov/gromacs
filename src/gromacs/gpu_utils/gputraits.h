@@ -63,9 +63,6 @@
 
 using DeviceTexture = void*;
 
-//! \brief Single GPU call timing event
-using CommandEvent = void*;
-
 // Stubs for CPU-only build. Might be changed in #3312.
 struct Float2
 {

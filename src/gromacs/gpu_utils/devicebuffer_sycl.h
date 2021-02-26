@@ -50,6 +50,7 @@
 #include <utility>
 
 #include "gromacs/gpu_utils/device_context.h"
+#include "gromacs/gpu_utils/device_event.h"
 #include "gromacs/gpu_utils/device_stream.h"
 #include "gromacs/gpu_utils/devicebuffer_datatype.h"
 #include "gromacs/gpu_utils/gmxsycl.h"
@@ -304,7 +305,7 @@ void copyToDeviceBuffer(DeviceBuffer<ValueType>* buffer,
                         size_t                   numValues,
                         const DeviceStream&      deviceStream,
                         GpuApiCallBehavior       transferKind,
-                        CommandEvent* gmx_unused timingEvent)
+                        DeviceEvent*             timingEvent)
 {
     if (numValues == 0)
     {
@@ -331,6 +332,10 @@ void copyToDeviceBuffer(DeviceBuffer<ValueType>* buffer,
     {
         ev.wait_and_throw();
     }
+    if (timingEvent)
+    {
+        timingEvent->setEvent(ev);
+    }
 }
 
 /*! \brief
@@ -356,7 +361,7 @@ void copyFromDeviceBuffer(ValueType*               hostBuffer,
                           size_t                   numValues,
                           const DeviceStream&      deviceStream,
                           GpuApiCallBehavior       transferKind,
-                          CommandEvent* gmx_unused timingEvent)
+                          DeviceEvent*             timingEvent)
 {
     if (numValues == 0)
     {
@@ -380,6 +385,10 @@ void copyFromDeviceBuffer(ValueType*               hostBuffer,
     {
         ev.wait_and_throw();
     }
+    if (timingEvent)
+    {
+        timingEvent->setEvent(ev);
+    }
 }
 
 /*! \brief
@@ -393,7 +402,7 @@ void copyBetweenDeviceBuffers(DeviceBuffer<ValueType>* /* destinationDeviceBuffe
                               size_t /* numValues */,
                               const DeviceStream& /* deviceStream */,
                               GpuApiCallBehavior /* transferKind */,
-                              CommandEvent* /*timingEvent*/)
+                              DeviceEvent* /*timingEvent*/)
 {
     // SYCL-TODO
     gmx_fatal(FARGS, "D2D copy stub was called. Not yet implemented in SYCL.");

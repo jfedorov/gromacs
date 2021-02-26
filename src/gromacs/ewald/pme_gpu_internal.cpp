@@ -58,6 +58,7 @@
 
 #include "gromacs/ewald/ewald_utils.h"
 #include "gromacs/gpu_utils/device_context.h"
+#include "gromacs/gpu_utils/device_event.h"
 #include "gromacs/gpu_utils/device_stream.h"
 #include "gromacs/gpu_utils/gpu_utils.h"
 #include "gromacs/gpu_utils/pmalloc.h"
@@ -1015,9 +1016,9 @@ void pme_gpu_reinit_atoms(PmeGpu* pmeGpu, const int nAtoms, const real* chargesA
  * \param[in] pmeGpu         The PME GPU data structure.
  * \param[in] pmeStageId     The PME GPU stage gtPME_ index from the enum in src/gromacs/timing/gpu_timing.h
  */
-static CommandEvent* pme_gpu_fetch_timing_event(const PmeGpu* pmeGpu, PmeStage pmeStageId)
+static DeviceEvent* pme_gpu_fetch_timing_event(const PmeGpu* pmeGpu, PmeStage pmeStageId)
 {
-    CommandEvent* timingEvent = nullptr;
+    DeviceEvent* timingEvent = nullptr;
     if (pme_gpu_timings_enabled(pmeGpu))
     {
         GMX_ASSERT(pmeStageId < PmeStage::Count, "Wrong PME GPU timing event index");

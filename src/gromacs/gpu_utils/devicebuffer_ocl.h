@@ -46,6 +46,7 @@
  */
 
 #include "gromacs/gpu_utils/device_context.h"
+#include "gromacs/gpu_utils/device_event.h"
 #include "gromacs/gpu_utils/device_stream.h"
 #include "gromacs/gpu_utils/devicebuffer_datatype.h"
 #include "gromacs/gpu_utils/gpu_utils.h" //only for GpuApiCallBehavior
@@ -125,7 +126,7 @@ void copyToDeviceBuffer(DeviceBuffer<ValueType>* buffer,
                         size_t                   numValues,
                         const DeviceStream&      deviceStream,
                         GpuApiCallBehavior       transferKind,
-                        CommandEvent*            timingEvent)
+                        DeviceEvent*             timingEvent)
 {
     if (numValues == 0)
     {
@@ -134,13 +135,14 @@ void copyToDeviceBuffer(DeviceBuffer<ValueType>* buffer,
     GMX_ASSERT(buffer, "needs a buffer pointer");
     GMX_ASSERT(hostBuffer, "needs a host buffer pointer");
     cl_int       clError;
-    const size_t offset = startingOffset * sizeof(ValueType);
-    const size_t bytes  = numValues * sizeof(ValueType);
+    const size_t offset            = startingOffset * sizeof(ValueType);
+    const size_t bytes             = numValues * sizeof(ValueType);
+    cl_event*    timingEventNative = DeviceEvent::getEventPtrForApiCall(timingEvent);
     switch (transferKind)
     {
         case GpuApiCallBehavior::Async:
             clError = clEnqueueWriteBuffer(
-                    deviceStream.stream(), *buffer, CL_FALSE, offset, bytes, hostBuffer, 0, nullptr, timingEvent);
+                    deviceStream.stream(), *buffer, CL_FALSE, offset, bytes, hostBuffer, 0, nullptr, timingEventNative);
             GMX_RELEASE_ASSERT(
                     clError == CL_SUCCESS,
                     gmx::formatString("Asynchronous H2D copy failed (OpenCL error %d: %s)",
@@ -151,7 +153,7 @@ void copyToDeviceBuffer(DeviceBuffer<ValueType>* buffer,
 
         case GpuApiCallBehavior::Sync:
             clError = clEnqueueWriteBuffer(
-                    deviceStream.stream(), *buffer, CL_TRUE, offset, bytes, hostBuffer, 0, nullptr, timingEvent);
+                    deviceStream.stream(), *buffer, CL_TRUE, offset, bytes, hostBuffer, 0, nullptr, timingEventNative);
             GMX_RELEASE_ASSERT(
                     clError == CL_SUCCESS,
                     gmx::formatString("Synchronous H2D copy failed (OpenCL error %d: %s)",
@@ -188,7 +190,7 @@ void copyFromDeviceBuffer(ValueType*               hostBuffer,
                           size_t                   numValues,
                           const DeviceStream&      deviceStream,
                           GpuApiCallBehavior       transferKind,
-                          CommandEvent*            timingEvent)
+                          DeviceEvent*             timingEvent)
 {
     if (numValues == 0)
     {
@@ -197,13 +199,14 @@ void copyFromDeviceBuffer(ValueType*               hostBuffer,
     GMX_ASSERT(buffer, "needs a buffer pointer");
     GMX_ASSERT(hostBuffer, "needs a host buffer pointer");
     cl_int       clError;
-    const size_t offset = startingOffset * sizeof(ValueType);
-    const size_t bytes  = numValues * sizeof(ValueType);
+    const size_t offset            = startingOffset * sizeof(ValueType);
+    const size_t bytes             = numValues * sizeof(ValueType);
+    cl_event*    timingEventNative = DeviceEvent::getEventPtrForApiCall(timingEvent);
     switch (transferKind)
     {
         case GpuApiCallBehavior::Async:
             clError = clEnqueueReadBuffer(
-                    deviceStream.stream(), *buffer, CL_FALSE, offset, bytes, hostBuffer, 0, nullptr, timingEvent);
+                    deviceStream.stream(), *buffer, CL_FALSE, offset, bytes, hostBuffer, 0, nullptr, timingEventNative);
             GMX_RELEASE_ASSERT(
                     clError == CL_SUCCESS,
                     gmx::formatString("Asynchronous D2H copy failed (OpenCL error %d: %s)",
@@ -214,7 +217,7 @@ void copyFromDeviceBuffer(ValueType*               hostBuffer,
 
         case GpuApiCallBehavior::Sync:
             clError = clEnqueueReadBuffer(
-                    deviceStream.stream(), *buffer, CL_TRUE, offset, bytes, hostBuffer, 0, nullptr, timingEvent);
+                    deviceStream.stream(), *buffer, CL_TRUE, offset, bytes, hostBuffer, 0, nullptr, timingEventNative);
             GMX_RELEASE_ASSERT(
                     clError == CL_SUCCESS,
                     gmx::formatString("Synchronous D2H copy failed (OpenCL error %d: %s)",
@@ -238,7 +241,7 @@ void copyBetweenDeviceBuffers(DeviceBuffer<ValueType>* /* destinationDeviceBuffe
                               size_t /* numValues */,
                               const DeviceStream& /* deviceStream */,
                               GpuApiCallBehavior /* transferKind */,
-                              CommandEvent* /*timingEvent*/)
+                              DeviceEvent* /*timingEvent*/)
 {
     // OpenCL-TODO
     gmx_fatal(FARGS, "D2D copy stub was called. Not yet implemented in OpenCL.");
@@ -269,9 +272,8 @@ void clearDeviceBufferAsync(DeviceBuffer<ValueType>* buffer,
     const int       pattern       = 0;
     const cl_uint   numWaitEvents = 0;
     const cl_event* waitEvents    = nullptr;
-    cl_event        commandEvent;
-    cl_int          clError = clEnqueueFillBuffer(
-            deviceStream.stream(), *buffer, &pattern, sizeof(pattern), offset, bytes, numWaitEvents, waitEvents, &commandEvent);
+    cl_int          clError       = clEnqueueFillBuffer(
+            deviceStream.stream(), *buffer, &pattern, sizeof(pattern), offset, bytes, numWaitEvents, waitEvents, nullptr);
     GMX_RELEASE_ASSERT(clError == CL_SUCCESS,
                        gmx::formatString("Couldn't clear the device buffer (OpenCL error %d: %s)",
                                          clError,

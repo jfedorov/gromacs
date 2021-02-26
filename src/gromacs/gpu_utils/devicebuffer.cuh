@@ -55,6 +55,8 @@
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/stringutil.h"
 
+class DeviceEvent;
+
 /*! \brief
  * Allocates a device-side buffer.
  * It is currently a caller's responsibility to call it only on not-yet allocated buffers.
@@ -116,7 +118,7 @@ void copyToDeviceBuffer(DeviceBuffer<ValueType>* buffer,
                         size_t                   numValues,
                         const DeviceStream&      deviceStream,
                         GpuApiCallBehavior       transferKind,
-                        CommandEvent* /*timingEvent*/)
+                        DeviceEvent* /*timingEvent*/)
 {
     if (numValues == 0)
     {
@@ -178,7 +180,7 @@ void copyFromDeviceBuffer(ValueType*               hostBuffer,
                           size_t                   numValues,
                           const DeviceStream&      deviceStream,
                           GpuApiCallBehavior       transferKind,
-                          CommandEvent* /*timingEvent*/)
+                          DeviceEvent* /*timingEvent*/)
 {
     if (numValues == 0)
     {
@@ -238,7 +240,7 @@ void copyBetweenDeviceBuffers(DeviceBuffer<ValueType>* destinationDeviceBuffer,
                               size_t                   numValues,
                               const DeviceStream&      deviceStream,
                               GpuApiCallBehavior       transferKind,
-                              CommandEvent* /*timingEvent*/)
+                              DeviceEvent* /*timingEvent*/)
 {
     if (numValues == 0)
     {

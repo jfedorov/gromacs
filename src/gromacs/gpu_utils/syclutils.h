@@ -49,6 +49,7 @@
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/stringutil.h"
 
+class DeviceEvent;
 class DeviceStream;
 enum class GpuApiCallBehavior;
 
@@ -100,7 +101,7 @@ void* prepareGpuKernelArguments(void* /*kernel*/, const KernelLaunchConfig& /*co
 inline void launchGpuKernel(void* /*kernel*/,
                             const KernelLaunchConfig& /*config*/,
                             const DeviceStream& /*deviceStream*/,
-                            CommandEvent* /*timingEvent*/,
+                            DeviceEvent* /*timingEvent*/,
                             const char* /*kernelName*/,
                             const void* /*kernelArgs*/)
 {

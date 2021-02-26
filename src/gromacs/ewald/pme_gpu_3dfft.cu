@@ -140,7 +140,7 @@ GpuParallel3dFft::~GpuParallel3dFft()
     handleCufftError(result, "cufftDestroy C2R failure");
 }
 
-void GpuParallel3dFft::perform3dFft(gmx_fft_direction dir, CommandEvent* /*timingEvent*/)
+void GpuParallel3dFft::perform3dFft(gmx_fft_direction dir, DeviceEvent* /*timingEvent*/)
 {
     cufftResult_t result;
     if (dir == GMX_FFT_REAL_TO_COMPLEX)

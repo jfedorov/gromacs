@@ -1,7 +1,8 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2016,2017,2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2016,2017,2018,2019,2020 by the GROMACS development team.
+ * Copyright (c) 2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -47,11 +48,13 @@
 
 #include "gromacs/utility/gmxassert.h"
 
+class DeviceEvent;
+
 //! Debug GPU timers in debug builds only
 #if defined(NDEBUG)
-static const bool c_debugTimerState = false;
+static constexpr bool c_debugTimerState = false;
 #else
-static const bool c_debugTimerState = true;
+static constexpr bool c_debugTimerState = true;
 #endif
 
 /*! \libinternal \brief
@@ -164,7 +167,7 @@ public:
      * within the region if they require it (e.g. on OpenCL).
      * \returns The pointer to the underlying single command timing event.
      */
-    CommandEvent* fetchNextEvent()
+    DeviceEvent* fetchNextEvent()
     {
         if (c_debugTimerState)
         {
