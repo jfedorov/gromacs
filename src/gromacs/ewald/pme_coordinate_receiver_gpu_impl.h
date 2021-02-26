@@ -59,11 +59,11 @@ class PmeCoordinateReceiverGpu::Impl
 
 public:
     /*! \brief Creates PME GPU coordinate receiver object
-     * \param[in] pmeStream       CUDA stream used for PME computations
      * \param[in] comm            Communicator used for simulation
+     * \param[in] deviceContext   GPU context
      * \param[in] ppRanks         List of PP ranks
      */
-    Impl(const DeviceStream& pmeStream, MPI_Comm comm, gmx::ArrayRef<PpRanks> ppRanks);
+    Impl(MPI_Comm comm, const DeviceContext& deviceContext, gmx::ArrayRef<PpRanks> ppRanks);
     ~Impl();
 
     /*! \brief
@@ -90,12 +90,29 @@ public:
     /*! \brief
      * For lib MPI, wait for coordinates from PP ranks
      * For thread MPI, enqueue PP co-ordinate transfer event into PME stream
+     * \param[in] senderIndex    Index of sender PP rank.
+     * \param[in] deviceStream   Stream in which to enqueue the wait event.
      */
-    void synchronizeOnCoordinatesFromPpRanks();
+    void synchronizeOnCoordinatesFromPpRanks(int senderIndex, const DeviceStream& deviceStream);
+
+    /*! \brief
+     * Return pointer to stream associated with specific PP rank sender index
+     * \param[in] senderIndex    Index of sender PP rank.
+     */
+    DeviceStream* ppCommStream(int senderIndex);
+
+    /*! \brief
+     * Return number of atoms involved in communication associated with specific PP rank sender
+     * index \param[in] senderIndex    Index of sender PP rank.
+     */
+    int ppCommNumAtoms(int senderIndex);
+
+    /*! \brief
+     * Return number of PP ranks involved in PME-PP communication
+     */
+    int ppCommNumSenderRanks();
 
 private:
-    //! CUDA stream for PME operations
-    const DeviceStream& pmeStream_;
     //! communicator for simulation
     MPI_Comm comm_;
     //! list of PP ranks
@@ -104,8 +121,10 @@ private:
     std::vector<MPI_Request> request_;
     //! vector of synchronization events to receive from PP tasks
     std::vector<GpuEventSynchronizer*> ppSync_;
-    //! counter of messages to receive
-    int recvCount_ = 0;
+    //! Streams used for managing pipelining
+    std::vector<DeviceStream*> ppCommStream_;
+    //! GPU context handle (not used in CUDA)
+    const DeviceContext& deviceContext_;
 };
 
 } // namespace gmx

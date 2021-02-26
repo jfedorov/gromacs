@@ -56,13 +56,23 @@
 namespace gmx
 {
 
-PmeCoordinateReceiverGpu::Impl::Impl(const DeviceStream&    pmeStream,
-                                     MPI_Comm               comm,
+PmeCoordinateReceiverGpu::Impl::Impl(MPI_Comm               comm,
+                                     const DeviceContext&   deviceContext,
                                      gmx::ArrayRef<PpRanks> ppRanks) :
-    pmeStream_(pmeStream), comm_(comm), ppRanks_(ppRanks)
+    comm_(comm), ppRanks_(ppRanks), deviceContext_(deviceContext)
 {
     request_.resize(ppRanks.size());
     ppSync_.resize(ppRanks.size());
+
+    // Create streams to manage pipelining
+    DeviceStream* stream;
+    size_t        i = 0;
+    while (i < ppRanks_.size())
+    {
+        stream = new DeviceStream(deviceContext_, DeviceStreamPriority::High, false);
+        ppCommStream_.push_back(stream);
+        i++;
+    }
 }
 
 PmeCoordinateReceiverGpu::Impl::~Impl() = default;
@@ -102,8 +112,7 @@ void PmeCoordinateReceiverGpu::Impl::receiveCoordinatesSynchronizerFromPpCudaDir
 #if GMX_MPI
     // Receive event from PP task
     // NOLINTNEXTLINE(bugprone-sizeof-expression)
-    MPI_Irecv(&ppSync_[recvCount_], sizeof(GpuEventSynchronizer*), MPI_BYTE, ppRank, 0, comm_, &request_[recvCount_]);
-    recvCount_++;
+    MPI_Irecv(&ppSync_[ppRank], sizeof(GpuEventSynchronizer*), MPI_BYTE, ppRank, 0, comm_, &request_[ppRank]);
 #else
     GMX_UNUSED_VALUE(ppRank);
 #endif
@@ -119,7 +128,7 @@ void PmeCoordinateReceiverGpu::Impl::launchReceiveCoordinatesFromPpCudaMpi(Devic
                "launchReceiveCoordinatesFromPpCudaMpi is expected to be called only for Lib-MPI");
 
 #if GMX_MPI
-    MPI_Irecv(&recvbuf[numAtoms], numBytes, MPI_BYTE, ppRank, eCommType_COORD_GPU, comm_, &request_[recvCount_++]);
+    MPI_Irecv(&recvbuf[numAtoms], numBytes, MPI_BYTE, ppRank, eCommType_COORD_GPU, comm_, &request_[ppRank]);
 #else
     GMX_UNUSED_VALUE(recvbuf);
     GMX_UNUSED_VALUE(numAtoms);
@@ -128,34 +137,38 @@ void PmeCoordinateReceiverGpu::Impl::launchReceiveCoordinatesFromPpCudaMpi(Devic
 #endif
 }
 
-void PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesFromPpRanks()
+void PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesFromPpRanks(int senderIndex,
+                                                                         const DeviceStream& deviceStream)
 {
-    if (recvCount_ > 0)
-    {
-        // ensure PME calculation doesn't commence until coordinate data/remote events
-        // has been transferred
+    // ensure PME calculation doesn't commence until coordinate data has been transferred
 #if GMX_MPI
-        MPI_Waitall(recvCount_, request_.data(), MPI_STATUS_IGNORE);
-#endif
-
-        // Make PME stream wait on PP to PME data trasnfer events
-        if (GMX_THREAD_MPI)
-        {
-            for (int i = 0; i < recvCount_; i++)
-            {
-                ppSync_[i]->enqueueWaitEvent(pmeStream_);
-            }
-        }
-
-        // reset receive counter
-        recvCount_ = 0;
+    MPI_Wait(&request_[senderIndex], MPI_STATUS_IGNORE);
+    if (GMX_THREAD_MPI)
+    {
+        ppSync_[senderIndex]->enqueueWaitEvent(deviceStream);
     }
+#endif
 }
 
-PmeCoordinateReceiverGpu::PmeCoordinateReceiverGpu(const DeviceStream&    pmeStream,
-                                                   MPI_Comm               comm,
+DeviceStream* PmeCoordinateReceiverGpu::Impl::ppCommStream(int senderIndex)
+{
+    return ppCommStream_[senderIndex];
+}
+
+int PmeCoordinateReceiverGpu::Impl::ppCommNumAtoms(int senderIndex)
+{
+    return ppRanks_[senderIndex].numAtoms;
+}
+
+int PmeCoordinateReceiverGpu::Impl::ppCommNumSenderRanks()
+{
+    return ppRanks_.size();
+}
+
+PmeCoordinateReceiverGpu::PmeCoordinateReceiverGpu(MPI_Comm               comm,
+                                                   const DeviceContext&   deviceContext,
                                                    gmx::ArrayRef<PpRanks> ppRanks) :
-    impl_(new Impl(pmeStream, comm, ppRanks))
+    impl_(new Impl(comm, deviceContext, ppRanks))
 {
 }
 
@@ -179,9 +192,26 @@ void PmeCoordinateReceiverGpu::launchReceiveCoordinatesFromPpCudaMpi(DeviceBuffe
     impl_->launchReceiveCoordinatesFromPpCudaMpi(recvbuf, numAtoms, numBytes, ppRank);
 }
 
-void PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromPpRanks()
+void PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromPpRanks(int                 senderIndex,
+                                                                   const DeviceStream& deviceStream)
 {
-    impl_->synchronizeOnCoordinatesFromPpRanks();
+    impl_->synchronizeOnCoordinatesFromPpRanks(senderIndex, deviceStream);
 }
+
+DeviceStream* PmeCoordinateReceiverGpu::ppCommStream(int senderIndex)
+{
+    return impl_->ppCommStream(senderIndex);
+}
+
+int PmeCoordinateReceiverGpu::ppCommNumAtoms(int senderIndex)
+{
+    return impl_->ppCommNumAtoms(senderIndex);
+}
+
+int PmeCoordinateReceiverGpu::ppCommNumSenderRanks()
+{
+    return impl_->ppCommNumSenderRanks();
+}
+
 
 } // namespace gmx
