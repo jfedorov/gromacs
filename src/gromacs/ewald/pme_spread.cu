@@ -222,8 +222,17 @@ __launch_bounds__(c_spreadMaxThreadsPerBlock) CLANG_DISABLE_OPTIMIZATION_ATTRIBU
     {
         return;
     }
+
+    // Early return if pipelining and index falls outside region for this stage
+    if (kernelParams.usePipeline
+        && ((atomIndexGlobal < kernelParams.pipelineAtomStart)
+            || (atomIndexGlobal >= kernelParams.pipelineAtomEnd)))
+    {
+        return;
+    }
+
     /* Charges, required for both spline and spread */
-    if (c_useAtomDataPrefetch)
+    if (!kernelParams.usePipeline && c_useAtomDataPrefetch)
     {
         pme_gpu_stage_atom_data<float, atomsPerBlock, 1>(sm_coefficients,
                                                          kernelParams.atoms.d_coefficients[0]);
@@ -238,7 +247,7 @@ __launch_bounds__(c_spreadMaxThreadsPerBlock) CLANG_DISABLE_OPTIMIZATION_ATTRIBU
     if (computeSplines)
     {
         const float3* __restrict__ gm_coordinates = asFloat3(kernelParams.atoms.d_coordinates);
-        if (c_useAtomDataPrefetch)
+        if (!kernelParams.usePipeline && c_useAtomDataPrefetch)
         {
             // Coordinates
             __shared__ float3 sm_coordinates[atomsPerBlock];

@@ -49,6 +49,8 @@
 #include "gromacs/utility/gmxmpi.h"
 
 class DeviceStream;
+class DeviceContext;
+
 struct PpRanks;
 
 namespace gmx
@@ -62,11 +64,11 @@ class PmeCoordinateReceiverGpu
 
 public:
     /*! \brief Creates PME GPU coordinate receiver object
-     * \param[in] pmeStream       CUDA stream used for PME computations
      * \param[in] comm            Communicator used for simulation
+     * \param[in] deviceContext   GPU context
      * \param[in] ppRanks         List of PP ranks
      */
-    PmeCoordinateReceiverGpu(const DeviceStream& pmeStream, MPI_Comm comm, gmx::ArrayRef<PpRanks> ppRanks);
+    PmeCoordinateReceiverGpu(MPI_Comm comm, const DeviceContext& deviceContext, gmx::ArrayRef<PpRanks> ppRanks);
     ~PmeCoordinateReceiverGpu();
 
     /*! \brief
@@ -94,8 +96,28 @@ public:
     /*! \brief
      * For lib MPI, wait for coordinates from PP ranks
      * For thread MPI, enqueue PP co-ordinate transfer event into PME stream
+     * \param[in] senderIndex    Index of sender PP rank.
+     * \param[in] deviceStream   Stream in which to enqueue the wait event.
      */
-    void synchronizeOnCoordinatesFromPpRanks();
+    void synchronizeOnCoordinatesFromPpRanks(int senderIndex, const DeviceStream& deviceStream);
+
+    /*! \brief
+     * Return pointer to stream associated with specific PP rank sender index
+     * \param[in] senderIndex    Index of sender PP rank.
+     */
+    DeviceStream* ppCommStream(int senderIndex);
+
+    /*! \brief
+     * Return number of atoms involved in communication associated with specific PP rank sender
+     * index \param[in] senderIndex    Index of sender PP rank.
+     */
+    int ppCommNumAtoms(int senderIndex);
+
+
+    /*! \brief
+     * Return number of PP ranks involved in PME-PP communication
+     */
+    int ppCommNumSenderRanks();
 
 private:
     class Impl;

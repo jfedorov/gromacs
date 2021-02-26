@@ -97,6 +97,7 @@ class MDLogger;
 enum class PinningPolicy : int;
 class StepWorkload;
 
+
 /*! \libinternal \brief Class for managing usage of separate PME-only ranks
  *
  * Used for checking if some parts of the code could not use PME-only ranks
@@ -119,6 +120,7 @@ private:
     std::vector<std::string> reasons_;
 };
 
+class PmeCoordinateReceiverGpu;
 } // namespace gmx
 
 enum
@@ -373,17 +375,21 @@ GPU_FUNC_QUALIFIER void pme_gpu_prepare_computation(gmx_pme_t*     GPU_FUNC_ARGU
 /*! \brief
  * Launches first stage of PME on GPU - spreading kernel.
  *
- * \param[in] pme                The PME data structure.
- * \param[in] xReadyOnDevice     Event synchronizer indicating that the coordinates
- * are ready in the device memory; nullptr allowed only on separate PME ranks.
- * \param[in] wcycle             The wallclock counter.
- * \param[in] lambdaQ            The Coulomb lambda of the current state of the
- * system. Only used if FEP of Coulomb is active.
+ * \param[in] pme                            The PME data structure.
+ * \param[in] xReadyOnDevice                 Event synchronizer indicating that the coordinates
+ *                                           are ready in the device memory; nullptr allowed only on
+ * separate PME ranks. \param[in] wcycle                         The wallclock counter. \param[in]
+ * lambdaQ                        The Coulomb lambda of the current state of the system. Only used
+ * if FEP of Coulomb is active. \param[in]  useGpuDirectComm              Whether direct GPU PME-PP
+ * communication is active \param[in]  pmeCoordinateReceiverGpu      Coordinate receiver object.
  */
-GPU_FUNC_QUALIFIER void pme_gpu_launch_spread(gmx_pme_t*            GPU_FUNC_ARGUMENT(pme),
-                                              GpuEventSynchronizer* GPU_FUNC_ARGUMENT(xReadyOnDevice),
-                                              gmx_wallcycle*        GPU_FUNC_ARGUMENT(wcycle),
-                                              real GPU_FUNC_ARGUMENT(lambdaQ)) GPU_FUNC_TERM;
+GPU_FUNC_QUALIFIER void pme_gpu_launch_spread(
+        gmx_pme_t*                     GPU_FUNC_ARGUMENT(pme),
+        GpuEventSynchronizer*          GPU_FUNC_ARGUMENT(xReadyOnDevice),
+        gmx_wallcycle*                 GPU_FUNC_ARGUMENT(wcycle),
+        real                           GPU_FUNC_ARGUMENT(lambdaQ),
+        const bool                     GPU_FUNC_ARGUMENT(useGpuDirectComm),
+        gmx::PmeCoordinateReceiverGpu* GPU_FUNC_ARGUMENT(pmeCoordinateReceiverGpu)) GPU_FUNC_TERM;
 
 /*! \brief
  * Launches middle stages of PME (FFT R2C, solving, FFT C2R) either on GPU or on CPU, depending on the run mode.
