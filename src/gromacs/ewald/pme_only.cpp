@@ -562,7 +562,8 @@ static void gmx_pme_send_force_vir_ener(const gmx_pme_t& pme,
 
             if (GMX_THREAD_MPI)
             {
-                pme_pp->pmeForceSenderGpu->sendFSynchronizerToPpCudaDirect(receiver.rankId);
+                pme_pp->pmeForceSenderGpu->sendFSynchronizerToPpCudaDirect(receiver.rankId,
+                                                                           &pme_pp->req[messages]);
             }
             else
             {
@@ -571,8 +572,6 @@ static void gmx_pme_send_force_vir_ener(const gmx_pme_t& pme,
                                                             receiver.numAtoms * sizeof(rvec),
                                                             receiver.rankId,
                                                             &pme_pp->req[messages]);
-
-                messages++;
             }
         }
         else

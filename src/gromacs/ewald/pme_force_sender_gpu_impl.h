@@ -74,10 +74,12 @@ public:
     void sendForceBufferAddressToPpRanks(DeviceBuffer<Float3> d_f);
 
     /*! \brief
-     * Send force synchronizer to PP rank (used with Thread-MPI)
+     * Send force synchronizer to PP rank (used with Thread-MPI).
+     * Usese a nonblocking operation.
      * \param[in] ppRank           PP rank to receive data
+     * \param[out] request         Pointer to the MPI request where the send will record
      */
-    void sendFSynchronizerToPpCudaDirect(int ppRank);
+    void sendFSynchronizerToPpCudaDirect(int ppRank, MPI_Request* request);
 
     /*! \brief
      * Send force to PP rank (used with Lib-MPI)
