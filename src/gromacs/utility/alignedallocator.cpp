@@ -84,12 +84,12 @@ void* AlignedAllocationPolicy::malloc(std::size_t bytes)
     // Adhere to the implementation requirements. Also avoids false
     // sharing.
     auto multiplesOfAlignment = (bytes / alignment() + 1) * alignment();
-    return aligned_alloc(alignment(), multiplesOfAlignment);
+    return ::aligned_alloc(alignment(), multiplesOfAlignment);
 }
 
 void AlignedAllocationPolicy::free(void* p)
 {
-    std::free(p);
+    ::free(p);
 }
 
 // === PageAlignedAllocationPolicy
@@ -138,12 +138,12 @@ void* PageAlignedAllocationPolicy::malloc(std::size_t bytes)
     // Adhere to the implementation requirements. Also avoids false
     // sharing.
     auto multiplesOfAlignment = (bytes / alignment() + 1) * alignment();
-    return aligned_alloc(alignment(), multiplesOfAlignment);
+    return ::aligned_alloc(alignment(), multiplesOfAlignment);
 }
 
 void PageAlignedAllocationPolicy::free(void* p)
 {
-    std::free(p);
+    ::free(p);
 }
 
 } // namespace gmx
