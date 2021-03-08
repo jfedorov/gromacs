@@ -1,16 +1,59 @@
-The GROMACS developers generally suggest you install GROMACS for
-production scientific use only from a tarball from an official
-source-code release.
+Installation guide for GROMACS  2021.2 version with CP2K QMMM Interface
 
-However, if you have a special need and wish to build and/or install a
-version from a git repository, please see
-docs/install-guide/index.rst in this repository, or (if applicable)
-the latest master branch documentation found via
-http://manual.gromacs.org/documentation/.
+1) Compile and install 8.1 version of CP2K:
+https://github.com/cp2k/cp2k/releases/
+For CP2K specific instructions please follow https://github.com/cp2k/cp2k/blob/master/INSTALL.md
 
-Note for GROMACS developers
----------------------------
-This file is excluded from the GROMACS source packages made with CPack,
-and not included into binary packages made with CPack. Source packages
-do include an INSTALL file containing the installation instructions, which
-has been compiled into plain text by Sphinx from docs/install-guide.
+2) In you compiled version of CP2K 8.1 make also libcp2k.
+In order to do so execute:
+make ARCH=<your arch> VERSION=<your version like psmp> libcp2k
+libcp2k.a file should appear in <cp2k dir>/lib/<arch>/psmp/ directory
+
+3) Download that GROMACS branch from the gitlab
+https://gitlab.com/gromacs/gromacs/-/tree/2021.2-qmmm
+If you want to clone whole repository, remember to checkout branch 2021.2-qmmm
+
+4) This version could be directly patched with Plumed v2.7.1 (use gromacs-2021 as a target code):
+https://github.com/plumed/plumed2/releases/tag/v2.7.1
+
+5) configure GROMACS with cmake as usual, but add the following keys.
+
+Build should be static:
+-DBUILD_SHARED_LIBS=OFF 
+-DGMXAPI=OFF 
+-DGMX_INSTALL_NBLIB_API=OFF 
+
+Double in general is better than single for QMMM (however both options are viable)
+-DGMX_DOUBLE=ON 
+
+FFTW, BLAS and LAPACK should be the same between CP2K and GROMACS.
+As an example, it could be done like that:
+-DGMX_FFT_LIBRARY=fftw3
+-DGMX_BLAS_USER="<path to your openblas>/lib/libopenblas.a" 
+-DGMX_LAPACK_USER="<path to your openblas>/lib/libopenblas.a" 
+
+Compilation of GROMACS-CP2K interface is controlled by the following flags.
+Activates Interface:
+-DGMX_CP2K=ON 
+
+Directory with libcp2k.a, typically something like that:
+-DCP2K_DIR="<path to cp2k>/cp2k/lib/local/psmp"
+
+Other libraries used by CP2K. Typically that should be combination of LDFLAGS and LIBS from the ARCH file used for libcp2k compilation.
+An exmaple for CP2K compiled with: OpenMPI, OpenBLAS, Netlib-SCALAPACK, fftw3, libxsmm, libint and libxc:
+-DCP2K_LIBS="-Wl,--enable-new-dtags -pthread -L/usr/lib64 -L/appl/spack/v014/install-tree/gcc-9.3.0/openmpi-4.0.3-ddb3ro/lib -L'/appl/spack/v014/install-tree/gcc-9.3.0/openblas-0.3.10-72fp3r/lib' -L'/appl/spack/v014/install-tree/gcc-9.3.0/fftw-3.3.8-aqjlqz/lib' -L'/appl/spack/gromacs_cp2k/cp2k/tools/toolchain/install/libint-v2.6.0-cp2k-lmax-5/lib' -L'/appl/spack/gromacs_cp2k/cp2k/tools/toolchain/install/libxc-4.3.4/lib' -L'/appl/spack/gromacs_cp2k/cp2k/tools/toolchain/install/libxsmm-1.16.1/lib' -L'/appl/spack/v014/install-tree/gcc-9.3.0/netlib-scalapack-2.1.0-his6fu/lib' -lscalapack -lxsmmf -lxsmm -ldl -lpthread -lxcf03 -lxc -lint2 -lfftw3_mpi -lfftw3 -lfftw3_omp -lmpi -lopenblas -lstdc++"
+
+Depending on you CP2K installation it could also include ELPA or other libraries. Please check your ARCH file, used for CP2K compilation.
+
+6) Then compile GROMACS as usually and you will get gmx_mpi binary which will include QMMM capabilities
+
+7) Tutorials to test the interface are located here:
+https://github.com/bioexcel/gromacs_cp2k_tutorial
+You might need to change run.sh files, depending on the specification of the system you are using.
+
+
+
+
+
+
+
