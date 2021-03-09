@@ -38,7 +38,7 @@
 #ifndef GMX_MATH_UNITS_H
 #define GMX_MATH_UNITS_H
 
-#include <cmath>
+#include <math.h>
 
 /*
  * Physical constants to be used in Gromacs.
