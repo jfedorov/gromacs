@@ -1361,9 +1361,7 @@ int Mdrunner::mdrunner()
     try
     {
         const bool useUpdateGroups = cr->dd ? ddUsesUpdateGroups(*cr->dd) : false;
-        const bool haveFrozenAtoms = inputrecFrozenAtoms(inputrec.get());
-
-        useGpuForUpdate = decideWhetherToUseGpuForUpdate(useDomainDecomposition,
+        useGpuForUpdate            = decideWhetherToUseGpuForUpdate(useDomainDecomposition,
                                                          useUpdateGroups,
                                                          pmeRunMode,
                                                          domdecOptions.numPmeRanks > 0,
@@ -1375,7 +1373,6 @@ int Mdrunner::mdrunner()
                                                          doEssentialDynamics,
                                                          gmx_mtop_ftype_count(mtop, F_ORIRES) > 0,
                                                          replExParams.exchangeInterval > 0,
-                                                         haveFrozenAtoms,
                                                          doRerun,
                                                          devFlags,
                                                          mdlog);

@@ -183,8 +183,10 @@ private:
     const DeviceContext& deviceContext_;
     //! GPU stream
     const DeviceStream& deviceStream_;
-    //! GPU kernel launch config
+    //! GPU kernel launch config for coordinate scaling
     KernelLaunchConfig coordinateScalingKernelLaunchConfig_;
+    //! GPU kernel launch config for freezing atoms
+    KernelLaunchConfig freezeAtomsKernelLaunchConfig_;
 
     //! Periodic boundary data
     PbcAiuc pbcAiuc_;
@@ -213,6 +215,19 @@ private:
     int numInverseMasses_ = -1;
     //! Allocation size for the reciprocal masses buffer
     int numInverseMassesAlloc_ = -1;
+
+    // Freeze group data from inputrec
+    ivec* nFreeze_;
+    //! Whether there are freeze groups
+    bool havePartiallyFrozenAtoms_ = false;
+    //! Map of frozen dimension index to the atom dimension index on host
+    HostVector<int> h_mapFrozenDimensions_;
+    //! Map of frozen dimension index to the atom dimension index on device
+    DeviceBuffer<int> d_mapFrozenDimensions_;
+    //! Number of elements in the map of frozen dimensions
+    int numMapFrozenDimensions_ = -1;
+    //! Allocation size for the the map of frozen dimensions buffer
+    int numMapFrozenDimensionsAlloc_ = -1;
 
     //! Leap-Frog integrator
     std::unique_ptr<LeapFrogGpu> integrator_;

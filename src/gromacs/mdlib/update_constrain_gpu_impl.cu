@@ -106,6 +106,22 @@ __launch_bounds__(c_maxThreadsPerBlock) __global__
     }
 }
 
+__launch_bounds__(c_maxThreadsPerBlock) __global__
+        static void freezeAtoms_kernel(const int numFrozen,
+                                       const int* __restrict__ gm_mapFrozenDimensions,
+                                       float* __restrict__ gm_xFlat,
+                                       const float* __restrict__ gm_xpFlat,
+                                       float* __restrict__ gm_vFlat)
+{
+    int threadIndex = blockIdx.x * blockDim.x + threadIdx.x;
+    if (threadIndex < numFrozen)
+    {
+        const int index = gm_mapFrozenDimensions[threadIndex];
+        gm_xFlat[index] = gm_xpFlat[index];
+        gm_vFlat[index] = 0.0;
+    }
+}
+
 void UpdateConstrainGpu::Impl::integrate(GpuEventSynchronizer*             fReadyOnDevice,
                                          const real                        dt,
                                          const bool                        updateVelocities,
@@ -136,6 +152,23 @@ void UpdateConstrainGpu::Impl::integrate(GpuEventSynchronizer*             fRead
     // d_xp_ -> d_x_ copy after constraints. Note that the integrate saves them in the wrong order as well.
     lincsGpu_->apply(d_xp_, d_x_, updateVelocities, d_v_, 1.0 / dt, computeVirial, virial, pbcAiuc_);
     settleGpu_->apply(d_xp_, d_x_, updateVelocities, d_v_, 1.0 / dt, computeVirial, virial, pbcAiuc_);
+
+    if (havePartiallyFrozenAtoms_)
+    {
+        const auto kernelArgs = prepareGpuKernelArguments(freezeAtoms_kernel,
+                                                          freezeAtomsKernelLaunchConfig_,
+                                                          &numMapFrozenDimensions_,
+                                                          &d_mapFrozenDimensions_,
+                                                          &d_x_,
+                                                          &d_xp_,
+                                                          &d_v_);
+        launchGpuKernel(freezeAtoms_kernel,
+                        freezeAtomsKernelLaunchConfig_,
+                        deviceStream_,
+                        nullptr,
+                        "freezeAtoms_kernel",
+                        kernelArgs);
+    }
 
     // scaledVirial -> virial (methods above returns scaled values)
     float scaleFactor = 0.5f / (dt * dt);
@@ -223,10 +256,20 @@ UpdateConstrainGpu::Impl::Impl(const t_inputrec&     ir,
     deviceContext_(deviceContext),
     deviceStream_(deviceStream),
     coordinatesReady_(xUpdatedOnDevice),
+    nFreeze_(ir.opts.nFreeze),
     wcycle_(wcycle)
 {
     GMX_ASSERT(xUpdatedOnDevice != nullptr, "The event synchronizer can not be nullptr.");
 
+    if (ir.opts.ngfrz > 0)
+    {
+        changePinningPolicy(&h_mapFrozenDimensions_, PinningPolicy::PinnedIfSupported);
+
+        freezeAtomsKernelLaunchConfig_.blockSize[0]     = c_threadsPerBlock;
+        freezeAtomsKernelLaunchConfig_.blockSize[1]     = 1;
+        freezeAtomsKernelLaunchConfig_.blockSize[2]     = 1;
+        freezeAtomsKernelLaunchConfig_.sharedMemorySize = 0;
+    }
 
     integrator_ = std::make_unique<LeapFrogGpu>(deviceContext_, deviceStream_, numTempScaleValues);
     lincsGpu_ = std::make_unique<LincsGpu>(ir.nLincsIter, ir.nProjOrder, deviceContext_, deviceStream_);
@@ -264,6 +307,37 @@ void UpdateConstrainGpu::Impl::set(DeviceBuffer<RVec>            d_x,
 
     reallocateDeviceBuffer(
             &d_inverseMasses_, numAtoms_, &numInverseMasses_, &numInverseMassesAlloc_, deviceContext_);
+
+    havePartiallyFrozenAtoms_ = md.havePartiallyFrozenAtoms;
+    if (havePartiallyFrozenAtoms_)
+    {
+        h_mapFrozenDimensions_.clear();
+        for (int i = 0; i < numAtoms_; i++)
+        {
+            const int freezeGroup = md.cFREEZE[i];
+            for (int d = 0; d < DIM; d++)
+            {
+                if (nFreeze_[freezeGroup][d])
+                {
+                    h_mapFrozenDimensions_.emplace_back(i * DIM + d);
+                }
+            }
+        }
+        freezeAtomsKernelLaunchConfig_.gridSize[0] =
+                (h_mapFrozenDimensions_.size() + c_threadsPerBlock - 1) / c_threadsPerBlock;
+        reallocateDeviceBuffer(&d_mapFrozenDimensions_,
+                               h_mapFrozenDimensions_.size(),
+                               &numMapFrozenDimensions_,
+                               &numMapFrozenDimensionsAlloc_,
+                               deviceContext_);
+        copyToDeviceBuffer(&d_mapFrozenDimensions_,
+                           h_mapFrozenDimensions_.data(),
+                           0,
+                           h_mapFrozenDimensions_.size(),
+                           deviceStream_,
+                           GpuApiCallBehavior::Async,
+                           nullptr);
+    }
 
     // Integrator should also update something, but it does not even have a method yet
     integrator_->set(numAtoms_, md.invmass, md.cTC);
