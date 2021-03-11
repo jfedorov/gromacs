@@ -65,8 +65,13 @@
  * \param[in]     deviceContext        The buffer's dummy device  context - not managed explicitly in CUDA RT.
  */
 template<typename ValueType>
-void allocateDeviceBuffer(DeviceBuffer<ValueType>* buffer, size_t numValues, const DeviceContext& /* deviceContext */)
+void allocateDeviceBuffer(DeviceBuffer<ValueType>* buffer, size_t numValues, const DeviceContext& deviceContext)
 {
+    GMX_UNUSED_VALUE(deviceContext);
+    GMX_ASSERT(deviceContext.isDeviceActive(),
+               "Could not allocate device buffer in a provided device context because the latter "
+               "does not correspond to a device currently active. Active it first using "
+               "setDeviceActive() method.");
     GMX_ASSERT(buffer, "needs a buffer pointer");
     cudaError_t stat = cudaMalloc(buffer, numValues * sizeof(ValueType));
     GMX_RELEASE_ASSERT(
@@ -123,6 +128,11 @@ void copyToDeviceBuffer(DeviceBuffer<ValueType>* buffer,
     }
     GMX_ASSERT(buffer, "needs a buffer pointer");
     GMX_ASSERT(hostBuffer, "needs a host buffer pointer");
+    GMX_ASSERT(deviceStream.deviceContext().isDeviceActive(),
+               "Could not copy to device buffer: provided stream is attached to a device context "
+               "that does not correspond to a device currently active. Active it first using "
+               "setDeviceActive() method.");
+
     cudaError_t  stat;
     const size_t bytes = numValues * sizeof(ValueType);
 
@@ -182,6 +192,10 @@ void copyFromDeviceBuffer(ValueType*               hostBuffer,
     }
     GMX_ASSERT(buffer, "needs a buffer pointer");
     GMX_ASSERT(hostBuffer, "needs a host buffer pointer");
+    GMX_ASSERT(deviceStream.deviceContext().isDeviceActive(),
+               "Could not copy from device buffer: provided stream is attached to a device context "
+               "that does not correspond to a device currently active. Active it first using "
+               "setDeviceActive() method.");
 
     cudaError_t  stat;
     const size_t bytes = numValues * sizeof(ValueType);
@@ -287,6 +301,10 @@ void clearDeviceBufferAsync(DeviceBuffer<ValueType>* buffer,
         return;
     }
     GMX_ASSERT(buffer, "needs a buffer pointer");
+    GMX_ASSERT(deviceStream.deviceContext().isDeviceActive(),
+               "Could not clear device buffer: provided stream is attached to a device context "
+               "that does not correspond to a device currently active. Active it first using "
+               "setDeviceActive() method.");
     const size_t bytes   = numValues * sizeof(ValueType);
     const char   pattern = 0;
 

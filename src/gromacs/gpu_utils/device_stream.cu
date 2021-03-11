@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2020, by the GROMACS development team, led by
+ * Copyright (c) 2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -44,16 +44,22 @@
 
 #include "device_stream.h"
 
+#include "gromacs/gpu_utils/device_context.h"
 #include "gromacs/gpu_utils/cudautils.cuh"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/stringutil.h"
 
-DeviceStream::DeviceStream(const DeviceContext& /* deviceContext */,
+DeviceStream::DeviceStream(const DeviceContext& deviceContext,
                            DeviceStreamPriority priority,
-                           const bool /* useTiming */)
+                           const bool /* useTiming */) :
+    deviceContext_(deviceContext)
 {
     cudaError_t stat;
+
+    GMX_RELEASE_ASSERT(deviceContext.isDeviceActive(),
+                       "Could not create CUDA stream: provided device context does not correspond "
+                       "to active device. To activate, use setDeviceActive() method.");
 
     if (priority == DeviceStreamPriority::Normal)
     {

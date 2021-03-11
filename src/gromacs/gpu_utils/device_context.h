@@ -78,7 +78,19 @@ public:
     //! Get the associated device information
     const DeviceInformation& deviceInfo() const { return deviceInfo_; }
 
-    void activate() { setActiveDevice(deviceInfo_); }
+    //! Activate the device associated with the context
+    void setDeviceActive() { setActiveDevice(deviceInfo_); }
+
+    /*! \brief Check if this context is currently active (i.e. corresponding device is set in CUDA)
+     *
+     * In CUDA, the active device should be explicitely activated, and the device buffers and device
+     * streams are not attached to the device through context. This function allows one to introduce
+     * explicit checks in order to make sure that the device buffers and streams, that are created
+     * for one device, are not used when the other is active.
+     *
+     * \return Whether this context corresponds to an active device.
+     */
+    bool isDeviceActive() const { return checkDeviceActive(deviceInfo_); }
 
 private:
     //! A reference to the device information used upon context creation
