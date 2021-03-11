@@ -255,8 +255,8 @@ UpdateConstrainGpu::Impl::Impl(const t_inputrec&     ir,
                                gmx_wallcycle*        wcycle) :
     deviceContext_(deviceContext),
     deviceStream_(deviceStream),
-    coordinatesReady_(xUpdatedOnDevice),
     nFreeze_(ir.opts.nFreeze),
+    coordinatesReady_(xUpdatedOnDevice),
     wcycle_(wcycle)
 {
     GMX_ASSERT(xUpdatedOnDevice != nullptr, "The event synchronizer can not be nullptr.");
