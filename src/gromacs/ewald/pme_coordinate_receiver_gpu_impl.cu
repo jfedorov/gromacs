@@ -92,8 +92,8 @@ void PmeCoordinateReceiverGpu::Impl::sendCoordinateBufferAddressToPpRanks(Device
     }
 }
 
-/*! \brief Receive coordinate data directly using CUDA memory copy */
-void PmeCoordinateReceiverGpu::Impl::launchReceiveCoordinatesFromPpCudaDirect(int ppRank)
+/*! \brief Receive coordinate synchronizer pointer from the PP ranks. */
+void PmeCoordinateReceiverGpu::Impl::receiveCoordinatesSynchronizerFromPpCudaDirect(int ppRank)
 {
     // Data will be pushed directly from PP task
 
@@ -137,9 +137,9 @@ void PmeCoordinateReceiverGpu::sendCoordinateBufferAddressToPpRanks(DeviceBuffer
     impl_->sendCoordinateBufferAddressToPpRanks(d_x);
 }
 
-void PmeCoordinateReceiverGpu::launchReceiveCoordinatesFromPpCudaDirect(int ppRank)
+void PmeCoordinateReceiverGpu::receiveCoordinatesSynchronizerFromPpCudaDirect(int ppRank)
 {
-    impl_->launchReceiveCoordinatesFromPpCudaDirect(ppRank);
+    impl_->receiveCoordinatesSynchronizerFromPpCudaDirect(ppRank);
 }
 
 void PmeCoordinateReceiverGpu::enqueueWaitReceiveCoordinatesFromPpCudaDirect()
