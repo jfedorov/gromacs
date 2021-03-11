@@ -256,7 +256,9 @@ public:
     bool thisRankHasPmeGpuTask() const;
     //! Return whether this rank has any task running on a GPU
     bool thisRankHasAnyGpuTask() const;
-    //! Get the list of devices assigned to this node
+    //! Get the tasks-to-device asignment for this physical node
+    //  Note that this is not a unique list of IDs as multiple tasks
+    //  can be assigned to the same device.
     std::vector<int> deviceIdsAssigned() { return deviceIdsAssigned_; }
 };
 
