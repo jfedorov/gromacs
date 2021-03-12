@@ -72,6 +72,7 @@ class TimingTest : public ::testing::Test
 {
 protected:
     void SetUp() override { wcycle = wallcycle_init(nullptr, 0, nullptr); }
+    void TearDown() override { wallcycle_destroy(wcycle); }
 
     int             delay_ms = 1;
     gmx_wallcycle_t wcycle;
@@ -109,18 +110,18 @@ TEST_F(TimingTest, DecorateWallCycleSub)
     if (useCycleSubcounters)
     {
         TimerDecorator td(wcycle);
-        int    probe = 0;
-      int    ref   = 1;
-      int    n1, n2;
-      double c1, c2;
-    wallcycle_sub_start(wcycle, ref);
-    td.wallcycle_sub(probe, sleep, delay_ms);
-    wallcycle_sub_stop(wcycle, ref);
-    wallcycle_sub_get(wcycle, probe, &n1, &c1);
-    wallcycle_sub_get(wcycle, ref, &n2, &c2);
+        int            probe = 0;
+        int            ref   = 1;
+        int            n1, n2;
+        double         c1, c2;
+        wallcycle_sub_start(wcycle, ref);
+        td.wallcycle_sub(probe, sleep, delay_ms);
+        wallcycle_sub_stop(wcycle, ref);
+        wallcycle_sub_get(wcycle, probe, &n1, &c1);
+        wallcycle_sub_get(wcycle, ref, &n2, &c2);
 
-    EXPECT_EQ(n1, n2);
-    EXPECT_DOUBLE_EQ_TOL(c1, c2, relativeToleranceAsFloatingPoint(c1, 5e-3));
+        EXPECT_EQ(n1, n2);
+        EXPECT_DOUBLE_EQ_TOL(c1, c2, relativeToleranceAsFloatingPoint(c1, 5e-3));
     }
 }
 
