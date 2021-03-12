@@ -58,7 +58,7 @@
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/snprintf.h"
 
-static const bool useCycleSubcounters = GMX_CYCLE_SUBCOUNTERS;
+static constexpr bool useCycleSubcounters = GMX_CYCLE_SUBCOUNTERS;
 
 #ifndef DEBUG_WCYCLE
 /*! \brief Enables consistency checking for the counters.

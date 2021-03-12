@@ -59,6 +59,8 @@ namespace test
 namespace
 {
 
+constexpr bool useCycleSubcounters = GMX_CYCLE_SUBCOUNTERS;
+
 //! Test function
 void sleep(int msecs)
 {
@@ -102,20 +104,15 @@ TEST_F(TimingTest, DecorateWallCycle)
  * This test needs to be disabled if GMX_CYCLE_SUBCOUNTERS are not
  * enabled because in that case, the subcounts (wccs) data structure is not allocated
  */
-#if GMX_CYCLE_SUBCOUNTERS
 TEST_F(TimingTest, DecorateWallCycleSub)
-#else
-TEST_F(TimingTest, DISABLED_DecorateWallCycleSub)
-#endif
 {
-    TimerDecorator td(wcycle);
-
-    //! local variable to query wallcycle counters
-    int    probe = 0;
-    int    ref   = 1;
-    int    n1, n2;
-    double c1, c2;
-
+    if (useCycleSubcounters)
+    {
+        TimerDecorator td(wcycle);
+        int    probe = 0;
+      int    ref   = 1;
+      int    n1, n2;
+      double c1, c2;
     wallcycle_sub_start(wcycle, ref);
     td.wallcycle_sub(probe, sleep, delay_ms);
     wallcycle_sub_stop(wcycle, ref);
@@ -124,17 +121,14 @@ TEST_F(TimingTest, DISABLED_DecorateWallCycleSub)
 
     EXPECT_EQ(n1, n2);
     EXPECT_DOUBLE_EQ_TOL(c1, c2, relativeToleranceAsFloatingPoint(c1, 5e-3));
+    }
 }
 
 /*! Test whether the decorator correctly wraps both counters simultaneously
  * This test needs to be disabled if GMX_CYCLE_SUBCOUNTERS are not
  * enabled because in that case, the subcounts (wccs) data structure is not allocated
  */
-#if GMX_CYCLE_SUBCOUNTERS
 TEST_F(TimingTest, DecorateWallCycleBoth)
-#else
-TEST_F(TimingTest, DISABLED_DecorateWallCycleBoth)
-#endif
 {
     TimerDecorator td(wcycle);
 
@@ -144,9 +138,15 @@ TEST_F(TimingTest, DISABLED_DecorateWallCycleBoth)
     double c1, c2;
 
     wallcycle_start_nocount(wcycle, ref);
-    wallcycle_sub_start(wcycle, ref);
+    if (useCycleSubcounters)
+    {
+        wallcycle_sub_start(wcycle, ref);
+    }
     td.wallcycle_both(probe, probe, sleep, delay_ms);
-    wallcycle_sub_stop(wcycle, ref);
+    if (useCycleSubcounters)
+    {
+        wallcycle_sub_stop(wcycle, ref);
+    }
     wallcycle_stop(wcycle, ref);
 
     wallcycle_get(wcycle, probe, &n1, &c1);
@@ -170,7 +170,6 @@ TEST_F(TimingTest, CheckOverhead)
 
     int    n;
     double c;
-    //! seconds per cycle
     double spc = gmx_cycles_calibrate(0.1);
 
     int reps = 1000000;
@@ -183,15 +182,12 @@ TEST_F(TimingTest, CheckOverhead)
     c = wallcycle_stop(wcycle, 0);
 
 #if defined(__INTEL_COMPILER)
-    //! 100 micro seconds for intel
     double expectedDelay = 100 * 1e-6 * reps;
 #else
-    //! < 100 ns per invocation pair
     double expectedDelay = 100 * 1e-9 * reps;
 #endif
 
 
-    //! c*spc: time elapsed in seconds
     EXPECT_LT(c * spc, expectedDelay);
 
     for (int i = 0; i < reps; ++i)
