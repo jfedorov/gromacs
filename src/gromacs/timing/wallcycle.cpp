@@ -458,7 +458,7 @@ void wallcycle_get(gmx_wallcycle_t wc, int ewc, int* n, double* c)
     *c = static_cast<double>(wc->wcc[ewc].c);
 }
 
-void wallcycle_sub_get(gmx_wallcycle_t wc, int ewcs, int *n, double *c)
+void wallcycle_sub_get(gmx_wallcycle_t wc, int ewcs, int* n, double* c)
 {
     if (useCycleSubcounters && wc != nullptr)
     {

@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019, by the GROMACS development team, led by
+ * Copyright (c) 2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -68,14 +68,11 @@ void sleep(int msecs)
 //! Test Fixture for timing tests
 class TimingTest : public ::testing::Test
 {
-    protected:
-        void SetUp() override
-        {
-            wcycle = wallcycle_init(nullptr, 0, nullptr);
-        }
+protected:
+    void SetUp() override { wcycle = wallcycle_init(nullptr, 0, nullptr); }
 
-        int             delay_ms = 1;
-        gmx_wallcycle_t wcycle;
+    int             delay_ms = 1;
+    gmx_wallcycle_t wcycle;
 };
 
 
@@ -84,9 +81,9 @@ TEST_F(TimingTest, DecorateWallCycle)
 {
     TimerDecorator td(wcycle);
 
-    int            probe = 0, ref = 1;
-    int            n1, n2;
-    double         c1, c2;
+    int    probe = 0, ref = 1;
+    int    n1, n2;
+    double c1, c2;
 
     //! credit cycles from enclosing call to the ref field of wcycle
     wallcycle_start(wcycle, ref);
@@ -114,10 +111,10 @@ TEST_F(TimingTest, DISABLED_DecorateWallCycleSub)
     TimerDecorator td(wcycle);
 
     //! local variable to query wallcycle counters
-    int            probe = 0;
-    int            ref   = 1;
-    int            n1, n2;
-    double         c1, c2;
+    int    probe = 0;
+    int    ref   = 1;
+    int    n1, n2;
+    double c1, c2;
 
     wallcycle_sub_start(wcycle, ref);
     td.wallcycle_sub(probe, sleep, delay_ms);
@@ -141,10 +138,10 @@ TEST_F(TimingTest, DISABLED_DecorateWallCycleBoth)
 {
     TimerDecorator td(wcycle);
 
-    int            probe = 0;
-    int            ref   = 1;
-    int            n1, n2;
-    double         c1, c2;
+    int    probe = 0;
+    int    ref   = 1;
+    int    n1, n2;
+    double c1, c2;
 
     wallcycle_start_nocount(wcycle, ref);
     wallcycle_sub_start(wcycle, ref);
@@ -171,17 +168,17 @@ TEST_F(TimingTest, CheckOverhead)
 {
     TimerDecorator td(wcycle);
 
-    int            n;
-    double         c;
+    int    n;
+    double c;
     //! seconds per cycle
-    double         spc = gmx_cycles_calibrate(0.1);
+    double spc = gmx_cycles_calibrate(0.1);
 
-    int            reps = 1000000;
+    int reps = 1000000;
 
     wallcycle_start(wcycle, 0);
     for (int i = 0; i < reps; ++i)
     {
-        td.wallcycle(1, [](){});
+        td.wallcycle(1, []() {});
     }
     c = wallcycle_stop(wcycle, 0);
 
@@ -195,7 +192,7 @@ TEST_F(TimingTest, CheckOverhead)
 
 
     //! c*spc: time elapsed in seconds
-    EXPECT_LT(c*spc, expectedDelay);
+    EXPECT_LT(c * spc, expectedDelay);
 
     for (int i = 0; i < reps; ++i)
     {
@@ -204,9 +201,9 @@ TEST_F(TimingTest, CheckOverhead)
     }
 
     wallcycle_get(wcycle, 2, &n, &c);
-    EXPECT_LT(c*spc, expectedDelay);
+    EXPECT_LT(c * spc, expectedDelay);
 }
 
-}  // namespace
-}  // namespace test
-}  // namespace gmx
+} // namespace
+} // namespace test
+} // namespace gmx

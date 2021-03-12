@@ -4,7 +4,7 @@
  * Copyright (c) 1991-2000, University of Groningen, The Netherlands.
  * Copyright (c) 2001-2008, The GROMACS development team.
  * Copyright (c) 2013,2014,2015,2017,2018 by the GROMACS development team.
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -165,7 +165,7 @@ void wallcycle_increment_event_count(gmx_wallcycle_t wc, int ewc);
 void wallcycle_get(gmx_wallcycle_t wc, int ewc, int* n, double* c);
 /* Returns the cumulative count and cycle count for ewc */
 
-void wallcycle_sub_get(gmx_wallcycle_t wc, int ewcs, int *n, double *c);
+void wallcycle_sub_get(gmx_wallcycle_t wc, int ewcs, int* n, double* c);
 /* Returns the cumulative count and sub cycle count for ewcs */
 
 void wallcycle_reset_all(gmx_wallcycle_t wc);
@@ -204,88 +204,84 @@ void wallcycle_sub_stop(gmx_wallcycle_t wc, int ewcs);
  */
 class TimerDecorator
 {
-    public:
-        /*! \brief
-         * Construct a TimerDecorator object
-         *
-         * \param[in]   cycles    wallcycle object to save information to
-         */
-        TimerDecorator(gmx_wallcycle_t cycles) : cycles_(cycles)
-        { }
+public:
+    /*! \brief
+     * Construct a TimerDecorator object
+     *
+     * \param[in]   cycles    wallcycle object to save information to
+     */
+    TimerDecorator(gmx_wallcycle_t cycles) : cycles_(cycles) {}
 
-        /*! \brief
-         * Wraps a callable object with wallcycle_start and wallcycle_stop
-         *
-         * \param ewc   counter category
-         * \param func  callable to be wrapped
-         * \param args  arguments to callable
-         */
-        template <class F, class ... Args>
-        void wallcycle(int ewc, F func, Args && ... args)
-        {
-            wallcycle_start(cycles_, ewc);
-            func(std::forward<Args>(args) ...);
-            wallcycle_stop(cycles_, ewc);
-        }
+    /*! \brief
+     * Wraps a callable object with wallcycle_start and wallcycle_stop
+     *
+     * \param ewc   counter category
+     * \param func  callable to be wrapped
+     * \param args  arguments to callable
+     */
+    template<class F, class... Args>
+    void wallcycle(int ewc, F func, Args&&... args)
+    {
+        wallcycle_start(cycles_, ewc);
+        func(std::forward<Args>(args)...);
+        wallcycle_stop(cycles_, ewc);
+    }
 
-        /*! \brief
-         * Wraps a callable object with wallcycle_sub_start and wallcycle_sub_stop
-         *
-         * \param ewc   counter category
-         * \param func  callable to be wrapped
-         * \param args  arguments to callable
-         */
-        template <class F, class ... Args>
-        void wallcycle_sub(int ewc, F func, Args && ... args)
-        {
-            wallcycle_sub_start(cycles_, ewc);
-            func(std::forward<Args>(args) ...);
-            wallcycle_sub_stop(cycles_, ewc);
-        }
+    /*! \brief
+     * Wraps a callable object with wallcycle_sub_start and wallcycle_sub_stop
+     *
+     * \param ewc   counter category
+     * \param func  callable to be wrapped
+     * \param args  arguments to callable
+     */
+    template<class F, class... Args>
+    void wallcycle_sub(int ewc, F func, Args&&... args)
+    {
+        wallcycle_sub_start(cycles_, ewc);
+        func(std::forward<Args>(args)...);
+        wallcycle_sub_stop(cycles_, ewc);
+    }
 
-        /*! \brief
-         * Wraps a callable object with wallcycle_sub_nocount and wallcycle_sub_stop
-         *
-         * \param ewc   counter category
-         * \param func  callable to be wrapped
-         * \param args  arguments to callable
-         */
-        template <class F, class ... Args>
-        void wallcycle_sub_nocount(int ewc, F func, Args && ... args)
-        {
-            wallcycle_sub_start_nocount(cycles_, ewc);
-            func(std::forward<Args>(args) ...);
-            wallcycle_sub_stop(cycles_, ewc);
-        }
+    /*! \brief
+     * Wraps a callable object with wallcycle_sub_nocount and wallcycle_sub_stop
+     *
+     * \param ewc   counter category
+     * \param func  callable to be wrapped
+     * \param args  arguments to callable
+     */
+    template<class F, class... Args>
+    void wallcycle_sub_nocount(int ewc, F func, Args&&... args)
+    {
+        wallcycle_sub_start_nocount(cycles_, ewc);
+        func(std::forward<Args>(args)...);
+        wallcycle_sub_stop(cycles_, ewc);
+    }
 
-        /*! \brief
-         * Wraps a callable object with wallcycle_start_nocount + wallcycle_sub_start
-         * and wallcycle_sub_stop + wallcycle_stop
-         *
-         * \param ewc   counter category
-         * \param func  callable to be wrapped
-         * \param args  arguments to callable
-         * \param ewc_inner accounting info for inner wcycle counter
-         * \param ewc_outer accounting info for outer wcycle counter
-         */
-        template <class F, class ... Args>
-        void wallcycle_both(int ewc_outer, int ewc_inner, F func, Args && ... args)
-        {
-            wallcycle_start_nocount(cycles_, ewc_outer);
-            wallcycle_sub_start(cycles_, ewc_inner);
-            func(std::forward<Args>(args) ...);
-            wallcycle_sub_stop(cycles_, ewc_inner);
-            wallcycle_stop(cycles_, ewc_outer);
-        }
+    /*! \brief
+     * Wraps a callable object with wallcycle_start_nocount + wallcycle_sub_start
+     * and wallcycle_sub_stop + wallcycle_stop
+     *
+     * \param ewc   counter category
+     * \param func  callable to be wrapped
+     * \param args  arguments to callable
+     * \param ewc_inner accounting info for inner wcycle counter
+     * \param ewc_outer accounting info for outer wcycle counter
+     */
+    template<class F, class... Args>
+    void wallcycle_both(int ewc_outer, int ewc_inner, F func, Args&&... args)
+    {
+        wallcycle_start_nocount(cycles_, ewc_outer);
+        wallcycle_sub_start(cycles_, ewc_inner);
+        func(std::forward<Args>(args)...);
+        wallcycle_sub_stop(cycles_, ewc_inner);
+        wallcycle_stop(cycles_, ewc_outer);
+    }
 
-        //! Return the internal wallcycle counting object
-        gmx_wallcycle_t get_wallcycles()
-        {
-            return cycles_;
-        }
+    //! Return the internal wallcycle counting object
+    gmx_wallcycle_t get_wallcycles() { return cycles_; }
 
-    private:
-        gmx_wallcycle_t cycles_;
+private:
+    gmx_wallcycle_t cycles_;
 };
 
 #endif
