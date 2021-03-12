@@ -858,14 +858,14 @@ void dd_make_reverse_top(FILE*                           fplog,
  * confuses static analysis tools unless we fuse the vsite
  * atom-indexing organization code with the ifunc-adding code, so that
  * they can see that nral is the same value. */
-static inline ArrayRef<const t_iatom> add_ifunc_for_vsites(const gmx_ga2la_t&      ga2la,
-                                                           const int               nral,
-                                                           const bool              isLocalVsite,
-                                                           const AtomIndexSet&     atomIndex,
-                                                           ArrayRef<const t_iatom> iatoms,
-                                                           InteractionList*        il)
+static inline ArrayRef<const int> add_ifunc_for_vsites(const gmx_ga2la_t&  ga2la,
+                                                       const int           nral,
+                                                       const bool          isLocalVsite,
+                                                       const AtomIndexSet& atomIndex,
+                                                       ArrayRef<const int> iatoms,
+                                                       InteractionList*    il)
 {
-    std::array<t_iatom, 1 + MAXATOMLIST> tiatoms;
+    std::array<int, 1 + MAXATOMLIST> tiatoms;
 
     /* Copy the type */
     tiatoms[0] = iatoms[0];
@@ -899,6 +899,7 @@ static inline ArrayRef<const t_iatom> add_ifunc_for_vsites(const gmx_ga2la_t&   
     }
     il->push_back(tiatoms[0], nral, tiatoms.data() + 1);
 
+    // Return an array with the parameter index and the nral atom indices
     return gmx::constArrayRefFromArray(il->iatoms.data() + il->iatoms.size() - (1 + nral), 1 + nral);
 }
 
@@ -907,7 +908,7 @@ static void add_posres(int                     mol,
                        int                     a_mol,
                        int                     numAtomsInMolecule,
                        const gmx_molblock_t*   molb,
-                       t_iatom*                iatoms,
+                       int*                    iatoms,
                        const t_iparams*        ip_in,
                        InteractionDefinitions* idef)
 {
@@ -952,7 +953,7 @@ static void add_fbposres(int                     mol,
                          int                     a_mol,
                          int                     numAtomsInMolecule,
                          const gmx_molblock_t*   molb,
-                         t_iatom*                iatoms,
+                         int*                    iatoms,
                          const t_iparams*        ip_in,
                          InteractionDefinitions* idef)
 {
@@ -989,11 +990,11 @@ static void add_vsite(const gmx_ga2la_t&      ga2la,
                       const int               nral,
                       const bool              isLocalVsite,
                       const AtomIndexSet&     atomIndex,
-                      ArrayRef<const t_iatom> iatoms,
+                      ArrayRef<const int>     iatoms,
                       InteractionDefinitions* idef)
 {
     /* Add this interaction to the local topology */
-    ArrayRef<const t_iatom> tiatoms =
+    ArrayRef<const int> tiatoms =
             add_ifunc_for_vsites(ga2la, nral, isLocalVsite, atomIndex, iatoms, &idef->il[ftype]);
 
     if (iatoms[1 + nral])
@@ -1137,7 +1138,7 @@ static inline int check_assign_interactions_atom(const AtomIndexSet&       atomI
 {
     gmx::ArrayRef<const DDPairInteractionRanges> iZones = zones.iZones;
 
-    ArrayRef<const t_iatom> rtil = reverseIlist.il;
+    ArrayRef<const int> rtil = reverseIlist.il;
 
     int numBondedInteractions = 0;
 
@@ -1145,7 +1146,7 @@ static inline int check_assign_interactions_atom(const AtomIndexSet&       atomI
     const int indexEnd = reverseIlist.index[atomIndex.inMolecule + 1];
     while (j < indexEnd)
     {
-        t_iatom tiatoms[1 + MAXATOMLIST];
+        int tiatoms[1 + MAXATOMLIST];
 
         const int ftype  = rtil[j++];
         auto      iatoms = gmx::constArrayRefFromArray(rtil.data() + j, rtil.size() - j);
