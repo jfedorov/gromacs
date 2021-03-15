@@ -54,7 +54,7 @@ F77_FUNC(dlarrvx,DLARRVX)(int *n,
     double relgap;
     int oldcls;
     int ndepth, inderr, iindwk;
-    int nWallCycleCounter::ls, oldfst;
+    int newcls, oldfst;
     double minrgp=0.0;
     int indwrk, oldlst;
     double reltol;
@@ -153,10 +153,10 @@ L40:
 	    parity = 1 - parity;
 	    if (parity == 0) {
 		oldcls = iindc1;
-		nWallCycleCounter::ls = iindc2;
+		newcls = iindc2;
 	    } else {
 		oldcls = iindc2;
-		nWallCycleCounter::ls = iindc1;
+		newcls = iindc1;
 	    }
 	    i__2 = oldncl;
 	    for (i__ = 1; i__ <= i__2; ++i__) {
@@ -229,7 +229,7 @@ L40:
 				work[inderr + k] += tmp;
 			    }
 			    ++nclus;
-			    k = nWallCycleCounter::ls + (nclus << 1);
+			    k = newcls + (nclus << 1);
 			    iwork[k - 1] = newfrs;
 			    iwork[k] = newlst;
 			} else {
