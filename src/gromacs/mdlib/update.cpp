@@ -1317,7 +1317,7 @@ void Update::Impl::update_sd_second_half(const t_inputrec& inputRecord,
          */
         real dt = inputRecord.delta_t;
 
-        wallcycle_start(wcycle, ewcUPDATE);
+        wallcycle_start(wcycle, WallCycleCounter::UPDATE);
 
         int nth = gmx_omp_nthreads_get(emntUpdate);
 
@@ -1350,7 +1350,7 @@ void Update::Impl::update_sd_second_half(const t_inputrec& inputRecord,
             GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR
         }
         inc_nrnb(nrnb, eNR_UPDATE, homenr);
-        wallcycle_stop(wcycle, ewcUPDATE);
+        wallcycle_stop(wcycle, WallCycleCounter::UPDATE);
 
         /* Constrain the coordinates upd->xp for half a time step */
         bool computeVirial = false;
@@ -1382,7 +1382,7 @@ void Update::Impl::finish_update(const t_inputrec& inputRecord,
      * then copy the results back here.
      */
 
-    wallcycle_start_nocount(wcycle, ewcUPDATE);
+    wallcycle_start_nocount(wcycle, WallCycleCounter::UPDATE);
 
     const int homenr = md->homenr;
     auto      xp     = makeConstArrayRef(xp_).subArray(0, homenr);
@@ -1423,7 +1423,7 @@ void Update::Impl::finish_update(const t_inputrec& inputRecord,
         }
     }
 
-    wallcycle_stop(wcycle, ewcUPDATE);
+    wallcycle_stop(wcycle, WallCycleCounter::UPDATE);
 }
 
 void Update::Impl::update_coords(const t_inputrec&                                inputRecord,

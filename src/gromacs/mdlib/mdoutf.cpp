@@ -753,10 +753,10 @@ void mdoutf_tng_close(gmx_mdoutf_t of)
 {
     if (of->tng || of->tng_low_prec)
     {
-        wallcycle_start(of->wcycle, ewcTRAJ);
+        wallcycle_start(of->wcycle, WallCycleCounter::TRAJ);
         gmx_tng_close(&of->tng);
         gmx_tng_close(&of->tng_low_prec);
-        wallcycle_stop(of->wcycle, ewcTRAJ);
+        wallcycle_stop(of->wcycle, WallCycleCounter::TRAJ);
     }
 }
 

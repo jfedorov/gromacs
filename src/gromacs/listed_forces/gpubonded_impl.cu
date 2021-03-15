@@ -310,11 +310,11 @@ void GpuBonded::Impl::launchEnergyTransfer()
     GMX_ASSERT(haveInteractions_,
                "No GPU bonded interactions, so no energies will be computed, so transfer should "
                "not be called");
-    wallcycle_sub_start_nocount(wcycle_, ewcsLAUNCH_GPU_BONDED);
+    wallcycle_sub_start_nocount(wcycle_, WallCycleSubCounter::LAUNCH_GPU_BONDED);
     // TODO add conditional on whether there has been any compute (and make sure host buffer doesn't contain garbage)
     float* h_vTot = vTot_.data();
     copyFromDeviceBuffer(h_vTot, &d_vTot_, 0, F_NRE, deviceStream_, GpuApiCallBehavior::Async, nullptr);
-    wallcycle_sub_stop(wcycle_, ewcsLAUNCH_GPU_BONDED);
+    wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LAUNCH_GPU_BONDED);
 }
 
 void GpuBonded::Impl::waitAccumulateEnergyTerms(gmx_enerdata_t* enerd)
@@ -323,10 +323,10 @@ void GpuBonded::Impl::waitAccumulateEnergyTerms(gmx_enerdata_t* enerd)
                "No GPU bonded interactions, so no energies will be computed or transferred, so "
                "accumulation should not occur");
 
-    wallcycle_start(wcycle_, ewcWAIT_GPU_BONDED);
+    wallcycle_start(wcycle_, WallCycleCounter::WAIT_GPU_BONDED);
     cudaError_t stat = cudaStreamSynchronize(deviceStream_.stream());
     CU_RET_ERR(stat, "D2H transfer of bonded energies failed");
-    wallcycle_stop(wcycle_, ewcWAIT_GPU_BONDED);
+    wallcycle_stop(wcycle_, WallCycleCounter::WAIT_GPU_BONDED);
 
     for (int fType : fTypesOnGpu)
     {
@@ -345,11 +345,11 @@ void GpuBonded::Impl::waitAccumulateEnergyTerms(gmx_enerdata_t* enerd)
 
 void GpuBonded::Impl::clearEnergies()
 {
-    wallcycle_start_nocount(wcycle_, ewcLAUNCH_GPU);
-    wallcycle_sub_start_nocount(wcycle_, ewcsLAUNCH_GPU_BONDED);
+    wallcycle_start_nocount(wcycle_, WallCycleCounter::LAUNCH_GPU);
+    wallcycle_sub_start_nocount(wcycle_, WallCycleSubCounter::LAUNCH_GPU_BONDED);
     clearDeviceBufferAsync(&d_vTot_, 0, F_NRE, deviceStream_);
-    wallcycle_sub_stop(wcycle_, ewcsLAUNCH_GPU_BONDED);
-    wallcycle_stop(wcycle_, ewcLAUNCH_GPU);
+    wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LAUNCH_GPU_BONDED);
+    wallcycle_stop(wcycle_, WallCycleCounter::LAUNCH_GPU);
 }
 
 // ---- GpuBonded

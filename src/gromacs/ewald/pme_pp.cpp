@@ -4,7 +4,7 @@
  * Copyright (c) 1991-2000, University of Groningen, The Netherlands.
  * Copyright (c) 2001-2004, The GROMACS development team.
  * Copyright (c) 2013,2014,2015,2016,2017 by the GROMACS development team.
- * Copyright (c) 2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -365,7 +365,7 @@ void gmx_pme_send_coordinates(t_forcerec*           fr,
                               GpuEventSynchronizer* coordinatesReadyOnDeviceEvent,
                               gmx_wallcycle*        wcycle)
 {
-    wallcycle_start(wcycle, ewcPP_PMESENDX);
+    wallcycle_start(wcycle, WallCycleCounter::PP_PMESENDX);
 
     unsigned int flags = PP_PME_COORD;
     if (computeEnergyAndVirial)
@@ -393,7 +393,7 @@ void gmx_pme_send_coordinates(t_forcerec*           fr,
                                sendCoordinatesFromGpu,
                                coordinatesReadyOnDeviceEvent);
 
-    wallcycle_stop(wcycle, ewcPP_PMESENDX);
+    wallcycle_stop(wcycle, WallCycleCounter::PP_PMESENDX);
 }
 
 void gmx_pme_send_finish(const t_commrec* cr)

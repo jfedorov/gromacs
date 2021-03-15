@@ -134,8 +134,8 @@ __global__ void unpackRecvBufKernel(float3* __restrict__ data,
 
 void GpuHaloExchange::Impl::reinitHalo(float3* d_coordinatesBuffer, float3* d_forcesBuffer)
 {
-    wallcycle_start(wcycle_, ewcDOMDEC);
-    wallcycle_sub_start(wcycle_, ewcsDD_GPU);
+    wallcycle_start(wcycle_, WallCycleCounter::DOMDEC);
+    wallcycle_sub_start(wcycle_, WallCycleSubCounter::DD_GPU);
 
     d_x_ = d_coordinatesBuffer;
     d_f_ = d_forcesBuffer;
@@ -243,8 +243,8 @@ void GpuHaloExchange::Impl::reinitHalo(float3* d_coordinatesBuffer, float3* d_fo
                  MPI_STATUS_IGNORE);
 #endif
 
-    wallcycle_sub_stop(wcycle_, ewcsDD_GPU);
-    wallcycle_stop(wcycle_, ewcDOMDEC);
+    wallcycle_sub_stop(wcycle_, WallCycleSubCounter::DD_GPU);
+    wallcycle_stop(wcycle_, WallCycleCounter::DOMDEC);
 
     return;
 }
@@ -253,14 +253,14 @@ void GpuHaloExchange::Impl::communicateHaloCoordinates(const matrix          box
                                                        GpuEventSynchronizer* coordinatesReadyOnDeviceEvent)
 {
 
-    wallcycle_start(wcycle_, ewcLAUNCH_GPU);
+    wallcycle_start(wcycle_, WallCycleCounter::LAUNCH_GPU);
     if (pulse_ == 0)
     {
         // ensure stream waits until coordinate data is available on device
         coordinatesReadyOnDeviceEvent->enqueueWaitEvent(nonLocalStream_);
     }
 
-    wallcycle_sub_start(wcycle_, ewcsLAUNCH_GPU_MOVEX);
+    wallcycle_sub_start(wcycle_, WallCycleSubCounter::LAUNCH_GPU_MOVEX);
 
     // launch kernel to pack send buffer
     KernelLaunchConfig config;
@@ -298,16 +298,16 @@ void GpuHaloExchange::Impl::communicateHaloCoordinates(const matrix          box
                 kernelFn, config, nonLocalStream_, nullptr, "Domdec GPU Apply X Halo Exchange", kernelArgs);
     }
 
-    wallcycle_sub_stop(wcycle_, ewcsLAUNCH_GPU_MOVEX);
-    wallcycle_stop(wcycle_, ewcLAUNCH_GPU);
+    wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LAUNCH_GPU_MOVEX);
+    wallcycle_stop(wcycle_, WallCycleCounter::LAUNCH_GPU);
 
     // Consider time spent in communicateHaloData as Comm.X counter
     // ToDo: We need further refinement here as communicateHaloData includes launch time for cudamemcpyasync
-    wallcycle_start(wcycle_, ewcMOVEX);
+    wallcycle_start(wcycle_, WallCycleCounter::MOVEX);
 
     communicateHaloData(d_x_, HaloQuantity::HaloCoordinates, coordinatesReadyOnDeviceEvent);
 
-    wallcycle_stop(wcycle_, ewcMOVEX);
+    wallcycle_stop(wcycle_, WallCycleCounter::MOVEX);
 
     return;
 }
@@ -318,15 +318,15 @@ void GpuHaloExchange::Impl::communicateHaloForces(bool accumulateForces)
 {
     // Consider time spent in communicateHaloData as Comm.F counter
     // ToDo: We need further refinement here as communicateHaloData includes launch time for cudamemcpyasync
-    wallcycle_start(wcycle_, ewcMOVEF);
+    wallcycle_start(wcycle_, WallCycleCounter::MOVEF);
 
     // Communicate halo data (in non-local stream)
     communicateHaloData(d_f_, HaloQuantity::HaloForces, nullptr);
 
-    wallcycle_stop(wcycle_, ewcMOVEF);
+    wallcycle_stop(wcycle_, WallCycleCounter::MOVEF);
 
-    wallcycle_start_nocount(wcycle_, ewcLAUNCH_GPU);
-    wallcycle_sub_start(wcycle_, ewcsLAUNCH_GPU_MOVEF);
+    wallcycle_start_nocount(wcycle_, WallCycleCounter::LAUNCH_GPU);
+    wallcycle_sub_start(wcycle_, WallCycleSubCounter::LAUNCH_GPU_MOVEF);
 
     float3* d_f = d_f_;
     // If this is the last pulse and index (noting the force halo
@@ -382,8 +382,8 @@ void GpuHaloExchange::Impl::communicateHaloForces(bool accumulateForces)
         fReadyOnDevice_.markEvent(nonLocalStream_);
     }
 
-    wallcycle_sub_stop(wcycle_, ewcsLAUNCH_GPU_MOVEF);
-    wallcycle_stop(wcycle_, ewcLAUNCH_GPU);
+    wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LAUNCH_GPU_MOVEF);
+    wallcycle_stop(wcycle_, WallCycleCounter::LAUNCH_GPU);
 }
 
 

@@ -144,14 +144,14 @@ static void print_em_start(FILE*                     fplog,
                            const char*               name)
 {
     walltime_accounting_start_time(walltime_accounting);
-    wallcycle_start(wcycle, ewcRUN);
+    wallcycle_start(wcycle, WallCycleCounter::RUN);
     print_start(fplog, cr, walltime_accounting, name);
 }
 
 //! Stop counting time for EM
 static void em_time_end(gmx_walltime_accounting_t walltime_accounting, gmx_wallcycle_t wcycle)
 {
-    wallcycle_stop(wcycle, ewcRUN);
+    wallcycle_stop(wcycle, WallCycleCounter::RUN);
 
     walltime_accounting_end_time(walltime_accounting);
 }
@@ -962,7 +962,7 @@ void EnergyEvaluator::run(em_state_t* ems, rvec mu_tot, tensor vir, tensor pres,
     /* Communicate stuff when parallel */
     if (PAR(cr) && inputrec->eI != IntegrationAlgorithm::NM)
     {
-        wallcycle_start(wcycle, ewcMoveE);
+        wallcycle_start(wcycle, WallCycleCounter::MoveE);
 
         global_stat(gstat,
                     cr,
@@ -979,7 +979,7 @@ void EnergyEvaluator::run(em_state_t* ems, rvec mu_tot, tensor vir, tensor pres,
                     FALSE,
                     CGLO_ENERGY | CGLO_PRESSURE | CGLO_CONSTRAINT);
 
-        wallcycle_stop(wcycle, ewcMoveE);
+        wallcycle_stop(wcycle, WallCycleCounter::MoveE);
     }
 
     if (fr->dispersionCorrection)

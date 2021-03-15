@@ -2281,7 +2281,7 @@ void VirtualSitesHandler::Impl::spreadForces(ArrayRef<const RVec> x,
                                              const matrix         box,
                                              gmx_wallcycle*       wcycle)
 {
-    wallcycle_start(wcycle, ewcVSITESPREAD);
+    wallcycle_start(wcycle, WallCycleCounter::VSITESPREAD);
 
     const bool useDomdec = domainInfo_.useDomdec();
 
@@ -2475,7 +2475,7 @@ void VirtualSitesHandler::Impl::spreadForces(ArrayRef<const RVec> x,
     inc_nrnb(nrnb, eNR_VSITE4FDN, vsite_count(ilists_, F_VSITE4FDN));
     inc_nrnb(nrnb, eNR_VSITEN, vsite_count(ilists_, F_VSITEN));
 
-    wallcycle_stop(wcycle, ewcVSITESPREAD);
+    wallcycle_stop(wcycle, WallCycleCounter::VSITESPREAD);
 }
 
 /*! \brief Returns the an array with group indices for each atom

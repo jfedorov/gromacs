@@ -394,7 +394,7 @@ void gmx::LegacySimulator::do_mimic()
     }
 
     walltime_accounting_start_time(walltime_accounting);
-    wallcycle_start(wcycle, ewcRUN);
+    wallcycle_start(wcycle, WallCycleCounter::RUN);
     print_start(fplog, cr, walltime_accounting, "mdrun");
 
     /***********************************************************
@@ -445,7 +445,7 @@ void gmx::LegacySimulator::do_mimic()
     while (!isLastStep)
     {
         isLastStep = (isLastStep || (ir->nsteps >= 0 && step_rel == ir->nsteps));
-        wallcycle_start(wcycle, ewcSTEP);
+        wallcycle_start(wcycle, WallCycleCounter::STEP);
 
         t = step;
 
@@ -471,9 +471,9 @@ void gmx::LegacySimulator::do_mimic()
             }
             if (constructVsites)
             {
-                wallcycle_start(wcycle, ewcVSITECONSTR);
+                wallcycle_start(wcycle, WallCycleCounter::VSITECONSTR);
                 vsite->construct(state->x, state->v, state->box, VSiteOperation::PositionsAndVelocities);
-                wallcycle_stop(wcycle, ewcVSITECONSTR);
+                wallcycle_stop(wcycle, WallCycleCounter::VSITECONSTR);
             }
         }
 
@@ -765,7 +765,7 @@ void gmx::LegacySimulator::do_mimic()
             print_time(stderr, walltime_accounting, step, ir, cr);
         }
 
-        cycles = wallcycle_stop(wcycle, ewcSTEP);
+        cycles = wallcycle_stop(wcycle, WallCycleCounter::STEP);
         if (DOMAINDECOMP(cr) && wcycle)
         {
             dd_cycles_add(cr->dd, cycles, ddCyclStep);

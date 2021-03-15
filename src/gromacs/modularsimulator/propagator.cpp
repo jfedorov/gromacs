@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -145,7 +145,7 @@ template<>
 template<NumVelocityScalingValues numVelocityScalingValues, ParrinelloRahmanVelocityScaling parrinelloRahmanVelocityScaling>
 void Propagator<IntegrationStep::PositionsOnly>::run()
 {
-    wallcycle_start(wcycle_, ewcUPDATE);
+    wallcycle_start(wcycle_, WallCycleCounter::UPDATE);
 
     auto xp = as_rvec_array(statePropagatorData_->positionsView().paddedArrayRef().data());
     auto x = as_rvec_array(statePropagatorData_->constPreviousPositionsView().paddedArrayRef().data());
@@ -169,7 +169,7 @@ void Propagator<IntegrationStep::PositionsOnly>::run()
         }
         GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR
     }
-    wallcycle_stop(wcycle_, ewcUPDATE);
+    wallcycle_stop(wcycle_, WallCycleCounter::UPDATE);
 }
 
 //! Propagation (velocity only)
@@ -177,7 +177,7 @@ template<>
 template<NumVelocityScalingValues numVelocityScalingValues, ParrinelloRahmanVelocityScaling parrinelloRahmanVelocityScaling>
 void Propagator<IntegrationStep::VelocitiesOnly>::run()
 {
-    wallcycle_start(wcycle_, ewcUPDATE);
+    wallcycle_start(wcycle_, WallCycleCounter::UPDATE);
 
     auto v = as_rvec_array(statePropagatorData_->velocitiesView().paddedArrayRef().data());
     auto f = as_rvec_array(statePropagatorData_->constForcesView().force().data());
@@ -237,7 +237,7 @@ void Propagator<IntegrationStep::VelocitiesOnly>::run()
         }
         GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR
     }
-    wallcycle_stop(wcycle_, ewcUPDATE);
+    wallcycle_stop(wcycle_, WallCycleCounter::UPDATE);
 }
 
 //! Propagation (leapfrog case - position and velocity)
@@ -245,7 +245,7 @@ template<>
 template<NumVelocityScalingValues numVelocityScalingValues, ParrinelloRahmanVelocityScaling parrinelloRahmanVelocityScaling>
 void Propagator<IntegrationStep::LeapFrog>::run()
 {
-    wallcycle_start(wcycle_, ewcUPDATE);
+    wallcycle_start(wcycle_, WallCycleCounter::UPDATE);
 
     auto xp = as_rvec_array(statePropagatorData_->positionsView().paddedArrayRef().data());
     auto x = as_rvec_array(statePropagatorData_->constPreviousPositionsView().paddedArrayRef().data());
@@ -308,7 +308,7 @@ void Propagator<IntegrationStep::LeapFrog>::run()
         }
         GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR
     }
-    wallcycle_stop(wcycle_, ewcUPDATE);
+    wallcycle_stop(wcycle_, WallCycleCounter::UPDATE);
 }
 
 //! Propagation (velocity verlet stage 2 - velocity and position)
@@ -316,7 +316,7 @@ template<>
 template<NumVelocityScalingValues numVelocityScalingValues, ParrinelloRahmanVelocityScaling parrinelloRahmanVelocityScaling>
 void Propagator<IntegrationStep::VelocityVerletPositionsAndVelocities>::run()
 {
-    wallcycle_start(wcycle_, ewcUPDATE);
+    wallcycle_start(wcycle_, WallCycleCounter::UPDATE);
 
     auto xp = as_rvec_array(statePropagatorData_->positionsView().paddedArrayRef().data());
     auto x = as_rvec_array(statePropagatorData_->constPreviousPositionsView().paddedArrayRef().data());
@@ -379,7 +379,7 @@ void Propagator<IntegrationStep::VelocityVerletPositionsAndVelocities>::run()
         }
         GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR
     }
-    wallcycle_stop(wcycle_, ewcUPDATE);
+    wallcycle_stop(wcycle_, WallCycleCounter::UPDATE);
 }
 
 template<IntegrationStep algorithm>

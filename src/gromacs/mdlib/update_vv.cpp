@@ -120,7 +120,7 @@ void integrateVVFirstStep(int64_t                   step,
         /*  ############### START FIRST UPDATE HALF-STEP FOR VV METHODS############### */
         rvec* vbuf = nullptr;
 
-        wallcycle_start(wcycle, ewcUPDATE);
+        wallcycle_start(wcycle, WallCycleCounter::UPDATE);
         if (ir->eI == IntegrationAlgorithm::VV && bInitStep)
         {
             /* if using velocity verlet with full time step Ekin,
@@ -141,9 +141,9 @@ void integrateVVFirstStep(int64_t                   step,
         upd->update_coords(
                 *ir, step, mdatoms, state, f->view().forceWithPadding(), fcdata, ekind, M, etrtVELOCITY1, cr, constr != nullptr);
 
-        wallcycle_stop(wcycle, ewcUPDATE);
+        wallcycle_stop(wcycle, WallCycleCounter::UPDATE);
         constrain_velocities(constr, do_log, do_ene, step, state, nullptr, bCalcVir, shake_vir);
-        wallcycle_start(wcycle, ewcUPDATE);
+        wallcycle_start(wcycle, WallCycleCounter::UPDATE);
         /* if VV, compute the pressure and constraints */
         /* For VV2, we strictly only need this if using pressure
          * control, but we really would like to have accurate pressures
@@ -164,7 +164,7 @@ void integrateVVFirstStep(int64_t                   step,
             So we need information from the last step in the first half of the integration */
         if (bGStat || do_per_step(step - 1, nstglobalcomm))
         {
-            wallcycle_stop(wcycle, ewcUPDATE);
+            wallcycle_stop(wcycle, WallCycleCounter::UPDATE);
             int totalNumberOfBondedInteractions = -1;
             compute_globals(gstat,
                             cr,
@@ -215,7 +215,7 @@ void integrateVVFirstStep(int64_t                   step,
                         fplog, vcm, *mdatoms, makeArrayRef(state->x), makeArrayRef(state->v));
                 inc_nrnb(nrnb, eNR_STOPCM, mdatoms->homenr);
             }
-            wallcycle_start(wcycle, ewcUPDATE);
+            wallcycle_start(wcycle, WallCycleCounter::UPDATE);
         }
         /* temperature scaling and pressure scaling to produce the extended variables at t+dt */
         if (!bInitStep)
@@ -244,7 +244,7 @@ void integrateVVFirstStep(int64_t                   step,
             }
             else if (bExchanged)
             {
-                wallcycle_stop(wcycle, ewcUPDATE);
+                wallcycle_stop(wcycle, WallCycleCounter::UPDATE);
                 /* We need the kinetic energy at minus the half step for determining
                  * the full step kinetic energy and possibly for T-coupling.*/
                 /* This may not be quite working correctly yet . . . . */
@@ -271,7 +271,7 @@ void integrateVVFirstStep(int64_t                   step,
                                 nullptr,
                                 bSumEkinhOld,
                                 CGLO_GSTAT | CGLO_TEMPERATURE);
-                wallcycle_start(wcycle, ewcUPDATE);
+                wallcycle_start(wcycle, WallCycleCounter::UPDATE);
             }
         }
         /* if it's the initial step, we performed this first step just to get the constraint virial */
@@ -280,7 +280,7 @@ void integrateVVFirstStep(int64_t                   step,
             copy_rvecn(vbuf, state->v.rvec_array(), 0, state->natoms);
             sfree(vbuf);
         }
-        wallcycle_stop(wcycle, ewcUPDATE);
+        wallcycle_stop(wcycle, WallCycleCounter::UPDATE);
     }
 
     /* compute the conserved quantity */
@@ -359,7 +359,7 @@ void integrateVVSecondStep(int64_t                                  step,
     upd->update_coords(
             *ir, step, mdatoms, state, f->view().forceWithPadding(), fcdata, ekind, M, etrtPOSITION, cr, constr != nullptr);
 
-    wallcycle_stop(wcycle, ewcUPDATE);
+    wallcycle_stop(wcycle, WallCycleCounter::UPDATE);
 
     constrain_coordinates(
             constr, do_log, do_ene, step, state, upd->xp()->arrayRefWithPadding(), dvdl_constr, bCalcVir, shake_vir);
@@ -395,14 +395,14 @@ void integrateVVSecondStep(int64_t                                  step,
                         nullptr,
                         bSumEkinhOld,
                         (bGStat ? CGLO_GSTAT : 0) | CGLO_TEMPERATURE);
-        wallcycle_start(wcycle, ewcUPDATE);
+        wallcycle_start(wcycle, WallCycleCounter::UPDATE);
         trotter_update(ir, step, ekind, enerd, state, total_vir, mdatoms, MassQ, trotter_seq, ettTSEQ4);
         /* now we know the scaling, we can compute the positions again */
         std::copy(cbuf->begin(), cbuf->end(), state->x.begin());
 
         upd->update_coords(
                 *ir, step, mdatoms, state, f->view().forceWithPadding(), fcdata, ekind, M, etrtPOSITION, cr, constr != nullptr);
-        wallcycle_stop(wcycle, ewcUPDATE);
+        wallcycle_stop(wcycle, WallCycleCounter::UPDATE);
 
         /* do we need an extra constraint here? just need to copy out of as_rvec_array(state->v.data()) to upd->xp? */
         /* are the small terms in the shake_vir here due

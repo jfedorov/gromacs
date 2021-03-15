@@ -258,7 +258,7 @@ static void nbnxn_kernel_cpu(const PairlistSet&         pairlistSet,
     gmx::ArrayRef<const NbnxnPairlistCpu> pairlists = pairlistSet.cpuLists();
 
     int gmx_unused nthreads = gmx_omp_nthreads_get(emntNonbonded);
-    wallcycle_sub_start(wcycle, ewcsNONBONDED_CLEAR);
+    wallcycle_sub_start(wcycle, WallCycleSubCounter::NONBONDED_CLEAR);
 #pragma omp parallel for schedule(static) num_threads(nthreads)
     for (gmx::index nb = 0; nb < pairlists.ssize(); nb++)
     {
@@ -275,8 +275,8 @@ static void nbnxn_kernel_cpu(const PairlistSet&         pairlistSet,
 
         if (nb == 0)
         {
-            wallcycle_sub_stop(wcycle, ewcsNONBONDED_CLEAR);
-            wallcycle_sub_start(wcycle, ewcsNONBONDED_KERNEL);
+            wallcycle_sub_stop(wcycle, WallCycleSubCounter::NONBONDED_CLEAR);
+            wallcycle_sub_start(wcycle, WallCycleSubCounter::NONBONDED_KERNEL);
         }
 
         // TODO: Change to reference
@@ -373,7 +373,7 @@ static void nbnxn_kernel_cpu(const PairlistSet&         pairlistSet,
             }
         }
     }
-    wallcycle_sub_stop(wcycle, ewcsNONBONDED_KERNEL);
+    wallcycle_sub_stop(wcycle, WallCycleSubCounter::NONBONDED_KERNEL);
 
     if (stepWork.computeEnergy)
     {
@@ -538,7 +538,7 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality   iLo
     GMX_ASSERT(gmx_omp_nthreads_get(emntNonbonded) == nbl_fep.ssize(),
                "Number of lists should be same as number of NB threads");
 
-    wallcycle_sub_start(wcycle_, ewcsNONBONDED_FEP);
+    wallcycle_sub_start(wcycle_, WallCycleSubCounter::NONBONDED_FEP);
 #pragma omp parallel for schedule(static) num_threads(nbl_fep.ssize())
     for (gmx::index th = 0; th < nbl_fep.ssize(); th++)
     {
@@ -605,5 +605,5 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality   iLo
                             + dvdl_nb[FreeEnergyPerturbationCouplingType::Coul]);
         }
     }
-    wallcycle_sub_stop(wcycle_, ewcsNONBONDED_FEP);
+    wallcycle_sub_stop(wcycle_, WallCycleSubCounter::NONBONDED_FEP);
 }

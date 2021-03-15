@@ -655,7 +655,7 @@ void calc_listed(struct gmx_wallcycle*         wcycle,
     {
         gmx::ForceWithShiftForces& forceWithShiftForces = forceOutputs->forceWithShiftForces();
 
-        wallcycle_sub_start(wcycle, ewcsLISTED);
+        wallcycle_sub_start(wcycle, WallCycleSubCounter::LISTED);
         /* The dummy array is to have a place to store the dhdl at other values
            of lambda, which will be thrown away in the end */
         gmx::EnumerationArray<FreeEnergyPerturbationCouplingType, real> dvdl = { 0 };
@@ -673,9 +673,9 @@ void calc_listed(struct gmx_wallcycle*         wcycle,
                          fcd,
                          stepWork,
                          global_atom_index);
-        wallcycle_sub_stop(wcycle, ewcsLISTED);
+        wallcycle_sub_stop(wcycle, WallCycleSubCounter::LISTED);
 
-        wallcycle_sub_start(wcycle, ewcsLISTED_BUF_OPS);
+        wallcycle_sub_start(wcycle, WallCycleSubCounter::LISTED_BUF_OPS);
         reduce_thread_output(&forceWithShiftForces, enerd->term, &enerd->grpp, dvdl, bt, stepWork);
 
         if (stepWork.computeDhdl)
@@ -685,7 +685,7 @@ void calc_listed(struct gmx_wallcycle*         wcycle,
                 enerd->dvdl_nonlin[i] += dvdl[i];
             }
         }
-        wallcycle_sub_stop(wcycle, ewcsLISTED_BUF_OPS);
+        wallcycle_sub_stop(wcycle, WallCycleSubCounter::LISTED_BUF_OPS);
     }
 
     /* Copy the sum of violations for the distance restraints from fcd */
@@ -827,7 +827,7 @@ void ListedForces::calculate(struct gmx_wallcycle*                     wcycle,
            awkward to account to this subtimer properly in the present
            code. We don't test / care much about performance with
            restraints, anyway. */
-        wallcycle_sub_start(wcycle, ewcsRESTRAINTS);
+        wallcycle_sub_start(wcycle, WallCycleSubCounter::RESTRAINTS);
 
         if (!idef.il[F_POSRES].empty())
         {
@@ -866,7 +866,7 @@ void ListedForces::calculate(struct gmx_wallcycle*                     wcycle,
                             hist);
         }
 
-        wallcycle_sub_stop(wcycle, ewcsRESTRAINTS);
+        wallcycle_sub_stop(wcycle, WallCycleSubCounter::RESTRAINTS);
     }
 
     calc_listed(wcycle, idef, threading_.get(), x, forceOutputs, fr, pbc, enerd, nrnb, lambda, md, fcdata, global_atom_index, stepWork);
@@ -883,7 +883,7 @@ void ListedForces::calculate(struct gmx_wallcycle*                     wcycle,
         }
         if (idef.ilsort != ilsortNO_FE)
         {
-            wallcycle_sub_start(wcycle, ewcsLISTED_FEP);
+            wallcycle_sub_start(wcycle, WallCycleSubCounter::LISTED_FEP);
             if (idef.ilsort != ilsortFE_SORTED)
             {
                 gmx_incons("The bonded interactions are not sorted for free energy");
@@ -917,7 +917,7 @@ void ListedForces::calculate(struct gmx_wallcycle*                     wcycle,
                 std::fill(std::begin(dvdl), std::end(dvdl), 0.0);
                 enerd->foreignLambdaTerms.accumulate(i, enerd->foreign_term[F_EPOT], dvdlSum);
             }
-            wallcycle_sub_stop(wcycle, ewcsLISTED_FEP);
+            wallcycle_sub_stop(wcycle, WallCycleSubCounter::LISTED_FEP);
         }
     }
 }

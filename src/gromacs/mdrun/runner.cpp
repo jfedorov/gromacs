@@ -1987,7 +1987,7 @@ int Mdrunner::mdrunner()
                     deviceStreamManager.get());
     }
 
-    wallcycle_stop(wcycle, ewcRUN);
+    wallcycle_stop(wcycle, WallCycleCounter::RUN);
 
     /* Finish up, write some stuff
      * if rerunMD, don't write last frame again

@@ -104,7 +104,7 @@ void calculateLongRangeNonbondeds(t_forcerec*                   fr,
                                   const t_inputrec&             ir,
                                   const t_commrec*              cr,
                                   t_nrnb*                       nrnb,
-                                  gmx_wallcycle_t               wcycle,
+                                  gmx_wallcycle*                wcycle,
                                   const t_mdatoms*              md,
                                   gmx::ArrayRef<const RVec>     coordinates,
                                   gmx::ForceWithVirial*         forceWithVirial,
@@ -141,7 +141,7 @@ void calculateLongRangeNonbondeds(t_forcerec*                   fr,
             /* Calculate the Ewald surface force and energy contributions, when necessary */
             if (haveEwaldSurfaceTerm)
             {
-                wallcycle_sub_start(wcycle, ewcsEWALD_CORRECTION);
+                wallcycle_sub_start(wcycle, WallCycleSubCounter::EWALD_CORRECTION);
 
                 int nthreads = fr->nthread_ewc;
 #pragma omp parallel for num_threads(nthreads) schedule(static)
@@ -185,7 +185,7 @@ void calculateLongRangeNonbondeds(t_forcerec*                   fr,
                 {
                     reduceEwaldThreadOuput(nthreads, fr->ewc_t);
                 }
-                wallcycle_sub_stop(wcycle, ewcsEWALD_CORRECTION);
+                wallcycle_sub_stop(wcycle, WallCycleSubCounter::EWALD_CORRECTION);
             }
 
             if (EEL_PME_EWALD(fr->ic->eeltype) && fr->n_tpi == 0)
@@ -213,7 +213,7 @@ void calculateLongRangeNonbondeds(t_forcerec*                   fr,
                      */
                     ddBalanceRegionHandler.closeAfterForceComputationCpu();
 
-                    wallcycle_start(wcycle, ewcPMEMESH);
+                    wallcycle_start(wcycle, WallCycleCounter::PMEMESH);
                     status = gmx_pme_do(
                             fr->pmedata,
                             gmx::constArrayRefFromArray(coordinates.data(), md->homenr - fr->n_tpi),
@@ -239,7 +239,7 @@ void calculateLongRangeNonbondeds(t_forcerec*                   fr,
                             &ewaldOutput.dvdl[FreeEnergyPerturbationCouplingType::Coul],
                             &ewaldOutput.dvdl[FreeEnergyPerturbationCouplingType::Vdw],
                             stepWork);
-                    wallcycle_stop(wcycle, ewcPMEMESH);
+                    wallcycle_stop(wcycle, WallCycleCounter::PMEMESH);
                     if (status != 0)
                     {
                         gmx_fatal(FARGS, "Error %d in reciprocal PME routine", status);

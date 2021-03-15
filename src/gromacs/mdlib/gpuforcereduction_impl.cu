@@ -127,7 +127,7 @@ void GpuForceReduction::Impl::reinit(float3*               baseForcePtr,
     completionMarker_ = completionMarker;
     cellInfo_.cell    = cell.data();
 
-    wallcycle_start_nocount(wcycle_, ewcLAUNCH_GPU);
+    wallcycle_start_nocount(wcycle_, WallCycleCounter::LAUNCH_GPU);
     reallocateDeviceBuffer(
             &cellInfo_.d_cell, numAtoms_, &cellInfo_.cellSize, &cellInfo_.cellSizeAlloc, deviceContext_);
     copyToDeviceBuffer(&cellInfo_.d_cell,
@@ -137,7 +137,7 @@ void GpuForceReduction::Impl::reinit(float3*               baseForcePtr,
                        deviceStream_,
                        GpuApiCallBehavior::Async,
                        nullptr);
-    wallcycle_stop(wcycle_, ewcLAUNCH_GPU);
+    wallcycle_stop(wcycle_, WallCycleCounter::LAUNCH_GPU);
 
     dependencyList_.clear();
 };
@@ -161,8 +161,8 @@ void GpuForceReduction::Impl::addDependency(GpuEventSynchronizer* const dependen
 
 void GpuForceReduction::Impl::execute()
 {
-    wallcycle_start_nocount(wcycle_, ewcLAUNCH_GPU);
-    wallcycle_sub_start(wcycle_, ewcsLAUNCH_GPU_NB_F_BUF_OPS);
+    wallcycle_start_nocount(wcycle_, WallCycleCounter::LAUNCH_GPU);
+    wallcycle_sub_start(wcycle_, WallCycleSubCounter::LAUNCH_GPU_NB_F_BUF_OPS);
 
     if (numAtoms_ == 0)
     {
@@ -205,8 +205,8 @@ void GpuForceReduction::Impl::execute()
         completionMarker_->markEvent(deviceStream_);
     }
 
-    wallcycle_sub_stop(wcycle_, ewcsLAUNCH_GPU_NB_F_BUF_OPS);
-    wallcycle_stop(wcycle_, ewcLAUNCH_GPU);
+    wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LAUNCH_GPU_NB_F_BUF_OPS);
+    wallcycle_stop(wcycle_, WallCycleCounter::LAUNCH_GPU);
 }
 
 GpuForceReduction::Impl::~Impl(){};

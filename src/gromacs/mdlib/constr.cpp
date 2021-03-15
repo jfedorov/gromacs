@@ -412,7 +412,7 @@ bool Constraints::Impl::apply(bool                      bLog,
     char  buf[22];
     int   nth;
 
-    wallcycle_start(wcycle, ewcCONSTR);
+    wallcycle_start(wcycle, WallCycleCounter::CONSTR);
 
     if (econq == ConstraintVariable::ForceDispl && !EI_ENERGY_MINIMIZATION(ir.eI))
     {
@@ -785,7 +785,7 @@ bool Constraints::Impl::apply(bool                      bLog,
                      ed);
         }
     }
-    wallcycle_stop(wcycle, ewcCONSTR);
+    wallcycle_stop(wcycle, WallCycleCounter::CONSTR);
 
     const bool haveVelocities = (!v.empty() || econq == ConstraintVariable::Velocities);
     if (haveVelocities && cFREEZE_)

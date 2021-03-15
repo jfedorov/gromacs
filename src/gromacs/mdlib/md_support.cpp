@@ -359,7 +359,7 @@ void compute_globals(gmx_global_stat*               gstat,
             gmx::ArrayRef<real> signalBuffer = signalCoordinator->getCommunicationBuffer();
             if (PAR(cr))
             {
-                wallcycle_start(wcycle, ewcMoveE);
+                wallcycle_start(wcycle, WallCycleCounter::MoveE);
                 global_stat(gstat,
                             cr,
                             enerd,
@@ -374,7 +374,7 @@ void compute_globals(gmx_global_stat*               gstat,
                             totalNumberOfBondedInteractions,
                             *bSumEkinhOld,
                             flags);
-                wallcycle_stop(wcycle, ewcMoveE);
+                wallcycle_stop(wcycle, WallCycleCounter::MoveE);
             }
             signalCoordinator->finalizeSignals();
             *bSumEkinhOld = FALSE;

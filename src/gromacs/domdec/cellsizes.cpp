@@ -854,9 +854,9 @@ static void set_dd_cell_sizes_dlb(gmx_domdec_t*      dd,
 
     if (bDoDLB)
     {
-        wallcycle_start(wcycle, ewcDDCOMMBOUND);
+        wallcycle_start(wcycle, WallCycleCounter::DDCOMMBOUND);
         set_dd_cell_sizes_dlb_change(dd, ddbox, bDynamicBox, bUniform, step);
-        wallcycle_stop(wcycle, ewcDDCOMMBOUND);
+        wallcycle_stop(wcycle, WallCycleCounter::DDCOMMBOUND);
     }
     else if (bDynamicBox)
     {

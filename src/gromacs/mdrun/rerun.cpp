@@ -442,7 +442,7 @@ void gmx::LegacySimulator::do_rerun()
     }
 
     walltime_accounting_start_time(walltime_accounting);
-    wallcycle_start(wcycle, ewcRUN);
+    wallcycle_start(wcycle, WallCycleCounter::RUN);
     print_start(fplog, cr, walltime_accounting, "mdrun");
 
     /***********************************************************
@@ -539,7 +539,7 @@ void gmx::LegacySimulator::do_rerun()
     isLastStep = (isLastStep || (ir->nsteps >= 0 && step_rel > ir->nsteps));
     while (!isLastStep)
     {
-        wallcycle_start(wcycle, ewcSTEP);
+        wallcycle_start(wcycle, WallCycleCounter::STEP);
 
         if (rerun_fr.bStep)
         {
@@ -876,7 +876,7 @@ void gmx::LegacySimulator::do_rerun()
             rerun_parallel_comm(cr, &rerun_fr, &isLastStep);
         }
 
-        cycles = wallcycle_stop(wcycle, ewcSTEP);
+        cycles = wallcycle_stop(wcycle, WallCycleCounter::STEP);
         if (DOMAINDECOMP(cr) && wcycle)
         {
             dd_cycles_add(cr->dd, cycles, ddCyclStep);

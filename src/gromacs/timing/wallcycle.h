@@ -4,7 +4,7 @@
  * Copyright (c) 1991-2000, University of Groningen, The Netherlands.
  * Copyright (c) 2001-2008, The GROMACS development team.
  * Copyright (c) 2013,2014,2015,2017,2018 by the GROMACS development team.
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -47,97 +47,101 @@
 
 typedef struct gmx_wallcycle* gmx_wallcycle_t;
 struct t_commrec;
-static constexpr gmx_wallcycle* nullWallcycle = nullptr;
 
-enum
+enum class WallCycleCounter : int
 {
-    ewcRUN,
-    ewcSTEP,
-    ewcPPDURINGPME,
-    ewcDOMDEC,
-    ewcDDCOMMLOAD,
-    ewcDDCOMMBOUND,
-    ewcVSITECONSTR,
-    ewcPP_PMESENDX,
-    ewcNS,
-    ewcLAUNCH_GPU,
-    ewcMOVEX,
-    ewcFORCE,
-    ewcMOVEF,
-    ewcPMEMESH,
-    ewcPME_REDISTXF,
-    ewcPME_SPREAD,
-    ewcPME_GATHER,
-    ewcPME_FFT,
-    ewcPME_FFTCOMM,
-    ewcLJPME,
-    ewcPME_SOLVE,
-    ewcPMEWAITCOMM,
-    ewcPP_PMEWAITRECVF,
-    ewcWAIT_GPU_PME_SPREAD,
-    ewcPME_FFT_MIXED_MODE,
-    ewcPME_SOLVE_MIXED_MODE,
-    ewcWAIT_GPU_PME_GATHER,
-    ewcWAIT_GPU_BONDED,
-    ewcPME_GPU_F_REDUCTION,
-    ewcWAIT_GPU_NB_NL,
-    ewcWAIT_GPU_NB_L,
-    ewcWAIT_GPU_STATE_PROPAGATOR_DATA,
-    ewcNB_XF_BUF_OPS,
-    ewcVSITESPREAD,
-    ewcPULLPOT,
-    ewcAWH,
-    ewcTRAJ,
-    ewcUPDATE,
-    ewcCONSTR,
-    ewcMoveE,
-    ewcROT,
-    ewcROTadd,
-    ewcSWAP,
-    ewcIMD,
-    ewcTEST,
-    ewcNR
+    RUN,
+    STEP,
+    PPDURINGPME,
+    DOMDEC,
+    DDCOMMLOAD,
+    DDCOMMBOUND,
+    VSITECONSTR,
+    PP_PMESENDX,
+    NS,
+    LAUNCH_GPU,
+    MOVEX,
+    FORCE,
+    MOVEF,
+    PMEMESH,
+    PME_REDISTXF,
+    PME_SPREAD,
+    PME_GATHER,
+    PME_FFT,
+    PME_FFTCOMM,
+    LJPME,
+    PME_SOLVE,
+    PMEWAITCOMM,
+    PP_PMEWAITRECVF,
+    WAIT_GPU_PME_SPREAD,
+    PME_FFT_MIXED_MODE,
+    PME_SOLVE_MIXED_MODE,
+    WAIT_GPU_PME_GATHER,
+    WAIT_GPU_BONDED,
+    PME_GPU_F_REDUCTION,
+    WAIT_GPU_NB_NL,
+    WAIT_GPU_NB_L,
+    WAIT_GPU_STATE_PROPAGATOR_DATA,
+    NB_XF_BUF_OPS,
+    VSITESPREAD,
+    PULLPOT,
+    AWH,
+    TRAJ,
+    UPDATE,
+    CONSTR,
+    MoveE,
+    ROT,
+    ROTadd,
+    SWAP,
+    IMD,
+    TEST,
+    Count
 };
 
-enum
+enum class WallCycleSubCounter : int
 {
-    ewcsDD_REDIST,
-    ewcsDD_GRID,
-    ewcsDD_SETUPCOMM,
-    ewcsDD_MAKETOP,
-    ewcsDD_MAKECONSTR,
-    ewcsDD_TOPOTHER,
-    ewcsDD_GPU,
-    ewcsNBS_GRID_LOCAL,
-    ewcsNBS_GRID_NONLOCAL,
-    ewcsNBS_SEARCH_LOCAL,
-    ewcsNBS_SEARCH_NONLOCAL,
-    ewcsLISTED,
-    ewcsLISTED_FEP,
-    ewcsRESTRAINTS,
-    ewcsLISTED_BUF_OPS,
-    ewcsNONBONDED_PRUNING,
-    ewcsNONBONDED_KERNEL,
-    ewcsNONBONDED_CLEAR,
-    ewcsNONBONDED_FEP,
-    ewcsLAUNCH_GPU_NONBONDED,
-    ewcsLAUNCH_GPU_BONDED,
-    ewcsLAUNCH_GPU_PME,
-    ewcsLAUNCH_STATE_PROPAGATOR_DATA,
-    ewcsEWALD_CORRECTION,
-    ewcsNB_X_BUF_OPS,
-    ewcsNB_F_BUF_OPS,
-    ewcsCLEAR_FORCE_BUFFER,
-    ewcsLAUNCH_GPU_NB_X_BUF_OPS,
-    ewcsLAUNCH_GPU_NB_F_BUF_OPS,
-    ewcsLAUNCH_GPU_MOVEX,
-    ewcsLAUNCH_GPU_MOVEF,
-    ewcsLAUNCH_GPU_UPDATE_CONSTRAIN,
-    ewcsTEST,
-    ewcsNR
+    DD_REDIST,
+    DD_GRID,
+    DD_SETUPCOMM,
+    DD_MAKETOP,
+    DD_MAKECONSTR,
+    DD_TOPOTHER,
+    DD_GPU,
+    NBS_GRID_LOCAL,
+    NBS_GRID_NONLOCAL,
+    NBS_SEARCH_LOCAL,
+    NBS_SEARCH_NONLOCAL,
+    LISTED,
+    LISTED_FEP,
+    RESTRAINTS,
+    LISTED_BUF_OPS,
+    NONBONDED_PRUNING,
+    NONBONDED_KERNEL,
+    NONBONDED_CLEAR,
+    NONBONDED_FEP,
+    LAUNCH_GPU_NONBONDED,
+    LAUNCH_GPU_BONDED,
+    LAUNCH_GPU_PME,
+    LAUNCH_STATE_PROPAGATOR_DATA,
+    EWALD_CORRECTION,
+    NB_X_BUF_OPS,
+    NB_F_BUF_OPS,
+    CLEAR_FORCE_BUFFER,
+    LAUNCH_GPU_NB_X_BUF_OPS,
+    LAUNCH_GPU_NB_F_BUF_OPS,
+    LAUNCH_GPU_MOVEX,
+    LAUNCH_GPU_MOVEF,
+    LAUNCH_GPU_UPDATE_CONSTRAIN,
+    TEST,
+    Count
 };
 
-gmx_bool wallcycle_have_counter();
+static constexpr const int sc_numWallCycleCounters    = static_cast<int>(WallCycleCounter::Count);
+static constexpr const int sc_numWallCycleSubCounters = static_cast<int>(WallCycleSubCounter::Count);
+static constexpr const int sc_numWallCycleCountersSquared =
+        sc_numWallCycleCounters * sc_numWallCycleCounters;
+
+bool wallcycle_have_counter();
 /* Returns if cycle counting is supported */
 
 gmx_wallcycle_t wallcycle_init(FILE* fplog, int resetstep, struct t_commrec* cr);
@@ -148,40 +152,40 @@ gmx_wallcycle_t wallcycle_init(FILE* fplog, int resetstep, struct t_commrec* cr)
 /* cleans up wallcycle structure */
 void wallcycle_destroy(gmx_wallcycle_t wc);
 
-void wallcycle_start(gmx_wallcycle_t wc, int ewc);
+void wallcycle_start(gmx_wallcycle* wc, WallCycleCounter ewc);
 /* Starts the cycle counter (and increases the call count) */
 
-void wallcycle_start_nocount(gmx_wallcycle_t wc, int ewc);
+void wallcycle_start_nocount(gmx_wallcycle* wc, WallCycleCounter ewc);
 /* Starts the cycle counter without increasing the call count */
 
-double wallcycle_stop(gmx_wallcycle_t wc, int ewc);
-/* Stop the cycle count for ewc, returns the last cycle count */
+double wallcycle_stop(gmx_wallcycle* wc, WallCycleCounter ewc);
+/* Stop the cycle count for ewc , returns the last cycle count */
 
-void wallcycle_increment_event_count(gmx_wallcycle_t wc, int ewc);
-/* Only increment call count for ewc by one */
+void wallcycle_increment_event_count(gmx_wallcycle* wc, WallCycleCounter ewc);
+/* Only increment call count for ewc  by one */
 
-void wallcycle_get(gmx_wallcycle_t wc, int ewc, int* n, double* c);
-/* Returns the cumulative count and cycle count for ewc */
+void wallcycle_get(gmx_wallcycle* wc, WallCycleCounter ewc, int* n, double* c);
+/* Returns the cumulative count and cycle count for ewc  */
 
-void wallcycle_reset_all(gmx_wallcycle_t wc);
+void wallcycle_reset_all(gmx_wallcycle* wc);
 /* Resets all cycle counters to zero */
 
-void wallcycle_scale_by_num_threads(gmx_wallcycle_t wc, bool isPmeRank, int nthreads_pp, int nthreads_pme);
+void wallcycle_scale_by_num_threads(gmx_wallcycle* wc, bool isPmeRank, int nthreads_pp, int nthreads_pme);
 /* Scale the cycle counts to reflect how many threads run for that number of cycles */
 
-int64_t wcycle_get_reset_counters(gmx_wallcycle_t wc);
+int64_t wcycle_get_reset_counters(gmx_wallcycle* wc);
 /* Return reset_counters from wc struct */
 
-void wcycle_set_reset_counters(gmx_wallcycle_t wc, int64_t reset_counters);
+void wcycle_set_reset_counters(gmx_wallcycle* wc, int64_t reset_counters);
 /* Set reset_counters */
 
-void wallcycle_sub_start(gmx_wallcycle_t wc, int ewcs);
-/* Set the start sub cycle count for ewcs */
+void wallcycle_sub_start(gmx_wallcycle* wc, WallCycleSubCounter ewcs);
+/* Set the start sub cycle count for ewcs  */
 
-void wallcycle_sub_start_nocount(gmx_wallcycle_t wc, int ewcs);
-/* Set the start sub cycle count for ewcs without increasing the call count */
+void wallcycle_sub_start_nocount(gmx_wallcycle* wc, WallCycleSubCounter ewcs);
+/* Set the start sub cycle count for ewcs  without increasing the call count */
 
-void wallcycle_sub_stop(gmx_wallcycle_t wc, int ewcs);
+void wallcycle_sub_stop(gmx_wallcycle* wc, WallCycleSubCounter ewcs);
 /* Stop the sub cycle count for ewcs */
 
 #endif
