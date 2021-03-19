@@ -55,7 +55,6 @@
 #include "gromacs/gpu_utils/gpu_utils.h"
 #include "gromacs/math/vec.h"
 #include "gromacs/math/vectypes.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/stringutil.h"
 
@@ -83,10 +82,9 @@ LeapFrogTestData::LeapFrogTestData(int        numAtoms,
     f_(numAtoms),
     inverseMasses_(numAtoms),
     inverseMassesPerDim_(numAtoms),
+    ptype_(numAtoms),
     numTCoupleGroups_(numTCoupleGroups)
 {
-    mdAtoms_.nr = numAtoms_;
-
     for (int i = 0; i < numAtoms_; i++)
     {
         // Typical PBC box size is tens of nanometers
@@ -112,11 +110,9 @@ LeapFrogTestData::LeapFrogTestData(int        numAtoms,
             inverseMassesPerDim_[i][d] = inverseMasses_[i];
         }
     }
-    mdAtoms_.invmass       = inverseMasses_.data();
-    mdAtoms_.invMassPerDim = as_rvec_array(inverseMassesPerDim_.data());
 
     // Temperature coupling
-    snew(mdAtoms_.cTC, numAtoms_);
+    cTC_.resize(numAtoms_);
 
     // To do temperature coupling at each step
     inputRecord_.nsttcouple = 1;
@@ -126,7 +122,7 @@ LeapFrogTestData::LeapFrogTestData(int        numAtoms,
         inputRecord_.etc = TemperatureCoupling::No;
         for (int i = 0; i < numAtoms_; i++)
         {
-            mdAtoms_.cTC[i] = 0;
+            cTC_[i] = 0;
         }
         kineticEnergyData_.ngtc = 1;
         t_grp_tcstat temperatureCouplingGroupData;
@@ -138,7 +134,7 @@ LeapFrogTestData::LeapFrogTestData(int        numAtoms,
         inputRecord_.etc = TemperatureCoupling::Yes;
         for (int i = 0; i < numAtoms_; i++)
         {
-            mdAtoms_.cTC[i] = i % numTCoupleGroups_;
+            cTC_[i] = i % numTCoupleGroups_;
         }
         kineticEnergyData_.ngtc = numTCoupleGroups_;
         for (int i = 0; i < numTCoupleGroups; i++)
@@ -173,11 +169,6 @@ LeapFrogTestData::LeapFrogTestData(int        numAtoms,
     snew(kineticEnergyData_.ekin_work_alloc, kineticEnergyData_.nthreads);
     snew(kineticEnergyData_.ekin_work, kineticEnergyData_.nthreads);
     snew(kineticEnergyData_.dekindl_work, kineticEnergyData_.nthreads);
-
-    mdAtoms_.homenr                   = numAtoms_;
-    mdAtoms_.haveVsites               = false;
-    mdAtoms_.havePartiallyFrozenAtoms = false;
-    mdAtoms_.cFREEZE                  = nullptr;
 
     update_ = std::make_unique<Update>(inputRecord_, nullptr);
     update_->setNumAtoms(numAtoms);
@@ -219,10 +210,7 @@ LeapFrogTestData::LeapFrogTestData(int        numAtoms,
     }
 }
 
-LeapFrogTestData::~LeapFrogTestData()
-{
-    sfree(mdAtoms_.cTC);
-}
+LeapFrogTestData::~LeapFrogTestData() = default;
 
 } // namespace test
 } // namespace gmx

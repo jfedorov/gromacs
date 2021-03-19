@@ -142,6 +142,7 @@
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
 #include "gromacs/trajectory/trajectoryframe.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/fatalerror.h"
@@ -1481,7 +1482,9 @@ void gmx::LegacySimulator::do_md()
                                     stateGpu->getVelocities(),
                                     stateGpu->getForces(),
                                     top.idef,
-                                    *mdatoms);
+                                    mdatoms->homenr,
+                                    gmx::arrayRefFromArray(mdatoms->invmass, mdatoms->homenr),
+                                    gmx::arrayRefFromArray(mdatoms->cTC, mdatoms->homenr));
 
                     // Copy data to the GPU after buffers might have being reinitialized
                     stateGpu->copyVelocitiesToGpu(state->v, AtomLocality::Local);
@@ -1538,8 +1541,14 @@ void gmx::LegacySimulator::do_md()
                  */
                 if (fr->useMts && bCalcVir && constr != nullptr)
                 {
-                    upd.update_for_constraint_virial(
-                            *ir, *mdatoms, *state, f.view().forceWithPadding(), *ekind);
+                    upd.update_for_constraint_virial(*ir,
+                                                     mdatoms->homenr,
+                                                     mdatoms->havePartiallyFrozenAtoms,
+                                                     *state,
+                                                     f.view().forceWithPadding(),
+                                                     mdatoms->invmass,
+                                                     mdatoms->invMassPerDim,
+                                                     *ekind);
 
                     constrain_coordinates(constr,
                                           do_log,
@@ -1556,8 +1565,23 @@ void gmx::LegacySimulator::do_md()
                         (fr->useMts && step % ir->mtsLevels[1].stepFactor == 0)
                                 ? f.view().forceMtsCombinedWithPadding()
                                 : f.view().forceWithPadding();
-                upd.update_coords(
-                        *ir, step, mdatoms, state, forceCombined, fcdata, ekind, M, etrtPOSITION, cr, constr != nullptr);
+                upd.update_coords(*ir,
+                                  step,
+                                  mdatoms->homenr,
+                                  mdatoms->havePartiallyFrozenAtoms,
+                                  mdatoms->ptype,
+                                  mdatoms->cFREEZE,
+                                  mdatoms->cTC,
+                                  mdatoms->invmass,
+                                  mdatoms->invMassPerDim,
+                                  state,
+                                  forceCombined,
+                                  fcdata,
+                                  ekind,
+                                  M,
+                                  etrtPOSITION,
+                                  cr,
+                                  constr != nullptr);
 
                 wallcycle_stop(wcycle, ewcUPDATE);
 
@@ -1571,9 +1595,28 @@ void gmx::LegacySimulator::do_md()
                                       bCalcVir && !fr->useMts,
                                       shake_vir);
 
-                upd.update_sd_second_half(
-                        *ir, step, &dvdl_constr, mdatoms, state, cr, nrnb, wcycle, constr, do_log, do_ene);
-                upd.finish_update(*ir, mdatoms, state, wcycle, constr != nullptr);
+                upd.update_sd_second_half(*ir,
+                                          step,
+                                          mdatoms->homenr,
+                                          mdatoms->ptype,
+                                          mdatoms->cFREEZE,
+                                          mdatoms->cTC,
+                                          mdatoms->invmass,
+                                          &dvdl_constr,
+                                          state,
+                                          cr,
+                                          nrnb,
+                                          wcycle,
+                                          constr,
+                                          do_log,
+                                          do_ene);
+                upd.finish_update(*ir,
+                                  mdatoms->homenr,
+                                  mdatoms->havePartiallyFrozenAtoms,
+                                  mdatoms->cFREEZE,
+                                  state,
+                                  wcycle,
+                                  constr != nullptr);
             }
 
             if (ir->bPull && ir->pull->bSetPbcRefToPrevStepCOM)

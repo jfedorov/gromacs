@@ -37,6 +37,7 @@
  */
 #include "gmxpre.h"
 
+#include "gromacs/utility/arrayref.h"
 #include "update_vv.h"
 
 #include <cmath>
@@ -138,8 +139,23 @@ void integrateVVFirstStep(int64_t                   step,
             trotter_update(ir, step, ekind, enerd, state, total_vir, mdatoms, MassQ, trotter_seq, ettTSEQ1);
         }
 
-        upd->update_coords(
-                *ir, step, mdatoms, state, f->view().forceWithPadding(), fcdata, ekind, M, etrtVELOCITY1, cr, constr != nullptr);
+        upd->update_coords(*ir,
+                           step,
+                           mdatoms->homenr,
+                           mdatoms->havePartiallyFrozenAtoms,
+                           mdatoms->ptype,
+                           mdatoms->cFREEZE,
+                           mdatoms->cTC,
+                           mdatoms->invmass,
+                           mdatoms->invMassPerDim,
+                           state,
+                           f->view().forceWithPadding(),
+                           fcdata,
+                           ekind,
+                           M,
+                           etrtVELOCITY1,
+                           cr,
+                           constr != nullptr);
 
         wallcycle_stop(wcycle, ewcUPDATE);
         constrain_velocities(constr, do_log, do_ene, step, state, nullptr, bCalcVir, shake_vir);
@@ -336,8 +352,23 @@ void integrateVVSecondStep(int64_t                                  step,
                            gmx_wallcycle*                           wcycle)
 {
     /* velocity half-step update */
-    upd->update_coords(
-            *ir, step, mdatoms, state, f->view().forceWithPadding(), fcdata, ekind, M, etrtVELOCITY2, cr, constr != nullptr);
+    upd->update_coords(*ir,
+                       step,
+                       mdatoms->homenr,
+                       mdatoms->havePartiallyFrozenAtoms,
+                       mdatoms->ptype,
+                       mdatoms->cFREEZE,
+                       mdatoms->cTC,
+                       mdatoms->invmass,
+                       mdatoms->invMassPerDim,
+                       state,
+                       f->view().forceWithPadding(),
+                       fcdata,
+                       ekind,
+                       M,
+                       etrtVELOCITY2,
+                       cr,
+                       constr != nullptr);
 
 
     /* Above, initialize just copies ekinh into ekin,
@@ -356,17 +387,46 @@ void integrateVVSecondStep(int64_t                                  step,
         updatePrevStepPullCom(pull_work, state);
     }
 
-    upd->update_coords(
-            *ir, step, mdatoms, state, f->view().forceWithPadding(), fcdata, ekind, M, etrtPOSITION, cr, constr != nullptr);
+    upd->update_coords(*ir,
+                       step,
+                       mdatoms->homenr,
+                       mdatoms->havePartiallyFrozenAtoms,
+                       mdatoms->ptype,
+                       mdatoms->cFREEZE,
+                       mdatoms->cTC,
+                       mdatoms->invmass,
+                       mdatoms->invMassPerDim,
+                       state,
+                       f->view().forceWithPadding(),
+                       fcdata,
+                       ekind,
+                       M,
+                       etrtPOSITION,
+                       cr,
+                       constr != nullptr);
 
     wallcycle_stop(wcycle, ewcUPDATE);
 
     constrain_coordinates(
             constr, do_log, do_ene, step, state, upd->xp()->arrayRefWithPadding(), dvdl_constr, bCalcVir, shake_vir);
 
-    upd->update_sd_second_half(
-            *ir, step, dvdl_constr, mdatoms, state, cr, nrnb, wcycle, constr, do_log, do_ene);
-    upd->finish_update(*ir, mdatoms, state, wcycle, constr != nullptr);
+    upd->update_sd_second_half(*ir,
+                               step,
+                               mdatoms->homenr,
+                               mdatoms->ptype,
+                               mdatoms->cFREEZE,
+                               mdatoms->cTC,
+                               mdatoms->invmass,
+                               dvdl_constr,
+                               state,
+                               cr,
+                               nrnb,
+                               wcycle,
+                               constr,
+                               do_log,
+                               do_ene);
+    upd->finish_update(
+            *ir, mdatoms->homenr, mdatoms->havePartiallyFrozenAtoms, mdatoms->cFREEZE, state, wcycle, constr != nullptr);
 
     if (ir->eI == IntegrationAlgorithm::VVAK)
     {
@@ -400,8 +460,23 @@ void integrateVVSecondStep(int64_t                                  step,
         /* now we know the scaling, we can compute the positions again */
         std::copy(cbuf->begin(), cbuf->end(), state->x.begin());
 
-        upd->update_coords(
-                *ir, step, mdatoms, state, f->view().forceWithPadding(), fcdata, ekind, M, etrtPOSITION, cr, constr != nullptr);
+        upd->update_coords(*ir,
+                           step,
+                           mdatoms->homenr,
+                           mdatoms->havePartiallyFrozenAtoms,
+                           mdatoms->ptype,
+                           mdatoms->cFREEZE,
+                           mdatoms->cTC,
+                           mdatoms->invmass,
+                           mdatoms->invMassPerDim,
+                           state,
+                           f->view().forceWithPadding(),
+                           fcdata,
+                           ekind,
+                           M,
+                           etrtPOSITION,
+                           cr,
+                           constr != nullptr);
         wallcycle_stop(wcycle, ewcUPDATE);
 
         /* do we need an extra constraint here? just need to copy out of as_rvec_array(state->v.data()) to upd->xp? */
@@ -409,7 +484,8 @@ void integrateVVSecondStep(int64_t                                  step,
          * to numerical errors, or are they important
          * physically? I'm thinking they are just errors, but not completely sure.
          * For now, will call without actually constraining, constr=NULL*/
-        upd->finish_update(*ir, mdatoms, state, wcycle, false);
+        upd->finish_update(
+                *ir, mdatoms->homenr, mdatoms->havePartiallyFrozenAtoms, mdatoms->cFREEZE, state, wcycle, false);
     }
     /* this factor or 2 correction is necessary
         because half of the constraint force is removed

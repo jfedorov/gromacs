@@ -97,7 +97,7 @@ void LeapFrogDeviceTestRunner::integrate(LeapFrogTestData* testData, int numStep
     auto integrator =
             std::make_unique<LeapFrogGpu>(deviceContext, deviceStream, testData->numTCoupleGroups_);
 
-    integrator->set(testData->numAtoms_, testData->inverseMasses_.data(), testData->mdAtoms_.cTC);
+    integrator->set(testData->numAtoms_, testData->inverseMasses_.data(), testData->cTC_.data());
 
     bool doTempCouple = testData->numTCoupleGroups_ > 0;
     for (int step = 0; step < numSteps; step++)

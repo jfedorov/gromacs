@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019, by the GROMACS development team, led by
+ * Copyright (c) 2019,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -59,6 +59,8 @@
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/utility/stringutil.h"
 
+enum class ParticleType : int;
+
 namespace gmx
 {
 namespace test
@@ -91,9 +93,11 @@ public:
     PaddedVector<real> inverseMasses_;
     //! Inverse masses of the particles per dimension
     PaddedVector<RVec> inverseMassesPerDim_;
+    //! Storage for particle type.
+    std::vector<ParticleType> ptype_;
+    //! Storage for temperature coupling groups.
+    std::vector<unsigned short> cTC_;
 
-    //! MD atoms structure in which inverse masses will be passed to the integrator
-    t_mdatoms mdAtoms_;
     //! Input record (to get integrator type, temperature and pressure coupling)
     t_inputrec inputRecord_;
     //! System state

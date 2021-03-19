@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -41,6 +41,7 @@
 
 #include "gmxpre.h"
 
+#include "gromacs/utility/arrayref.h"
 #include "propagator.h"
 
 #include "gromacs/utility.h"
@@ -62,14 +63,14 @@ namespace gmx
 {
 //! Update velocities
 template<NumVelocityScalingValues numVelocityScalingValues, ParrinelloRahmanVelocityScaling parrinelloRahmanVelocityScaling>
-static void inline updateVelocities(int         a,
-                                    real        dt,
-                                    real        lambda,
-                                    const rvec* gmx_restrict invMassPerDim,
-                                    rvec* gmx_restrict v,
-                                    const rvec* gmx_restrict f,
-                                    const rvec               diagPR,
-                                    const matrix             matrixPR)
+static void inline updateVelocities(int                  a,
+                                    real                 dt,
+                                    real                 lambda,
+                                    rvec*                invMassPerDim,
+                                    ArrayRef<RVec>       v,
+                                    ArrayRef<const RVec> f,
+                                    const rvec           diagPR,
+                                    const matrix         matrixPR)
 {
     for (int d = 0; d < DIM; d++)
     {
@@ -104,11 +105,11 @@ static void inline updateVelocities(int         a,
 }
 
 //! Update positions
-static void inline updatePositions(int         a,
-                                   real        dt,
-                                   const rvec* gmx_restrict x,
-                                   rvec* gmx_restrict xprime,
-                                   const rvec* gmx_restrict v)
+static void inline updatePositions(int                  a,
+                                   real                 dt,
+                                   ArrayRef<const RVec> x,
+                                   ArrayRef<RVec>       xprime,
+                                   ArrayRef<const RVec> v)
 {
     for (int d = 0; d < DIM; d++)
     {
@@ -147,9 +148,9 @@ void Propagator<IntegrationStep::PositionsOnly>::run()
 {
     wallcycle_start(wcycle_, ewcUPDATE);
 
-    auto xp = as_rvec_array(statePropagatorData_->positionsView().paddedArrayRef().data());
-    auto x = as_rvec_array(statePropagatorData_->constPreviousPositionsView().paddedArrayRef().data());
-    auto v = as_rvec_array(statePropagatorData_->constVelocitiesView().paddedArrayRef().data());
+    auto xp = statePropagatorData_->positionsView().paddedArrayRef();
+    auto x  = statePropagatorData_->constPreviousPositionsView().paddedArrayRef();
+    auto v  = statePropagatorData_->constVelocitiesView().paddedArrayRef();
 
     int nth    = gmx_omp_nthreads_get(emntUpdate);
     int homenr = mdAtoms_->mdatoms()->homenr;
@@ -179,8 +180,8 @@ void Propagator<IntegrationStep::VelocitiesOnly>::run()
 {
     wallcycle_start(wcycle_, ewcUPDATE);
 
-    auto v = as_rvec_array(statePropagatorData_->velocitiesView().paddedArrayRef().data());
-    auto f = as_rvec_array(statePropagatorData_->constForcesView().force().data());
+    auto v             = statePropagatorData_->velocitiesView().paddedArrayRef();
+    auto f             = statePropagatorData_->constForcesView().force();
     auto invMassPerDim = mdAtoms_->mdatoms()->invMassPerDim;
 
     const real lambda =
@@ -247,10 +248,10 @@ void Propagator<IntegrationStep::LeapFrog>::run()
 {
     wallcycle_start(wcycle_, ewcUPDATE);
 
-    auto xp = as_rvec_array(statePropagatorData_->positionsView().paddedArrayRef().data());
-    auto x = as_rvec_array(statePropagatorData_->constPreviousPositionsView().paddedArrayRef().data());
-    auto v = as_rvec_array(statePropagatorData_->velocitiesView().paddedArrayRef().data());
-    auto f = as_rvec_array(statePropagatorData_->constForcesView().force().data());
+    auto xp            = statePropagatorData_->positionsView().paddedArrayRef();
+    auto x             = statePropagatorData_->constPreviousPositionsView().paddedArrayRef();
+    auto v             = statePropagatorData_->velocitiesView().paddedArrayRef();
+    auto f             = statePropagatorData_->constForcesView().force();
     auto invMassPerDim = mdAtoms_->mdatoms()->invMassPerDim;
 
     const real lambda =
@@ -318,10 +319,10 @@ void Propagator<IntegrationStep::VelocityVerletPositionsAndVelocities>::run()
 {
     wallcycle_start(wcycle_, ewcUPDATE);
 
-    auto xp = as_rvec_array(statePropagatorData_->positionsView().paddedArrayRef().data());
-    auto x = as_rvec_array(statePropagatorData_->constPreviousPositionsView().paddedArrayRef().data());
-    auto v = as_rvec_array(statePropagatorData_->velocitiesView().paddedArrayRef().data());
-    auto f = as_rvec_array(statePropagatorData_->constForcesView().force().data());
+    auto xp            = statePropagatorData_->positionsView().paddedArrayRef();
+    auto x             = statePropagatorData_->constPreviousPositionsView().paddedArrayRef();
+    auto v             = statePropagatorData_->velocitiesView().paddedArrayRef();
+    auto f             = statePropagatorData_->constForcesView().force();
     auto invMassPerDim = mdAtoms_->mdatoms()->invMassPerDim;
 
     const real lambda =

@@ -241,11 +241,13 @@ UpdateConstrainGpu::Impl::Impl(const t_inputrec&     ir,
 
 UpdateConstrainGpu::Impl::~Impl() {}
 
-void UpdateConstrainGpu::Impl::set(DeviceBuffer<Float3>          d_x,
-                                   DeviceBuffer<Float3>          d_v,
-                                   const DeviceBuffer<Float3>    d_f,
-                                   const InteractionDefinitions& idef,
-                                   const t_mdatoms&              md)
+void UpdateConstrainGpu::Impl::set(DeviceBuffer<Float3>           d_x,
+                                   DeviceBuffer<Float3>           d_v,
+                                   const DeviceBuffer<Float3>     d_f,
+                                   const InteractionDefinitions&  idef,
+                                   int                            numAtoms,
+                                   ArrayRef<const real>           invmass,
+                                   ArrayRef<const unsigned short> cTC)
 {
     // TODO wallcycle
     wallcycle_start_nocount(wcycle_, ewcLAUNCH_GPU);
@@ -259,7 +261,7 @@ void UpdateConstrainGpu::Impl::set(DeviceBuffer<Float3>          d_x,
     d_v_ = d_v;
     d_f_ = d_f;
 
-    numAtoms_ = md.nr;
+    numAtoms_ = numAtoms;
 
     reallocateDeviceBuffer(&d_xp_, numAtoms_, &numXp_, &numXpAlloc_, deviceContext_);
 
@@ -267,8 +269,8 @@ void UpdateConstrainGpu::Impl::set(DeviceBuffer<Float3>          d_x,
             &d_inverseMasses_, numAtoms_, &numInverseMasses_, &numInverseMassesAlloc_, deviceContext_);
 
     // Integrator should also update something, but it does not even have a method yet
-    integrator_->set(numAtoms_, md.invmass, md.cTC);
-    lincsGpu_->set(idef, numAtoms_, md.invmass);
+    integrator_->set(numAtoms_, invmass.data(), cTC.data());
+    lincsGpu_->set(idef, numAtoms_, invmass.data());
     settleGpu_->set(idef);
 
     coordinateScalingKernelLaunchConfig_.gridSize[0] =
@@ -335,13 +337,15 @@ void UpdateConstrainGpu::scaleVelocities(const matrix scalingMatrix)
     impl_->scaleVelocities(scalingMatrix);
 }
 
-void UpdateConstrainGpu::set(DeviceBuffer<Float3>          d_x,
-                             DeviceBuffer<Float3>          d_v,
-                             const DeviceBuffer<Float3>    d_f,
-                             const InteractionDefinitions& idef,
-                             const t_mdatoms&              md)
+void UpdateConstrainGpu::set(DeviceBuffer<Float3>           d_x,
+                             DeviceBuffer<Float3>           d_v,
+                             const DeviceBuffer<Float3>     d_f,
+                             const InteractionDefinitions&  idef,
+                             int                            numAtoms,
+                             ArrayRef<const real>           invmass,
+                             ArrayRef<const unsigned short> cTC)
 {
-    impl_->set(d_x, d_v, d_f, idef, md);
+    impl_->set(d_x, d_v, d_f, idef, numAtoms, invmass, cTC);
 }
 
 void UpdateConstrainGpu::setPbc(const PbcType pbcType, const matrix box)

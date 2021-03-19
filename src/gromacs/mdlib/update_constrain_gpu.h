@@ -148,13 +148,16 @@ public:
      * \param[in,out]  d_v                 Device buffer with velocities.
      * \param[in]      d_f                 Device buffer with forces.
      * \param[in]      idef                System topology
-     * \param[in]      md                  Atoms data.
-     */
-    void set(DeviceBuffer<RVec>            d_x,
-             DeviceBuffer<RVec>            d_v,
-             DeviceBuffer<RVec>            d_f,
-             const InteractionDefinitions& idef,
-             const t_mdatoms&              md);
+     * \param[in]      numAtoms            Number of atoms.
+     * \param[in]      invmass             Inverse masses.
+     * \param[in]      cTC                 Temperature coupling.*/
+    void set(DeviceBuffer<RVec>             d_x,
+             DeviceBuffer<RVec>             d_v,
+             DeviceBuffer<RVec>             d_f,
+             const InteractionDefinitions&  idef,
+             int                            numAtoms,
+             ArrayRef<const real>           invmass,
+             ArrayRef<const unsigned short> cTC);
 
     /*! \brief
      * Update PBC data.

@@ -56,9 +56,9 @@ struct t_fcdata;
 struct t_graph;
 struct t_grpopts;
 struct t_inputrec;
-struct t_mdatoms;
 struct t_nrnb;
 class t_state;
+enum class ParticleType : int;
 
 namespace gmx
 {
@@ -117,7 +117,13 @@ public:
      */
     void update_coords(const t_inputrec&                                inputRecord,
                        int64_t                                          step,
-                       const t_mdatoms*                                 md,
+                       int                                              homenr,
+                       bool                                             havePartiallyFrozenAtoms,
+                       const ParticleType*                              ptype,
+                       const unsigned short*                            cFREEZE,
+                       const unsigned short*                            cTC,
+                       const real*                                      invMass,
+                       rvec*                                            invMassPerDim,
                        t_state*                                         state,
                        const gmx::ArrayRefWithPadding<const gmx::RVec>& f,
                        const t_fcdata&                                  fcdata,
@@ -137,11 +143,13 @@ public:
      * \param[in]  wcycle           Wall-clock cycle counter.
      * \param[in]  haveConstraints  If the system has constraints.
      */
-    void finish_update(const t_inputrec& inputRecord,
-                       const t_mdatoms*  md,
-                       t_state*          state,
-                       gmx_wallcycle_t   wcycle,
-                       bool              haveConstraints);
+    void finish_update(const t_inputrec&     inputRecord,
+                       int                   homenr,
+                       bool                  havePartiallyFrozenAtoms,
+                       const unsigned short* cFREEZE,
+                       t_state*              state,
+                       gmx_wallcycle_t       wcycle,
+                       bool                  haveConstraints);
 
     /*! \brief Secong part of the SD integrator.
      *
@@ -161,26 +169,33 @@ public:
      * \param[in]  do_log       If this is logging step.
      * \param[in]  do_ene       If this is an energy evaluation step.
      */
-    void update_sd_second_half(const t_inputrec& inputRecord,
-                               int64_t           step,
-                               real*             dvdlambda,
-                               const t_mdatoms*  md,
-                               t_state*          state,
-                               const t_commrec*  cr,
-                               t_nrnb*           nrnb,
-                               gmx_wallcycle_t   wcycle,
-                               gmx::Constraints* constr,
-                               bool              do_log,
-                               bool              do_ene);
+    void update_sd_second_half(const t_inputrec&     inputRecord,
+                               int64_t               step,
+                               int                   homenr,
+                               const ParticleType*   ptype,
+                               const unsigned short* cFREEZE,
+                               const unsigned short* cTC,
+                               const real*           invMass,
+                               real*                 dvdlambda,
+                               t_state*              state,
+                               const t_commrec*      cr,
+                               t_nrnb*               nrnb,
+                               gmx_wallcycle_t       wcycle,
+                               gmx::Constraints*     constr,
+                               bool                  do_log,
+                               bool                  do_ene);
 
     /*! \brief Performs a leap-frog update without updating \p state so the constrain virial
      * can be computed.
      */
-    void update_for_constraint_virial(const t_inputrec&                                inputRecord,
-                                      const t_mdatoms&                                 md,
-                                      const t_state&                                   state,
+    void update_for_constraint_virial(const t_inputrec& inputRecord,
+                                      int               homenr,
+                                      bool              havePartiallyFrozenAtoms,
+                                      const t_state&    state,
                                       const gmx::ArrayRefWithPadding<const gmx::RVec>& f,
-                                      const gmx_ekindata_t&                            ekind);
+                                      const real*                                      invMass,
+                                      rvec*                 invMassPerDim,
+                                      const gmx_ekindata_t& ekind);
 
     /*! \brief Update pre-computed constants that depend on the reference temperature for coupling.
      *
