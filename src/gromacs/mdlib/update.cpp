@@ -790,6 +790,8 @@ static void do_update_md(int                         start,
                 {
                     updateMDLeapfrogSimple<StoreUpdatedVelocities::yes, NumTempScaleValues::single, ApplyParrinelloRahmanVScaling::no>(
                             start, nrend, dt, dtPressureCouple, invMassPerDim, tcstat, cTC, nullptr, x, xprime, v, f);
+                    GMX_UNUSED_VALUE(havePartiallyFrozenAtoms);
+                    GMX_UNUSED_VALUE(invMass);
                 }
             }
             else
@@ -830,6 +832,8 @@ static void doUpdateMDDoNotUpdateVelocities(int                            start
     {
         updateMDLeapfrogSimple<StoreUpdatedVelocities::no, NumTempScaleValues::single, ApplyParrinelloRahmanVScaling::no>(
                 start, nrend, dt, dt, invMassPerDim, tcstat, {}, {}, x, xprime, v, f);
+        GMX_UNUSED_VALUE(havePartiallyFrozenAtoms);
+        GMX_UNUSED_VALUE(invmass);
     }
 }
 
