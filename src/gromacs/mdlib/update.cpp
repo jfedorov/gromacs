@@ -547,7 +547,8 @@ enum class AccelerationType
  * \param[in]     dt                The time step.
  * \param[in]     dtPressureCouple  Time step for pressure coupling, is 0 when no pressure
  *                                  coupling should be applied at this step.
- * \param[in]     md                Atom properties.
+ * \param[in]     cTC               Array of temperature coupling groups, or nullptr.
+ * \param[in]     invMassPerDim     Array of inverse masses per dimension.
  * \param[in]     ekind             Kinetic energy data.
  * \param[in]     box               The box dimensions.
  * \param[in]     x                 Input coordinates.

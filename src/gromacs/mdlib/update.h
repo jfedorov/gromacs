@@ -103,17 +103,27 @@ public:
      *
      * Selects the appropriate integrator, based on the input record and performs a numerical integration step.
      *
-     * \param[in]  inputRecord      Input record.
-     * \param[in]  step             Current timestep.
-     * \param[in]  md               MD atoms data.
-     * \param[in]  state            System state object.
-     * \param[in]  f                Buffer with atomic forces for home particles.
-     * \param[in]  fcdata           Force calculation data to update distance and orientation restraints.
-     * \param[in]  ekind            Kinetic energy data (for temperature coupling, energy groups, etc.).
-     * \param[in]  M                Parrinello-Rahman velocity scaling matrix.
-     * \param[in]  updatePart       What should be updated, coordinates or velocities. This enum only used in VV integrator.
-     * \param[in]  cr               Comunication record  (Old comment: these shouldn't be here -- need to think about it).
-     * \param[in]  haveConstraints  If the system has constraints.
+     * \param[in]  inputRecord              Input record.
+     * \param[in]  step                     Current timestep.
+     * \param[in]  homenr                   Number of atoms on domain.
+     * \param[in]  havePartiallyFrozenAtoms If we need to account for frozen atoms.
+     * \param[in]  ptype                    Array of particle types.
+     * \param[in]  cFREEZE                  Array of freeze group indices, or nullptr.
+     * \param[in]  cTC                      Array of temperature couplng groups, or nullptr.
+     * \param[in]  invMass                  Array of inverse masses.
+     * \param[in]  invMassPerDim            Array of inverse masses per dimension.
+     * \param[in]  state                    System state object.
+     * \param[in]  f                        Buffer with atomic forces for home particles.
+     * \param[in]  fcdata                   Force calculation data to update distance
+     *                                      and orientation restraints.
+     * \param[in]  ekind                    Kinetic energy data (for temperature coupling,
+     *                                      energy groups, etc.).
+     * \param[in]  M                        Parrinello-Rahman velocity scaling matrix.
+     * \param[in]  updatePart               What should be updated, coordinates or velocities.
+     *                                      This enum only used in VV integrator.
+     * \param[in]  cr                       Comunication record  (Old comment: these shouldn't be
+     *                                      here -- need to think about it).
+     * \param[in]  haveConstraints          If the system has constraints.
      */
     void update_coords(const t_inputrec&                                inputRecord,
                        int64_t                                          step,
@@ -137,11 +147,13 @@ public:
      *
      * Copy the updated coordinates to the main coordinates buffer for the atoms that are not frozen.
      *
-     * \param[in]  inputRecord      Input record.
-     * \param[in]  md               MD atoms data.
-     * \param[in]  state            System state object.
-     * \param[in]  wcycle           Wall-clock cycle counter.
-     * \param[in]  haveConstraints  If the system has constraints.
+     * \param[in]  inputRecord              Input record.
+     * \param[in]  homenr                   Number of atoms on domain.
+     * \param[in]  havePartiallyFrozenAtoms If we need to account for frozen atoms.
+     * \param[in]  cFREEZE                  Array of freeze group indices, or nullptr.
+     * \param[in]  state                    System state object.
+     * \param[in]  wcycle                   Wall-clock cycle counter.
+     * \param[in]  haveConstraints          If the system has constraints.
      */
     void finish_update(const t_inputrec&     inputRecord,
                        int                   homenr,
@@ -159,7 +171,11 @@ public:
      * \param[in]  step         Current timestep.
      * \param[in]  dvdlambda    Free energy derivative. Contribution to be added to
      *                          the bonded interactions.
-     * \param[in]  md           MD atoms data.
+     * \param[in]  homenr       Number of atoms on domain.
+     * \param[in]  ptype        Array of particle types.
+     * \param[in]  cFREEZE      Array of freeze group indices, or nullptr.
+     * \param[in]  cTC          Array of temperature coupling group indicies, or nullptr.
+     * \param[in]  invMass      Array of inverse masses.
      * \param[in]  state        System state object.
      * \param[in]  cr           Comunication record.
      * \param[in]  nrnb         Cycle counters.
