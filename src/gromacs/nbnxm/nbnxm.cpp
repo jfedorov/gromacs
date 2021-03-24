@@ -45,6 +45,7 @@
 
 #include "nbnxm.h"
 
+#include "gromacs/gpu_utils/devicebuffer_datatype.h"
 #include "gromacs/domdec/domdec_struct.h"
 #include "gromacs/nbnxm/atomdata.h"
 #include "gromacs/timing/wallcycle.h"

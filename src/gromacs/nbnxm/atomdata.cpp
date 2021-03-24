@@ -44,6 +44,7 @@
 
 #include <algorithm>
 
+#include "gromacs/gpu_utils/devicebuffer_datatype.h"
 #include "gromacs/math/functions.h"
 #include "gromacs/math/utilities.h"
 #include "gromacs/math/vec.h"

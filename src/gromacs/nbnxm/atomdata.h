@@ -48,7 +48,6 @@
 
 #include <cstdio>
 
-#include "gromacs/gpu_utils/devicebuffer_datatype.h"
 #include "gromacs/gpu_utils/hostallocator.h"
 #include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/locality.h"
@@ -64,7 +63,8 @@ class MDLogger;
 struct NbnxmGpu;
 struct nbnxn_atomdata_t;
 struct nonbonded_verlet_t;
-
+template<typename>
+struct DeviceBuffer;
 class GpuEventSynchronizer;
 
 namespace Nbnxm

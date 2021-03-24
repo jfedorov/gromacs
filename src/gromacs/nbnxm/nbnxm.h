@@ -113,7 +113,6 @@
 
 #include <memory>
 
-#include "gromacs/gpu_utils/devicebuffer_datatype.h"
 #include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/locality.h"
 #include "gromacs/utility/arrayref.h"
@@ -139,7 +138,8 @@ struct t_mdatoms;
 struct t_nrnb;
 struct t_forcerec;
 struct t_inputrec;
-
+template<typename>
+struct DeviceBuffer;
 class GpuEventSynchronizer;
 
 namespace gmx

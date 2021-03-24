@@ -44,6 +44,7 @@
 #ifndef GMX_NBNXM_NBNXM_GPU_H
 #define GMX_NBNXM_NBNXM_GPU_H
 
+#include "gromacs/gpu_utils/devicebuffer_datatype.h"
 #include "gromacs/gpu_utils/gpu_macros.h"
 #include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/locality.h"

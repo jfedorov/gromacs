@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -127,7 +127,10 @@ extern template struct DeviceBuffer<gmx::RVec>;
 
 //! \brief A device-side buffer of ValueTypes
 template<typename ValueType>
-using DeviceBuffer = void*;
+struct DeviceBuffer
+{
+    operator void*() const { throw; }
+};
 
 #endif
 

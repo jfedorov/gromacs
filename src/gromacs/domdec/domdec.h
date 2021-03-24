@@ -62,7 +62,6 @@
 
 #include <vector>
 
-#include "gromacs/gpu_utils/devicebuffer_datatype.h"
 #include "gromacs/math/vectypes.h"
 #include "gromacs/utility/real.h"
 
@@ -84,6 +83,8 @@ enum class PbcType : int;
 class t_state;
 class DeviceContext;
 class GpuEventSynchronizer;
+template<typename>
+struct DeviceBuffer;
 
 namespace gmx
 {
