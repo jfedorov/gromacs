@@ -60,6 +60,8 @@
 #ifndef GMX_DOMDEC_DOMDEC_H
 #define GMX_DOMDEC_DOMDEC_H
 
+#include <stdio.h>
+
 #include <vector>
 
 #include "gromacs/math/vectypes.h"
