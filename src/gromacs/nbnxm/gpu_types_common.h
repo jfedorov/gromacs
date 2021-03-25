@@ -188,7 +188,7 @@ struct NBParamGpu
     //! table scale/spacing
     float coulomb_tab_scale;
     //! pointer to the table in the device memory
-    DeviceBuffer<float> coulomb_tab;
+    DeviceBuffer<float> coulomb_tab{};
     //! texture object bound to coulomb_tab
     DeviceTexture coulomb_tab_texobj;
 };
