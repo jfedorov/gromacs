@@ -53,6 +53,8 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <future>
+
 #include "gromacs/analysisdata/paralleloptions.h"
 #include "gromacs/utility/exceptions.h"
 
@@ -404,6 +406,33 @@ TYPED_TEST(AnalysisDataCommonTest, CallsModuleCorrectlyWithOutOfOrderFrames)
     ASSERT_NO_THROW_GMX(handle1.finishData());
     ASSERT_NO_THROW_GMX(handle2.finishData());
 }
+
+TYPED_TEST(AnalysisDataCommonTest, CallsModulesCorrectlyWithConcurrentExecution)
+{
+    ASSERT_NO_THROW_GMX(AnalysisDataTest::addStaticCheckerModule());
+    ASSERT_NO_THROW_GMX(AnalysisDataTest::addStaticParallelCheckerModule());
+    ASSERT_NO_THROW_GMX(AnalysisDataTest::addStaticColumnCheckerModule(1, 2));
+    gmx::AnalysisDataHandle          handle1;
+    gmx::AnalysisDataHandle          handle2;
+    gmx::AnalysisDataParallelOptions options(3);
+    ASSERT_NO_THROW_GMX(handle1 = this->data_.startData(options));
+    ASSERT_NO_THROW_GMX(handle2 = this->data_.startData(options));
+    std::future<void> handle1Waiter = std::async(std::launch::async, [&, this](){
+      ASSERT_NO_THROW_GMX(AnalysisDataTest::presentDataFrame(this->input_, 0, handle1));
+      ASSERT_NO_THROW_GMX(AnalysisDataTest::presentDataFrame(this->input_, 2, handle1));
+    });
+    std::future<void> handle2Waiter = std::async(std::launch::async, [&, this](){
+      ASSERT_NO_THROW_GMX(AnalysisDataTest::presentDataFrame(this->input_, 1, handle2));
+    });
+    handle1Waiter.wait();
+    handle2Waiter.wait();
+    ASSERT_NO_THROW_GMX(this->data_.finishFrameSerial(0));
+    ASSERT_NO_THROW_GMX(this->data_.finishFrameSerial(1));
+    ASSERT_NO_THROW_GMX(this->data_.finishFrameSerial(2));
+    ASSERT_NO_THROW_GMX(handle1.finishData());
+    ASSERT_NO_THROW_GMX(handle2.finishData());
+}
+
 
 /*
  * Tests that data can be accessed correctly from a module that requests

@@ -45,6 +45,7 @@
 #include "analysisdata.h"
 
 #include <memory>
+#include <mutex>
 
 #include "gromacs/analysisdata/dataframe.h"
 #include "gromacs/analysisdata/datastorage.h"
@@ -100,6 +101,8 @@ public:
 
     //! Storage implementation.
     AnalysisDataStorage storage_;
+    //! Guard for storage access
+    std::recursive_mutex storageGuard_;
     /*! \brief
      * List of handles for this data object.
      *
@@ -144,6 +147,7 @@ void AnalysisData::setMultipoint(bool bMultipoint)
 
 int AnalysisData::frameCount() const
 {
+    std::lock_guard<std::recursive_mutex> lock(impl_->storageGuard_);
     return impl_->storage_.frameCount();
 }
 
@@ -165,6 +169,7 @@ AnalysisDataHandle AnalysisData::startData(const AnalysisDataParallelOptions& op
 
 void AnalysisData::finishFrameSerial(int frameIndex)
 {
+    std::lock_guard<std::recursive_mutex> lock(impl_->storageGuard_);
     impl_->storage_.finishFrameSerial(frameIndex);
 }
 
@@ -193,12 +198,14 @@ void AnalysisData::finishData(AnalysisDataHandle handle)
 
 AnalysisDataFrameRef AnalysisData::tryGetDataFrameInternal(int index) const
 {
+    std::lock_guard<std::recursive_mutex> lock(impl_->storageGuard_);
     return impl_->storage_.tryGetDataFrame(index);
 }
 
 
 bool AnalysisData::requestStorageInternal(int nframes)
 {
+    std::lock_guard<std::recursive_mutex> lock(impl_->storageGuard_);
     return impl_->storage_.requestStorage(nframes);
 }
 
@@ -218,6 +225,7 @@ void AnalysisDataHandle::startFrame(int index, real x, real dx)
     GMX_RELEASE_ASSERT(impl_ != nullptr, "Invalid data handle used");
     GMX_RELEASE_ASSERT(impl_->currentFrame_ == nullptr,
                        "startFrame() called twice without calling finishFrame()");
+    std::lock_guard<std::recursive_mutex> lock(impl_->data_.impl_->storageGuard_);
     impl_->currentFrame_ = &impl_->data_.impl_->storage_.startFrame(index, x, dx);
 }
 
@@ -279,6 +287,7 @@ void AnalysisDataHandle::finishFrame()
                        "finishFrame() called without calling startFrame()");
     AnalysisDataStorageFrame* frame = impl_->currentFrame_;
     impl_->currentFrame_            = nullptr;
+    std::lock_guard<std::recursive_mutex> lock(impl_->data_.impl_->storageGuard_);
     frame->finishFrame();
 }
 

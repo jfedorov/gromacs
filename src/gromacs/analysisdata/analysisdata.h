@@ -71,9 +71,6 @@ class AnalysisDataParallelOptions;
  * When used through the trajectory analysis framework, calls to startData(),
  * finishFrameSerial(), and finishData() are handled by the framework.
  *
- * \todo
- * Parallel implementation is not complete.
- *
  * \if internal
  * Special note for MPI implementation: assuming that the initialization of
  * data objects is identical in all processes, associating the data objects
