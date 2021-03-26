@@ -2,7 +2,7 @@
  * This file is part of the GROMACS molecular simulation package.
  *
  * Copyright (c) 2011,2012,2013,2014,2015 by the GROMACS development team.
- * Copyright (c) 2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -417,12 +417,12 @@ TYPED_TEST(AnalysisDataCommonTest, CallsModulesCorrectlyWithConcurrentExecution)
     gmx::AnalysisDataParallelOptions options(3);
     ASSERT_NO_THROW_GMX(handle1 = this->data_.startData(options));
     ASSERT_NO_THROW_GMX(handle2 = this->data_.startData(options));
-    std::future<void> handle1Waiter = std::async(std::launch::async, [&, this](){
-      ASSERT_NO_THROW_GMX(AnalysisDataTest::presentDataFrame(this->input_, 0, handle1));
-      ASSERT_NO_THROW_GMX(AnalysisDataTest::presentDataFrame(this->input_, 2, handle1));
+    std::future<void> handle1Waiter = std::async(std::launch::async, [&, this]() {
+        ASSERT_NO_THROW_GMX(AnalysisDataTest::presentDataFrame(this->input_, 0, handle1));
+        ASSERT_NO_THROW_GMX(AnalysisDataTest::presentDataFrame(this->input_, 2, handle1));
     });
-    std::future<void> handle2Waiter = std::async(std::launch::async, [&, this](){
-      ASSERT_NO_THROW_GMX(AnalysisDataTest::presentDataFrame(this->input_, 1, handle2));
+    std::future<void> handle2Waiter = std::async(std::launch::async, [&, this]() {
+        ASSERT_NO_THROW_GMX(AnalysisDataTest::presentDataFrame(this->input_, 1, handle2));
     });
     handle1Waiter.wait();
     handle2Waiter.wait();
