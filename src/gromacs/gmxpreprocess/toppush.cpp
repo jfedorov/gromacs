@@ -39,6 +39,7 @@
 
 #include "toppush.h"
 
+#include <array>
 #include <cctype>
 #include <cmath>
 #include <cstdlib>
@@ -2018,6 +2019,7 @@ void push_bond(Directive                         d,
 
     /* default force parameters  */
     std::vector<int> atoms;
+    atoms.reserve(nral);
     for (int j = 0; (j < nral); j++)
     {
         atoms.emplace_back(aa[j] - 1);
@@ -2399,6 +2401,7 @@ void push_cmap(Directive                         d,
 
     /* default force parameters  */
     std::vector<int> atoms;
+    atoms.reserve(nral);
     for (int j = 0; (j < nral); j++)
     {
         atoms.emplace_back(aa[j] - 1);
@@ -2513,9 +2516,9 @@ void push_vsitesn(Directive d, gmx::ArrayRef<InteractionsOfType> bond, t_atoms* 
 
     for (int j = 0; j < nj; j++)
     {
-        std::vector<int> atoms = { firstAtom, atc[j] };
-        forceParam[0]          = nj;
-        forceParam[1]          = weight[j] / weight_tot;
+        std::array<int, 2> atoms = { firstAtom, atc[j] };
+        forceParam[0]            = nj;
+        forceParam[1]            = weight[j] / weight_tot;
         /* Put the values in the appropriate arrays */
         add_param_to_list(&bond[ftype], InteractionOfType(atoms, forceParam));
     }
@@ -2680,7 +2683,7 @@ static void convert_pairs_to_pairsQ(gmx::ArrayRef<InteractionsOfType> interactio
 
     for (const auto& param : paramp1)
     {
-        std::vector<real> forceParam = {
+        std::array<real, MAXFORCEPARAM> forceParam = {
             fudgeQQ, atoms->atom[param.ai()].q, atoms->atom[param.aj()].q, param.c0(), param.c1()
         };
         paramnew.emplace_back(InteractionOfType(param.atoms(), forceParam, ""));
@@ -2728,8 +2731,8 @@ static void generate_LJCpairsNB(MoleculeInformation* mol, int nb_funct, Interact
                             "for Van der Waals type Lennard-Jones");
                     warning_error_and_exit(wi, message, FARGS);
                 }
-                std::vector<int>  atoms      = { i, j };
-                std::vector<real> forceParam = {
+                std::array<int, 2>              atoms      = { i, j };
+                std::array<real, MAXFORCEPARAM> forceParam = {
                     atom[i].q,
                     atom[j].q,
                     nbp->interactionTypes[ntype * atom[i].type + atom[j].type].c0(),
