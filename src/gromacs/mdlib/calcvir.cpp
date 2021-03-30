@@ -4,7 +4,7 @@
  * Copyright (c) 1991-2000, University of Groningen, The Netherlands.
  * Copyright (c) 2001-2004, The GROMACS development team.
  * Copyright (c) 2013,2014,2015,2016,2018 by the GROMACS development team.
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -49,6 +49,7 @@
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/gmxassert.h"
 
 #define XXXX 0
@@ -61,6 +62,9 @@
 #define ZZYY 7
 #define ZZZZ 8
 
+namespace gmx
+{
+
 static void upd_vir(rvec vir, real dvx, real dvy, real dvz)
 {
     vir[XX] -= 0.5 * dvx;
@@ -68,7 +72,12 @@ static void upd_vir(rvec vir, real dvx, real dvy, real dvz)
     vir[ZZ] -= 0.5 * dvz;
 }
 
-static void calc_x_times_f(int nxf, const rvec x[], const rvec f[], gmx_bool bScrewPBC, const matrix box, matrix x_times_f)
+static void calc_x_times_f(int                  nxf,
+                           ArrayRef<const RVec> x,
+                           ArrayRef<const RVec> f,
+                           gmx_bool             bScrewPBC,
+                           const matrix         box,
+                           matrix               x_times_f)
 {
     clear_mat(x_times_f);
 
@@ -100,7 +109,7 @@ static void calc_x_times_f(int nxf, const rvec x[], const rvec f[], gmx_bool bSc
     }
 }
 
-void calc_vir(int nxf, const rvec x[], const rvec f[], tensor vir, bool bScrewPBC, const matrix box)
+void calc_vir(int nxf, ArrayRef<const RVec> x, ArrayRef<const RVec> f, tensor vir, bool bScrewPBC, const matrix box)
 {
     matrix x_times_f;
 
@@ -127,8 +136,8 @@ void calc_vir(int nxf, const rvec x[], const rvec f[], tensor vir, bool bScrewPB
             int end   = std::min(nxf * (thread + 1) / nthreads, nxf);
 
             calc_x_times_f(end - start,
-                           x + start,
-                           f + start,
+                           arrayRefFromArray(x.data() + start, sizeof(RVec)),
+                           arrayRefFromArray(x.data() + start, sizeof(RVec)),
                            bScrewPBC,
                            box,
                            thread == 0 ? x_times_f : xf_buf[thread * 3]);
@@ -146,7 +155,4 @@ void calc_vir(int nxf, const rvec x[], const rvec f[], tensor vir, bool bScrewPB
     }
 }
 
-void f_calc_vir(int i0, int i1, const rvec x[], const rvec f[], tensor vir, const matrix box)
-{
-    calc_vir(i1 - i0, x + i0, f + i0, vir, FALSE, box);
-}
+} // namespace gmx

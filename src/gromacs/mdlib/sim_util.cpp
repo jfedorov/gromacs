@@ -156,7 +156,7 @@ static void sum_forces(ArrayRef<RVec> f, ArrayRef<const RVec> forceToAdd)
 
 static void calc_virial(int                              start,
                         int                              homenr,
-                        const rvec                       x[],
+                        gmx::ArrayRef<const RVec>        x,
                         const gmx::ForceWithShiftForces& forceWithShiftForces,
                         tensor                           vir_part,
                         const matrix                     box,
@@ -165,16 +165,19 @@ static void calc_virial(int                              start,
                         PbcType                          pbcType)
 {
     /* The short-range virial from surrounding boxes */
-    const rvec* fshift          = as_rvec_array(forceWithShiftForces.shiftForces().data());
-    const rvec* shiftVecPointer = as_rvec_array(fr->shift_vec.data());
-    calc_vir(SHIFTS, shiftVecPointer, fshift, vir_part, pbcType == PbcType::Screw, box);
+    gmx::calc_vir(
+            SHIFTS, fr->shift_vec, forceWithShiftForces.shiftForces(), vir_part, pbcType == PbcType::Screw, box);
     inc_nrnb(nrnb, eNR_VIRIAL, SHIFTS);
 
     /* Calculate partial virial, for local atoms only, based on short range.
      * Total virial is computed in global_stat, called from do_md
      */
-    const rvec* f = as_rvec_array(forceWithShiftForces.force().data());
-    f_calc_vir(start, start + homenr, x, f, vir_part, box);
+    calc_vir(homenr,
+             arrayRefFromArray(x.data() + start, sizeof(RVec)),
+             arrayRefFromArray(forceWithShiftForces.force().data() + start, sizeof(RVec)),
+             vir_part,
+             FALSE,
+             box);
     inc_nrnb(nrnb, eNR_VIRIAL, homenr);
 
     if (debug)
@@ -333,8 +336,7 @@ static void postProcessForceWithShiftForces(t_nrnb*                   nrnb,
     if (stepWork.computeVirial)
     {
         /* Calculation of the virial must be done after vsites! */
-        calc_virial(
-                0, mdatoms.homenr, as_rvec_array(x.data()), forceWithShiftForces, vir_force, box, nrnb, &fr, fr.pbcType);
+        calc_virial(0, mdatoms.homenr, x, forceWithShiftForces, vir_force, box, nrnb, &fr, fr.pbcType);
     }
 }
 

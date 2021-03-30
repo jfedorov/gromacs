@@ -40,6 +40,7 @@
 #include "gmxpre.h"
 
 #include "gromacs/mdlib/calcvir.h"
+#include "gromacs/utility/arrayref.h"
 
 #include <gtest/gtest.h>
 
@@ -86,7 +87,7 @@ private:
 
 TEST_F(CalcvirTest, CanCalculateVirialAllAtomsInBox)
 {
-    calc_vir(numVirialAtoms_, as_rvec_array(coordinates_.data()), as_rvec_array(forces_.data()), virial_, false, nullptr);
+    calc_vir(numVirialAtoms_, coordinates_, forces_, virial_, false, nullptr);
 
     checker_.checkVector(virial_[0], "Virial x");
     checker_.checkVector(virial_[1], "Virial y");
@@ -97,7 +98,7 @@ TEST_F(CalcvirTest, CanCalculateVirialAllAtomsInBoxScrew)
 {
 
     const matrix box = { { 10, 0, 0 }, { 0, 12, 0 }, { 0, 0, 14 } };
-    calc_vir(numVirialAtoms_, as_rvec_array(coordinates_.data()), as_rvec_array(forces_.data()), virial_, true, box);
+    calc_vir(numVirialAtoms_, coordinates_, forces_, virial_, true, box);
 
     checker_.checkVector(virial_[0], "Virial x");
     checker_.checkVector(virial_[1], "Virial y");
@@ -108,7 +109,7 @@ TEST_F(CalcvirTest, CanCalculateVirialAtomsOutOfBoxScrewX)
 {
 
     const matrix box = { { 5, 0, 0 }, { 0, 10, 0 }, { 0, 0, 12 } };
-    calc_vir(numVirialAtoms_, as_rvec_array(coordinates_.data()), as_rvec_array(forces_.data()), virial_, true, box);
+    calc_vir(numVirialAtoms_, coordinates_, forces_, virial_, true, box);
 
     checker_.checkVector(virial_[0], "Virial x");
     checker_.checkVector(virial_[1], "Virial y");
@@ -119,7 +120,7 @@ TEST_F(CalcvirTest, CanCalculateVirialAtomsOutOfBoxScrewY)
 {
 
     const matrix box = { { 10, 0, 0 }, { 0, 5, 0 }, { 0, 0, 12 } };
-    calc_vir(numVirialAtoms_, as_rvec_array(coordinates_.data()), as_rvec_array(forces_.data()), virial_, true, box);
+    calc_vir(numVirialAtoms_, coordinates_, forces_, virial_, true, box);
 
     checker_.checkVector(virial_[0], "Virial x");
     checker_.checkVector(virial_[1], "Virial y");
@@ -130,7 +131,7 @@ TEST_F(CalcvirTest, CanCalculateVirialAtomsOutOfBoxScrewZ)
 {
 
     const matrix box = { { 10, 0, 0 }, { 0, 12, 0 }, { 0, 0, 5 } };
-    calc_vir(numVirialAtoms_, as_rvec_array(coordinates_.data()), as_rvec_array(forces_.data()), virial_, true, box);
+    calc_vir(numVirialAtoms_, coordinates_, forces_, virial_, true, box);
 
     checker_.checkVector(virial_[0], "Virial x");
     checker_.checkVector(virial_[1], "Virial y");
@@ -141,7 +142,7 @@ TEST_F(CalcvirTest, CanCalculateVirialAtomsOutOfBoxScrewXYZ)
 {
 
     const matrix box = { { 4, 0, 0 }, { 0, 5, 0 }, { 0, 0, 6 } };
-    calc_vir(numVirialAtoms_, as_rvec_array(coordinates_.data()), as_rvec_array(forces_.data()), virial_, true, box);
+    calc_vir(numVirialAtoms_, coordinates_, forces_, virial_, true, box);
 
     checker_.checkVector(virial_[0], "Virial x");
     checker_.checkVector(virial_[1], "Virial y");
