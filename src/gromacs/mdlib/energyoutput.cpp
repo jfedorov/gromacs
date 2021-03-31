@@ -871,7 +871,7 @@ void EnergyOutput::addDataAtEnergyStep(bool                    bDoDHDL,
      * as an argument. This is because we sometimes need to write the box from
      * the last timestep to match the trajectory frames.
      */
-    add_ebin_indexed(ebin_, ie_, gmx::ArrayRef<bool>(bEner_), enerd->term, bSum);
+    add_ebin_indexed(ebin_, ie_, bEner_, enerd->term, bSum);
     if (nCrmsd_)
     {
         crmsd[0] = constr->rmsd();

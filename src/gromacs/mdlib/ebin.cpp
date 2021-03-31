@@ -40,10 +40,12 @@
 
 #include "ebin.h"
 
+#include <array>
 #include <cmath>
 #include <cstring>
 
 #include <algorithm>
+#include <vector>
 
 #include "gromacs/math/units.h"
 #include "gromacs/math/utilities.h"
@@ -196,11 +198,11 @@ void add_ebin(t_ebin* eb, int entryIndex, int nener, const real ener[], gmx_bool
 // and whether eb->nsum was zero, to lift the branches out of the loop
 // over all possible energy terms, but that is true for a lot of the
 // ebin and mdebin functionality, so we should do it all or nothing.
-void add_ebin_indexed(t_ebin*                   eb,
-                      int                       entryIndex,
-                      gmx::ArrayRef<bool>       shouldUse,
-                      gmx::ArrayRef<const real> ener,
-                      gmx_bool                  bSum)
+void add_ebin_indexed(t_ebin*                        eb,
+                      int                            entryIndex,
+                      const std::array<bool, F_NRE>& shouldUse,
+                      gmx::ArrayRef<const real>      ener,
+                      gmx_bool                       bSum)
 {
 
     GMX_ASSERT(shouldUse.size() == ener.size(), "View sizes must match");

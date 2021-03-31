@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1991-2000, University of Groningen, The Netherlands.
  * Copyright (c) 2001-2004, The GROMACS development team.
- * Copyright (c) 2013,2014,2015,2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2013,2014,2015,2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -47,9 +47,12 @@
 #define GMX_MDLIB_EBIN_H
 
 #include <stdio.h>
+#include <array>
+#include <vector>
 
 #include "gromacs/fileio/enxio.h"
 #include "gromacs/trajectory/energyframe.h"
+#include "gromacs/topology/ifunc.h"
 #include "gromacs/utility/basedefinitions.h"
 
 namespace gmx
@@ -142,11 +145,11 @@ void add_ebin(t_ebin* eb, int entryIndex, int nener, const real ener[], gmx_bool
  * \param[in] ener        Values of thermodinamic terms to add.
  * \param[in] bSum        If the average value should be accumulated for these terms.
  */
-void add_ebin_indexed(t_ebin*                   eb,
-                      int                       entryIndex,
-                      gmx::ArrayRef<bool>       shouldUse,
-                      gmx::ArrayRef<const real> ener,
-                      gmx_bool                  bSum);
+void add_ebin_indexed(t_ebin*                        eb,
+                      int                            entryIndex,
+                      const std::array<bool, F_NRE>& shouldUse,
+                      gmx::ArrayRef<const real>      ener,
+                      gmx_bool                       bSum);
 
 /*! \brief Increase the counters for the sums.
  *
