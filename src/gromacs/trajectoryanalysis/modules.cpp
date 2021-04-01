@@ -48,6 +48,7 @@
 #include "gromacs/trajectoryanalysis/cmdlinerunner.h"
 
 #include "modules/angle.h"
+#include "modules/cluster.h"
 #include "modules/convert_trj.h"
 #include "modules/distance.h"
 #include "modules/extract_cluster.h"
@@ -93,6 +94,7 @@ void registerTrajectoryAnalysisModules(CommandLineModuleManager* manager)
     using namespace gmx::analysismodules;
     CommandLineModuleGroup group = manager->addModuleGroup("Trajectory analysis");
     registerModule<AngleInfo>(manager, group);
+    registerModule<ClusterInfo>(manager, group);
     registerModule<ConvertTrjInfo>(manager, group);
     registerModule<DistanceInfo>(manager, group);
     registerModule<ExtractClusterInfo>(manager, group);

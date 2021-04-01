@@ -32,56 +32,34 @@
  * To help us fund GROMACS development, we humbly ask that you cite
  * the research papers on the package. Check out http://www.gromacs.org.
  */
+/*! \internal \file
+ * \brief
+ * Declares trajectory analysis module for clustering.
+ *
+ * \author Paul Bauer <paul.bauer.q@gmail.com>
+ * \ingroup module_trajectoryanalysis
+ */
+#ifndef GMX_TRAJECTORYANALYSIS_MODULES_CLUSTER_H
+#define GMX_TRAJECTORYANALYSIS_MODULES_CLUSTER_H
 
-#ifndef GMX_GMXANA_CLUSTER_METHODS_H
-#define GMX_GMXANA_CLUSTER_METHODS_H
+#include "gromacs/trajectoryanalysis/analysismodule.h"
 
-#include <stdio.h>
-
-#include "gromacs/utility/basedefinitions.h"
-#include "gromacs/utility/real.h"
-
-struct gmx_output_env_t;
-struct t_mat;
-
-enum class ClusterMethods : int
+namespace gmx
 {
-    Linkage,
-    JarvisPatrick,
-    MonteCarlo,
-    Diagonalization,
-    Gromos,
-    Count,
-    Default = Linkage
+
+namespace analysismodules
+{
+
+class ClusterInfo
+{
+public:
+    static const char                      name[];
+    static const char                      shortDescription[];
+    static TrajectoryAnalysisModulePointer create();
 };
 
-struct t_clusters
-{
-    int  ncl;
-    int* cl;
-};
+} // namespace analysismodules
 
-struct t_nnb
-{
-    int  nr;
-    int* nb;
-};
-
-
-void mc_optimize(FILE*             log,
-                 t_mat*            m,
-                 real*             time,
-                 int               maxiter,
-                 int               nrandom,
-                 int               seed,
-                 real              kT,
-                 const char*       conv,
-                 gmx_output_env_t* oenv);
-
-void gather(t_mat* m, real cutoff, t_clusters* clust);
-
-void jarvis_patrick(int n1, real** mat, int M, int P, real rmsdcut, t_clusters* clust);
-
-void gromos(int n1, real** mat, real rmsdcut, t_clusters* clust);
+} // namespace gmx
 
 #endif
