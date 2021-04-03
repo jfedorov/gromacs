@@ -838,7 +838,8 @@ void ListedForces::calculate(struct gmx_wallcycle*                     wcycle,
 
         if (!idef.il[F_POSRES].empty())
         {
-            posres_wrapper(nrnb, idef, &pbc_full, x, enerd, lambda, fr, &forceOutputs->forceWithVirial());
+            posres_wrapper(
+                    threading_->nthreads, nrnb, idef, &pbc_full, x, enerd, lambda, fr, &forceOutputs->forceWithVirial());
         }
 
         if (!idef.il[F_FBPOSRES].empty())
@@ -886,7 +887,8 @@ void ListedForces::calculate(struct gmx_wallcycle*                     wcycle,
         gmx::EnumerationArray<FreeEnergyPerturbationCouplingType, real> dvdl = { 0 };
         if (!idef.il[F_POSRES].empty())
         {
-            posres_wrapper_lambda(wcycle, fepvals, idef, &pbc_full, x, enerd, lambda, fr);
+            posres_wrapper_lambda(
+                    threading_->nthreads, wcycle, fepvals, idef, &pbc_full, x, enerd, lambda, fr);
         }
         if (idef.ilsort != ilsortNO_FE)
         {

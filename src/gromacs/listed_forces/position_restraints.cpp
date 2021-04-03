@@ -72,21 +72,21 @@ namespace
 
 /*! \brief returns dx, rdist, and dpdl for functions posres() and fbposres()
  */
-void posres_dx(const rvec      x,
-               const rvec      pos0A,
-               const rvec      pos0B,
-               const rvec      comA_sc,
-               const rvec      comB_sc,
-               real            lambda,
-               const t_pbc*    pbc,
-               RefCoordScaling refcoord_scaling,
-               int             npbcdim,
-               rvec            dx,
-               rvec            rdist,
-               rvec            dpdl)
+static inline void posres_dx(const rvec      x,
+                             const rvec      pos0A,
+                             const rvec      pos0B,
+                             const rvec      comA_sc,
+                             const rvec      comB_sc,
+                             real            lambda,
+                             const t_pbc*    pbc,
+                             RefCoordScaling refcoord_scaling,
+                             int             npbcdim,
+                             rvec            dx,
+                             rvec            rdist,
+                             rvec            dpdl)
 {
     int  m, d;
-    real posA, posB, L1, ref = 0.;
+    real posA, posB, L1, ref;
     rvec pos;
 
     L1 = 1.0 - lambda;
@@ -324,13 +324,30 @@ real fbposres(int                   nbonds,
     return vtot;
 }
 
+//! Computes the loop step for position restraints parallelized over openMP.
+int computeChunkSize(const int numThreads, const int numBonds)
+{
+    const int naiveChunkSize = numBonds / numThreads;
+    return numThreads * naiveChunkSize == numBonds ? naiveChunkSize : naiveChunkSize + 1;
+}
+
+
+//! Thread-local variable accumulator. Aligned to typical cache-width to avoid false sharing.
+struct alignas(64) PosResOutputAccumulator
+{
+    real dvdl   = 0;
+    real vtot   = 0;
+    rvec virial = { 0 };
+};
+
 
 /*! \brief Compute energies and forces, when requested, for position restraints
  *
  * Note that position restraints require a different pbc treatment
  * from other bondeds */
 template<bool computeForce>
-real posres(int                   nbonds,
+real posres(const int             numThreads,
+            const int             numForceAtomElements,
             const t_iatom         forceatoms[],
             const t_iparams       forceparams[],
             const rvec            x[],
@@ -343,21 +360,18 @@ real posres(int                   nbonds,
             const rvec            comA,
             const rvec            comB)
 {
-    int              i, ai, m, d, type, npbcdim = 0;
-    const t_iparams* pr;
-    real             kk, fm;
-    rvec             comA_sc, comB_sc, rdist, dpdl, dx;
+    rvec comA_sc, comB_sc;
 
-    npbcdim = numPbcDimensions(pbcType);
+    const int npbcdim = numPbcDimensions(pbcType);
     GMX_ASSERT((pbcType == PbcType::No) == (npbcdim == 0), "");
     if (refcoord_scaling == RefCoordScaling::Com)
     {
         clear_rvec(comA_sc);
         clear_rvec(comB_sc);
-        for (m = 0; m < npbcdim; m++)
+        for (int m = 0; m < npbcdim; m++)
         {
             assert(npbcdim <= DIM);
-            for (d = m; d < npbcdim; d++)
+            for (int d = m; d < npbcdim; d++)
             {
                 comA_sc[m] += comA[d] * pbc->box[d][m];
                 comB_sc[m] += comB[d] * pbc->box[d][m];
@@ -367,7 +381,7 @@ real posres(int                   nbonds,
 
     const real L1 = 1.0 - lambda;
 
-    rvec* f;
+    rvec* f = nullptr;
     if (computeForce)
     {
         GMX_ASSERT(forceWithVirial != nullptr, "When forces are requested we need a force object");
@@ -376,40 +390,78 @@ real posres(int                   nbonds,
     real vtot = 0.0;
     /* Use intermediate virial buffer to reduce reduction rounding errors */
     rvec virial = { 0 };
-    for (i = 0; (i < nbonds);)
+
+    // Each loop consumes 2 forceatoms elements - the type and the atom index
+    constexpr int c_forceAtomIncrement = 2;
+    // This is the number of actual position restraints per thread.
+    const int chunkSize = computeChunkSize(numThreads, numForceAtomElements / c_forceAtomIncrement);
+    std::vector<PosResOutputAccumulator> outputs(numThreads);
+
+#pragma omp parallel for num_threads(numThreads) schedule(static)
+    for (int threadNumber = 0; threadNumber < numThreads; threadNumber++)
     {
-        type = forceatoms[i++];
-        ai   = forceatoms[i++];
-        pr   = &forceparams[type];
+        int  baseIndex = threadNumber * c_forceAtomIncrement * chunkSize;
+        rvec rdist, dpdl, dx;
+        real kk, fm;
 
-        /* return dx, rdist, and dpdl */
-        posres_dx(x[ai],
-                  forceparams[type].posres.pos0A,
-                  forceparams[type].posres.pos0B,
-                  comA_sc,
-                  comB_sc,
-                  lambda,
-                  pbc,
-                  refcoord_scaling,
-                  npbcdim,
-                  dx,
-                  rdist,
-                  dpdl);
+        rvec localVirial    = { 0 };
+        real localVTot      = 0;
+        real localDvDLambda = 0;
 
-        for (m = 0; (m < DIM); m++)
+        for (int i = baseIndex; i < baseIndex + chunkSize * c_forceAtomIncrement; i += c_forceAtomIncrement)
         {
-            kk = L1 * pr->posres.fcA[m] + lambda * pr->posres.fcB[m];
-            fm = -kk * dx[m];
-            vtot += 0.5 * kk * dx[m] * dx[m];
-            *dvdlambda += 0.5 * (pr->posres.fcB[m] - pr->posres.fcA[m]) * dx[m] * dx[m] + fm * dpdl[m];
-
-            /* Here we correct for the pbc_dx which included rdist */
-            if (computeForce)
+            if (i >= numForceAtomElements)
             {
-                f[ai][m] += fm;
-                virial[m] -= 0.5 * (dx[m] + rdist[m]) * fm;
+                continue;
+            }
+            const int        type = forceatoms[i];
+            const int        ai   = forceatoms[i + 1];
+            const t_iparams* pr   = &forceparams[type];
+            /* return dx, rdist, and dpdl */
+            posres_dx(x[ai],
+                      forceparams[type].posres.pos0A,
+                      forceparams[type].posres.pos0B,
+                      comA_sc,
+                      comB_sc,
+                      lambda,
+                      pbc,
+                      refcoord_scaling,
+                      npbcdim,
+                      dx,
+                      rdist,
+                      dpdl);
+
+            for (int m = 0; (m < DIM); m++)
+            {
+                kk = L1 * pr->posres.fcA[m] + lambda * pr->posres.fcB[m];
+                fm = -kk * dx[m];
+                // #pragma omp atomic
+                localVTot += 0.5 * kk * dx[m] * dx[m];
+                // #pragma omp atomic
+                localDvDLambda +=
+                        0.5 * (pr->posres.fcB[m] - pr->posres.fcA[m]) * dx[m] * dx[m] + fm * dpdl[m];
+
+                /* Here we correct for the pbc_dx which included rdist */
+                if (computeForce)
+                {
+                    // #pragma omp atomic
+                    f[ai][m] += fm;
+                    // #pragma omp atomic
+                    localVirial[m] -= 0.5 * (dx[m] + rdist[m]) * fm;
+                }
             }
         }
+        PosResOutputAccumulator& output = outputs[threadNumber];
+        output.vtot += localVTot;
+        output.dvdl += localDvDLambda;
+        rvec_inc(output.virial, localVirial);
+    }
+
+    for (auto& output : outputs)
+    {
+        *dvdlambda += output.dvdl;
+        vtot += output.vtot;
+        rvec_inc(virial, output.virial);
     }
 
     if (computeForce)
@@ -422,7 +474,8 @@ real posres(int                   nbonds,
 
 } // namespace
 
-void posres_wrapper(t_nrnb*                       nrnb,
+void posres_wrapper(const int                     numThreads,
+                    t_nrnb*                       nrnb,
                     const InteractionDefinitions& idef,
                     const struct t_pbc*           pbc,
                     const rvec*                   x,
@@ -434,7 +487,8 @@ void posres_wrapper(t_nrnb*                       nrnb,
     real v, dvdl;
 
     dvdl = 0;
-    v    = posres<true>(idef.il[F_POSRES].size(),
+    v    = posres<true>(numThreads,
+                     idef.il[F_POSRES].size(),
                      idef.il[F_POSRES].iatoms.data(),
                      idef.iparams_posres.data(),
                      x,
@@ -454,7 +508,8 @@ void posres_wrapper(t_nrnb*                       nrnb,
     inc_nrnb(nrnb, eNR_POSRES, gmx::exactDiv(idef.il[F_POSRES].size(), 2));
 }
 
-void posres_wrapper_lambda(struct gmx_wallcycle*         wcycle,
+void posres_wrapper_lambda(const int                     numThreads,
+                           struct gmx_wallcycle*         wcycle,
                            const t_lambda*               fepvals,
                            const InteractionDefinitions& idef,
                            const struct t_pbc*           pbc,
@@ -473,7 +528,8 @@ void posres_wrapper_lambda(struct gmx_wallcycle*         wcycle,
         const real lambda_dum =
                 (i == 0 ? lambda[static_cast<int>(FreeEnergyPerturbationCouplingType::Restraint)]
                         : fepvals->all_lambda[FreeEnergyPerturbationCouplingType::Restraint][i - 1]);
-        const real v = posres<false>(idef.il[F_POSRES].size(),
+        const real v = posres<false>(numThreads,
+                                     idef.il[F_POSRES].size(),
                                      idef.il[F_POSRES].iatoms.data(),
                                      idef.iparams_posres.data(),
                                      x,

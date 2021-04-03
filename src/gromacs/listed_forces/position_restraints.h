@@ -68,7 +68,8 @@ class ForceWithVirial;
 }
 
 /*! \brief Helper function that wraps calls to posres */
-void posres_wrapper(t_nrnb*                       nrnb,
+void posres_wrapper(int                           numThreads,
+                    t_nrnb*                       nrnb,
                     const InteractionDefinitions& idef,
                     const struct t_pbc*           pbc,
                     const rvec*                   x,
@@ -79,7 +80,8 @@ void posres_wrapper(t_nrnb*                       nrnb,
 
 /*! \brief Helper function that wraps calls to posres for free-energy
     pertubation */
-void posres_wrapper_lambda(struct gmx_wallcycle*         wcycle,
+void posres_wrapper_lambda(int                           numThreads,
+                           struct gmx_wallcycle*         wcycle,
                            const t_lambda*               fepvals,
                            const InteractionDefinitions& idef,
                            const struct t_pbc*           pbc,

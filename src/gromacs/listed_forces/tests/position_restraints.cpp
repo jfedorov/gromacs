@@ -79,7 +79,7 @@ namespace
 
 //! Tolerance for float evaluation
 constexpr float c_precisionTolerance = 1e-6;
-
+constexpr int   c_numOmpThreads      = 2;
 
 class PositionRestraintsTest : public ::testing::TestWithParam<std::tuple<RefCoordScaling, PbcType>>
 {
@@ -157,7 +157,8 @@ TEST_P(PositionRestraintsTest, BasicPosResNoFreeEnergy)
     const std::vector<RVec> referencePositions = { { 0.0, 0.0, 0.0 }, { 0.5, 0.6, 0.0 } };
     const std::vector<RVec> forceConstants     = { { 1000, 500, 250 }, { 0, 200, 400 } };
     setValues(positions, referencePositions, forceConstants);
-    posres_wrapper(&nrnb_,
+    posres_wrapper(c_numOmpThreads,
+                   &nrnb_,
                    idef_,
                    &pbc_,
                    as_rvec_array(x_.data()),
