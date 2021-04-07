@@ -148,29 +148,30 @@ void LincsConstraintsRunner::applyConstraints(ConstraintsTestData* testData, t_p
               lincsd);
 
     // Evaluate constraints
-    bool success = constrain_lincs(false,
-                                   testData->ir_,
-                                   0,
-                                   lincsd,
-                                   testData->invmass_,
-                                   &cr,
-                                   &ms,
-                                   testData->x_.arrayRefWithPadding(),
-                                   testData->xPrime_.arrayRefWithPadding(),
-                                   testData->xPrime2_.arrayRefWithPadding().unpaddedArrayRef(),
-                                   pbc.box,
-                                   &pbc,
-                                   testData->hasMassPerturbed_,
-                                   testData->lambda_,
-                                   &testData->dHdLambda_,
-                                   testData->invdt_,
-                                   testData->v_.arrayRefWithPadding().unpaddedArrayRef(),
-                                   testData->computeVirial_,
-                                   testData->virialScaled_,
-                                   gmx::ConstraintVariable::Positions,
-                                   &testData->nrnb_,
-                                   maxwarn,
-                                   &warncount_lincs);
+    bool success;
+    std::tie(success, warncount_lincs) =
+            constrain_lincs(false,
+                            testData->ir_,
+                            0,
+                            lincsd,
+                            testData->invmass_,
+                            &cr,
+                            &ms,
+                            testData->x_.arrayRefWithPadding(),
+                            testData->xPrime_.arrayRefWithPadding(),
+                            testData->xPrime2_.arrayRefWithPadding().unpaddedArrayRef(),
+                            pbc.box,
+                            &pbc,
+                            testData->hasMassPerturbed_,
+                            testData->lambda_,
+                            &testData->dHdLambda_,
+                            testData->invdt_,
+                            testData->v_.arrayRefWithPadding().unpaddedArrayRef(),
+                            testData->computeVirial_,
+                            testData->virialScaled_,
+                            gmx::ConstraintVariable::Positions,
+                            &testData->nrnb_,
+                            maxwarn);
     EXPECT_TRUE(success) << "Test failed with a false return value in LINCS.";
     EXPECT_EQ(warncount_lincs, 0) << "There were warnings in LINCS.";
     done_lincs(lincsd);

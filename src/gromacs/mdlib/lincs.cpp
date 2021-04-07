@@ -2144,18 +2144,18 @@ void set_lincs(const InteractionDefinitions& idef,
 }
 
 //! Issues a warning when LINCS constraints cannot be satisfied.
-static void lincs_warning(gmx_domdec_t*                 dd,
-                          ArrayRef<const RVec>          x,
-                          ArrayRef<const RVec>          xprime,
-                          t_pbc*                        pbc,
-                          int                           ncons,
-                          gmx::ArrayRef<const AtomPair> atoms,
-                          gmx::ArrayRef<const real>     bllen,
-                          real                          wangle,
-                          int                           maxwarn,
-                          int*                          warncount)
+static int lincs_warning(gmx_domdec_t*                 dd,
+                         ArrayRef<const RVec>          x,
+                         ArrayRef<const RVec>          xprime,
+                         t_pbc*                        pbc,
+                         int                           ncons,
+                         gmx::ArrayRef<const AtomPair> atoms,
+                         gmx::ArrayRef<const real>     bllen,
+                         real                          wangle,
+                         int                           maxwarn)
 {
-    real wfac = std::cos(gmx::c_deg2Rad * wangle);
+    int  warncount = 0;
+    real wfac      = std::cos(gmx::c_deg2Rad * wangle);
 
     fprintf(stderr,
             "bonds that rotated more than %g degrees:\n"
@@ -2196,13 +2196,14 @@ static void lincs_warning(gmx_domdec_t*                 dd,
                 gmx_fatal(FARGS, "Bond length not finite.");
             }
 
-            (*warncount)++;
+            (warncount)++;
         }
     }
-    if (*warncount > maxwarn)
+    if (warncount > maxwarn)
     {
-        too_many_constraint_warnings(ConstraintAlgorithm::Lincs, *warncount);
+        too_many_constraint_warnings(ConstraintAlgorithm::Lincs, warncount);
     }
+    return warncount;
 }
 
 //! Status information about how well LINCS satisified the constraints in this domain
@@ -2268,31 +2269,31 @@ static LincsDeviations makeLincsDeviations(const Lincs& lincsd, ArrayRef<const R
     return result;
 }
 
-bool constrain_lincs(bool                            computeRmsd,
-                     const t_inputrec&               ir,
-                     int64_t                         step,
-                     Lincs*                          lincsd,
-                     ArrayRef<const real>            invmass,
-                     const t_commrec*                cr,
-                     const gmx_multisim_t*           ms,
-                     ArrayRefWithPadding<const RVec> xPadded,
-                     ArrayRefWithPadding<RVec>       xprimePadded,
-                     ArrayRef<RVec>                  min_proj,
-                     const matrix                    box,
-                     t_pbc*                          pbc,
-                     const bool                      hasMassPerturbed,
-                     real                            lambda,
-                     real*                           dvdlambda,
-                     real                            invdt,
-                     ArrayRef<RVec>                  v,
-                     bool                            bCalcVir,
-                     tensor                          vir_r_m_dr,
-                     ConstraintVariable              econq,
-                     t_nrnb*                         nrnb,
-                     int                             maxwarn,
-                     int*                            warncount)
+std::tuple<bool, int> constrain_lincs(bool                            computeRmsd,
+                                      const t_inputrec&               ir,
+                                      int64_t                         step,
+                                      Lincs*                          lincsd,
+                                      ArrayRef<const real>            invmass,
+                                      const t_commrec*                cr,
+                                      const gmx_multisim_t*           ms,
+                                      ArrayRefWithPadding<const RVec> xPadded,
+                                      ArrayRefWithPadding<RVec>       xprimePadded,
+                                      ArrayRef<RVec>                  min_proj,
+                                      const matrix                    box,
+                                      t_pbc*                          pbc,
+                                      const bool                      hasMassPerturbed,
+                                      real                            lambda,
+                                      real*                           dvdlambda,
+                                      real                            invdt,
+                                      ArrayRef<RVec>                  v,
+                                      bool                            bCalcVir,
+                                      tensor                          vir_r_m_dr,
+                                      ConstraintVariable              econq,
+                                      t_nrnb*                         nrnb,
+                                      int                             maxwarn)
 {
-    bool bOK = TRUE;
+    bool bOK       = true;
+    int  warncount = 0;
 
     /* This boolean should be set by a flag passed to this routine.
      * We can also easily check if any constraint length is changed,
@@ -2307,7 +2308,7 @@ bool constrain_lincs(bool                            computeRmsd,
             lincsd->rmsdData = { { 0 } };
         }
 
-        return bOK;
+        return std::make_tuple(bOK, warncount);
     }
 
     ArrayRef<const RVec> x      = xPadded.unpaddedArrayRef();
@@ -2454,8 +2455,8 @@ bool constrain_lincs(bool                            computeRmsd,
                             ddglatnr(cr->dd, lincsd->atoms[deviations.indexOfMaxDeviation].index1),
                             ddglatnr(cr->dd, lincsd->atoms[deviations.indexOfMaxDeviation].index2));
 
-                    lincs_warning(
-                            cr->dd, x, xprime, pbc, lincsd->nc, lincsd->atoms, lincsd->bllen, ir.LincsWarnAngle, maxwarn, warncount);
+                    warncount += lincs_warning(
+                            cr->dd, x, xprime, pbc, lincsd->nc, lincsd->atoms, lincsd->bllen, ir.LincsWarnAngle, maxwarn);
                 }
                 bOK = (deviations.maxDeviation < 0.5);
             }
@@ -2541,7 +2542,7 @@ bool constrain_lincs(bool                            computeRmsd,
         inc_nrnb(nrnb, eNR_CONSTR_VIR, lincsd->nc_real);
     }
 
-    return bOK;
+    return std::make_tuple(bOK, warncount);
 }
 
 } // namespace gmx
