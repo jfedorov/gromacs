@@ -65,6 +65,12 @@ namespace gmx
 class BoxDeformation;
 class Constraints;
 
+/*! \brief Sets whether we store the updated velocities */
+enum class StoreUpdatedVelocities
+{
+    yes, //!< Store the updated velocities
+    no   //!< Do not store the updated velocities
+};
 
 /*! \libinternal
  * \brief Contains data for update phase */
