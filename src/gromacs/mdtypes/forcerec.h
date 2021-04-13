@@ -106,16 +106,8 @@ class WholeMoleculeTransform;
  * this value should be slighlty smaller than sqrt(GMX_FLOAT_MAX).
  */
 #define GMX_CUTOFF_INF 1E+18
-
-/* enums for the neighborlist type */
-enum
-{
-    enbvdwNONE,
-    enbvdwLJ,
-    enbvdwBHAM,
-    enbvdwTAB,
-    enbvdwNR
-};
+//! Check the cuttoff
+real cutoff_inf(real cutoff);
 
 struct cginfo_mb_t
 {
@@ -159,7 +151,7 @@ public:
         return forceBufferForDirectVirialContributions_;
     }
 
-    //! Returns the buffer for shift forces, size SHIFTS
+    //! Returns the buffer for shift forces, size c_numShiftVectors
     gmx::ArrayRef<gmx::RVec> shiftForces() { return shiftForces_; }
 
     //! Resizes the direct virial contribution buffer, when present
@@ -170,7 +162,7 @@ private:
     bool haveDirectVirialContributions_ = false;
     //! Force buffer for force computation with direct virial contributions
     std::vector<gmx::RVec> forceBufferForDirectVirialContributions_;
-    //! Shift force array for computing the virial, size SHIFTS
+    //! Shift force array for computing the virial, size c_numShiftVectors
     std::vector<gmx::RVec> shiftForces_;
 };
 // NOLINTNEXTLINE (clang-analyzer-optin.performance.Padding)
@@ -190,12 +182,12 @@ struct t_forcerec
     //! Tells whether atoms inside a molecule can be in different periodic images,
     //  i.e. whether we need to take into account PBC when computing distances inside molecules.
     //  This determines whether PBC must be considered for e.g. bonded interactions.
-    gmx_bool        bMolPBC     = FALSE;
+    bool            bMolPBC     = false;
     RefCoordScaling rc_scaling  = RefCoordScaling::No;
-    rvec            posres_com  = { 0 };
-    rvec            posres_comB = { 0 };
+    gmx::RVec       posres_com  = { 0, 0, 0 };
+    gmx::RVec       posres_comB = { 0, 0, 0 };
 
-    gmx_bool use_simd_kernels = FALSE;
+    bool use_simd_kernels = false;
 
     /* Interaction for calculated in kernels. In many cases this is similar to
      * the electrostatics settings in the inputrecord, but the difference is that
@@ -217,19 +209,15 @@ struct t_forcerec
     real rlist = 0;
 
     /* Charge sum for topology A/B ([0]/[1]) for Ewald corrections */
-    double qsum[2]  = { 0 };
-    double q2sum[2] = { 0 };
-    double c6sum[2] = { 0 };
+    std::array<double, 2> qsum  = { 0 };
+    std::array<double, 2> q2sum = { 0 };
+    std::array<double, 2> c6sum = { 0 };
 
     /* Dispersion correction stuff */
     std::unique_ptr<DispersionCorrection> dispersionCorrection;
 
     /* Fudge factors */
     real fudgeQQ = 0;
-
-    /* Table stuff */
-    gmx_bool bcoultab = FALSE;
-    gmx_bool bvdwtab  = FALSE;
 
     std::unique_ptr<t_forcetable> pairsTable; /* for 1-4 interactions, [pairs] and [pairs_nb] */
 
@@ -261,15 +249,15 @@ struct t_forcerec
     std::vector<ForceHelperBuffers> forceHelperBuffers;
 
     /* Data for PPPM/PME/Ewald */
-    struct gmx_pme_t* pmedata                = nullptr;
-    LongRangeVdW      ljpme_combination_rule = LongRangeVdW::Geom;
+    gmx_pme_t*   pmedata                = nullptr;
+    LongRangeVdW ljpme_combination_rule = LongRangeVdW::Geom;
 
     /* PME/Ewald stuff */
     std::unique_ptr<gmx_ewald_tab_t> ewald_table;
 
     /* Non bonded Parameter lists */
-    int               ntype = 0; /* Number of atom types */
-    gmx_bool          bBHAM = FALSE;
+    int               ntype          = 0; /* Number of atom types */
+    bool              haveBuckingham = false;
     std::vector<real> nbfp;
     std::vector<real> ljpme_c6grid; /* C6-values used on grid in LJPME */
 
@@ -312,8 +300,8 @@ struct t_forcerec
     gmx::GpuBonded* gpuBonded = nullptr;
 
     /* Ewald correction thread local virial and energy data */
-    int                         nthread_ewc = 0;
-    struct ewald_corr_thread_t* ewc_t       = nullptr;
+    int                              nthread_ewc = 0;
+    std::vector<ewald_corr_thread_t> ewc_t;
 
     gmx::ForceProviders* forceProviders = nullptr;
 

@@ -407,7 +407,7 @@ ModularSimulatorAlgorithmBuilder::ModularSimulatorAlgorithmBuilder(
     if (legacySimulatorData->inputrec->efep != FreeEnergyPerturbationType::No)
     {
         freeEnergyPerturbationData_ = std::make_unique<FreeEnergyPerturbationData>(
-                legacySimulatorData->fplog, legacySimulatorData->inputrec, legacySimulatorData->mdAtoms);
+                legacySimulatorData->fplog, *legacySimulatorData->inputrec, legacySimulatorData->mdAtoms);
     }
 
     statePropagatorData_ = std::make_unique<StatePropagatorData>(
@@ -436,7 +436,7 @@ ModularSimulatorAlgorithmBuilder::ModularSimulatorAlgorithmBuilder(
                                                legacySimulatorData->constr,
                                                legacySimulatorData->fplog,
                                                legacySimulatorData->fr->fcdata.get(),
-                                               legacySimulatorData->mdModulesNotifier,
+                                               legacySimulatorData->mdModulesNotifiers,
                                                MASTER(legacySimulatorData->cr),
                                                legacySimulatorData->observablesHistory,
                                                legacySimulatorData->startingBehavior,
@@ -574,7 +574,7 @@ ModularSimulatorAlgorithm ModularSimulatorAlgorithmBuilder::build()
                                                              legacySimulatorData_->mdrunOptions,
                                                              legacySimulatorData_->cr,
                                                              legacySimulatorData_->outputProvider,
-                                                             legacySimulatorData_->mdModulesNotifier,
+                                                             legacySimulatorData_->mdModulesNotifiers,
                                                              legacySimulatorData_->inputrec,
                                                              legacySimulatorData_->top_global,
                                                              legacySimulatorData_->oenv,

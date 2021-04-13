@@ -257,7 +257,8 @@ void gmx::LegacySimulator::do_md()
 
     int*                fep_state = MASTER(cr) ? &state_global->fep_state : nullptr;
     gmx::ArrayRef<real> lambda    = MASTER(cr) ? state_global->lambda : gmx::ArrayRef<real>();
-    initialize_lambdas(fplog, *ir, MASTER(cr), fep_state, lambda);
+    initialize_lambdas(
+            fplog, *ir, gmx::arrayRefFromArray(ir->opts.ref_t, ir->opts.ngtc), MASTER(cr), fep_state, lambda);
     Update upd(*ir, deform);
     bool   doSimulatedAnnealing = false;
     {
@@ -307,7 +308,7 @@ void gmx::LegacySimulator::do_md()
                                    mdrunOptions,
                                    cr,
                                    outputProvider,
-                                   mdModulesNotifier,
+                                   mdModulesNotifiers,
                                    ir,
                                    top_global,
                                    oenv,
@@ -323,7 +324,7 @@ void gmx::LegacySimulator::do_md()
                                    false,
                                    startingBehavior,
                                    simulationsShareState,
-                                   mdModulesNotifier);
+                                   mdModulesNotifiers);
 
     gstat = global_stat_init(ir);
 
@@ -357,10 +358,11 @@ void gmx::LegacySimulator::do_md()
 
     auto mdatoms = mdAtoms->mdatoms();
 
-    ForceBuffers f(fr->useMts,
+    ForceBuffers     f(fr->useMts,
                    ((useGpuForNonbonded && useGpuForBufferOps) || useGpuForUpdate)
                            ? PinningPolicy::PinnedIfSupported
                            : PinningPolicy::CannotBePinned);
+    const t_mdatoms* md = mdAtoms->mdatoms();
     if (DOMAINDECOMP(cr))
     {
         stateInstance = std::make_unique<t_state>();
@@ -389,7 +391,11 @@ void gmx::LegacySimulator::do_md()
                             nrnb,
                             nullptr,
                             FALSE);
-        upd.setNumAtoms(state->natoms);
+        upd.updateAfterPartition(state->natoms,
+                                 md->cFREEZE ? gmx::arrayRefFromArray(md->cFREEZE, md->nr)
+                                             : gmx::ArrayRef<const unsigned short>(),
+                                 md->cTC ? gmx::arrayRefFromArray(md->cTC, md->nr)
+                                         : gmx::ArrayRef<const unsigned short>());
     }
     else
     {
@@ -400,7 +406,11 @@ void gmx::LegacySimulator::do_md()
         /* Generate and initialize new topology */
         mdAlgorithmsSetupAtomData(cr, *ir, top_global, &top, fr, &f, mdAtoms, constr, vsite, shellfc);
 
-        upd.setNumAtoms(state->natoms);
+        upd.updateAfterPartition(state->natoms,
+                                 md->cFREEZE ? gmx::arrayRefFromArray(md->cFREEZE, md->nr)
+                                             : gmx::ArrayRef<const unsigned short>(),
+                                 md->cTC ? gmx::arrayRefFromArray(md->cTC, md->nr)
+                                         : gmx::ArrayRef<const unsigned short>());
     }
 
     std::unique_ptr<UpdateConstrainGpu> integrator;
@@ -1008,7 +1018,11 @@ void gmx::LegacySimulator::do_md()
                                     nrnb,
                                     wcycle,
                                     do_verbose && !bPMETunePrinting);
-                upd.setNumAtoms(state->natoms);
+                upd.updateAfterPartition(state->natoms,
+                                         md->cFREEZE ? gmx::arrayRefFromArray(md->cFREEZE, md->nr)
+                                                     : gmx::ArrayRef<const unsigned short>(),
+                                         md->cTC ? gmx::arrayRefFromArray(md->cTC, md->nr)
+                                                 : gmx::ArrayRef<const unsigned short>());
             }
         }
 
@@ -1890,7 +1904,11 @@ void gmx::LegacySimulator::do_md()
                                 nrnb,
                                 wcycle,
                                 FALSE);
-            upd.setNumAtoms(state->natoms);
+            upd.updateAfterPartition(state->natoms,
+                                     md->cFREEZE ? gmx::arrayRefFromArray(md->cFREEZE, md->nr)
+                                                 : gmx::ArrayRef<const unsigned short>(),
+                                     md->cTC ? gmx::arrayRefFromArray(md->cTC, md->nr)
+                                             : gmx::ArrayRef<const unsigned short>());
         }
 
         bFirstStep = FALSE;

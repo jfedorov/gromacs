@@ -44,12 +44,11 @@
 #ifndef GMX_ENERGYELEMENT_MICROSTATE_H
 #define GMX_ENERGYELEMENT_MICROSTATE_H
 
-#include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/state.h"
 
 #include "modularsimulatorinterfaces.h"
 
-struct gmx_ekindata_t;
+class gmx_ekindata_t;
 struct gmx_enerdata_t;
 struct gmx_mtop_t;
 struct ObservablesHistory;
@@ -70,7 +69,10 @@ class ModularSimulatorAlgorithmBuilderHelper;
 class ParrinelloRahmanBarostat;
 class StatePropagatorData;
 class VelocityScalingTemperatureCoupling;
-struct MdModulesNotifier;
+struct MDModulesNotifiers;
+
+//! Function type for elements contributing energy
+using EnergyContribution = std::function<real(Step, Time)>;
 
 /*! \internal
  * \ingroup module_modularsimulator
@@ -104,7 +106,7 @@ public:
                const Constraints*          constr,
                FILE*                       fplog,
                t_fcdata*                   fcd,
-               const MdModulesNotifier&    mdModulesNotifier,
+               const MDModulesNotifiers&   mdModulesNotifiers,
                bool                        isMasterRank,
                ObservablesHistory*         observablesHistory,
                StartingBehavior            startingBehavior,
@@ -188,21 +190,19 @@ public:
      */
     [[nodiscard]] bool hasReadEkinFromCheckpoint() const;
 
-    /*! \brief Set velocity scaling temperature coupling
+    /*! \brief Add conserved energy contribution
      *
-     * This allows to set a pointer to a velocity scaling temperature coupling
-     * element used to obtain contributions to the conserved energy.
-     * TODO: This should be made obsolete my a more modular energy element
+     * This allows other elements to register callbacks for contributions to
+     * the conserved energy term.
      */
-    void setVelocityScalingTemperatureCoupling(const VelocityScalingTemperatureCoupling* velocityScalingTemperatureCoupling);
+    void addConservedEnergyContribution(EnergyContribution&& energyContribution);
 
     /*! \brief set Parrinello-Rahman barostat
      *
      * This allows to set a pointer to the Parrinello-Rahman barostat used to
      * print the box velocities.
-     * TODO: This should be made obsolete my a more modular energy element
      */
-    void setParrinelloRahamnBarostat(const ParrinelloRahmanBarostat* parrinelloRahmanBarostat);
+    void setParrinelloRahmanBoxVelocities(std::function<const rvec*()>&& parrinelloRahmanBoxVelocities);
 
     /*! \brief Initialize energy history
      *
@@ -229,11 +229,12 @@ private:
 
     /*! \brief Save data at energy steps
      *
+     * \param step  The current step
      * \param time  The current time
      * \param isEnergyCalculationStep  Whether the current step is an energy calculation step
      * \param isFreeEnergyCalculationStep  Whether the current step is a free energy calculation step
      */
-    void doStep(Time time, bool isEnergyCalculationStep, bool isFreeEnergyCalculationStep);
+    void doStep(Step step, Time time, bool isEnergyCalculationStep, bool isFreeEnergyCalculationStep);
 
     /*! \brief Write to energy trajectory
      *
@@ -290,10 +291,12 @@ private:
     StatePropagatorData* statePropagatorData_;
     //! Pointer to the free energy perturbation data
     FreeEnergyPerturbationData* freeEnergyPerturbationData_;
-    //! Pointer to the vrescale thermostat
-    const VelocityScalingTemperatureCoupling* velocityScalingTemperatureCoupling_;
-    //! Pointer to the Parrinello-Rahman barostat
-    const ParrinelloRahmanBarostat* parrinelloRahmanBarostat_;
+
+    //! Callbacks contributing to the conserved energy term
+    std::vector<EnergyContribution> conservedEnergyContributions_;
+    //! Callback to the Parrinello-Rahman box velocities
+    std::function<const rvec*()> parrinelloRahmanBoxVelocities_;
+
     //! Contains user input mdp options.
     const t_inputrec* inputrec_;
     //! Full system topology.
@@ -310,8 +313,8 @@ private:
     FILE* fplog_;
     //! Helper struct for force calculations.
     t_fcdata* fcd_;
-    //! Notification to MD modules
-    const MdModulesNotifier& mdModulesNotifier_;
+    //! Notifiers to MD modules
+    const MDModulesNotifiers& mdModulesNotifiers_;
     //! Global topology groups
     const SimulationGroups* groups_;
     //! History of simulation observables.

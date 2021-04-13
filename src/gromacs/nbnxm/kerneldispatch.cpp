@@ -63,7 +63,6 @@
 
 #include "kernel_common.h"
 #include "nbnxm_gpu.h"
-#include "nbnxm_gpu_data_mgmt.h"
 #include "nbnxm_simd.h"
 #include "pairlistset.h"
 #include "pairlistsets.h"
@@ -466,8 +465,9 @@ void nonbonded_verlet_t::dispatchNonbondedKernel(gmx::InteractionLocality   iLoc
                     stepWork,
                     clearF,
                     enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::CoulombSR].data(),
-                    fr.bBHAM ? enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::BuckinghamSR].data()
-                             : enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::LJSR].data(),
+                    fr.haveBuckingham
+                            ? enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::BuckinghamSR].data()
+                            : enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::LJSR].data(),
                     wcycle_);
             break;
 
@@ -486,8 +486,9 @@ void nonbonded_verlet_t::dispatchNonbondedKernel(gmx::InteractionLocality   iLoc
                     nbat->out[0].f,
                     nbat->out[0].fshift.data(),
                     enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::CoulombSR].data(),
-                    fr.bBHAM ? enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::BuckinghamSR].data()
-                             : enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::LJSR].data());
+                    fr.haveBuckingham
+                            ? enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::BuckinghamSR].data()
+                            : enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::LJSR].data());
             break;
 
         default: GMX_RELEASE_ASSERT(false, "Invalid nonbonded kernel type passed!");
@@ -631,7 +632,7 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
                 GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR
             }
 
-            sum_epot(enerd->foreign_grpp, enerd->foreign_term);
+            sum_epot(enerd->foreign_grpp, enerd->foreign_term.data());
             enerd->foreignLambdaTerms.accumulate(
                     i,
                     enerd->foreign_term[F_EPOT],
