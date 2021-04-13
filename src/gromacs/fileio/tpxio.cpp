@@ -2950,7 +2950,7 @@ static void do_tpx_state_second(gmx::ISerializer* serializer, TpxFileHeader* tpx
             {
                 state->flags |= enumValueToBitMask(StateEntry::V);
             }
-            state_change_natoms(state, tpx->natoms);
+            state->changeNumAtoms(tpx->natoms);
         }
     }
 

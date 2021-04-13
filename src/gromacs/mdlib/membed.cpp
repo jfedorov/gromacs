@@ -809,7 +809,7 @@ static void rm_group(SimulationGroups* groups,
             }
         }
     }
-    state_change_natoms(state, newStateAtomNumber);
+    state->changeNumAtoms(newStateAtomNumber);
     for (int i = 0; i < state->natoms; i++)
     {
         copy_rvec(x_tmp[i], x[i]);

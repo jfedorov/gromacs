@@ -84,11 +84,11 @@ static inline int DD_FLAG_BW(int d)
     return 1 << (16 + d * 2 + 1);
 }
 
-static void copyMovedAtomsToBufferPerAtom(gmx::ArrayRef<const int> move,
-                                          int                      nvec,
-                                          int                      vec,
-                                          rvec*                    src,
-                                          gmx_domdec_comm_t*       comm)
+static void copyMovedAtomsToBufferPerAtom(gmx::ArrayRef<const int>       move,
+                                          int                            nvec,
+                                          int                            vec,
+                                          gmx::ArrayRef<const gmx::RVec> src,
+                                          gmx_domdec_comm_t*             comm)
 {
     int pos_vec[DIM * 2] = { 0 };
 
@@ -240,11 +240,10 @@ static void rotate_state_atom(t_state* state, int a)
         v[a][YY] = -v[a][YY];
         v[a][ZZ] = -v[a][ZZ];
     }
-    if (state->flags & enumValueToBitMask(StateEntry::Cgp))
+    for (auto v : state->rvecVectors())
     {
-        auto cg_p   = makeArrayRef(state->cg_p);
-        cg_p[a][YY] = -cg_p[a][YY];
-        cg_p[a][ZZ] = -cg_p[a][ZZ];
+        v[a][YY] = -v[a][YY];
+        v[a][ZZ] = -v[a][ZZ];
     }
 }
 
@@ -570,8 +569,7 @@ void dd_redistribute_cg(FILE*         fplog,
     }
 
     // Positions are always present, so there's nothing to flag
-    bool bV   = (state->flags & enumValueToBitMask(StateEntry::V)) != 0;
-    bool bCGP = (state->flags & enumValueToBitMask(StateEntry::Cgp)) != 0;
+    bool bV = (state->flags & enumValueToBitMask(StateEntry::V)) != 0;
 
     DDBufferAccess<int> moveBuffer(comm->intBuffer, dd->numHomeAtoms);
     gmx::ArrayRef<int>  move = moveBuffer.buffer;
@@ -722,10 +720,7 @@ void dd_redistribute_cg(FILE*         fplog,
     {
         nvec++;
     }
-    if (bCGP)
-    {
-        nvec++;
-    }
+    nvec += ssize(state->rvecVectors());
 
     /* Make sure the communication buffers are large enough */
     for (int mc = 0; mc < dd->ndim * 2; mc++)
@@ -745,14 +740,14 @@ void dd_redistribute_cg(FILE*         fplog,
     copyMovedUpdateGroupCogs(move, nvec, state->x, comm);
 
     int vectorIndex = 0;
-    copyMovedAtomsToBufferPerAtom(move, nvec, vectorIndex++, state->x.rvec_array(), comm);
+    copyMovedAtomsToBufferPerAtom(move, nvec, vectorIndex++, makeArrayRef(state->x), comm);
     if (bV)
     {
-        copyMovedAtomsToBufferPerAtom(move, nvec, vectorIndex++, state->v.rvec_array(), comm);
+        copyMovedAtomsToBufferPerAtom(move, nvec, vectorIndex++, makeArrayRef(state->v), comm);
     }
-    if (bCGP)
+    for (const auto rvecVector : state->rvecVectors())
     {
-        copyMovedAtomsToBufferPerAtom(move, nvec, vectorIndex++, state->cg_p.rvec_array(), comm);
+        copyMovedAtomsToBufferPerAtom(move, nvec, vectorIndex++, rvecVector, comm);
     }
 
     int* moved = getMovedBuffer(comm, 0, dd->numHomeAtoms);
@@ -925,16 +920,15 @@ void dd_redistribute_cg(FILE*         fplog,
 
                 auto  x       = makeArrayRef(state->x);
                 auto  v       = makeArrayRef(state->v);
-                auto  cg_p    = makeArrayRef(state->cg_p);
                 rvec* rvecPtr = as_rvec_array(rvecBuffer.buffer.data());
                 copy_rvec(rvecPtr[buf_pos++], x[home_pos_at]);
                 if (bV)
                 {
                     copy_rvec(rvecPtr[buf_pos++], v[home_pos_at]);
                 }
-                if (bCGP)
+                for (auto rvecVector : state->rvecVectors())
                 {
-                    copy_rvec(rvecPtr[buf_pos++], cg_p[home_pos_at]);
+                    copy_rvec(rvecPtr[buf_pos++], rvecVector[home_pos_at]);
                 }
                 home_pos_at++;
             }

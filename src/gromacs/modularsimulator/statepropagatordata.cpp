@@ -117,7 +117,7 @@ StatePropagatorData::StatePropagatorData(int                numAtoms,
     }
     else
     {
-        state_change_natoms(globalState, globalState->natoms);
+        globalState->changeNumAtoms(globalState->natoms);
         f_.resize(globalState->natoms);
         localNAtoms_ = globalState->natoms;
         x_           = globalState->x;
@@ -260,7 +260,7 @@ std::unique_ptr<t_state> StatePropagatorData::localState()
     auto state   = std::make_unique<t_state>();
     state->flags = enumValueToBitMask(StateEntry::X) | enumValueToBitMask(StateEntry::V)
                    | enumValueToBitMask(StateEntry::Box);
-    state_change_natoms(state.get(), localNAtoms_);
+    state->changeNumAtoms(localNAtoms_);
     state->x = x_;
     state->v = v_;
     copy_mat(box_, state->box);

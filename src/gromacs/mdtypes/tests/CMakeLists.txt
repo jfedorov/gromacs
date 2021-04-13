@@ -37,4 +37,5 @@ gmx_add_unit_test(MdtypesUnitTest mdtypes-test
         checkpointdata.cpp
         forcebuffers.cpp
         multipletimestepping.cpp
+	state.cpp
         )

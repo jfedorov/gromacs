@@ -2591,9 +2591,9 @@ static void dd_sort_state(gmx_domdec_t* dd, t_forcerec* fr, t_state* state)
     {
         orderVector(cgsort, makeArrayRef(state->v), rvecBuffer.buffer);
     }
-    if (state->flags & enumValueToBitMask(StateEntry::Cgp))
+    for (auto rvecVector : state->rvecVectors())
     {
-        orderVector(cgsort, makeArrayRef(state->cg_p), rvecBuffer.buffer);
+        orderVector(cgsort, rvecVector, rvecBuffer.buffer);
     }
 
     /* Reorder the global cg index */
@@ -3138,7 +3138,7 @@ void dd_partition_system(FILE*                     fplog,
         dd_sort_state(dd, fr, state_local);
 
         /* After sorting and compacting we set the correct size */
-        state_change_natoms(state_local, comm->atomRanges.numHomeAtoms());
+        state_local->changeNumAtoms(comm->atomRanges.numHomeAtoms());
 
         /* Rebuild all the indices */
         dd->ga2la->clear();
@@ -3254,9 +3254,7 @@ void dd_partition_system(FILE*                     fplog,
     /* Make space for the extra coordinates for virtual site
      * or constraint communication.
      */
-    state_local->natoms = comm->atomRanges.numAtomsTotal();
-
-    state_change_natoms(state_local, state_local->natoms);
+    state_local->changeNumAtoms(comm->atomRanges.numAtomsTotal());
 
     int nat_f_novirsum;
     if (vsite && vsite->numInterUpdategroupVirtualSites())

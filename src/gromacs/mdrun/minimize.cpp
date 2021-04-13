@@ -362,6 +362,50 @@ static void get_state_f_norm_max(const t_commrec* cr, const t_grpopts* opts, t_m
     get_f_norm_max(cr, opts, mdatoms, ems->f.view().force(), &ems->fnorm, &ems->fmax, &ems->a_fmax);
 }
 
+//! Copies flags, coordinates and box and with FEP also lambas
+static void copyCoordinatesAndBox(em_state_t* ems, const t_state& state)
+{
+    GMX_RELEASE_ASSERT(
+            (state.flags & ~(enumValueToBitMask(StateEntry::Lambda) | enumValueToBitMask(StateEntry::Box)))
+                    == enumValueToBitMask(StateEntry::X),
+            "We should have X set and possibly Lambda and Box, nothing else");
+
+    ems->s.flags = state.flags;
+    ems->s.changeNumAtoms(state.natoms);
+    const auto xSrc  = gmx::makeArrayRef(state.x);
+    auto       xDest = gmx::makeArrayRef(ems->s.x);
+    for (int i = 0; i < ems->s.natoms; i++)
+    {
+        xDest[i] = xSrc[i];
+    }
+    copy_mat(state.box, ems->s.box);
+
+    if (state.flags & enumValueToBitMask(StateEntry::Lambda))
+    {
+        ems->s.fep_state = state.fep_state;
+        ems->s.lambda    = state.lambda;
+    }
+}
+
+// Copies the coordinates, box, the final force buffer and force norm and max
+static void copyEMStateContents(em_state_t* dest, const em_state_t& src)
+{
+    copyCoordinatesAndBox(dest, src.s);
+
+    const auto fSrc = src.f.view().force();
+    dest->f.resize(fSrc.size());
+    auto fDest = dest->f.view().force();
+    GMX_RELEASE_ASSERT(fDest.size() == fSrc.size(), "Number of atoms should match");
+    for (gmx::index i = 0; i < ssize(fDest); i++)
+    {
+        fDest[i] = fSrc[i];
+    }
+    dest->epot   = src.epot;
+    dest->fnorm  = src.fnorm;
+    dest->fmax   = src.fmax;
+    dest->a_fmax = src.a_fmax;
+}
+
 //! Initialize the energy minimization
 static void init_em(FILE*                fplog,
                     const gmx::MDLogger& mdlog,
@@ -461,10 +505,8 @@ static void init_em(FILE*                fplog,
     }
     else
     {
-        state_change_natoms(state_global, state_global->natoms);
-        /* Just copy the state */
-        ems->s = *state_global;
-        state_change_natoms(&ems->s, ems->s.natoms);
+        state_global->changeNumAtoms(state_global->natoms);
+        copyCoordinatesAndBox(ems, *state_global);
 
         mdAlgorithmsSetupAtomData(
                 cr, *ir, top_global, top, fr, &ems->f, mdAtoms, constr, vsite, shellfc ? *shellfc : nullptr);
@@ -632,15 +674,15 @@ static void write_em_traj(FILE*               fplog,
 //! \brief Do one minimization step
 //
 // \returns true when the step succeeded, false when a constraint error occurred
-static bool do_em_step(const t_commrec*                          cr,
-                       const t_inputrec*                         ir,
-                       t_mdatoms*                                md,
-                       em_state_t*                               ems1,
-                       real                                      a,
-                       gmx::ArrayRefWithPadding<const gmx::RVec> force,
-                       em_state_t*                               ems2,
-                       gmx::Constraints*                         constr,
-                       int64_t                                   count)
+static bool do_em_step(const t_commrec*               cr,
+                       const t_inputrec*              ir,
+                       t_mdatoms*                     md,
+                       em_state_t*                    ems1,
+                       real                           a,
+                       gmx::ArrayRef<const gmx::RVec> force,
+                       em_state_t*                    ems2,
+                       gmx::Constraints*              constr,
+                       int64_t                        count)
 
 {
     t_state *    s1, *s2;
@@ -662,7 +704,7 @@ static bool do_em_step(const t_commrec*                          cr,
 
     if (s2->natoms != s1->natoms)
     {
-        state_change_natoms(s2, s1->natoms);
+        s2->changeNumAtoms(s1->natoms);
         ems2->f.resize(s2->natoms);
     }
     if (DOMAINDECOMP(cr) && s2->cg_gl.size() != s1->cg_gl.size())
@@ -683,7 +725,7 @@ static bool do_em_step(const t_commrec*                          cr,
     {
         const rvec* x1 = s1->x.rvec_array();
         rvec*       x2 = s2->x.rvec_array();
-        const rvec* f  = as_rvec_array(force.unpaddedArrayRef().data());
+        const rvec* f  = as_rvec_array(force.data());
 
         int gf = 0;
 #pragma omp for schedule(static) nowait
@@ -708,19 +750,6 @@ static bool do_em_step(const t_commrec*                          cr,
                 }
             }
             GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR
-        }
-
-        if (s2->flags & enumValueToBitMask(StateEntry::Cgp))
-        {
-            /* Copy the CG p vector */
-            const rvec* p1 = s1->cg_p.rvec_array();
-            rvec*       p2 = s2->cg_p.rvec_array();
-#pragma omp for schedule(static) nowait
-            for (int i = start; i < end; i++)
-            {
-                // Trivial OpenMP block that does not throw
-                copy_rvec(p1[i], p2[i]);
-            }
         }
 
         if (DOMAINDECOMP(cr))
@@ -1231,6 +1260,31 @@ static real pr_beta(const t_commrec*  cr,
     return sum / gmx::square(s_min->fnorm);
 }
 
+//! Name for registering the CG "p" vector in t_state
+static const std::string c_cgpString = "CGp";
+
+//! Struct that holds em_state_p and the CG "p" vector
+struct CGState
+{
+    CGState() : emState({}), p(emState.s.addRVecVector(c_cgpString)) {}
+
+    //! The general part of the EM state
+    em_state_t emState;
+    //! A reference to "p" vector in \p emState needed for Conjugate Gradients
+    gmx::ArrayRef<gmx::RVec>& p;
+};
+
+//! Copies the p vector contents from one CGState to another
+static void copyCGP(CGState* dest, const CGState& src)
+{
+    GMX_ASSERT(dest->p.size() == src.p.size(), "Sizes of p should match");
+
+    for (gmx::index i = 0; i < ssize(dest->p); i++)
+    {
+        dest->p[i] = src.p[i];
+    }
+}
+
 namespace gmx
 {
 
@@ -1266,24 +1320,18 @@ void LegacySimulator::do_cg()
     if (MASTER(cr))
     {
         // In CG, the state is extended with a search direction
-        state_global->flags |= enumValueToBitMask(StateEntry::Cgp);
-
-        // Ensure the extra per-atom state array gets allocated
-        state_change_natoms(state_global, state_global->natoms);
-
-        // Initialize the search direction to zero
-        for (RVec& cg_p : state_global->cg_p)
-        {
-            cg_p = { 0, 0, 0 };
-        }
+        state_global->addRVecVector(c_cgpString);
     }
 
     /* Create 4 states on the stack and extract pointers that we will swap */
-    em_state_t  s0{}, s1{}, s2{}, s3{};
-    em_state_t* s_min = &s0;
-    em_state_t* s_a   = &s1;
-    em_state_t* s_b   = &s2;
-    em_state_t* s_c   = &s3;
+    CGState  s0;
+    CGState  s1;
+    CGState  s2;
+    CGState  s3;
+    CGState* s_min = &s0;
+    CGState* s_a   = &s1;
+    CGState* s_b   = &s2;
+    CGState* s_c   = &s3;
 
     /* Init em and store the local state in s_min */
     init_em(fplog,
@@ -1295,7 +1343,7 @@ void LegacySimulator::do_cg()
             pull_work,
             state_global,
             top_global,
-            s_min,
+            &s_min->emState,
             &top,
             nrnb,
             fr,
@@ -1352,7 +1400,7 @@ void LegacySimulator::do_cg()
     /* do_force always puts the charge groups in the box and shifts again
      * We do not unshift, so molecules are always whole in congrad.c
      */
-    energyEvaluator.run(s_min, mu_tot, vir, pres, -1, TRUE);
+    energyEvaluator.run(&s_min->emState, mu_tot, vir, pres, -1, TRUE);
 
     if (MASTER(cr))
     {
@@ -1380,17 +1428,23 @@ void LegacySimulator::do_cg()
     }
 
     /* Estimate/guess the initial stepsize */
-    stepsize = inputrec->em_stepsize / s_min->fnorm;
+    stepsize = inputrec->em_stepsize / s_min->emState.fnorm;
 
     if (MASTER(cr))
     {
         double sqrtNumAtoms = sqrt(static_cast<double>(state_global->natoms));
-        fprintf(stderr, "   F-max             = %12.5e on atom %d\n", s_min->fmax, s_min->a_fmax + 1);
-        fprintf(stderr, "   F-Norm            = %12.5e\n", s_min->fnorm / sqrtNumAtoms);
+        fprintf(stderr,
+                "   F-max             = %12.5e on atom %d\n",
+                s_min->emState.fmax,
+                s_min->emState.a_fmax + 1);
+        fprintf(stderr, "   F-Norm            = %12.5e\n", s_min->emState.fnorm / sqrtNumAtoms);
         fprintf(stderr, "\n");
         /* and copy to the log file too... */
-        fprintf(fplog, "   F-max             = %12.5e on atom %d\n", s_min->fmax, s_min->a_fmax + 1);
-        fprintf(fplog, "   F-Norm            = %12.5e\n", s_min->fnorm / sqrtNumAtoms);
+        fprintf(fplog,
+                "   F-max             = %12.5e on atom %d\n",
+                s_min->emState.fmax,
+                s_min->emState.a_fmax + 1);
+        fprintf(fplog, "   F-Norm            = %12.5e\n", s_min->emState.fnorm / sqrtNumAtoms);
         fprintf(fplog, "\n");
     }
     /* Start the loop over CG steps.
@@ -1407,8 +1461,8 @@ void LegacySimulator::do_cg()
          */
 
         /* Calculate the new direction in p, and the gradient in this direction, gpa */
-        gmx::ArrayRef<gmx::RVec>       pm  = s_min->s.cg_p;
-        gmx::ArrayRef<const gmx::RVec> sfm = s_min->f.view().force();
+        gmx::ArrayRef<gmx::RVec>       pm  = s_min->p;
+        gmx::ArrayRef<const gmx::RVec> sfm = s_min->emState.f.view().force();
         double                         gpa = 0;
         int                            gf  = 0;
         for (int i = 0; i < mdatoms->homenr; i++)
@@ -1464,7 +1518,7 @@ void LegacySimulator::do_cg()
          * relative change in coordinate is smaller than precision
          */
         minstep      = 0;
-        auto s_min_x = makeArrayRef(s_min->s.x);
+        auto s_min_x = makeArrayRef(s_min->emState.s.x);
         for (int i = 0; i < mdatoms->homenr; i++)
         {
             for (m = 0; m < DIM; m++)
@@ -1497,7 +1551,7 @@ void LegacySimulator::do_cg()
         do_f = do_per_step(step, inputrec->nstfout);
 
         write_em_traj(
-                fplog, cr, outf, do_x, do_f, nullptr, top_global, inputrec, step, s_min, state_global, observablesHistory);
+                fplog, cr, outf, do_x, do_f, nullptr, top_global, inputrec, step, &s_min->emState, state_global, observablesHistory);
 
         /* Take a step downhill.
          * In theory, we should minimize the function along this direction.
@@ -1516,11 +1570,11 @@ void LegacySimulator::do_cg()
          * to even accept a SMALL increase in energy, if the derivative is still downhill.
          * This leads to lower final energies in the tests I've done. / Erik
          */
-        s_a->epot = s_min->epot;
-        a         = 0.0;
-        c         = a + stepsize; /* reference position along line is zero */
+        s_a->emState.epot = s_min->emState.epot;
+        a                 = 0.0;
+        c                 = a + stepsize; /* reference position along line is zero */
 
-        if (DOMAINDECOMP(cr) && s_min->s.ddp_count < cr->dd->ddp_count)
+        if (DOMAINDECOMP(cr) && s_min->emState.s.ddp_count < cr->dd->ddp_count)
         {
             em_dd_partition_system(fplog,
                                    mdlog,
@@ -1530,7 +1584,7 @@ void LegacySimulator::do_cg()
                                    inputrec,
                                    imdSession,
                                    pull_work,
-                                   s_min,
+                                   &s_min->emState,
                                    &top,
                                    mdAtoms,
                                    fr,
@@ -1541,15 +1595,16 @@ void LegacySimulator::do_cg()
         }
 
         /* Take a trial step (new coords in s_c) */
-        do_em_step(cr, inputrec, mdatoms, s_min, c, s_min->s.cg_p.constArrayRefWithPadding(), s_c, constr, -1);
+        do_em_step(cr, inputrec, mdatoms, &s_min->emState, c, s_min->p, &s_c->emState, constr, -1);
+        copyCGP(s_c, *s_min);
 
         neval++;
         /* Calculate energy for the trial step */
-        energyEvaluator.run(s_c, mu_tot, vir, pres, -1, FALSE);
+        energyEvaluator.run(&s_c->emState, mu_tot, vir, pres, -1, FALSE);
 
         /* Calc derivative along line */
-        const rvec*                    pc  = s_c->s.cg_p.rvec_array();
-        gmx::ArrayRef<const gmx::RVec> sfc = s_c->f.view().force();
+        gmx::ArrayRef<const gmx::RVec> pc  = s_c->p;
+        gmx::ArrayRef<const gmx::RVec> sfc = s_c->emState.f.view().force();
         double                         gpc = 0;
         for (int i = 0; i < mdatoms->homenr; i++)
         {
@@ -1565,12 +1620,13 @@ void LegacySimulator::do_cg()
         }
 
         /* This is the max amount of increase in energy we tolerate */
-        tmp = std::sqrt(GMX_REAL_EPS) * fabs(s_a->epot);
+        tmp = std::sqrt(GMX_REAL_EPS) * fabs(s_a->emState.epot);
 
         /* Accept the step if the energy is lower, or if it is not significantly higher
          * and the line derivative is still negative.
          */
-        if (s_c->epot < s_a->epot || (gpc < 0 && s_c->epot < (s_a->epot + tmp)))
+        if (s_c->emState.epot < s_a->emState.epot
+            || (gpc < 0 && s_c->emState.epot < (s_a->emState.epot + tmp)))
         {
             foundlower = TRUE;
             /* Great, we found a better energy. Increase step for next iteration
@@ -1634,7 +1690,7 @@ void LegacySimulator::do_cg()
                     b = 0.5 * (a + c);
                 }
 
-                if (DOMAINDECOMP(cr) && s_min->s.ddp_count != cr->dd->ddp_count)
+                if (DOMAINDECOMP(cr) && s_min->emState.s.ddp_count != cr->dd->ddp_count)
                 {
                     /* Reload the old state */
                     em_dd_partition_system(fplog,
@@ -1645,7 +1701,7 @@ void LegacySimulator::do_cg()
                                            inputrec,
                                            imdSession,
                                            pull_work,
-                                           s_min,
+                                           &s_min->emState,
                                            &top,
                                            mdAtoms,
                                            fr,
@@ -1656,17 +1712,18 @@ void LegacySimulator::do_cg()
                 }
 
                 /* Take a trial step to this new point - new coords in s_b */
-                do_em_step(cr, inputrec, mdatoms, s_min, b, s_min->s.cg_p.constArrayRefWithPadding(), s_b, constr, -1);
+                do_em_step(cr, inputrec, mdatoms, &s_min->emState, b, s_min->p, &s_b->emState, constr, -1);
+                copyCGP(s_b, *s_min);
 
                 neval++;
                 /* Calculate energy for the trial step */
-                energyEvaluator.run(s_b, mu_tot, vir, pres, -1, FALSE);
+                energyEvaluator.run(&s_b->emState, mu_tot, vir, pres, -1, FALSE);
 
                 /* p does not change within a step, but since the domain decomposition
                  * might change, we have to use cg_p of s_b here.
                  */
-                const rvec*                    pb  = s_b->s.cg_p.rvec_array();
-                gmx::ArrayRef<const gmx::RVec> sfb = s_b->f.view().force();
+                gmx::ArrayRef<const gmx::RVec> pb  = s_b->p;
+                gmx::ArrayRef<const gmx::RVec> sfb = s_b->emState.f.view().force();
                 gpb                                = 0;
                 for (int i = 0; i < mdatoms->homenr; i++)
                 {
@@ -1683,23 +1740,28 @@ void LegacySimulator::do_cg()
 
                 if (debug)
                 {
-                    fprintf(debug, "CGE: EpotA %f EpotB %f EpotC %f gpb %f\n", s_a->epot, s_b->epot, s_c->epot, gpb);
+                    fprintf(debug,
+                            "CGE: EpotA %f EpotB %f EpotC %f gpb %f\n",
+                            s_a->emState.epot,
+                            s_b->emState.epot,
+                            s_c->emState.epot,
+                            gpb);
                 }
 
-                epot_repl = s_b->epot;
+                epot_repl = s_b->emState.epot;
 
                 /* Keep one of the intervals based on the value of the derivative at the new point */
                 if (gpb > 0)
                 {
                     /* Replace c endpoint with b */
-                    swap_em_state(&s_b, &s_c);
+                    std::swap(s_b, s_c);
                     c   = b;
                     gpc = gpb;
                 }
                 else
                 {
                     /* Replace a endpoint with b */
-                    swap_em_state(&s_b, &s_a);
+                    std::swap(s_b, s_a);
                     a   = b;
                     gpa = gpb;
                 }
@@ -1709,9 +1771,10 @@ void LegacySimulator::do_cg()
                  * Never run more than 20 steps, no matter what.
                  */
                 nminstep++;
-            } while ((epot_repl > s_a->epot || epot_repl > s_c->epot) && (nminstep < 20));
+            } while ((epot_repl > s_a->emState.epot || epot_repl > s_c->emState.epot) && (nminstep < 20));
 
-            if (std::fabs(epot_repl - s_min->epot) < fabs(s_min->epot) * GMX_REAL_EPS || nminstep >= 20)
+            if (std::fabs(epot_repl - s_min->emState.epot) < fabs(s_min->emState.epot) * GMX_REAL_EPS
+                || nminstep >= 20)
             {
                 /* OK. We couldn't find a significantly lower energy.
                  * If beta==0 this was steepest descent, and then we give up.
@@ -1733,22 +1796,28 @@ void LegacySimulator::do_cg()
 
             /* Select min energy state of A & C, put the best in B.
              */
-            if (s_c->epot < s_a->epot)
+            if (s_c->emState.epot < s_a->emState.epot)
             {
                 if (debug)
                 {
-                    fprintf(debug, "CGE: C (%f) is lower than A (%f), moving C to B\n", s_c->epot, s_a->epot);
+                    fprintf(debug,
+                            "CGE: C (%f) is lower than A (%f), moving C to B\n",
+                            s_c->emState.epot,
+                            s_a->emState.epot);
                 }
-                swap_em_state(&s_b, &s_c);
+                std::swap(s_b, s_c);
                 gpb = gpc;
             }
             else
             {
                 if (debug)
                 {
-                    fprintf(debug, "CGE: A (%f) is lower than C (%f), moving A to B\n", s_a->epot, s_c->epot);
+                    fprintf(debug,
+                            "CGE: A (%f) is lower than C (%f), moving A to B\n",
+                            s_a->emState.epot,
+                            s_c->emState.epot);
                 }
-                swap_em_state(&s_b, &s_a);
+                std::swap(s_b, s_a);
                 gpb = gpa;
             }
         }
@@ -1756,9 +1825,9 @@ void LegacySimulator::do_cg()
         {
             if (debug)
             {
-                fprintf(debug, "CGE: Found a lower energy %f, moving C to B\n", s_c->epot);
+                fprintf(debug, "CGE: Found a lower energy %f, moving C to B\n", s_c->emState.epot);
             }
-            swap_em_state(&s_b, &s_c);
+            std::swap(s_b, s_c);
             gpb = gpc;
         }
 
@@ -1770,14 +1839,14 @@ void LegacySimulator::do_cg()
         }
         else
         {
-            /* s_min->fnorm cannot be zero, because then we would have converged
+            /* s_min->emState.fnorm cannot be zero, because then we would have converged
              * and broken out.
              */
 
             /* Polak-Ribiere update.
              * Change to fnorm2/fnorm2_old for Fletcher-Reeves
              */
-            beta = pr_beta(cr, &inputrec->opts, mdatoms, top_global, s_min, s_b);
+            beta = pr_beta(cr, &inputrec->opts, mdatoms, top_global, &s_min->emState, &s_b->emState);
         }
         /* Limit beta to prevent oscillations */
         if (fabs(beta) > 5.0)
@@ -1787,7 +1856,7 @@ void LegacySimulator::do_cg()
 
 
         /* update positions */
-        swap_em_state(&s_min, &s_b);
+        std::swap(s_min, s_b);
         gpa = gpb;
 
         /* Print it if necessary */
@@ -1799,10 +1868,10 @@ void LegacySimulator::do_cg()
                 fprintf(stderr,
                         "\rStep %d, Epot=%12.6e, Fnorm=%9.3e, Fmax=%9.3e (atom %d)\n",
                         step,
-                        s_min->epot,
-                        s_min->fnorm / sqrtNumAtoms,
-                        s_min->fmax,
-                        s_min->a_fmax + 1);
+                        s_min->emState.epot,
+                        s_min->emState.fnorm / sqrtNumAtoms,
+                        s_min->emState.fmax,
+                        s_min->emState.a_fmax + 1);
                 fflush(stderr);
             }
             /* Store the new (lower) energies */
@@ -1852,7 +1921,7 @@ void LegacySimulator::do_cg()
         /* Stop when the maximum force lies below tolerance.
          * If we have reached machine precision, converged is already set to true.
          */
-        converged = converged || (s_min->fmax < inputrec->em_tol);
+        converged = converged || (s_min->emState.fmax < inputrec->em_tol);
 
     } /* End of the loop */
 
@@ -1860,11 +1929,11 @@ void LegacySimulator::do_cg()
     {
         step--; /* we never took that last step in this case */
     }
-    if (s_min->fmax > inputrec->em_tol)
+    if (s_min->emState.fmax > inputrec->em_tol)
     {
         if (MASTER(cr))
         {
-            warn_step(fplog, inputrec->em_tol, s_min->fmax, step - 1 == number_steps, FALSE);
+            warn_step(fplog, inputrec->em_tol, s_min->emState.fmax, step - 1 == number_steps, FALSE);
         }
         converged = FALSE;
     }
@@ -1913,15 +1982,25 @@ void LegacySimulator::do_cg()
     do_x = !do_per_step(step, inputrec->nstxout);
     do_f = (inputrec->nstfout > 0 && !do_per_step(step, inputrec->nstfout));
 
-    write_em_traj(
-            fplog, cr, outf, do_x, do_f, ftp2fn(efSTO, nfile, fnm), top_global, inputrec, step, s_min, state_global, observablesHistory);
+    write_em_traj(fplog,
+                  cr,
+                  outf,
+                  do_x,
+                  do_f,
+                  ftp2fn(efSTO, nfile, fnm),
+                  top_global,
+                  inputrec,
+                  step,
+                  &s_min->emState,
+                  state_global,
+                  observablesHistory);
 
 
     if (MASTER(cr))
     {
         double sqrtNumAtoms = sqrt(static_cast<double>(state_global->natoms));
-        print_converged(stderr, CG, inputrec->em_tol, step, converged, number_steps, s_min, sqrtNumAtoms);
-        print_converged(fplog, CG, inputrec->em_tol, step, converged, number_steps, s_min, sqrtNumAtoms);
+        print_converged(stderr, CG, inputrec->em_tol, step, converged, number_steps, &s_min->emState, sqrtNumAtoms);
+        print_converged(fplog, CG, inputrec->em_tol, step, converged, number_steps, &s_min->emState, sqrtNumAtoms);
 
         fprintf(fplog, "\nPerformed %d energy evaluations in total.\n", neval);
     }
@@ -2037,10 +2116,10 @@ void LegacySimulator::do_lbfgs()
     em_state_t* sb   = &s1;
     em_state_t* sc   = &s2;
     em_state_t* last = &s3;
-    /* Initialize by copying the state from ems (we could skip x and f here) */
-    *sa = ems;
-    *sb = ems;
-    *sc = ems;
+    /* Initialize by copying the state from ems (we could skip x and only resize f) */
+    copyEMStateContents(sa, ems);
+    copyEMStateContents(sa, ems);
+    copyEMStateContents(sc, ems);
 
     /* Print to log file */
     print_em_start(fplog, cr, walltime_accounting, wcycle, LBFGS);
@@ -2244,12 +2323,12 @@ void LegacySimulator::do_lbfgs()
         }
 
         // Before taking any steps along the line, store the old position
-        *last            = ems;
+        copyEMStateContents(last, ems);
         real*      lastx = static_cast<real*>(last->s.x.data()[0]);
         real*      lastf = static_cast<real*>(last->f.view().force().data()[0]);
         const real Epot0 = ems.epot;
 
-        *sa = ems;
+        copyEMStateContents(sa, ems);
 
         /* Take a step downhill.
          * In theory, we should find the actual minimum of the function in this
@@ -2424,14 +2503,14 @@ void LegacySimulator::do_lbfgs()
                     /* Replace c endpoint with b */
                     c = b;
                     /* copy state b to c */
-                    *sc = *sb;
+                    copyEMStateContents(sc, *sb);
                 }
                 else
                 {
                     /* Replace a endpoint with b */
                     a = b;
                     /* copy state b to a */
-                    *sa = *sb;
+                    copyEMStateContents(sa, *sb);
                 }
 
                 /*
@@ -2474,13 +2553,13 @@ void LegacySimulator::do_lbfgs()
             if (sc->epot < sa->epot)
             {
                 /* Use state C */
-                ems        = *sc;
+                copyEMStateContents(&ems, *sc);
                 step_taken = c;
             }
             else
             {
                 /* Use state A */
-                ems        = *sa;
+                copyEMStateContents(&ems, *sa);
                 step_taken = a;
             }
         }
@@ -2488,7 +2567,7 @@ void LegacySimulator::do_lbfgs()
         {
             /* found lower */
             /* Use state C */
-            ems        = *sc;
+            copyEMStateContents(&ems, *sc);
             step_taken = c;
         }
 
@@ -2848,7 +2927,7 @@ void LegacySimulator::do_steep()
         if (count > 0)
         {
             validStep = do_em_step(
-                    cr, inputrec, mdatoms, s_min, stepsize, s_min->f.view().forceWithPadding(), s_try, constr, count);
+                    cr, inputrec, mdatoms, s_min, stepsize, s_min->f.view().force(), s_try, constr, count);
         }
 
         if (validStep)

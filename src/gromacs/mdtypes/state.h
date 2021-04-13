@@ -63,6 +63,7 @@
 #include "gromacs/math/paddedvector.h"
 #include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/md_enums.h"
+#include "gromacs/utility/classhelpers.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/real.h"
 
@@ -106,7 +107,7 @@ enum class StateEntry : int
     X,
     V,
     SDxNotSupported,
-    Cgp,
+    Cgp_unused,
     LDRngNotSupported,
     LDRngINotSupported,
     DisreInitF,
@@ -248,8 +249,47 @@ class t_state
 public:
     t_state();
 
-    // All things public
-    int natoms; //!< Number of atoms, local + non-local; this is the size of \p x, \p v and \p cg_p, when used
+    //! Change the number of atoms represented by this state, allocating memory as needed.
+    void changeNumAtoms(int numAtoms);
+
+    /*! \brief Adds a vector to the state, returns a reference to the ArrayRef of the vector
+     *
+     * The vector will have size \p natoms and is initialized with zeros.
+     * The arrayref returned is valid for the lifetime of the t_state object.
+     * The memory and size of this ArrayRef can change, so never store a copy of the ArrayRef,
+     * only copies of the reference. You should not modify the ArrayRef itself, only the contents
+     * of the array elements it references.
+     *
+     * \throws InvalidInputError when a name is passed that has been passed before to this method.
+     */
+    gmx::ArrayRef<gmx::RVec>& addRVecVector(const std::string& name);
+
+    //! Returns the list registered with name \p name or empty ArrayRef when not found
+    gmx::ArrayRef<gmx::RVec> rvecVector(const std::string& name)
+    {
+        for (const auto& rvecVectorEntry : rvecVectorEntries_)
+        {
+            if (rvecVectorEntry.name == name)
+            {
+                return *rvecVectorEntry.arrayRef;
+            }
+        }
+
+        return {};
+    }
+
+    //! Returns a list of array refs for the RVec vectors
+    gmx::ArrayRef<gmx::ArrayRef<gmx::RVec>> rvecVectors() { return rvecVectorArrayRefs_; }
+
+    //! Returns a list of array refs for the RVec vectors
+    gmx::ArrayRef<const gmx::ArrayRef<gmx::RVec>> rvecVectors() const
+    {
+        return rvecVectorArrayRefs_;
+    }
+
+    // Most things public
+    //! Number of atoms, local + non-local; this is the size of \p x, \p v and \p rvecVectors_, when used
+    int natoms;
     int ngtc;          //!< The number of temperature coupling groups
     int nnhpres;       //!< The number of NH-chains for the MTTK barostat (always 1 or 0)
     int nhchainlength; //!< The NH-chain length for temperature coupling and MTTK barostat
@@ -270,9 +310,8 @@ public:
     double              baros_integral; //!< For Berendsen P-coupling conserved quantity
     real                veta;           //!< Trotter based isotropic P-coupling
     real                vol0; //!< Initial volume,required for computing MTTK conserved quantity
-    PaddedHostVector<gmx::RVec> x;    //!< The coordinates (natoms)
-    PaddedHostVector<gmx::RVec> v;    //!< The velocities (natoms)
-    PaddedHostVector<gmx::RVec> cg_p; //!< p vector for conjugate gradient minimization
+    PaddedHostVector<gmx::RVec> x; //!< The coordinates (natoms)
+    PaddedHostVector<gmx::RVec> v; //!< The velocities (natoms)
 
     ekinstate_t ekinstate; //!< The state of the kinetic energy
 
@@ -286,6 +325,25 @@ public:
     std::vector<int> cg_gl;           //!< The global cg number of the local cgs
 
     std::vector<double> pull_com_prev_step; //!< The COM of the previous step of each pull group
+
+private:
+    //! Collection of storage and information need for a single RVec vector entry
+    struct RVecVectorEntry
+    {
+        //! A padded vector of RVec for atoms
+        PaddedVector<gmx::RVec> rvecVector;
+        //! An arrayRef into rvecVector using a unique pointer so it can referenced permanently
+        std::unique_ptr<gmx::ArrayRef<gmx::RVec>> arrayRef;
+        //! Names for the vector
+        std::string name;
+    };
+    // The same indices in the next two vectors refer to the same rvecVector
+    //! A vector of padded RVec vectors with arrayRefs and names
+    std::vector<RVecVectorEntry> rvecVectorEntries_;
+    //! A vector of arrayRefs into rvecVectors_, useful for looping over vectors
+    std::vector<gmx::ArrayRef<gmx::RVec>> rvecVectorArrayRefs_;
+
+    GMX_DISALLOW_COPY_MOVE_AND_ASSIGN(t_state);
 };
 
 #ifndef DOXYGEN
@@ -305,9 +363,6 @@ struct t_extmass
 
 //! Resizes the T- and P-coupling state variables
 void init_gtc_state(t_state* state, int ngtc, int nnhpres, int nhchainlength);
-
-//! Change the number of atoms represented by this state, allocating memory as needed.
-void state_change_natoms(t_state* state, int natoms);
 
 //! Allocates memory for free-energy history
 void init_dfhist_state(t_state* state, int dfhistNumLambda);

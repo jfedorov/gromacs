@@ -404,7 +404,7 @@ void gmx::LegacySimulator::do_md()
     }
     else
     {
-        state_change_natoms(state_global, state_global->natoms);
+        state_global->changeNumAtoms(state_global->natoms);
         /* Copy the pointer to the global state */
         state = state_global;
 

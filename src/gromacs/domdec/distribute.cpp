@@ -55,6 +55,7 @@
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/topology/topology.h"
 #include "gromacs/utility/enumerationhelpers.h"
+#include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/logger.h"
 
@@ -260,7 +261,7 @@ static void dd_distribute_state(gmx_domdec_t* dd, const t_state* state, t_state*
     /* communicate df_history -- required for restarting from checkpoint */
     dd_distribute_dfhist(dd, state_local->dfhist);
 
-    state_change_natoms(state_local, dd->comm->atomRanges.numHomeAtoms());
+    state_local->changeNumAtoms(dd->comm->atomRanges.numHomeAtoms());
 
     if (state_local->flags & enumValueToBitMask(StateEntry::X))
     {
@@ -270,9 +271,15 @@ static void dd_distribute_state(gmx_domdec_t* dd, const t_state* state, t_state*
     {
         distributeVec(dd, DDMASTER(dd) ? state->v : gmx::ArrayRef<const gmx::RVec>(), state_local->v);
     }
-    if (state_local->flags & enumValueToBitMask(StateEntry::Cgp))
+    if (DDMASTER(dd) && state_local->rvecVectors().size() != state->rvecVectors().size())
     {
-        distributeVec(dd, DDMASTER(dd) ? state->cg_p : gmx::ArrayRef<const gmx::RVec>(), state_local->cg_p);
+        GMX_THROW(gmx::InvalidInputError("state and state_local should have matching entries"));
+    }
+    for (gmx::index i = 0; i < ssize(state_local->rvecVectors()); i++)
+    {
+        distributeVec(dd,
+                      DDMASTER(dd) ? state->rvecVectors()[i] : gmx::ArrayRef<const gmx::RVec>(),
+                      state_local->rvecVectors()[i]);
     }
 }
 

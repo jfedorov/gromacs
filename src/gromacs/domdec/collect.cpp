@@ -326,14 +326,14 @@ void dd_collect_state(gmx_domdec_t* dd, const t_state* state_local, t_state* sta
                        state_local->v,
                        globalVRef);
     }
-    if (state_local->flags & enumValueToBitMask(StateEntry::Cgp))
+    for (gmx::index i = 0; i < ssize(state_local->rvecVectors()); i++)
     {
-        auto globalCgpRef = state ? state->cg_p : gmx::ArrayRef<gmx::RVec>();
+        auto globalVecRef = state ? state->rvecVectors()[i] : gmx::ArrayRef<gmx::RVec>();
         dd_collect_vec(dd,
                        state_local->ddp_count,
                        state_local->ddp_count_cg_gl,
                        state_local->cg_gl,
-                       state_local->cg_p,
-                       globalCgpRef);
+                       state_local->rvecVectors()[i],
+                       globalVecRef);
     }
 }

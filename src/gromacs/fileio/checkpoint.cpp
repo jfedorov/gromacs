@@ -1341,7 +1341,7 @@ static int do_cpt_state(XDR* xd, int fflags, t_state* state, FILE* list)
     // allocations need to be managed. If writing, this won't change
     // anything that matters.
     using StateFlags = gmx::EnumerationArray<StateEntry, bool>;
-    state_change_natoms(state, state->natoms);
+    state->changeNumAtoms(state->natoms);
     for (auto i = StateFlags::keys().begin(); (i != StateFlags::keys().end() && ret == 0); i++)
     {
         if (fflags & enumValueToBitMask(*i))

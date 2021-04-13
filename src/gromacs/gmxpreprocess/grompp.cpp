@@ -720,7 +720,7 @@ static void new_status(const char*                           topfile,
     {
         state->flags |= enumValueToBitMask(StateEntry::V);
     }
-    state_change_natoms(state, state->natoms);
+    state->changeNumAtoms(state->natoms);
     std::copy(x, x + state->natoms, state->x.data());
     sfree(x);
     if (v != nullptr)

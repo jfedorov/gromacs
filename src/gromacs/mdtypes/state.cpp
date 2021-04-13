@@ -43,6 +43,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <mutex>
 
 #include "gromacs/math/paddedvector.h"
 #include "gromacs/math/vec.h"
@@ -56,6 +57,7 @@
 #include "gromacs/pbcutil/boxutilities.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/utility/compare.h"
+#include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/stringutil.h"
@@ -152,24 +154,27 @@ void init_gtc_state(t_state* state, int ngtc, int nnhpres, int nhchainlength)
 
 
 /* Checkpoint code relies on this function having no effect if
-   state->natoms is > 0 and passed as natoms. */
-void state_change_natoms(t_state* state, int natoms)
+   state->natoms is > 0 and passed as numAtoms. */
+void t_state::changeNumAtoms(const int numAtoms)
 {
-    state->natoms = natoms;
+    natoms = numAtoms;
 
     /* We need padding, since we might use SIMD access, but the
      * containers here all ensure that. */
-    if (state->flags & enumValueToBitMask(StateEntry::X))
+    if (flags & enumValueToBitMask(StateEntry::X))
     {
-        state->x.resizeWithPadding(natoms);
+        x.resizeWithPadding(natoms);
     }
-    if (state->flags & enumValueToBitMask(StateEntry::V))
+    if (flags & enumValueToBitMask(StateEntry::V))
     {
-        state->v.resizeWithPadding(natoms);
+        v.resizeWithPadding(natoms);
     }
-    if (state->flags & enumValueToBitMask(StateEntry::Cgp))
+    for (gmx::index i = 0; i < gmx::ssize(rvecVectorEntries_); i++)
     {
-        state->cg_p.resizeWithPadding(natoms);
+        auto& rvecVectorEntry = rvecVectorEntries_[i];
+        rvecVectorEntry.rvecVector.resizeWithPadding(natoms);
+        *rvecVectorEntry.arrayRef = makeArrayRef(rvecVectorEntry.rvecVector);
+        rvecVectorArrayRefs_[i]   = makeArrayRef(rvecVectorEntry.rvecVector);
     }
 }
 
@@ -387,6 +392,40 @@ t_state::t_state() :
     clear_mat(pres_prev);
     clear_mat(svir_prev);
     clear_mat(fvir_prev);
+}
+
+// We use a global mutex for locking access to the state during registration of extra RVec vectors
+static std::mutex registrationMutex;
+
+gmx::ArrayRef<gmx::RVec>& t_state::addRVecVector(const std::string& name)
+{
+    std::lock_guard<std::mutex> registrationLock(registrationMutex);
+
+    for (const auto& rvecVectorEntry : rvecVectorEntries_)
+    {
+        if (rvecVectorEntry.name == name)
+        {
+            GMX_THROW(gmx::InvalidInputError(
+                    "addRVecVector() called with a name that is already present"));
+        }
+    }
+
+    rvecVectorEntries_.push_back({ {}, nullptr, name });
+
+    auto& back       = rvecVectorEntries_.back();
+    auto& rvecVector = back.rvecVector;
+    rvecVector.resizeWithPadding(natoms);
+    // Clear the buffer, including the padding
+    gmx::ArrayRef<gmx::RVec> viewWithPadding = rvecVector.arrayRefWithPadding().paddedArrayRef();
+    const gmx::RVec          zeroVec         = { 0.0_real, 0.0_real, 0.0_real };
+    std::fill(viewWithPadding.begin(), viewWithPadding.end(), zeroVec);
+
+    // Add the ArrayRef to the entry and the ArrayRef vectors
+    back.arrayRef = std::make_unique<gmx::ArrayRef<gmx::RVec>>(makeArrayRef(rvecVector));
+    rvecVectorArrayRefs_.push_back(makeArrayRef(rvecVector));
+
+    // Return a reference to an object in a unique pointer so the reference remains valid
+    return *back.arrayRef;
 }
 
 void set_box_rel(const t_inputrec* ir, t_state* state)
