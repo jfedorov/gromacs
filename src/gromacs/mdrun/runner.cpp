@@ -161,6 +161,7 @@
 #include "gromacs/utility/keyvaluetree.h"
 #include "gromacs/utility/logger.h"
 #include "gromacs/utility/loggerbuilder.h"
+#include "gromacs/utility/messagestringcollector.h"
 #include "gromacs/utility/mdmodulenotification.h"
 #include "gromacs/utility/physicalnodecommunicator.h"
 #include "gromacs/utility/pleasecite.h"
@@ -177,6 +178,243 @@
 namespace gmx
 {
 
+/*! \brief Return whether CUDA-aware MPI can be used
+ *
+ * Returns true in a configuration using CUDA and an MPI library if
+ * GROMACS detected CUDA awareness in the library, or if that
+ * detection result is overridden by the use of
+ * GMX_FORCE_CUDA_AWARE_MPI. In the latter case, a warning is
+ * issued. */
+static bool canUseCudaAwareMpi(const MDLogger& mdlog, const bool haveDetectedCudaAwareMpi, const bool forceCudaAwareMpi)
+{
+    if (!GMX_LIB_MPI || !GMX_GPU_CUDA)
+    {
+        // We won't consider using CUDA-aware MPI unless we're using
+        // both CUDA and an MPI library.
+        return false;
+    }
+
+    if (!haveDetectedCudaAwareMpi && forceCudaAwareMpi)
+    {
+        // CUDA-aware support not detected in MPI library but, user has forced its use
+        GMX_LOG(mdlog.warning)
+                .asParagraph()
+                .appendText(
+                        "You have forced the use of CUDA-aware MPI with the "
+                        "GMX_FORCE_CUDA_AWARE_MPI environment variable. "
+                        "However GROMACS did not detect that the the MPI library "
+                        "is CUDA-aware. GROMACS recommends use of latest OpenMPI version "
+                        "for CUDA-aware support. "
+                        "If you observe failures at runtime, try unsetting "
+                        "that environment variable.");
+    }
+
+    return true;
+}
+
+/*! \brief Return whether a GPU feature that benefits from CUDA-aware
+ * MPI can be enabled.
+ *
+ * If the environment variable is set, the implementation uses the GPU
+ * feature. Note that in library MPI configurations, the MPI library
+ * must be built with CUDA awareness for that to be the observed
+ * behavior Thread-MPI configurations use the CUDA API to provide
+ * similar functionality directly.
+ */
+static bool canEnableCudaAwareDeveloperFeature(const char* environmentVariableName)
+{
+    if (GMX_THREAD_MPI || GMX_LIB_MPI)
+    {
+        // Use the CUDA-aware feature if the developer asked for it.
+        const bool environmentVariableIsSet = (getenv(environmentVariableName) != nullptr);
+        return environmentVariableIsSet;
+    }
+    // With no MPI, there's no question of CUDA awareness of MPI.
+    return false;
+}
+
+/*! \brief Return whether GPU halo exchange can be enabled.
+ *
+ * If the environment variable is set, the implementation uses GPU halo exchange
+ * if the requirements are met, logging when the environment variable was set.
+ */
+static bool canEnableGpuHaloExchange(const MDLogger& mdlog,
+                                     const bool      haveDetectedCudaAwareMpi,
+                                     const bool      forceCudaAwareMpi,
+                                     const bool      useGpuForNonbonded)
+{
+    const char* environmentVariableName = "GMX_GPU_DD_COMMS";
+
+    if (!canEnableCudaAwareDeveloperFeature(environmentVariableName))
+    {
+        return false;
+    }
+
+    MessageStringCollector messageCollector;
+    messageCollector.startContext(
+            formatString("%s environment variable detected, but the 'GPU halo exchange' feature "
+                         "will not be enabled because:",
+                         environmentVariableName));
+    if (!useGpuForNonbonded)
+    {
+        messageCollector.append("nonbonded interactions are not offloaded.");
+    }
+    if (!haveDetectedCudaAwareMpi && !forceCudaAwareMpi)
+    {
+        messageCollector.append("GROMACS couldn't detect CUDA awareness in the MPI library.");
+    }
+    if (!messageCollector.isEmpty())
+    {
+        GMX_LOG(mdlog.warning).asParagraph().appendText(messageCollector.toString());
+        return false;
+    }
+
+    GMX_LOG(mdlog.info)
+            .asParagraph()
+            .appendTextFormatted(
+                    "This run has requested the 'GPU halo exchange' feature, enabled by "
+                    "the %s environment variable.",
+                    environmentVariableName);
+    return true;
+}
+
+/*! \brief Return whether GPU halo exchange can be enabled.
+ *
+ * If the environment variable is set, the implementation uses GPU
+ * PME-PP communications if the requirements are met, logging when the
+ * environment variable was set.
+ */
+static bool canEnableGpuPmePpComm(const MDLogger&  mdlog,
+                                  const bool       haveDetectedCudaAwareMpi,
+                                  const bool       forceCudaAwareMpi,
+                                  const PmeRunMode pmeRunMode)
+{
+    const char* environmentVariableName = "GMX_GPU_PME_PP_COMMS";
+
+    if (!canEnableCudaAwareDeveloperFeature(environmentVariableName))
+    {
+        return false;
+    }
+
+    MessageStringCollector messageCollector;
+    messageCollector.startContext(
+            formatString("%s environment variable detected, but the 'GPU PME-PP communications' "
+                         "feature will not be enabled because:",
+                         environmentVariableName));
+    if (pmeRunMode != PmeRunMode::GPU)
+    {
+        if (pmeRunMode == PmeRunMode::Mixed)
+        {
+            messageCollector.append(
+                    "PME FFT and gather are not offloaded to the GPU (PME is running in mixed "
+                    "mode).");
+        }
+        else
+        {
+            messageCollector.append("PME is not offloaded to the GPU.");
+        }
+    }
+    if (!haveDetectedCudaAwareMpi && !forceCudaAwareMpi)
+    {
+        messageCollector.append("GROMACS couldn't detect CUDA awareness in the MPI library.");
+    }
+    if (!messageCollector.isEmpty())
+    {
+        GMX_LOG(mdlog.warning).asParagraph().appendText(messageCollector.toString());
+        return false;
+    }
+
+    GMX_LOG(mdlog.info)
+            .asParagraph()
+            .appendTextFormatted(
+                    "This run uses the 'GPU PME-PP communications' feature, enabled "
+                    "by the %s environment variable.",
+                    environmentVariableName);
+    return true;
+}
+
+/*! \brief Return whether GPU buffer operations can be enabled.
+ *
+ * If the environment variable is set, or if other GPU features are in
+ * use, the implementation uses GPU PME-PP communications if the
+ * requirements are met, logging if so.
+ */
+static bool canEnableGpuBufferOps(const MDLogger& mdlog,
+                                  const bool      useGpuForNonbonded,
+                                  const bool      enableGpuHaloExchange,
+                                  const bool      enableGpuPmePPComm)
+{
+    const char* environmentVariableName = "GMX_USE_GPU_BUFFER_OPS";
+
+    if (!GMX_GPU_CUDA || !useGpuForNonbonded)
+    {
+        // Only the CUDA configuration running with nonbonded
+        // offloaded has an implementation.
+        return false;
+    }
+
+    const bool environmentVariableIsSet = (getenv(environmentVariableName) != nullptr);
+    if (environmentVariableIsSet)
+    {
+        GMX_LOG(mdlog.info)
+                .asParagraph()
+                .appendTextFormatted(
+                        "Enabling GPU buffer operations from the use of %s environment variable.",
+                        environmentVariableName);
+        return true;
+    }
+
+    // GPU buffer operations are implicitly turned on by some GPU features
+    MessageStringCollector messageCollector;
+    messageCollector.startContext(formatString(
+            "Enabling GPU buffer operations (equivalent to %s=1) because:", environmentVariableName));
+    if (enableGpuHaloExchange)
+    {
+        messageCollector.append("GPU halo exchange is active");
+    }
+    if (enableGpuPmePPComm)
+    {
+        messageCollector.append("GPU PME-PP communication is active");
+    }
+    if (messageCollector.isEmpty())
+    {
+        return false;
+    }
+    GMX_LOG(mdlog.info).asParagraph().appendText(messageCollector.toString());
+    return true;
+}
+
+/*! \brief Return whether GPU update can be forced on.
+ *
+ * If the environment variable is set, the implementation defaults to running the update on the GPU,
+ * logging if so.
+ */
+static bool canForceGpuUpdateDefault(const MDLogger& mdlog)
+{
+    const char* environmentVariableName = "GMX_FORCE_UPDATE_DEFAULT_GPU";
+
+    if (GMX_FAHCORE)
+    {
+        GMX_LOG(mdlog.info)
+                .asParagraph()
+                .appendTextFormatted("This run will default to '-update gpu' to suit FAHCORE.");
+        return true;
+    }
+
+    const bool environmentVariableIsSet = (getenv(environmentVariableName) != nullptr);
+    if (environmentVariableIsSet)
+    {
+        GMX_LOG(mdlog.info)
+                .asParagraph()
+                .appendTextFormatted(
+                        "This run will default to '-update gpu' as requested by the "
+                        "%s environment variable. GPU update with domain "
+                        "decomposition lacks substantial testing and should be used with caution.",
+                        environmentVariableName);
+        return true;
+    }
+    return false;
+}
 
 /*! \brief Manage any development feature flag variables encountered
  *
@@ -194,183 +432,25 @@ namespace gmx
  * \param[in]  pmeRunMode           The PME run mode for this run
  * \returns                         The object populated with development feature flags.
  */
-static DevelopmentFeatureFlags manageDevelopmentFeatures(const gmx::MDLogger& mdlog,
-                                                         const bool           useGpuForNonbonded,
-                                                         const PmeRunMode     pmeRunMode)
+static DevelopmentFeatureFlags manageDevelopmentFeatures(const MDLogger&  mdlog,
+                                                         const bool       useGpuForNonbonded,
+                                                         const PmeRunMode pmeRunMode)
 {
     DevelopmentFeatureFlags devFlags;
 
-    // Some builds of GCC 5 give false positive warnings that these
-    // getenv results are ignored when clearly they are used.
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-result"
+    const bool haveDetectedCudaAwareMpi = (checkMpiCudaAwareSupport() == CudaAwareMpiStatus::Supported);
+    const bool forceCudaAwareMpi        = (getenv("GMX_FORCE_CUDA_AWARE_MPI") != nullptr);
 
-    devFlags.enableGpuBufferOps =
-            GMX_GPU_CUDA && useGpuForNonbonded && (getenv("GMX_USE_GPU_BUFFER_OPS") != nullptr);
-    devFlags.enableGpuHaloExchange = GMX_GPU_CUDA && getenv("GMX_GPU_DD_COMMS") != nullptr;
-    devFlags.forceGpuUpdateDefault = (getenv("GMX_FORCE_UPDATE_DEFAULT_GPU") != nullptr) || GMX_FAHCORE;
-    devFlags.enableGpuPmePPComm = GMX_GPU_CUDA && getenv("GMX_GPU_PME_PP_COMMS") != nullptr;
+    devFlags.usingCudaAwareMpi = canUseCudaAwareMpi(mdlog, haveDetectedCudaAwareMpi, forceCudaAwareMpi);
+    devFlags.enableGpuHaloExchange = canEnableGpuHaloExchange(
+            mdlog, haveDetectedCudaAwareMpi, forceCudaAwareMpi, useGpuForNonbonded);
+    devFlags.enableGpuPmePPComm =
+            canEnableGpuPmePpComm(mdlog, haveDetectedCudaAwareMpi, forceCudaAwareMpi, pmeRunMode);
 
-#pragma GCC diagnostic pop
+    devFlags.enableGpuBufferOps = canEnableGpuBufferOps(
+            mdlog, useGpuForNonbonded, devFlags.enableGpuHaloExchange, devFlags.enableGpuPmePPComm);
 
-    // Direct GPU comm path is being used with CUDA_AWARE_MPI
-    // make sure underlying MPI implementation is CUDA-aware
-    if (!GMX_THREAD_MPI && (devFlags.enableGpuPmePPComm || devFlags.enableGpuHaloExchange))
-    {
-        const bool haveDetectedCudaAwareMpi =
-                (checkMpiCudaAwareSupport() == CudaAwareMpiStatus::Supported);
-        const bool forceCudaAwareMpi = (getenv("GMX_FORCE_CUDA_AWARE_MPI") != nullptr);
-
-        if (!haveDetectedCudaAwareMpi && forceCudaAwareMpi)
-        {
-            // CUDA-aware support not detected in MPI library but, user has forced it's use
-            GMX_LOG(mdlog.warning)
-                    .asParagraph()
-                    .appendTextFormatted(
-                            "This run has forced use of 'CUDA-aware MPI'. "
-                            "But, GROMACS cannot determine if underlying MPI "
-                            "is CUDA-aware. GROMACS recommends use of latest openMPI version "
-                            "for CUDA-aware support. "
-                            "If you observe failures at runtime, try unsetting "
-                            "GMX_FORCE_CUDA_AWARE_MPI environment variable.");
-        }
-
-        if (haveDetectedCudaAwareMpi || forceCudaAwareMpi)
-        {
-            devFlags.usingCudaAwareMpi = true;
-            GMX_LOG(mdlog.warning)
-                    .asParagraph()
-                    .appendTextFormatted(
-                            "Using CUDA-aware MPI for 'GPU halo exchange' or 'GPU PME-PP "
-                            "communications' feature.");
-        }
-        else
-        {
-            if (devFlags.enableGpuHaloExchange)
-            {
-                GMX_LOG(mdlog.warning)
-                        .asParagraph()
-                        .appendTextFormatted(
-                                "GMX_GPU_DD_COMMS environment variable detected, but the 'GPU "
-                                "halo exchange' feature will not be enabled as GROMACS couldn't "
-                                "detect CUDA_aware support in underlying MPI implementation.");
-                devFlags.enableGpuHaloExchange = false;
-            }
-            if (devFlags.enableGpuPmePPComm)
-            {
-                GMX_LOG(mdlog.warning)
-                        .asParagraph()
-                        .appendText(
-                                "GMX_GPU_PME_PP_COMMS environment variable detected, but the "
-                                "'GPU PME-PP communications' feature will not be enabled as "
-                                "GROMACS couldn't "
-                                "detect CUDA_aware support in underlying MPI implementation.");
-                devFlags.enableGpuPmePPComm = false;
-            }
-
-            GMX_LOG(mdlog.warning)
-                    .asParagraph()
-                    .appendTextFormatted(
-                            "GROMACS recommends use of latest OpenMPI version for CUDA-aware "
-                            "support. "
-                            "If you are certain about CUDA-aware support in your MPI library, "
-                            "you can force it's use by setting environment variable "
-                            " GMX_FORCE_CUDA_AWARE_MPI.");
-        }
-    }
-
-    if (devFlags.enableGpuBufferOps)
-    {
-        GMX_LOG(mdlog.warning)
-                .asParagraph()
-                .appendTextFormatted(
-                        "This run uses the 'GPU buffer ops' feature, enabled by the "
-                        "GMX_USE_GPU_BUFFER_OPS environment variable.");
-    }
-
-    if (devFlags.forceGpuUpdateDefault)
-    {
-        GMX_LOG(mdlog.warning)
-                .asParagraph()
-                .appendTextFormatted(
-                        "This run will default to '-update gpu' as requested by the "
-                        "GMX_FORCE_UPDATE_DEFAULT_GPU environment variable. GPU update with domain "
-                        "decomposition lacks substantial testing and should be used with caution.");
-    }
-
-    if (devFlags.enableGpuHaloExchange)
-    {
-        if (useGpuForNonbonded)
-        {
-            if (!devFlags.enableGpuBufferOps)
-            {
-                GMX_LOG(mdlog.warning)
-                        .asParagraph()
-                        .appendTextFormatted(
-                                "Enabling GPU buffer operations required by GMX_GPU_DD_COMMS "
-                                "(equivalent with GMX_USE_GPU_BUFFER_OPS=1).");
-                devFlags.enableGpuBufferOps = true;
-            }
-            GMX_LOG(mdlog.warning)
-                    .asParagraph()
-                    .appendTextFormatted(
-                            "This run has requested the 'GPU halo exchange' feature, enabled by "
-                            "the "
-                            "GMX_GPU_DD_COMMS environment variable.");
-        }
-        else
-        {
-            GMX_LOG(mdlog.warning)
-                    .asParagraph()
-                    .appendTextFormatted(
-                            "GMX_GPU_DD_COMMS environment variable detected, but the 'GPU "
-                            "halo exchange' feature will not be enabled as nonbonded interactions "
-                            "are not offloaded.");
-            devFlags.enableGpuHaloExchange = false;
-        }
-    }
-
-    if (devFlags.enableGpuPmePPComm)
-    {
-        if (pmeRunMode == PmeRunMode::GPU)
-        {
-            if (!devFlags.enableGpuBufferOps)
-            {
-                GMX_LOG(mdlog.warning)
-                        .asParagraph()
-                        .appendTextFormatted(
-                                "Enabling GPU buffer operations required by GMX_GPU_PME_PP_COMMS "
-                                "(equivalent with GMX_USE_GPU_BUFFER_OPS=1).");
-                devFlags.enableGpuBufferOps = true;
-            }
-            GMX_LOG(mdlog.warning)
-                    .asParagraph()
-                    .appendTextFormatted(
-                            "This run uses the 'GPU PME-PP communications' feature, enabled "
-                            "by the GMX_GPU_PME_PP_COMMS environment variable.");
-        }
-        else
-        {
-            std::string clarification;
-            if (pmeRunMode == PmeRunMode::Mixed)
-            {
-                clarification =
-                        "PME FFT and gather are not offloaded to the GPU (PME is running in mixed "
-                        "mode).";
-            }
-            else
-            {
-                clarification = "PME is not offloaded to the GPU.";
-            }
-            GMX_LOG(mdlog.warning)
-                    .asParagraph()
-                    .appendText(
-                            "GMX_GPU_PME_PP_COMMS environment variable detected, but the "
-                            "'GPU PME-PP communications' feature was not enabled as "
-                            + clarification);
-            devFlags.enableGpuPmePPComm = false;
-        }
-    }
+    devFlags.forceGpuUpdateDefault = canForceGpuUpdateDefault(mdlog);
 
     return devFlags;
 }
