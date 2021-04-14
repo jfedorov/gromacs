@@ -33,8 +33,8 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 
-#ifndef GMX_GMXANA_CLUSTER_JARVIS_PATRICK_H
-#define GMX_GMXANA_CLUSTER_JARVIS_PATRICK_H
+#ifndef GMX_GMXANA_CLUSTER_LINKAGE_H
+#define GMX_GMXANA_CLUSTER_LINKAGE_H
 
 #include <stdio.h>
 #include <vector>
@@ -53,38 +53,28 @@ namespace gmx
 
 class MDLogger;
 
-class ClusterJarvisPatrick : public ICluster
+class ClusterLinkage : public ICluster
 {
 public:
-    explicit ClusterJarvisPatrick(const t_mat*    inputMatrix,
-                                  real            rmsdCutOff,
-                                  int             numNearestNeighbors,
-                                  int             numIdenticalNeighbors,
-                                  const MDLogger& logger) :
+    explicit ClusterLinkage(const t_mat* inputMatrix, real rmsdCutOff, const MDLogger& logger) :
         finished_(false),
         rmsdCutOff_(rmsdCutOff),
-        numNearestNeighbors_(numNearestNeighbors),
-        numIdenticalNeighbors_(numIdenticalNeighbors),
         matrix_(inputMatrix),
         logger_(logger)
     {
         makeClusters();
     }
-    ~ClusterJarvisPatrick() override;
+    ~ClusterLinkage() override = default;
 
     ArrayRef<const int> clusterList() const override;
 
 private:
     //! Perform actual clustering.
     void makeClusters();
-    //! Did we perform the clustering?
+    //! Did we peform the clustering?
     bool finished_;
     //! Value for RMSD cutoff.
     const real rmsdCutOff_;
-    //! Number of nearest neighbors for jarvis patrick.
-    const int numNearestNeighbors_;
-    //! Number of identical neighbors for jarvis patrick.
-    const int numIdenticalNeighbors_;
     //! Handle to cluster matrix.
     const t_mat* matrix_;
     //! Cluster indices

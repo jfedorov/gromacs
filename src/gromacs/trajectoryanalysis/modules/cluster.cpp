@@ -45,19 +45,38 @@
 #include "cluster.h"
 
 #include <algorithm>
+#include <cmath>
+#include <memory>
+#include <numeric>
 #include <string>
+#include <vector>
 
 #include "gromacs/coordinateio/coordinatefile.h"
 #include "gromacs/coordinateio/requirements.h"
 #include "gromacs/fileio/filetypes.h"
 #include "gromacs/fileio/trxio.h"
-#include "gromacs/gmxana/cluster_methods.h"
+#include "gromacs/gmxana/cmat.h"
+#include "gromacs/math/do_fit.h"
+#include "gromacs/math/functions.h"
+#include "gromacs/math/matrix.h"
+#include "gromacs/math/multidimarray.h"
+#include "gromacs/mdspan/extensions.h"
+#include "gromacs/mdspan/extents.h"
+#include "gromacs/mdspan/mdspan.h"
 #include "gromacs/options/basicoptions.h"
 #include "gromacs/options/filenameoption.h"
 #include "gromacs/options/ioptionscontainer.h"
 #include "gromacs/selection/selectionoption.h"
+#include "gromacs/trajectory//trajectoryframe.h"
 #include "gromacs/trajectoryanalysis/analysissettings.h"
+#include "gromacs/trajectoryanalysis/modules/cluster_diagonalize.h"
+#include "gromacs/trajectoryanalysis/modules/cluster_gromos.h"
+#include "gromacs/trajectoryanalysis/modules/cluster_jarvis_patrick.h"
+#include "gromacs/trajectoryanalysis/modules/cluster_linkage.h"
+#include "gromacs/trajectoryanalysis/modules/cluster_monte_carlo.h"
 #include "gromacs/trajectoryanalysis/topologyinformation.h"
+#include "gromacs/utility/filestream.h"
+#include "gromacs/utility/loggerbuilder.h"
 
 namespace gmx
 {
@@ -75,6 +94,166 @@ constexpr gmx::EnumerationArray<ClusterMethods, const char*> c_clusterMethodName
     "diagonalization",
     "gromos"
 };
+
+struct ClusterTrajectoryData
+{
+    //! All frames in the trajectory for clustering
+    std::vector<std::vector<RVec>> frames;
+    //! All times for the trajectory frames.
+    std::vector<real> times;
+    //! Trajectory frame boxes.
+    std::vector<Matrix3x3> boxes;
+};
+
+void calculateDistance(ArrayRef<const RVec>                                        x,
+                       basic_mdspan<real, extents<dynamic_extent, dynamic_extent>> distances)
+{
+    const int numCoordinates = x.size();
+    for (int i = 0; i < numCoordinates - 1; ++i)
+    {
+        RVec xi = x[i];
+        for (int j = i + 1; j < numCoordinates; ++j)
+        {
+            RVec dx;
+            rvec_sub(xi, x[j], dx);
+            distances(i, j) = norm(dx);
+        }
+    }
+}
+
+real rmsDistance(int                                                               numCoordinates,
+                 basic_mdspan<const real, extents<dynamic_extent, dynamic_extent>> distances1,
+                 basic_mdspan<const real, extents<dynamic_extent, dynamic_extent>> distances2)
+{
+    real r2 = 0.0;
+    for (int i = 0; i < numCoordinates - 1; ++i)
+    {
+        for (int j = i + 1; j < numCoordinates; ++j)
+        {
+            const real r = distances1(i, j) - distances2(i, j);
+            r2 += r * r;
+        }
+    }
+    r2 /= gmx::exactDiv(numCoordinates * (numCoordinates - 1), 2);
+    return std::sqrt(r2);
+}
+
+void addClusterFrame(ClusterTrajectoryData* data,
+                     const t_trxframe&      fr,
+                     ArrayRef<const int>    index,
+                     ArrayRef<const real>   masses,
+                     bool                   useLeastSquaresFitting)
+{
+    auto& currentStructure = data->frames.emplace_back();
+    currentStructure.resize(index.size());
+    for (int i = 0; i < gmx::ssize(index); ++i)
+    {
+        copy_rvec(fr.x[index[i]], currentStructure[i]);
+    }
+    data->times.emplace_back(fr.time);
+    data->boxes.emplace_back(createMatrix3x3FromLegacyMatrix(fr.box));
+    if (useLeastSquaresFitting)
+    {
+        reset_x(index.size(),
+                index.data(),
+                index.size(),
+                nullptr,
+                as_rvec_array(currentStructure.data()),
+                masses.data());
+    }
+}
+
+t_mat* generateClusterMatrix(int                                   numFrames,
+                             int                                   numCoordinates,
+                             bool                                  oneDimensional,
+                             bool                                  useRmsdDistances,
+                             bool                                  useLeastSquaresFitting,
+                             const std::vector<std::vector<RVec>>& coordinates,
+                             ArrayRef<const real>                  masses,
+                             const MDLogger&                       logger)
+{
+    t_mat*  matrix     = init_mat(numFrames, oneDimensional);
+    int64_t numEntries = (static_cast<int64_t>(numFrames) * static_cast<int64_t>(numFrames - 1)) / 2;
+    if (!useRmsdDistances)
+    {
+        GMX_LOG(logger.info)
+                .asParagraph()
+                .appendTextFormatted("Computing %dx%d RMS deviation matrix\n", numFrames, numFrames);
+        std::vector<RVec> currentCoordinates(numCoordinates);
+        for (int i1 = 0; i1 < numFrames; ++i1)
+        {
+            for (int i2 = i1 + 1; i2 < numFrames; ++i2)
+            {
+                for (int index = 0; index < numCoordinates; ++index)
+                {
+                    copy_rvec(coordinates[i1][index], currentCoordinates[index]);
+                }
+                if (useLeastSquaresFitting)
+                {
+                    do_fit(numCoordinates,
+                           masses.data(),
+                           as_rvec_array(coordinates[i2].data()),
+                           as_rvec_array(currentCoordinates.data()));
+                }
+                const real rmsd = rmsdev(numCoordinates,
+                                         masses.data(),
+                                         as_rvec_array(coordinates[i2].data()),
+                                         as_rvec_array(currentCoordinates.data()));
+                set_mat_entry(matrix, i1, i2, rmsd);
+            }
+            numEntries -= numFrames - i1 - 1;
+            GMX_LOG(logger.info)
+                    .appendTextFormatted(
+                            "\r# RMSD calculations left: "
+                            "%" PRId64 "   ",
+                            numEntries);
+        }
+    }
+    else
+    {
+        GMX_LOG(logger.info)
+                .asParagraph()
+                .appendTextFormatted("Computing %dx%d RMS distance deviation matrix\n", numFrames, numFrames);
+        MultiDimArray<std::vector<real>, extents<dynamic_extent, dynamic_extent>> dist1;
+        MultiDimArray<std::vector<real>, extents<dynamic_extent, dynamic_extent>> dist2;
+        dist1.resize(numCoordinates, numCoordinates);
+        dist2.resize(numCoordinates, numCoordinates);
+        for (int i1 = 0; i1 < numFrames; ++i1)
+        {
+            calculateDistance(coordinates[i1], dist1);
+            for (int i2 = i1 + 1; i2 < numFrames; ++i2)
+            {
+                calculateDistance(coordinates[i2], dist2);
+                set_mat_entry(matrix, i1, i2, rmsDistance(numCoordinates, dist1, dist2));
+            }
+            numEntries -= numFrames - i1 - 1;
+            GMX_LOG(logger.info)
+                    .appendTextFormatted(
+                            "\r# RMSD calculations left: "
+                            "%" PRId64 "   ",
+                            numEntries);
+        }
+    }
+    return matrix;
+}
+
+void convertToBinary(t_mat* matrix, int numFrames, real rmsdCutoff)
+{
+    for (int i1 = 0; i1 < numFrames; ++i1)
+    {
+        for (int i2 = 0; i2 < numFrames; ++i2)
+        {
+            if (matrix->mat[i1][i2] < rmsdCutoff)
+            {
+                matrix->mat[i1][i2] = 0;
+            }
+            else
+            {
+                matrix->mat[i1][i2] = 1;
+            }
+        }
+    }
+}
 
 
 /*
@@ -98,7 +277,6 @@ private:
     TrajectoryFrameWriterPointer    output_;
     Selection                       sel_;
     std::string                     clusterBaseName_;
-    std::string                     rmsdInputMatrixFileName_;
     std::string                     rawRmsdOutputFileName_;
     std::string                     rmsdOutputFileName_;
     std::string                     logFileName_;
@@ -119,7 +297,6 @@ private:
     bool                            useBinaryValues_                  = false;
     bool                            useNearestNeghbors_               = false;
     bool                            useRandomMCSteps_                 = false;
-    bool                            useRmsdInputMatrix_               = false;
     bool                            writeRmsdDistribution_            = false;
     bool                            writeRmsdEigenVectors_            = false;
     bool                            writeMCConversion_                = false;
@@ -135,15 +312,26 @@ private:
     int                             numJarvisPatrickNearestNeighbors_ = 10;
     int                             numNearestNeighborsForCluster_    = 3;
     int                             randomNumberSeed_                 = -1;
+    int                             maxMCIterations_                  = 10000;
     int                             numRandomMCSteps_                 = 0;
     real                            rmsdCutoff_                       = 0.1;
     real                            maximumRmsdLevel_                 = -1.0;
     real                            minimumRmsDistance_               = 0.0;
     real                            kT_                               = 1e-3;
     ClusterMethods                  method_                           = ClusterMethods::Linkage;
+    ClusterTrajectoryData           frameData_;
+    std::vector<int>                localIndices_;
+    std::vector<real>               masses_;
+    std::unique_ptr<LoggerOwner>    loggerOwner_;
 };
 
-Cluster::Cluster() {}
+Cluster::Cluster()
+{
+    LoggerBuilder builder;
+    builder.addTargetStream(gmx::MDLogger::LogLevel::Info, &gmx::TextOutputFile::standardOutput());
+    builder.addTargetStream(gmx::MDLogger::LogLevel::Warning, &gmx::TextOutputFile::standardError());
+    loggerOwner_ = std::make_unique<LoggerOwner>(builder.build());
+}
 
 
 void Cluster::initOptions(IOptionsContainer* options, TrajectoryAnalysisSettings* settings)
@@ -297,12 +485,17 @@ void Cluster::initOptions(IOptionsContainer* options, TrajectoryAnalysisSettings
                             "Number of identical nearest neighbors required to form a cluster"));
     options->addOption(
             IntegerOption("seed").store(&randomNumberSeed_).defaultValue(-1).description("Random number seed for Monte Carlo clustering algorithm (-1 means generate)"));
+
+    options->addOption(
+            IntegerOption("niter").store(&maxMCIterations_).defaultValue(10000).description("Number of iterations for MC"));
+
     options->addOption(IntegerOption("nrandom")
                                .store(&numRandomMCSteps_)
                                .storeIsSet(&useRandomMCSteps_)
                                .defaultValueIfSet(1)
                                .description("The first iterations for MC may be done complete "
                                             "random, to shuffle the frames"));
+
     options->addOption(RealOption("kT").store(&kT_).defaultValue(1e-3).description(
             "Boltzmann weighting factor for Monte Carlo optimization "
             "(zero turns off uphill steps)"));
@@ -312,19 +505,11 @@ void Cluster::initOptions(IOptionsContainer* options, TrajectoryAnalysisSettings
             "Selection of particles to write to the file"));
 
     options->addOption(FileNameOption("cl")
-                               .filetype(eftTrajectory)
+                               .filetype(OptionFileType::Trajectory)
                                .outputFile()
                                .store(&clusterBaseName_)
                                .defaultBasename("clusters")
                                .description("Clustered structures"));
-
-    options->addOption(FileNameOption("dm")
-                               .legacyType(efXPM)
-                               .inputFile()
-                               .defaultBasename("rmsd")
-                               .store(&rmsdInputMatrixFileName_)
-                               .storeIsSet(&useRmsdInputMatrix_)
-                               .description("RMSD input matrix?"));
 
     options->addOption(FileNameOption("om")
                                .legacyType(efXPM)
@@ -348,28 +533,28 @@ void Cluster::initOptions(IOptionsContainer* options, TrajectoryAnalysisSettings
                                .store(&logFileName_)
                                .description("File to write detailed logging information to"));
     options->addOption(FileNameOption("dist")
-                               .filetype(eftPlot)
+                               .filetype(OptionFileType::Plot)
                                .outputFile()
                                .defaultBasename("rmsd-dist")
                                .storeIsSet(&writeRmsdDistribution_)
                                .store(&rmsdDistributionOutputFileName_)
                                .description("File to write optional Cluster RMSD distribution to"));
     options->addOption(FileNameOption("ev")
-                               .filetype(eftPlot)
+                               .filetype(OptionFileType::Plot)
                                .outputFile()
                                .defaultBasename("rmsd-eig")
                                .storeIsSet(&writeRmsdEigenVectors_)
                                .store(&rmsdEigenVectorFileName_)
                                .description("File to write optional RMSD eigenvectors to"));
     options->addOption(FileNameOption("conv")
-                               .filetype(eftPlot)
+                               .filetype(OptionFileType::Plot)
                                .outputFile()
                                .defaultBasename("mc-conv")
                                .storeIsSet(&writeMCConversion_)
                                .store(&mcConversionFileName_)
                                .description("File to write MC conversion info to"));
     options->addOption(FileNameOption("sz")
-                               .filetype(eftPlot)
+                               .filetype(OptionFileType::Plot)
                                .outputFile()
                                .defaultBasename("clust-size")
                                .storeIsSet(&writeClusterSize_)
@@ -383,21 +568,21 @@ void Cluster::initOptions(IOptionsContainer* options, TrajectoryAnalysisSettings
                                .store(&clusterTransitionsFileName_)
                                .description("File to write cluster transitions to"));
     options->addOption(FileNameOption("ntr")
-                               .filetype(eftPlot)
+                               .filetype(OptionFileType::Plot)
                                .outputFile()
                                .defaultBasename("cust-trans")
                                .storeIsSet(&writeNumClusterTransitions_)
                                .store(&numClusterTransitionsFileName_)
                                .description("File to write number of transitions to"));
     options->addOption(FileNameOption("clid")
-                               .filetype(eftPlot)
+                               .filetype(OptionFileType::Plot)
                                .outputFile()
                                .defaultBasename("clust-id")
                                .storeIsSet(&writeClusterIDs_)
                                .store(&clusterIDFileName_)
                                .description("File to write cluster ids to"));
     options->addOption(FileNameOption("clndx")
-                               .filetype(eftIndex)
+                               .filetype(OptionFileType::Index)
                                .outputFile()
                                .defaultBasename("clusters")
                                .storeIsSet(&writeClusterMappingFile_)
@@ -422,19 +607,87 @@ void Cluster::optionsFinished(TrajectoryAnalysisSettings* settings)
 
 void Cluster::initAnalysis(const TrajectoryAnalysisSettings& /*settings*/, const TopologyInformation& top)
 {
-    output_ = createTrajectoryFrameWriter(top.mtop(),
-                                          sel_,
-                                          clusterBaseName_,
-                                          top.hasTopology() ? top.copyAtoms() : nullptr,
-                                          requirementsBuilder_.process());
+    if (!sel_.isValid())
+    {
+        localIndices_.resize(top.mtop()->natoms);
+        std::iota(localIndices_.begin(), localIndices_.end(), 0);
+    }
+    ArrayRef<const int> atomIndexRef = sel_.isValid() ? sel_.atomIndices() : localIndices_;
+    const int           natoms       = sel_.isValid() ? sel_.atomCount() : localIndices_.size();
+    if (!top.hasFullTopology())
+    {
+        GMX_THROW(InvalidInputError("Need full topology with masses for clustering"));
+    }
+    masses_.resize(natoms);
+    const auto* localAtoms = top.atoms();
+    for (int i = 0; i < gmx::ssize(atomIndexRef); ++i)
+    {
+        masses_[i] = localAtoms->atom[atomIndexRef[i]].m;
+    }
 }
 
-void Cluster::analyzeFrame(int frnr, const t_trxframe& fr, t_pbc* /* pbc */, TrajectoryAnalysisModuleData* /*pdata*/)
+void Cluster::analyzeFrame(int /* frnr */, const t_trxframe& fr, t_pbc* /* pbc */, TrajectoryAnalysisModuleData* /*pdata*/)
 {
-    output_->prepareAndWriteFrame(frnr, fr);
+    ArrayRef<const int> atomIndexRef = sel_.isValid() ? sel_.atomIndices() : localIndices_;
+    addClusterFrame(&frameData_, fr, atomIndexRef, masses_, useLeastSquaresFitting_);
 }
 
-void Cluster::finishAnalysis(int /*nframes*/) {}
+void Cluster::finishAnalysis(int nframes)
+{
+    if (nframes < 2)
+    {
+        GMX_THROW(InvalidInputError("Need at least two frames to start clustering"));
+    }
+
+    const MDLogger& logger = loggerOwner_->logger();
+    const int       natoms = sel_.isValid() ? sel_.atomCount() : localIndices_.size();
+    GMX_LOG(logger.info)
+            .asParagraph()
+            .appendTextFormatted("Allocated %zu bytes for frames\n", (nframes * natoms * sizeof(RVec)));
+    GMX_LOG(logger.info).asParagraph().appendTextFormatted("Read %d frames from trajectory\n", nframes);
+    t_mat* matrix = generateClusterMatrix(nframes,
+                                          natoms,
+                                          method_ == ClusterMethods::Diagonalization,
+                                          useRmsdDistances_,
+                                          useLeastSquaresFitting_,
+                                          frameData_.frames,
+                                          masses_,
+                                          logger);
+
+    if (useBinaryValues_)
+    {
+        convertToBinary(matrix, nframes, rmsdCutoff_);
+    }
+    std::unique_ptr<ICluster> clusterMethod;
+    switch (method_)
+    {
+        case ClusterMethods::Linkage:
+            clusterMethod = std::make_unique<ClusterLinkage>(matrix, rmsdCutoff_, logger);
+            break;
+        case ClusterMethods::Diagonalization:
+            clusterMethod = std::make_unique<ClusterDiagonalize>(matrix, rmsdCutoff_, nframes, logger);
+            break;
+        case ClusterMethods::MonteCarlo:
+            clusterMethod = std::make_unique<ClusterMonteCarlo>(matrix,
+                                                                rmsdCutoff_,
+                                                                kT_,
+                                                                nframes,
+                                                                randomNumberSeed_,
+                                                                maxMCIterations_,
+                                                                numRandomMCSteps_,
+                                                                logger,
+                                                                frameData_.times);
+            break;
+        case ClusterMethods::JarvisPatrick:
+            clusterMethod = std::make_unique<ClusterJarvisPatrick>(
+                    matrix, rmsdCutoff_, numJarvisPatrickNearestNeighbors_, numNearestNeighborsForCluster_, logger);
+            break;
+        case ClusterMethods::Gromos:
+            clusterMethod = std::make_unique<ClusterGromos>(matrix, rmsdCutoff_, nframes, logger);
+            break;
+        default: GMX_THROW(InvalidInputError("No such clustering method"));
+    }
+}
 
 
 void Cluster::writeOutput() {}

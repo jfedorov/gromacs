@@ -61,7 +61,7 @@ public:
                                real                 kT,
                                int                  numInputs,
                                int                  seed,
-                               int                  maxIerations,
+                               int                  maxIterations,
                                int                  randomIterations,
                                const MDLogger&      logger,
                                ArrayRef<const real> time) :
@@ -70,7 +70,7 @@ public:
         kT_(kT),
         numInputs_(numInputs),
         seed_(seed),
-        maxIterations_(maxIerations),
+        maxIterations_(maxIterations),
         randomIterations_(randomIterations),
         matrix_(inputMatrix),
         logger_(logger),
@@ -78,7 +78,7 @@ public:
     {
         makeClusters();
     }
-    ~ClusterMonteCarlo() override;
+    ~ClusterMonteCarlo() override = default;
 
     ArrayRef<const int> clusterList() const override;
 

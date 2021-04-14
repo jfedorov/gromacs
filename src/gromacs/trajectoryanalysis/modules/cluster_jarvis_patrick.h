@@ -33,8 +33,8 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 
-#ifndef GMX_GMXANA_CLUSTER_DIAGONALIZE_H
-#define GMX_GMXANA_CLUSTER_DIAGONALIZE_H
+#ifndef GMX_GMXANA_CLUSTER_JARVIS_PATRICK_H
+#define GMX_GMXANA_CLUSTER_JARVIS_PATRICK_H
 
 #include <stdio.h>
 #include <vector>
@@ -53,38 +53,42 @@ namespace gmx
 
 class MDLogger;
 
-class ClusterDiagonalize : public ICluster
+class ClusterJarvisPatrick : public ICluster
 {
 public:
-    explicit ClusterDiagonalize(const t_mat* inputMatrix, real rmsdCutOff, int numStructures, const MDLogger& logger) :
+    explicit ClusterJarvisPatrick(const t_mat*    inputMatrix,
+                                  real            rmsdCutOff,
+                                  int             numNearestNeighbors,
+                                  int             numIdenticalNeighbors,
+                                  const MDLogger& logger) :
         finished_(false),
         rmsdCutOff_(rmsdCutOff),
-        numStructures_(numStructures),
+        numNearestNeighbors_(numNearestNeighbors),
+        numIdenticalNeighbors_(numIdenticalNeighbors),
         matrix_(inputMatrix),
         logger_(logger)
     {
         makeClusters();
     }
-    ~ClusterDiagonalize() override;
+    ~ClusterJarvisPatrick() override = default;
 
     ArrayRef<const int> clusterList() const override;
-
-    //! Access the eigenvalues of the input matrix
-    ArrayRef<const real> eigenvalues() const;
 
 private:
     //! Perform actual clustering.
     void makeClusters();
-    //! Did we peform the clustering?
+    //! Did we perform the clustering?
     bool finished_;
     //! Value for RMSD cutoff.
     const real rmsdCutOff_;
-    //! Number of input structures.
-    const int numStructures_;
+    //! Number of nearest neighbors for jarvis patrick.
+    const int numNearestNeighbors_;
+    //! Number of identical neighbors for jarvis patrick.
+    const int numIdenticalNeighbors_;
     //! Handle to cluster matrix.
     const t_mat* matrix_;
-    //! Matrix eigenvalues
-    std::vector<real> eigenvalues_;
+    //! Cluster indices
+    std::vector<int> clusters_;
     //! Logger handle
     const MDLogger& logger_;
 };

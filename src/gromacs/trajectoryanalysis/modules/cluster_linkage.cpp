@@ -134,7 +134,8 @@ void ClusterLinkage::makeClusters()
 
     /* Renumber clusters */
     int cid = 1;
-    for (int k = 1; k < n1; k++)
+    int k   = 1;
+    for (; k < n1; k++)
     {
         if (clusters[k].cluster != clusters[k - 1].cluster)
         {
@@ -146,7 +147,10 @@ void ClusterLinkage::makeClusters()
             clusters[k - 1].cluster = cid;
         }
     }
-    clusters[n1 - 1].cluster = cid;
+    if (!clusters.empty())
+    {
+        clusters[k - 1].cluster = cid;
+    }
     if (debug)
     {
         for (int k = 0; (k < n1); k++)

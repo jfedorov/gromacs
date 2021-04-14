@@ -33,8 +33,8 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 
-#ifndef GMX_GMXANA_CLUSTER_LINKAGE_H
-#define GMX_GMXANA_CLUSTER_LINKAGE_H
+#ifndef GMX_GMXANA_CLUSTER_DIAGONALIZE_H
+#define GMX_GMXANA_CLUSTER_DIAGONALIZE_H
 
 #include <stdio.h>
 #include <vector>
@@ -53,20 +53,24 @@ namespace gmx
 
 class MDLogger;
 
-class ClusterLinkage : public ICluster
+class ClusterDiagonalize : public ICluster
 {
 public:
-    explicit ClusterLinkage(const t_mat* inputMatrix, real rmsdCutOff, const MDLogger& logger) :
+    explicit ClusterDiagonalize(const t_mat* inputMatrix, real rmsdCutOff, int numStructures, const MDLogger& logger) :
         finished_(false),
         rmsdCutOff_(rmsdCutOff),
+        numStructures_(numStructures),
         matrix_(inputMatrix),
         logger_(logger)
     {
         makeClusters();
     }
-    ~ClusterLinkage() override;
+    ~ClusterDiagonalize() override = default;
 
     ArrayRef<const int> clusterList() const override;
+
+    //! Access the eigenvalues of the input matrix
+    ArrayRef<const real> eigenvalues() const;
 
 private:
     //! Perform actual clustering.
@@ -75,10 +79,12 @@ private:
     bool finished_;
     //! Value for RMSD cutoff.
     const real rmsdCutOff_;
+    //! Number of input structures.
+    const int numStructures_;
     //! Handle to cluster matrix.
     const t_mat* matrix_;
-    //! Cluster indices
-    std::vector<int> clusters_;
+    //! Matrix eigenvalues
+    std::vector<real> eigenvalues_;
     //! Logger handle
     const MDLogger& logger_;
 };

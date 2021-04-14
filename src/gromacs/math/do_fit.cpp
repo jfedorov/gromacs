@@ -50,7 +50,7 @@
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/smalloc.h"
 
-real calc_similar_ind(gmx_bool bRho, int nind, const int* index, const real mass[], rvec x[], rvec xp[])
+real calc_similar_ind(gmx_bool bRho, int nind, const int* index, const real* mass, const rvec* x, rvec* xp)
 {
     int  i, j, d;
     real m, tm, xs, xd, rs, rd;
@@ -91,22 +91,22 @@ real calc_similar_ind(gmx_bool bRho, int nind, const int* index, const real mass
     }
 }
 
-real rmsdev_ind(int nind, int index[], real mass[], rvec x[], rvec xp[])
+real rmsdev_ind(int nind, const int* index, const real* mass, const rvec* x, rvec* xp)
 {
     return calc_similar_ind(FALSE, nind, index, mass, x, xp);
 }
 
-real rmsdev(int natoms, real mass[], rvec x[], rvec xp[])
+real rmsdev(int natoms, const real* mass, const rvec* x, rvec* xp)
 {
     return calc_similar_ind(FALSE, natoms, nullptr, mass, x, xp);
 }
 
-real rhodev_ind(int nind, int index[], real mass[], rvec x[], rvec xp[])
+real rhodev_ind(int nind, const int* index, const real* mass, rvec* x, rvec* xp)
 {
     return calc_similar_ind(TRUE, nind, index, mass, x, xp);
 }
 
-real rhodev(int natoms, real mass[], rvec x[], rvec xp[])
+real rhodev(int natoms, const real* mass, rvec* x, rvec* xp)
 {
     return calc_similar_ind(TRUE, natoms, nullptr, mass, x, xp);
 }
@@ -260,7 +260,7 @@ void calc_fit_R(int ndim, int natoms, const real* w_rls, const rvec* xp, rvec* x
     sfree(om);
 }
 
-void do_fit_ndim(int ndim, int natoms, real* w_rls, const rvec* xp, rvec* x)
+void do_fit_ndim(int ndim, int natoms, const real* w_rls, const rvec* xp, rvec* x)
 {
     int    j, m, r, c;
     matrix R;
@@ -287,12 +287,12 @@ void do_fit_ndim(int ndim, int natoms, real* w_rls, const rvec* xp, rvec* x)
     }
 }
 
-void do_fit(int natoms, real* w_rls, const rvec* xp, rvec* x)
+void do_fit(int natoms, const real* w_rls, const rvec* xp, rvec* x)
 {
     do_fit_ndim(3, natoms, w_rls, xp, x);
 }
 
-void reset_x_ndim(int ndim, int ncm, const int* ind_cm, int nreset, const int* ind_reset, rvec x[], const real mass[])
+void reset_x_ndim(int ndim, int ncm, const int* ind_cm, int nreset, const int* ind_reset, rvec* x, const real* mass)
 {
     int  i, m, ai;
     rvec xcm;
@@ -350,7 +350,7 @@ void reset_x_ndim(int ndim, int ncm, const int* ind_cm, int nreset, const int* i
     }
 }
 
-void reset_x(int ncm, const int* ind_cm, int nreset, const int* ind_reset, rvec x[], const real mass[])
+void reset_x(int ncm, const int* ind_cm, int nreset, const int* ind_reset, rvec* x, const real* mass)
 {
     reset_x_ndim(3, ncm, ind_cm, nreset, ind_reset, x, mass);
 }

@@ -33,57 +33,72 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 
-#ifndef GMX_GMXANA_CLUSTER_GROMOS_H
-#define GMX_GMXANA_CLUSTER_GROMOS_H
+/*! \file
+ * \brief
+ * Declares gmx::ICluster for clustering methods.
+ *
+ * \author Paul Bauer <paul.bauer.q@gmail.com>
+ * \inlibraryapi
+ * \ingroup module_gmxana
+ */
 
-#include <stdio.h>
-#include <vector>
+#ifndef GMX_GMXANA_ICLUSTER_H
+#define GMX_GMXANA_ICLUSTER_H
 
 #include "gromacs/utility/arrayref.h"
-#include "icluster.h"
-
 #include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/real.h"
-
-struct t_clusters;
-struct t_mat;
 
 namespace gmx
 {
 
-class MDLogger;
+enum class ClusterMethods : int
+{
+    Linkage,
+    JarvisPatrick,
+    MonteCarlo,
+    Diagonalization,
+    Gromos,
+    Count,
+    Default = Linkage
+};
 
-class ClusterGromos : public ICluster
+struct PairDistances
+{
+    PairDistances(int indexI, int indexJ, real dist) : i(indexI), j(indexJ), distance(dist) {}
+    //! First index.
+    int i;
+    //! Second index.
+    int j;
+    //! Distance between them.
+    real distance;
+};
+
+struct ClusterIDs
+{
+    //! Index for configuration.
+    int configuration = 0;
+    //! Index for cluster.
+    int cluster = 0;
+};
+
+/*! \brief
+ * ICluster interface for different kinds of clustering methods.
+ *
+ * Methods that derive from this interface can be used to cluster different kinds of inputs.
+ *
+ * \inlibraryapi
+ * \ingroup module_gmxana
+ */
+class ICluster
 {
 public:
-    explicit ClusterGromos(const t_mat* inputMatrix, real rmsdCutOff, int numInputs, const MDLogger& logger) :
-        finished_(false),
-        rmsdCutOff_(rmsdCutOff),
-        numInputs_(numInputs),
-        matrix_(inputMatrix),
-        logger_(logger)
-    {
-        makeClusters();
-    }
-    ~ClusterGromos() override;
-
-    ArrayRef<const int> clusterList() const override;
-
-private:
-    //! Perform actual clustering.
-    void makeClusters();
-    //! Did we perform the clustering?
-    bool finished_;
-    //! Value for RMSD cutoff.
-    const real rmsdCutOff_;
-    //! Number of inputs.
-    int numInputs_;
-    //! Handle to cluster matrix.
-    const t_mat* matrix_;
-    //! Cluster indices
-    std::vector<int> clusters_;
-    //! Logger handle
-    const MDLogger& logger_;
+    ICluster() {}
+    virtual ~ICluster() {}
+    /*! \brief
+     * Access cluster list.
+     */
+    virtual ArrayRef<const int> clusterList() const = 0;
 };
 
 } // namespace gmx
