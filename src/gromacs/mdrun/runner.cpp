@@ -181,11 +181,18 @@ namespace gmx
 /*! \brief Return whether CUDA-aware MPI can be used
  *
  * Returns true in a configuration using CUDA and an MPI library if
- * GROMACS detected CUDA awareness in the library, or if that
- * detection result is overridden by the use of
- * GMX_FORCE_CUDA_AWARE_MPI. In the latter case, a warning is
- * issued. */
-static bool canUseCudaAwareMpi(const MDLogger& mdlog, const bool haveDetectedCudaAwareMpi, const bool forceCudaAwareMpi)
+ * - GROMACS detected CUDA awareness in the library (or if that
+ *   detection result is overridden by the use of
+ *   GMX_FORCE_CUDA_AWARE_MPI), and
+ * - a GPU feature that will use it is enabled.
+ *
+ * If CUDA awareness was not detected but the environment variable
+ * forced its usage, a warning is issued. */
+static bool canUseCudaAwareMpi(const MDLogger& mdlog,
+                               const bool      haveDetectedCudaAwareMpi,
+                               const bool      forceCudaAwareMpi,
+                               const bool      enableGpuHaloExchange,
+                               const bool      enableGpuPmePPComm)
 {
     if (!GMX_LIB_MPI || !GMX_GPU_CUDA)
     {
@@ -194,7 +201,20 @@ static bool canUseCudaAwareMpi(const MDLogger& mdlog, const bool haveDetectedCud
         return false;
     }
 
-    if (!haveDetectedCudaAwareMpi && forceCudaAwareMpi)
+    if (!enableGpuHaloExchange || !enableGpuPmePPComm)
+    {
+        // We won't use CUDA-aware MPI unless a feature that wants it
+        // is being used
+        return false;
+    }
+
+    if (haveDetectedCudaAwareMpi)
+    {
+        // Always use it when a feature wants it and it was detected
+        return true;
+    }
+
+    if (forceCudaAwareMpi)
     {
         // CUDA-aware support not detected in MPI library but, user has forced its use
         GMX_LOG(mdlog.warning)
@@ -207,9 +227,11 @@ static bool canUseCudaAwareMpi(const MDLogger& mdlog, const bool haveDetectedCud
                         "for CUDA-aware support. "
                         "If you observe failures at runtime, try unsetting "
                         "that environment variable.");
+        return true;
     }
 
-    return true;
+    // Features that want it will still work, but probably slower
+    return false;
 }
 
 /*! \brief Return whether a GPU feature that benefits from CUDA-aware
@@ -336,7 +358,7 @@ static bool canEnableGpuPmePpComm(const MDLogger&  mdlog,
 /*! \brief Return whether GPU buffer operations can be enabled.
  *
  * If the environment variable is set, or if other GPU features are in
- * use, the implementation uses GPU PME-PP communications if the
+ * use, the implementation uses GPU buffer operations if the
  * requirements are met, logging if so.
  */
 static bool canEnableGpuBufferOps(const MDLogger& mdlog,
@@ -441,15 +463,17 @@ static DevelopmentFeatureFlags manageDevelopmentFeatures(const MDLogger&  mdlog,
     const bool haveDetectedCudaAwareMpi = (checkMpiCudaAwareSupport() == CudaAwareMpiStatus::Supported);
     const bool forceCudaAwareMpi        = (getenv("GMX_FORCE_CUDA_AWARE_MPI") != nullptr);
 
-    devFlags.usingCudaAwareMpi = canUseCudaAwareMpi(mdlog, haveDetectedCudaAwareMpi, forceCudaAwareMpi);
     devFlags.enableGpuHaloExchange = canEnableGpuHaloExchange(
             mdlog, haveDetectedCudaAwareMpi, forceCudaAwareMpi, useGpuForNonbonded);
     devFlags.enableGpuPmePPComm =
             canEnableGpuPmePpComm(mdlog, haveDetectedCudaAwareMpi, forceCudaAwareMpi, pmeRunMode);
-
     devFlags.enableGpuBufferOps = canEnableGpuBufferOps(
             mdlog, useGpuForNonbonded, devFlags.enableGpuHaloExchange, devFlags.enableGpuPmePPComm);
-
+    devFlags.usingCudaAwareMpi     = canUseCudaAwareMpi(mdlog,
+                                                    haveDetectedCudaAwareMpi,
+                                                    forceCudaAwareMpi,
+                                                    devFlags.enableGpuHaloExchange,
+                                                    devFlags.enableGpuPmePPComm);
     devFlags.forceGpuUpdateDefault = canForceGpuUpdateDefault(mdlog);
 
     return devFlags;
