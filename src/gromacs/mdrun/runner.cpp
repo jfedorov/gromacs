@@ -201,7 +201,7 @@ static bool canUseCudaAwareMpi(const MDLogger& mdlog,
         return false;
     }
 
-    if (!enableGpuHaloExchange || !enableGpuPmePPComm)
+    if (!enableGpuHaloExchange && !enableGpuPmePPComm)
     {
         // We won't use CUDA-aware MPI unless a feature that wants it
         // is being used
