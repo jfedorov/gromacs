@@ -245,14 +245,15 @@ static bool canUseCudaAwareMpi(const MDLogger& mdlog,
  */
 static bool canEnableCudaAwareDeveloperFeature(const char* environmentVariableName)
 {
-    if (GMX_THREAD_MPI || GMX_LIB_MPI)
+    if (!GMX_GPU_CUDA || !GMX_MPI)
     {
-        // Use the CUDA-aware feature if the developer asked for it.
-        const bool environmentVariableIsSet = (getenv(environmentVariableName) != nullptr);
-        return environmentVariableIsSet;
+        // Without MPI, or without CUDA, there's no question of CUDA awareness of MPI.
+        return false;
     }
-    // With no MPI, there's no question of CUDA awareness of MPI.
-    return false;
+
+    // Use the CUDA-aware feature if the developer asked for it.
+    const bool environmentVariableIsSet = (getenv(environmentVariableName) != nullptr);
+    return environmentVariableIsSet;
 }
 
 /*! \brief Return whether GPU halo exchange can be enabled.
@@ -281,7 +282,7 @@ static bool canEnableGpuHaloExchange(const MDLogger& mdlog,
     {
         messageCollector.append("nonbonded interactions are not offloaded.");
     }
-    if (!haveDetectedCudaAwareMpi && !forceCudaAwareMpi)
+    if (GMX_LIB_MPI && !haveDetectedCudaAwareMpi && !forceCudaAwareMpi)
     {
         messageCollector.append("GROMACS couldn't detect CUDA awareness in the MPI library.");
     }
@@ -336,7 +337,7 @@ static bool canEnableGpuPmePpComm(const MDLogger&  mdlog,
             messageCollector.append("PME is not offloaded to the GPU.");
         }
     }
-    if (!haveDetectedCudaAwareMpi && !forceCudaAwareMpi)
+    if (GMX_LIB_MPI && !haveDetectedCudaAwareMpi && !forceCudaAwareMpi)
     {
         messageCollector.append("GROMACS couldn't detect CUDA awareness in the MPI library.");
     }
