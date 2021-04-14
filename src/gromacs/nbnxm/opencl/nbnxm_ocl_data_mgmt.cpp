@@ -34,7 +34,7 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 /*! \internal \file
- *  \brief Define OpenCL implementation of nbnxm_gpu_data_mgmt.h
+ *  \brief Define OpenCL implementation of NBNXM GPU data management.
  *
  *  \author Anca Hamuraru <anca@streamcomputing.eu>
  *  \author Dimitrios Karkoulis <dimitris.karkoulis@gmail.com>
@@ -60,11 +60,11 @@
 #include "gromacs/mdtypes/interaction_const.h"
 #include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/nbnxm/atomdata.h"
-#include "gromacs/nbnxm/gpu_data_mgmt.h"
+#include "gromacs/nbnxm/nbnxm_gpu.h"
 #include "gromacs/nbnxm/gpu_jit_support.h"
 #include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/nbnxm/nbnxm_gpu.h"
-#include "gromacs/nbnxm/nbnxm_gpu_data_mgmt.h"
+#include "gromacs/nbnxm/nbnxm_gpu_private.h"
 #include "gromacs/nbnxm/pairlistsets.h"
 #include "gromacs/timing/gpu_timing.h"
 #include "gromacs/utility/cstringutil.h"

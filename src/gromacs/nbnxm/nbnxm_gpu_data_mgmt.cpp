@@ -34,7 +34,7 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 /*! \internal \file
- *  \brief Define common implementation of nbnxm_gpu_data_mgmt.h
+ *  \brief Define common implementations of GPU NBNXM data management.
  *
  *  \author Anca Hamuraru <anca@streamcomputing.eu>
  *  \author Dimitrios Karkoulis <dimitris.karkoulis@gmail.com>
@@ -60,20 +60,20 @@
 #    include "sycl/nbnxm_sycl_types.h"
 #endif
 
-#include "nbnxm_gpu_data_mgmt.h"
+#include "nbnxm_gpu_private.h"
 
 #include "gromacs/gpu_utils/device_stream_manager.h"
 #include "gromacs/gpu_utils/gputraits.h"
 #include "gromacs/gpu_utils/pmalloc.h"
 #include "gromacs/hardware/device_information.h"
+#include "gromacs/listed_forces/gpubonded.h"
 #include "gromacs/mdtypes/interaction_const.h"
 #include "gromacs/mdtypes/simulation_workload.h"
-#include "gromacs/nbnxm/gpu_common_utils.h"
-#include "gromacs/nbnxm/gpu_data_mgmt.h"
+#include "gromacs/nbnxm/gpu_common.h"
 #include "gromacs/nbnxm/gridset.h"
+#include "gromacs/nbnxm/nbnxm_gpu_public.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/timing/gpu_timing.h"
-#include "gromacs/pbcutil/ishift.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"

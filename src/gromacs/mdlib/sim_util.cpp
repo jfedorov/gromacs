@@ -97,9 +97,7 @@
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/mdtypes/state_propagator_data_gpu.h"
-#include "gromacs/nbnxm/gpu_data_mgmt.h"
 #include "gromacs/nbnxm/nbnxm.h"
-#include "gromacs/nbnxm/nbnxm_gpu.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/pulling/pull.h"
@@ -1133,7 +1131,7 @@ static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
                                                             stateGpu->fReducedOnDevice());
 
     // register forces and add dependencies
-    fr->gpuForceReduction[gmx::AtomLocality::Local]->registerNbnxmForce(nbv->getGpuForces());
+    fr->gpuForceReduction[gmx::AtomLocality::Local]->registerNbnxmForce(Nbnxm::getGpuForces(nbv->gpu_nbv));
 
     if (runScheduleWork->simulationWork.useGpuPme
         && (thisRankHasDuty(cr, DUTY_PME) || runScheduleWork->simulationWork.useGpuPmePpCommunication))
@@ -1184,7 +1182,8 @@ static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
                                                                    accumulate);
 
         // register forces and add dependencies
-        fr->gpuForceReduction[gmx::AtomLocality::NonLocal]->registerNbnxmForce(nbv->getGpuForces());
+        fr->gpuForceReduction[gmx::AtomLocality::NonLocal]->registerNbnxmForce(
+                Nbnxm::getGpuForces(nbv->gpu_nbv));
         if (runScheduleWork->domainWork.haveCpuBondedWork || runScheduleWork->domainWork.haveFreeEnergyWork)
         {
             fr->gpuForceReduction[gmx::AtomLocality::NonLocal]->addDependency(
@@ -1436,11 +1435,12 @@ void do_force(FILE*                               fplog,
                 // TODO the xq, f, and fshift buffers are now shared
                 // resources, so they should be maintained by a
                 // higher-level object than the nb module.
-                fr->gpuBonded->updateInteractionListsAndDeviceBuffers(nbv->getGridIndices(),
-                                                                      top->idef,
-                                                                      Nbnxm::gpu_get_xq(nbv->gpu_nbv),
-                                                                      Nbnxm::gpu_get_f(nbv->gpu_nbv),
-                                                                      Nbnxm::gpu_get_fshift(nbv->gpu_nbv));
+                fr->gpuBonded->updateInteractionListsAndDeviceBuffers(
+                        nbv->getGridIndices(),
+                        top->idef,
+                        Nbnxm::gpu_get_xq(nbv->gpu_nbv),
+                        Nbnxm::getGpuForces(nbv->gpu_nbv),
+                        Nbnxm::gpu_get_fshift(nbv->gpu_nbv));
             }
         }
 

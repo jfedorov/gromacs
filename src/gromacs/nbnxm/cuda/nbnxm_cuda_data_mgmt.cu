@@ -34,7 +34,7 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 /*! \file
- *  \brief Define CUDA implementation of nbnxn_gpu_data_mgmt.h
+ *  \brief Define CUDA implementation of NBNXM data management
  *
  *  \author Szilard Pall <pall.szilard@gmail.com>
  */
@@ -62,11 +62,12 @@
 #include "gromacs/mdtypes/interaction_const.h"
 #include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/nbnxm/atomdata.h"
-#include "gromacs/nbnxm/gpu_data_mgmt.h"
+#include "gromacs/nbnxm/nbnxm_gpu.h"
 #include "gromacs/nbnxm/gridset.h"
 #include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/nbnxm/nbnxm_gpu.h"
-#include "gromacs/nbnxm/nbnxm_gpu_data_mgmt.h"
+#include "gromacs/nbnxm/nbnxm_gpu_private.h"
+#include "gromacs/nbnxm/nbnxm_gpu_public.h"
 #include "gromacs/nbnxm/pairlistsets.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/timing/gpu_timing.h"
@@ -114,13 +115,6 @@ void* gpu_get_xq(NbnxmGpu* nb)
     assert(nb);
 
     return static_cast<void*>(nb->atdat->xq);
-}
-
-DeviceBuffer<gmx::RVec> gpu_get_f(NbnxmGpu* nb)
-{
-    assert(nb);
-
-    return reinterpret_cast<DeviceBuffer<gmx::RVec>>(nb->atdat->f);
 }
 
 DeviceBuffer<gmx::RVec> gpu_get_fshift(NbnxmGpu* nb)

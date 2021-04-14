@@ -51,6 +51,7 @@
 #include "gromacs/mdtypes/forcerec.h" // only for GET_CGINFO_*
 #include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/nbnxm/nbnxm.h"
+#include "gromacs/nbnxm/nbnxm_gpu.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/simd/simd.h"
 #include "gromacs/utility/exceptions.h"
@@ -1033,14 +1034,14 @@ void nbnxn_atomdata_x_to_nbat_x_gpu(const Nbnxm::GridSet&   gridSet,
 
     for (int g = gridBegin; g < gridEnd; g++)
     {
-        nbnxn_gpu_x_to_nbat_x(gridSet.grids()[g],
-                              gpu_nbv,
-                              d_x,
-                              (g == gridBegin) ? xReadyOnDevice : nullptr, // Sync on first iteration only
-                              locality,
-                              g,
-                              gridSet.numColumnsMax(),
-                              (g == gridEnd - 1));
+        Nbnxm::nbnxn_gpu_x_to_nbat_x(gridSet.grids()[g],
+                                     gpu_nbv,
+                                     d_x,
+                                     (g == gridBegin) ? xReadyOnDevice : nullptr, // Sync on first iteration only
+                                     locality,
+                                     g,
+                                     gridSet.numColumnsMax(),
+                                     (g == gridEnd - 1));
     }
 }
 

@@ -116,6 +116,7 @@
 #include "gromacs/gpu_utils/devicebuffer_datatype.h"
 #include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/locality.h"
+#include "gromacs/nbnxm/nbnxm_gpu_public.h"
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/real.h"
@@ -394,12 +395,6 @@ public:
      * \returns               The number of atoms for given locality
      */
     int getNumAtoms(gmx::AtomLocality locality) const;
-
-    /*! \brief Get the pointer to the GPU nonbonded force buffer
-     *
-     * \returns A pointer to the force buffer in GPU memory
-     */
-    DeviceBuffer<gmx::RVec> getGpuForces() const;
 
     //! Return the kernel setup
     const Nbnxm::KernelSetup& kernelSetup() const { return kernelSetup_; }
