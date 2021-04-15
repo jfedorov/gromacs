@@ -289,11 +289,11 @@ public:
 
     // Most things public
     //! Number of atoms, local + non-local; this is the size of \p x, \p v and \p rvecVectors_, when used
-    int natoms;
+    int natoms = 0;
     int ngtc;          //!< The number of temperature coupling groups
     int nnhpres;       //!< The number of NH-chains for the MTTK barostat (always 1 or 0)
     int nhchainlength; //!< The NH-chain length for temperature coupling and MTTK barostat
-    int flags; //!< Set of bit-flags telling which entries are present, see enum at the top of the file
+    int flags = 0; //!< Set of bit-flags telling which entries are present, see enum at the top of the file
     int fep_state; //!< indicates which of the alchemical states we are in
     gmx::EnumerationArray<FreeEnergyPerturbationCouplingType, real> lambda; //!< Free-energy lambda vector
     matrix                                                          box; //!< Matrix of box vectors
@@ -320,9 +320,9 @@ public:
     df_history_t*                    dfhist;     //!< Free-energy history for free energy analysis
     std::shared_ptr<gmx::AwhHistory> awhHistory; //!< Accelerated weight histogram history
 
-    int              ddp_count;       //!< The DD partitioning count for this state
-    int              ddp_count_cg_gl; //!< The DD partitioning count for index_gl
-    std::vector<int> cg_gl;           //!< The global cg number of the local cgs
+    int              ddp_count       = -1; //!< The DD partitioning count for this state
+    int              ddp_count_cg_gl = -1; //!< The DD partitioning count for index_gl
+    std::vector<int> cg_gl;                //!< The global cg number of the local cgs
 
     std::vector<double> pull_com_prev_step; //!< The COM of the previous step of each pull group
 
