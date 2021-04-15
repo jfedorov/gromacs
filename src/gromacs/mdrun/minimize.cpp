@@ -121,8 +121,15 @@ using gmx::RVec;
 using gmx::VirtualSitesHandler;
 
 //! Utility structure for manipulating states during EM
-typedef struct em_state
+struct em_state_t
 {
+    //! Copy assignment, copies the data, not the references
+    em_state_t& operator=(const em_state_t& right);
+
+    //! Delete move assignment
+    em_state_t& operator=(em_state_t&& right) = delete;
+
+
     //! Copy of the global state
     t_state s;
     //! Force array
@@ -135,7 +142,7 @@ typedef struct em_state
     real fmax;
     //! Direction
     int a_fmax;
-} em_state_t;
+};
 
 //! Print the EM starting conditions
 static void print_em_start(FILE*                     fplog,
@@ -362,23 +369,23 @@ static void get_state_f_norm_max(const t_commrec* cr, const t_grpopts* opts, t_m
     get_f_norm_max(cr, opts, mdatoms, ems->f.view().force(), &ems->fnorm, &ems->fmax, &ems->a_fmax);
 }
 
-//! Copies flags, coordinates and box and with FEP also lambas
+//! Copies flags, coordinates, other state vectos and box and with FEP also lambas
 static void copyCoordinatesAndBox(em_state_t* ems, const t_state& state)
 {
-    GMX_RELEASE_ASSERT(
-            (state.flags & ~(enumValueToBitMask(StateEntry::Lambda) | enumValueToBitMask(StateEntry::Box)))
-                    == enumValueToBitMask(StateEntry::X),
-            "We should have X set and possibly Lambda and Box, nothing else");
-
     ems->s.flags = state.flags;
     ems->s.changeNumAtoms(state.natoms);
     const auto xSrc  = gmx::makeArrayRef(state.x);
     auto       xDest = gmx::makeArrayRef(ems->s.x);
-    for (int i = 0; i < ems->s.natoms; i++)
-    {
-        xDest[i] = xSrc[i];
-    }
+    std::copy(xSrc.begin(), xSrc.end(), xDest.begin());
     copy_mat(state.box, ems->s.box);
+    GMX_ASSERT(ems->s.rvecVectors().size() == state.rvecVectors().size(),
+               "size of rvecVectors should match");
+    for (gmx::index v = 0; v < ssize(state.rvecVectors()); v++)
+    {
+        std::copy(state.rvecVectors()[v].begin(),
+                  state.rvecVectors()[v].end(),
+                  ems->s.rvecVectors()[v].begin());
+    }
 
     if (state.flags & enumValueToBitMask(StateEntry::Lambda))
     {
@@ -387,23 +394,21 @@ static void copyCoordinatesAndBox(em_state_t* ems, const t_state& state)
     }
 }
 
-// Copies the coordinates, box, the final force buffer and force norm and max
-static void copyEMStateContents(em_state_t* dest, const em_state_t& src)
+em_state_t& em_state_t::operator=(const em_state_t& right)
 {
-    copyCoordinatesAndBox(dest, src.s);
+    copyCoordinatesAndBox(this, right.s);
 
-    const auto fSrc = src.f.view().force();
-    dest->f.resize(fSrc.size());
-    auto fDest = dest->f.view().force();
+    const auto fSrc = right.f.view().force();
+    f.resize(fSrc.size());
+    auto fDest = f.view().force();
     GMX_RELEASE_ASSERT(fDest.size() == fSrc.size(), "Number of atoms should match");
-    for (gmx::index i = 0; i < ssize(fDest); i++)
-    {
-        fDest[i] = fSrc[i];
-    }
-    dest->epot   = src.epot;
-    dest->fnorm  = src.fnorm;
-    dest->fmax   = src.fmax;
-    dest->a_fmax = src.a_fmax;
+    std::copy(fSrc.begin(), fSrc.end(), fDest.begin());
+    epot   = right.epot;
+    fnorm  = right.fnorm;
+    fmax   = right.fmax;
+    a_fmax = right.a_fmax;
+
+    return *this;
 }
 
 //! Initialize the energy minimization
@@ -435,6 +440,12 @@ static void init_em(FILE*                fplog,
 
     if (MASTER(cr))
     {
+        GMX_RELEASE_ASSERT(
+                (state_global->flags
+                 & ~(enumValueToBitMask(StateEntry::Lambda) | enumValueToBitMask(StateEntry::Box)))
+                        == enumValueToBitMask(StateEntry::X),
+                "We should have X set and possibly Lambda and Box, nothing else");
+
         state_global->ngtc = 0;
     }
     int*                fep_state = MASTER(cr) ? &state_global->fep_state : nullptr;
@@ -2117,9 +2128,9 @@ void LegacySimulator::do_lbfgs()
     em_state_t* sc   = &s2;
     em_state_t* last = &s3;
     /* Initialize by copying the state from ems (we could skip x and only resize f) */
-    copyEMStateContents(sa, ems);
-    copyEMStateContents(sa, ems);
-    copyEMStateContents(sc, ems);
+    *sa = ems;
+    *sb = ems;
+    *sc = ems;
 
     /* Print to log file */
     print_em_start(fplog, cr, walltime_accounting, wcycle, LBFGS);
@@ -2323,12 +2334,12 @@ void LegacySimulator::do_lbfgs()
         }
 
         // Before taking any steps along the line, store the old position
-        copyEMStateContents(last, ems);
+        *last            = ems;
         real*      lastx = static_cast<real*>(last->s.x.data()[0]);
         real*      lastf = static_cast<real*>(last->f.view().force().data()[0]);
         const real Epot0 = ems.epot;
 
-        copyEMStateContents(sa, ems);
+        *sa = ems;
 
         /* Take a step downhill.
          * In theory, we should find the actual minimum of the function in this
@@ -2503,14 +2514,14 @@ void LegacySimulator::do_lbfgs()
                     /* Replace c endpoint with b */
                     c = b;
                     /* copy state b to c */
-                    copyEMStateContents(sc, *sb);
+                    *sc = *sb;
                 }
                 else
                 {
                     /* Replace a endpoint with b */
                     a = b;
                     /* copy state b to a */
-                    copyEMStateContents(sa, *sb);
+                    *sa = *sb;
                 }
 
                 /*
@@ -2553,13 +2564,13 @@ void LegacySimulator::do_lbfgs()
             if (sc->epot < sa->epot)
             {
                 /* Use state C */
-                copyEMStateContents(&ems, *sc);
+                ems        = *sc;
                 step_taken = c;
             }
             else
             {
                 /* Use state A */
-                copyEMStateContents(&ems, *sa);
+                ems        = *sa;
                 step_taken = a;
             }
         }
@@ -2567,7 +2578,7 @@ void LegacySimulator::do_lbfgs()
         {
             /* found lower */
             /* Use state C */
-            copyEMStateContents(&ems, *sc);
+            ems        = *sc;
             step_taken = c;
         }
 

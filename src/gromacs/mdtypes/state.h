@@ -56,6 +56,7 @@
 #define GMX_MDTYPES_STATE_H
 
 #include <array>
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -264,24 +265,27 @@ public:
      */
     gmx::ArrayRef<gmx::RVec>& addRVecVector(const std::string& name);
 
-    //! Returns the list registered with name \p name or empty ArrayRef when not found
-    gmx::ArrayRef<gmx::RVec> rvecVector(const std::string& name)
+    /*! \brief Returns the list registered with name \p name or empty when not found
+     *
+     * The returned ArrayRef is invalidated by a called to \p changeNumAtoms().
+     */
+    std::optional<gmx::ArrayRef<gmx::RVec>> rvecVector(const std::string& name)
     {
-        for (const auto& rvecVectorEntry : rvecVectorEntries_)
+        auto it = rvecVectors_.find(name);
+        if (it != rvecVectors_.end())
         {
-            if (rvecVectorEntry.name == name)
-            {
-                return *rvecVectorEntry.arrayRef;
-            }
+            return std::optional<gmx::ArrayRef<gmx::RVec>>(it->second.second);
         }
-
-        return {};
+        else
+        {
+            return std::nullopt;
+        }
     }
 
     //! Returns a list of array refs for the RVec vectors
     gmx::ArrayRef<gmx::ArrayRef<gmx::RVec>> rvecVectors() { return rvecVectorArrayRefs_; }
 
-    //! Returns a list of array refs for the RVec vectors
+    //! Returns a list of const array refs for the RVec vectors
     gmx::ArrayRef<const gmx::ArrayRef<gmx::RVec>> rvecVectors() const
     {
         return rvecVectorArrayRefs_;
@@ -327,19 +331,11 @@ public:
     std::vector<double> pull_com_prev_step; //!< The COM of the previous step of each pull group
 
 private:
-    //! Collection of storage and information need for a single RVec vector entry
-    struct RVecVectorEntry
-    {
-        //! A padded vector of RVec for atoms
-        PaddedVector<gmx::RVec> rvecVector;
-        //! An arrayRef into rvecVector using a unique pointer so it can referenced permanently
-        std::unique_ptr<gmx::ArrayRef<gmx::RVec>> arrayRef;
-        //! Names for the vector
-        std::string name;
-    };
-    // The same indices in the next two vectors refer to the same rvecVector
+    //! Rebuilds rvecVectorArrayRefs_
+    void rebuildRVecVectorArrayRefs();
+
     //! A vector of padded RVec vectors with arrayRefs and names
-    std::vector<RVecVectorEntry> rvecVectorEntries_;
+    std::map<std::string, std::pair<PaddedVector<gmx::RVec>, gmx::ArrayRef<gmx::RVec>>> rvecVectors_;
     //! A vector of arrayRefs into rvecVectors_, useful for looping over vectors
     std::vector<gmx::ArrayRef<gmx::RVec>> rvecVectorArrayRefs_;
 

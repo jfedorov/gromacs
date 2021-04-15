@@ -108,7 +108,7 @@ TEST(StateRVecVectors, ArrayRefReferenceRemainsValid)
 
     EXPECT_EQ(state.rvecVectors().size(), 1);
 
-    EXPECT_EQ(ssize(arrayRefRef), numAtoms);
+    ASSERT_EQ(ssize(arrayRefRef), numAtoms);
 
     const int       testIndex = 1;
     const gmx::RVec testValue = { 3, 1, 2 };
@@ -119,7 +119,7 @@ TEST(StateRVecVectors, ArrayRefReferenceRemainsValid)
 
     EXPECT_EQ(state.rvecVectors().size(), 2);
 
-    EXPECT_EQ(ssize(arrayRefRef), numAtoms);
+    ASSERT_EQ(ssize(arrayRefRef), numAtoms);
 
     // Note that EXPECT_EQ does not seem to work for RVec
     for (int d = 0; d < DIM; d++)
@@ -148,7 +148,9 @@ TEST(StateRVecVectors, RetrievesRVecVector)
     const gmx::RVec testValue = { 3, 1, 2 };
     arrayRefRef[testIndex]    = testValue;
 
-    gmx::ArrayRef<const gmx::RVec> vec = state.rvecVector(testString2);
+    auto req = state.rvecVector(testString2);
+    ASSERT_EQ(req.has_value(), true);
+    gmx::ArrayRef<const gmx::RVec> vec = req.value();
 
     // Note that EXPECT_EQ does not seem to work for RVec
     for (int d = 0; d < DIM; d++)

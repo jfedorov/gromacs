@@ -169,12 +169,24 @@ void t_state::changeNumAtoms(const int numAtoms)
     {
         v.resizeWithPadding(natoms);
     }
-    for (gmx::index i = 0; i < gmx::ssize(rvecVectorEntries_); i++)
+    for (auto& rvecVector : rvecVectors_)
     {
-        auto& rvecVectorEntry = rvecVectorEntries_[i];
-        rvecVectorEntry.rvecVector.resizeWithPadding(natoms);
-        *rvecVectorEntry.arrayRef = makeArrayRef(rvecVectorEntry.rvecVector);
-        rvecVectorArrayRefs_[i]   = makeArrayRef(rvecVectorEntry.rvecVector);
+        rvecVector.second.first.resizeWithPadding(natoms);
+        rvecVector.second.second = makeArrayRef(rvecVector.second.first);
+    }
+
+    rebuildRVecVectorArrayRefs();
+}
+
+void t_state::rebuildRVecVectorArrayRefs()
+{
+    rvecVectorArrayRefs_.resize(rvecVectors_.size());
+
+    gmx::index i = 0;
+    for (auto it : rvecVectors_)
+    {
+        rvecVectorArrayRefs_[i] = it.second.second;
+        i++;
     }
 }
 
@@ -395,37 +407,33 @@ t_state::t_state() :
 }
 
 // We use a global mutex for locking access to the state during registration of extra RVec vectors
-static std::mutex registrationMutex;
+static std::mutex s_registrationMutex;
 
 gmx::ArrayRef<gmx::RVec>& t_state::addRVecVector(const std::string& name)
 {
-    std::lock_guard<std::mutex> registrationLock(registrationMutex);
+    std::lock_guard<std::mutex> registrationLock(s_registrationMutex);
 
-    for (const auto& rvecVectorEntry : rvecVectorEntries_)
+    auto [it, success] = rvecVectors_.insert({ name, { {}, {} } });
+    if (!success)
     {
-        if (rvecVectorEntry.name == name)
-        {
-            GMX_THROW(gmx::InvalidInputError(
-                    "addRVecVector() called with a name that is already present"));
-        }
+        GMX_THROW(gmx::InvalidInputError(
+                "addRVecVector() called with a name that is already present"));
     }
 
-    rvecVectorEntries_.push_back({ {}, nullptr, name });
-
-    auto& back       = rvecVectorEntries_.back();
-    auto& rvecVector = back.rvecVector;
+    auto& rvecVector = it->second.first;
     rvecVector.resizeWithPadding(natoms);
     // Clear the buffer, including the padding
     gmx::ArrayRef<gmx::RVec> viewWithPadding = rvecVector.arrayRefWithPadding().paddedArrayRef();
     const gmx::RVec          zeroVec         = { 0.0_real, 0.0_real, 0.0_real };
     std::fill(viewWithPadding.begin(), viewWithPadding.end(), zeroVec);
+    // Store the ArrayRef, so we can reference it permanently
+    it->second.second = makeArrayRef(rvecVector);
 
-    // Add the ArrayRef to the entry and the ArrayRef vectors
-    back.arrayRef = std::make_unique<gmx::ArrayRef<gmx::RVec>>(makeArrayRef(rvecVector));
-    rvecVectorArrayRefs_.push_back(makeArrayRef(rvecVector));
+    // Rebuild all the ArrayRefs, as the order might have changed
+    rebuildRVecVectorArrayRefs();
 
     // Return a reference to an object in a unique pointer so the reference remains valid
-    return *back.arrayRef;
+    return it->second.second;
 }
 
 void set_box_rel(const t_inputrec* ir, t_state* state)
