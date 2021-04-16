@@ -121,6 +121,15 @@ public:
         callBackFunctions_.emplace_back(callBackFunction);
     }
 
+    /*! \brief
+     * Remove all current subscribers
+     *
+     * Suits notifiers that are re-used */
+    void clearSubscribers() { callBackFunctions_.clear(); }
+
+    //! Return true if no subscribers exist
+    bool empty() { return callBackFunctions_.empty(); }
+
 private:
     std::vector<std::function<void(CallParameter)>> callBackFunctions_;
 };
