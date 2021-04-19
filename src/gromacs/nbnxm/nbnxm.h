@@ -376,10 +376,13 @@ public:
                                   gmx::ArrayRef<const int>       typeA,
                                   gmx::ArrayRef<const int>       typeB,
                                   t_lambda*                      fepvals,
-                                  gmx::ArrayRef<const real>      lambda,
-                                  gmx_enerdata_t*                enerd,
-                                  const gmx::StepWorkload&       stepWork,
-                                  t_nrnb*                        nrnb);
+                                  bool                           haveSoftCore,
+                                  int                            numLambdaPoints,
+                                  int                       numFreeEnergyPerturbationCouplingTypes,
+                                  gmx::ArrayRef<const real> lambda,
+                                  gmx_enerdata_t*           enerd,
+                                  const gmx::StepWorkload&  stepWork,
+                                  t_nrnb*                   nrnb);
 
     /*! \brief Add the forces stored in nbat to f, zeros the forces in nbat
      * \param [in] locality         Local or non-local

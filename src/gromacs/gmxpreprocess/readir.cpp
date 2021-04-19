@@ -695,13 +695,13 @@ void check_ir(const char*                    mdparin,
     {
         fep = ir->fepvals.get();
         sprintf(err_buf, "The soft-core power is %d and can only be 1 or 2", fep->sc_power);
-        CHECK(fep->sc_alpha != 0 && fep->sc_power != 1 && fep->sc_power != 2);
+        CHECK(fep->haveSoftCore() && fep->sc_power != 1 && fep->sc_power != 2);
 
         sprintf(err_buf,
                 "The soft-core sc-r-power is %d and can only be 6. (sc-r-power 48 is no longer "
                 "supported.)",
                 static_cast<int>(fep->sc_r_power));
-        CHECK(fep->sc_alpha != 0 && fep->sc_r_power != 6.0);
+        CHECK(fep->haveSoftCore() && fep->sc_r_power != 6.0);
 
         sprintf(err_buf,
                 "Can't use positive delta-lambda (%g) if initial state/lambda does not start at "
@@ -790,7 +790,7 @@ void check_ir(const char*                    mdparin,
             }
         }
 
-        if ((fep->sc_alpha > 0) && (!fep->bScCoul))
+        if ((fep->haveSoftCore()) && (!fep->bScCoul))
         {
             for (i = 0; i < fep->n_lambda; i++)
             {
@@ -801,7 +801,7 @@ void check_ir(const char*                    mdparin,
                         i,
                         fep->all_lambda[static_cast<int>(FreeEnergyPerturbationCouplingType::Vdw)][i],
                         fep->all_lambda[static_cast<int>(FreeEnergyPerturbationCouplingType::Coul)][i]);
-                CHECK((fep->sc_alpha > 0)
+                CHECK((fep->haveSoftCore())
                       && (((fep->all_lambda[static_cast<int>(FreeEnergyPerturbationCouplingType::Coul)][i] > 0.0)
                            && (fep->all_lambda[static_cast<int>(FreeEnergyPerturbationCouplingType::Coul)][i] < 1.0))
                           && ((fep->all_lambda[static_cast<int>(FreeEnergyPerturbationCouplingType::Vdw)][i] > 0.0)
@@ -1652,7 +1652,7 @@ static void do_fep_params(t_inputrec* ir, gmx::ArrayRef<std::string> fep_lambda,
             }
         }
     }
-    if ((bOneLambda) && (fep->sc_alpha > 0))
+    if ((bOneLambda) && (fep->haveSoftCore() > 0))
     {
         fep->bScCoul = TRUE;
     }
@@ -2658,7 +2658,7 @@ void get_ir(const char*     mdparin,
          * this check will not be triggered.
          */
         if (ir->efep != FreeEnergyPerturbationType::No && ir->fepvals->n_lambda == 0
-            && ir->fepvals->sc_alpha != 0
+            && ir->fepvals->haveSoftCore()
             && (couple_lambda_has_vdw_on(opts->couple_lam0) && couple_lambda_has_vdw_on(opts->couple_lam1)))
         {
             warning(wi,
@@ -4526,7 +4526,7 @@ void triple_check(const char* mdparin, t_inputrec* ir, gmx_mtop_t* sys, warninp_
                       "constant by hand.");
     }
 
-    if (ir->efep != FreeEnergyPerturbationType::No && ir->fepvals->sc_alpha != 0
+    if (ir->efep != FreeEnergyPerturbationType::No && ir->fepvals->haveSoftCore()
         && !gmx_within_tol(sys->ffparams.reppow, 12.0, 10 * GMX_DOUBLE_EPS))
     {
         gmx_fatal(FARGS, "Soft-core interactions are only supported with VdW repulsion power 12");

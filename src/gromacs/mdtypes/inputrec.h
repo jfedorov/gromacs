@@ -113,6 +113,8 @@ struct t_simtemp
 
 struct t_lambda
 {
+    //! Whether or not soft core potentials are used
+    bool haveSoftCore() const { return sc_alpha != 0; }
     //! The frequency for calculating dhdl
     int nstdhdl;
     //! Fractional value of lambda (usually will use init_fep_state, this will only be for slow growth, and for legacy free energy code. Only has a valid value if positive)

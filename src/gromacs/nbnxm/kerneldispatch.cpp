@@ -506,10 +506,13 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
                                                   gmx::ArrayRef<const int>   typeA,
                                                   gmx::ArrayRef<const int>   typeB,
                                                   t_lambda*                  fepvals,
-                                                  gmx::ArrayRef<const real>  lambda,
-                                                  gmx_enerdata_t*            enerd,
-                                                  const gmx::StepWorkload&   stepWork,
-                                                  t_nrnb*                    nrnb)
+                                                  const bool                 haveSoftCore,
+                                                  const int                  numLambdaPoints,
+                                                  const int numFreeEnergyPerturbationCouplingTypes,
+                                                  gmx::ArrayRef<const real> lambda,
+                                                  gmx_enerdata_t*           enerd,
+                                                  const gmx::StepWorkload&  stepWork,
+                                                  t_nrnb*                   nrnb)
 {
     const auto nbl_fep = pairlistSets().pairlistSet(iLocality).fepLists();
 
@@ -577,7 +580,7 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
         GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR
     }
 
-    if (fepvals->sc_alpha != 0)
+    if (haveSoftCore)
     {
         enerd->dvdl_nonlin[FreeEnergyPerturbationCouplingType::Vdw] +=
                 dvdl_nb[FreeEnergyPerturbationCouplingType::Vdw];
@@ -595,7 +598,7 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
     /* If we do foreign lambda and we have soft-core interactions
      * we have to recalculate the (non-linear) energies contributions.
      */
-    if (fepvals->n_lambda > 0 && stepWork.computeDhdl && fepvals->sc_alpha != 0)
+    if (numLambdaPoints > 0 && stepWork.computeDhdl && haveSoftCore)
     {
         gmx::EnumerationArray<FreeEnergyPerturbationCouplingType, real> lam_i;
         kernelFlags = (donb_flags & ~(GMX_NONBONDED_DO_FORCE | GMX_NONBONDED_DO_SHIFTFORCE))
@@ -610,7 +613,7 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
         for (gmx::index i = 0; i < 1 + enerd->foreignLambdaTerms.numLambdas(); i++)
         {
             std::fill(std::begin(dvdl_nb), std::end(dvdl_nb), 0);
-            for (int j = 0; j < static_cast<int>(FreeEnergyPerturbationCouplingType::Count); j++)
+            for (int j = 0; j < numFreeEnergyPerturbationCouplingTypes; j++)
             {
                 lam_i[j] = (i == 0 ? lambda[j] : fepvals->all_lambda[j][i - 1]);
             }
