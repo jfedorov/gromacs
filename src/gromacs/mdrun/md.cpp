@@ -142,6 +142,7 @@
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
 #include "gromacs/trajectory/trajectoryframe.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/fatalerror.h"
@@ -521,7 +522,7 @@ void gmx::LegacySimulator::do_md()
 
     preparePrevStepPullCom(ir,
                            pull_work,
-                           gmx::arrayRefFromArray(md->massT, md->nr),
+                           md->massT ? gmx::arrayRefFromArray(md->massT, md->nr) : gmx::ArrayRef<real>{},
                            state,
                            state_global,
                            cr,
@@ -1585,14 +1586,17 @@ void gmx::LegacySimulator::do_md()
                  */
                 if (fr->useMts && bCalcVir && constr != nullptr)
                 {
-                    upd.update_for_constraint_virial(*ir,
-                                                     md->homenr,
-                                                     md->havePartiallyFrozenAtoms,
-                                                     gmx::arrayRefFromArray(md->invmass, md->nr),
-                                                     gmx::arrayRefFromArray(md->invMassPerDim, md->nr),
-                                                     *state,
-                                                     f.view().forceWithPadding(),
-                                                     *ekind);
+                    upd.update_for_constraint_virial(
+                            *ir,
+                            md->homenr,
+                            md->havePartiallyFrozenAtoms,
+                            md->invmass ? gmx::arrayRefFromArray(md->invmass, md->nr)
+                                        : gmx::ArrayRef<real>{},
+                            md->invMassPerDim ? gmx::arrayRefFromArray(md->invMassPerDim, md->nr)
+                                              : gmx::ArrayRef<rvec>{},
+                            *state,
+                            f.view().forceWithPadding(),
+                            *ekind);
 
                     constrain_coordinates(constr,
                                           do_log,
@@ -1613,9 +1617,12 @@ void gmx::LegacySimulator::do_md()
                                   step,
                                   md->homenr,
                                   md->havePartiallyFrozenAtoms,
-                                  gmx::arrayRefFromArray(md->ptype, md->nr),
-                                  gmx::arrayRefFromArray(md->invmass, md->nr),
-                                  gmx::arrayRefFromArray(md->invMassPerDim, md->nr),
+                                  md->ptype ? gmx::arrayRefFromArray(md->ptype, md->nr)
+                                            : gmx::ArrayRef<ParticleType>{},
+                                  md->invmass ? gmx::arrayRefFromArray(md->invmass, md->nr)
+                                              : gmx::ArrayRef<real>{},
+                                  md->invMassPerDim ? gmx::arrayRefFromArray(md->invMassPerDim, md->nr)
+                                                    : gmx::ArrayRef<rvec>{},
                                   state,
                                   forceCombined,
                                   fcdata,
@@ -1641,8 +1648,10 @@ void gmx::LegacySimulator::do_md()
                                           step,
                                           &dvdl_constr,
                                           md->homenr,
-                                          gmx::arrayRefFromArray(md->ptype, md->nr),
-                                          gmx::arrayRefFromArray(md->invmass, md->nr),
+                                          md->ptype ? gmx::arrayRefFromArray(md->ptype, md->nr)
+                                                    : gmx::ArrayRef<ParticleType>{},
+                                          md->invmass ? gmx::arrayRefFromArray(md->invmass, md->nr)
+                                                      : gmx::ArrayRef<real>{},
                                           state,
                                           cr,
                                           nrnb,

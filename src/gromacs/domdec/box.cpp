@@ -283,9 +283,9 @@ void set_ddbox(const gmx_domdec_t&            dd,
 {
     if (!masterRankHasTheSystemState || DDMASTER(dd))
     {
-        bool needToReduceCoordinateData     = (!masterRankHasTheSystemState && dd.nnodes > 1);
-        gmx::ArrayRef<const gmx::RVec> xRef = constArrayRefFromArray(
-                x.data(), masterRankHasTheSystemState ? x.size() : dd.comm->atomRanges.numHomeAtoms());
+        bool needToReduceCoordinateData = (!masterRankHasTheSystemState && dd.nnodes > 1);
+        gmx::ArrayRef<const gmx::RVec> xRef =
+                masterRankHasTheSystemState ? x : x.subArray(0, dd.comm->atomRanges.numHomeAtoms());
 
         low_set_ddbox(dd.unitCellInfo.npbcdim,
                       dd.unitCellInfo.numBoundedDimensions,

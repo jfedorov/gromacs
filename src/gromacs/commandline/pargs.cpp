@@ -543,7 +543,8 @@ gmx_bool parse_common_args(int*               argc,
                                "only get called only on the master rank");
             gmx::CommandLineHelpWriter(options)
                     .setHelpText(gmx::constArrayRefFromArray<const char*>(desc, ndesc))
-                    .setKnownIssues(gmx::constArrayRefFromArray(bugs, nbugs))
+                    .setKnownIssues((bugs != nullptr) ? gmx::constArrayRefFromArray(bugs, nbugs)
+                                                      : gmx::ArrayRef<const char*>{})
                     .writeHelp(*context);
             return FALSE;
         }

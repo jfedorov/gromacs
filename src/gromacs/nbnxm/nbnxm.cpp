@@ -43,6 +43,7 @@
 
 #include "gmxpre.h"
 
+#include "gromacs/utility/arrayref.h"
 #include "nbnxm.h"
 
 #include "gromacs/domdec/domdec_struct.h"
@@ -129,7 +130,7 @@ gmx::ArrayRef<const int> nonbonded_verlet_t::getLocalAtomOrder() const
 
     const int numIndices = grid.atomIndexEnd() - grid.firstAtomInColumn(0);
 
-    return gmx::constArrayRefFromArray(pairSearch_->gridSet().atomIndices().data(), numIndices);
+    return gmx::ArrayRef<const int>(pairSearch_->gridSet().atomIndices()).subArray(0, numIndices);
 }
 
 void nonbonded_verlet_t::setLocalAtomOrder() const

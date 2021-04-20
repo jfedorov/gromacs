@@ -750,8 +750,8 @@ void calc_listed_lambda(const InteractionDefinitions& idef,
             const InteractionList& ilist = idef.il[ftype];
             /* Create a temporary iatom list with only perturbed interactions */
             const int           numNonperturbed = idef.numNonperturbedInteractions[ftype];
-            ArrayRef<const int> iatomsPerturbed = gmx::constArrayRefFromArray(
-                    ilist.iatoms.data() + numNonperturbed, ilist.size() - numNonperturbed);
+            ArrayRef<const int> iatomsPerturbed =
+                    gmx::ArrayRef<const int>(ilist.iatoms).subArray(numNonperturbed, ilist.size() - numNonperturbed);
             if (!iatomsPerturbed.empty())
             {
                 /* Set the work range of thread 0 to the perturbed bondeds */

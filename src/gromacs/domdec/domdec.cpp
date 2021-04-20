@@ -329,7 +329,7 @@ void dd_move_x(gmx_domdec_t* dd, const matrix box, gmx::ArrayRef<gmx::RVec> x, g
             gmx::ArrayRef<gmx::RVec> receiveBuffer;
             if (cd->receiveInPlace)
             {
-                receiveBuffer = gmx::arrayRefFromArray(x.data() + nat_tot, ind.nrecv[nzone + 1]);
+                receiveBuffer = x.subArray(nat_tot, ind.nrecv[nzone + 1]);
             }
             else
             {
@@ -396,7 +396,7 @@ void dd_move_f(gmx_domdec_t* dd, gmx::ForceWithShiftForces* forceWithShiftForces
             gmx::ArrayRef<gmx::RVec> sendBuffer;
             if (cd.receiveInPlace)
             {
-                sendBuffer = gmx::arrayRefFromArray(f.data() + nat_tot, ind.nrecv[nzone + 1]);
+                sendBuffer = f.subArray(nat_tot, ind.nrecv[nzone + 1]);
             }
             else
             {

@@ -347,7 +347,7 @@ private:
             buffer_.resize(numElements);
         }
 
-        return gmx::arrayRefFromArray(buffer_.data(), numElements);
+        return gmx::ArrayRef<T>(buffer_).subArray(0, numElements);
     }
 
     /*! \brief Acquire the buffer for use with size set to \p numElements, the elements are undefined */

@@ -159,8 +159,10 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
         constr->setConstraints(top,
                                mdatoms->nr,
                                mdatoms->homenr,
-                               gmx::arrayRefFromArray(mdatoms->massT, mdatoms->nr),
-                               gmx::arrayRefFromArray(mdatoms->invmass, mdatoms->nr),
+                               mdatoms->massT ? gmx::arrayRefFromArray(mdatoms->massT, mdatoms->nr)
+                                              : gmx::ArrayRef<real>{},
+                               mdatoms->invmass ? gmx::arrayRefFromArray(mdatoms->invmass, mdatoms->nr)
+                                                : gmx::ArrayRef<real>{},
                                mdatoms->nMassPerturbed != 0,
                                mdatoms->lambda,
                                mdatoms->cFREEZE ? gmx::arrayRefFromArray(mdatoms->cFREEZE, mdatoms->nr)

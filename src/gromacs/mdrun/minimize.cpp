@@ -989,7 +989,7 @@ void EnergyEvaluator::run(em_state_t* ems, rvec mu_tot, tensor vir, tensor pres,
     if (bufferSize > 0 && bNS)
     {
         ArrayRef<const RVec> localCoordinates =
-                constArrayRefFromArray(ems->s.x.data(), mdAtoms->mdatoms()->homenr);
+                ArrayRef<const RVec>(ems->s.x).subArray(0, mdAtoms->mdatoms()->homenr);
         setCoordinates(&pairSearchCoordinates, localCoordinates);
     }
 

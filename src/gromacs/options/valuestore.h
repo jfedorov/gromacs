@@ -113,7 +113,9 @@ public:
     int            valueCount() override { return static_cast<int>(store_->size()); }
     ArrayRef<bool> values() override
     {
-        return arrayRefFromArray(reinterpret_cast<bool*>(boolStore_.data()), boolStore_.size());
+        return boolStore_.empty() ? ArrayRef<bool>{}
+                                  : arrayRefFromArray(reinterpret_cast<bool*>(boolStore_.data()),
+                                                      boolStore_.size());
     }
     void clear() override
     {

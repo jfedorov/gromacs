@@ -49,6 +49,7 @@
 #include "gromacs/domdec/domdec_network.h"
 #include "gromacs/math/vec.h"
 #include "gromacs/mdtypes/state.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/fatalerror.h"
 
@@ -73,7 +74,7 @@ static void dd_collect_cg(gmx_domdec_t*            dd,
     if (ddpCount == dd->ddp_count)
     {
         /* The local state and DD are in sync, use the DD indices */
-        atomGroups = gmx::constArrayRefFromArray(dd->globalAtomGroupIndices.data(), dd->ncg_home);
+        atomGroups = gmx::ArrayRef<const int>(dd->globalAtomGroupIndices).subArray(0, dd->ncg_home);
         nat_home   = dd->comm->atomRanges.numHomeAtoms();
     }
     else if (ddpCountCgGl == ddpCount)
@@ -106,7 +107,7 @@ static void dd_collect_cg(gmx_domdec_t*            dd,
             int   numGroups    = ma->intBuffer[2 * rank];
 
             domainGroups.atomGroups =
-                    gmx::constArrayRefFromArray(ma->atomGroups.data() + groupOffset, numGroups);
+                    gmx::ArrayRef<const int>(ma->atomGroups).subArray(groupOffset, numGroups);
 
             domainGroups.numAtoms = ma->intBuffer[2 * rank + 1];
 

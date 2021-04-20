@@ -654,8 +654,10 @@ static void computeSpecialForces(FILE*                          fplog,
         gmx::ForceProviderInput forceProviderInput(
                 x,
                 mdatoms->homenr,
-                gmx::arrayRefFromArray(mdatoms->chargeA, mdatoms->homenr),
-                gmx::arrayRefFromArray(mdatoms->massT, mdatoms->homenr),
+                mdatoms->chargeA ? gmx::arrayRefFromArray(mdatoms->chargeA, mdatoms->homenr)
+                                 : gmx::ArrayRef<real>{},
+                mdatoms->massT ? gmx::arrayRefFromArray(mdatoms->massT, mdatoms->homenr)
+                               : gmx::ArrayRef<real>{},
                 t,
                 box,
                 *cr);
@@ -1406,9 +1408,12 @@ void do_force(FILE*                               fplog,
             wallcycle_sub_stop(wcycle, WallCycleSubCounter::NBSGridNonLocal);
         }
 
-        nbv->setAtomProperties(gmx::constArrayRefFromArray(mdatoms->typeA, mdatoms->nr),
-                               gmx::constArrayRefFromArray(mdatoms->chargeA, mdatoms->nr),
-                               fr->cginfo);
+        nbv->setAtomProperties(
+                mdatoms->typeA ? gmx::constArrayRefFromArray(mdatoms->typeA, mdatoms->nr)
+                               : gmx::ArrayRef<const int>{},
+                mdatoms->chargeA ? gmx::constArrayRefFromArray(mdatoms->chargeA, mdatoms->nr)
+                                 : gmx::ArrayRef<const real>{},
+                fr->cginfo);
 
         wallcycle_stop(wcycle, WallCycleCounter::NS);
 

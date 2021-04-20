@@ -2113,8 +2113,8 @@ static void setup_dd_communication(gmx_domdec_t* dd, matrix box, gmx_ddbox_t* dd
             gmx::ArrayRef<int> integerBufferRef;
             if (cd->receiveInPlace)
             {
-                integerBufferRef = gmx::arrayRefFromArray(
-                        dd->globalAtomGroupIndices.data() + pos_cg, ind->nrecv[nzone]);
+                integerBufferRef =
+                        gmx::ArrayRef<int>(dd->globalAtomGroupIndices).subArray(pos_cg, ind->nrecv[nzone]);
             }
             else
             {
@@ -3046,7 +3046,8 @@ void dd_partition_system(FILE*                     fplog,
     if (comm->systemInfo.useUpdateGroups)
     {
         comm->updateGroupsCog->addCogs(
-                gmx::arrayRefFromArray(dd->globalAtomGroupIndices.data(), dd->ncg_home), state_local->x);
+                gmx::ArrayRef<int>(dd->globalAtomGroupIndices).subArray(0, dd->ncg_home),
+                state_local->x);
     }
 
     /* Check if we should sort the charge groups */
@@ -3070,7 +3071,7 @@ void dd_partition_system(FILE*                     fplog,
         if (comm->systemInfo.useUpdateGroups)
         {
             comm->updateGroupsCog->addCogs(
-                    gmx::arrayRefFromArray(dd->globalAtomGroupIndices.data(), dd->ncg_home),
+                    gmx::ArrayRef<int>(dd->globalAtomGroupIndices).subArray(0, dd->ncg_home),
                     state_local->x);
         }
 

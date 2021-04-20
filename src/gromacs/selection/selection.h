@@ -336,7 +336,10 @@ public:
     //! Returns atom indices of all atoms in the selection.
     ArrayRef<const int> atomIndices() const
     {
-        return constArrayRefFromArray(sel_->rawPositions_.m.mapb.a, sel_->rawPositions_.m.mapb.nra);
+        return (sel_->rawPositions_.m.mapb.a != nullptr)
+                       ? constArrayRefFromArray(sel_->rawPositions_.m.mapb.a,
+                                                sel_->rawPositions_.m.mapb.nra)
+                       : ArrayRef<const int>{};
     }
     //! Number of positions in the selection.
     int posCount() const { return data().posCount(); }
@@ -345,7 +348,9 @@ public:
     //! Returns coordinates for this selection as a continuous array.
     ArrayRef<const rvec> coordinates() const
     {
-        return constArrayRefFromArray(data().rawPositions_.x, posCount());
+        return (data().rawPositions_.x != nullptr)
+                       ? constArrayRefFromArray(data().rawPositions_.x, posCount())
+                       : ArrayRef<const rvec>{};
     }
     //! Returns whether velocities are available for this selection.
     bool hasVelocities() const { return data().rawPositions_.v != nullptr; }

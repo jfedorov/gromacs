@@ -66,6 +66,7 @@
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/timing/wallcycle.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/smalloc.h"
@@ -217,7 +218,7 @@ void calculateLongRangeNonbondeds(t_forcerec*                    fr,
                     wallcycle_start(wcycle, WallCycleCounter::PmeMesh);
                     status = gmx_pme_do(
                             fr->pmedata,
-                            gmx::constArrayRefFromArray(coordinates.data(), md->homenr - fr->n_tpi),
+                            coordinates.subArray(0, md->homenr - fr->n_tpi),
                             forceWithVirial->force_,
                             md->chargeA ? gmx::constArrayRefFromArray(md->chargeA, md->nr)
                                         : gmx::ArrayRef<const real>{},
