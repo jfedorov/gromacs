@@ -221,7 +221,7 @@ transferIndicesImpl(const ListedTypeData<FiveCenterType>& interactions, Interact
 
 template<template<class> class Container, class InteractionType>
 void transferIndices(const Container<InteractionType>&  interactionData,
-                     InteractionDefinitions* idef,
+                     [[maybe_unused]] InteractionDefinitions* idef,
                      [[maybe_unused]] int offset)
 {
     if constexpr (ListedTypeIsImplemented<InteractionType>{})
