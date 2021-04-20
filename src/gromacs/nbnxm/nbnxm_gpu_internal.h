@@ -44,8 +44,10 @@
 #ifndef GMX_NBNXM_NBNXM_GPU_INTERNAL_H
 #define GMX_NBNXM_NBNXM_GPU_INTERNAL_H
 
+#include "gromacs/hardware/device_information.h"
 #include "gromacs/mdtypes/locality.h"
 #include "gromacs/nbnxm/gpu_types_common.h"
+#include "gromacs/timing/gpu_timing.h"
 #include "gromacs/utility/range.h"
 
 #if GMX_GPU_CUDA
@@ -100,6 +102,141 @@ static inline gmx::Range<int> getGpuAtomRange(const NBAtomDataGpu* atomData, con
         GMX_THROW(gmx::InconsistentInputError(
                 "Only Local and NonLocal atom locities can be used to get atom ranges in NBNXM."));
     }
+}
+
+static inline void issueClFlushInStream(const DeviceStream& deviceStream)
+{
+#if GMX_GPU_OPENCL
+    /* Based on the v1.2 section 5.13 of the OpenCL spec, a flush is needed
+     * in the stream after marking an event in it in order to be able to sync with
+     * the event from another stream.
+     */
+    cl_int cl_error = clFlush(deviceStream.stream());
+    if (cl_error != CL_SUCCESS)
+    {
+        GMX_THROW(gmx::InternalError("clFlush failed: " + ocl_get_error_string(cl_error)));
+    }
+#else
+    GMX_UNUSED_VALUE(deviceStream);
+#endif
+}
+
+static inline void init_timings(gmx_wallclock_gpu_nbnxn_t* t)
+{
+    t->nb_h2d_t = 0.0;
+    t->nb_d2h_t = 0.0;
+    t->nb_c     = 0;
+    t->pl_h2d_t = 0.0;
+    t->pl_h2d_c = 0;
+    for (int i = 0; i < 2; i++)
+    {
+        for (int j = 0; j < 2; j++)
+        {
+            t->ktime[i][j].t = 0.0;
+            t->ktime[i][j].c = 0;
+        }
+    }
+    t->pruneTime.c        = 0;
+    t->pruneTime.t        = 0.0;
+    t->dynamicPruneTime.c = 0;
+    t->dynamicPruneTime.t = 0.0;
+}
+
+static inline void init_ewald_coulomb_force_table(const EwaldCorrectionTables& tables,
+                                                  NBParamGpu*                  nbp,
+                                                  const DeviceContext&         deviceContext)
+{
+    if (nbp->coulomb_tab)
+    {
+        destroyParamLookupTable(&nbp->coulomb_tab, nbp->coulomb_tab_texobj);
+    }
+
+    nbp->coulomb_tab_scale = tables.scale;
+    initParamLookupTable(
+            &nbp->coulomb_tab, &nbp->coulomb_tab_texobj, tables.tableF.data(), tables.tableF.size(), deviceContext);
+}
+
+static inline ElecType nbnxn_gpu_pick_ewald_kernel_type(const interaction_const_t& ic,
+                                                        const DeviceInformation gmx_unused& deviceInfo)
+{
+    bool bTwinCut = (ic.rcoulomb != ic.rvdw);
+
+    /* Benchmarking/development environment variables to force the use of
+       analytical or tabulated Ewald kernel. */
+    const bool forceAnalyticalEwald = (getenv("GMX_GPU_NB_ANA_EWALD") != nullptr);
+    const bool forceTabulatedEwald  = (getenv("GMX_GPU_NB_TAB_EWALD") != nullptr);
+    const bool forceTwinCutoffEwald = (getenv("GMX_GPU_NB_EWALD_TWINCUT") != nullptr);
+
+    if (forceAnalyticalEwald && forceTabulatedEwald)
+    {
+        gmx_incons(
+                "Both analytical and tabulated Ewald GPU non-bonded kernels "
+                "requested through environment variables.");
+    }
+
+    /* By default, use analytical Ewald except with CUDA on NVIDIA CC 7.0 and 8.0.
+     */
+    const bool c_useTabulatedEwaldDefault =
+#if GMX_GPU_CUDA
+            (deviceInfo.prop.major == 7 && deviceInfo.prop.minor == 0)
+            || (deviceInfo.prop.major == 8 && deviceInfo.prop.minor == 0);
+#else
+            false;
+#endif
+    bool bUseAnalyticalEwald = !c_useTabulatedEwaldDefault;
+    if (forceAnalyticalEwald)
+    {
+        bUseAnalyticalEwald = true;
+        if (debug)
+        {
+            fprintf(debug, "Using analytical Ewald GPU kernels\n");
+        }
+    }
+    else if (forceTabulatedEwald)
+    {
+        bUseAnalyticalEwald = false;
+
+        if (debug)
+        {
+            fprintf(debug, "Using tabulated Ewald GPU kernels\n");
+        }
+    }
+
+    /* Use twin cut-off kernels if requested by bTwinCut or the env. var.
+       forces it (use it for debugging/benchmarking only). */
+    if (!bTwinCut && !forceTwinCutoffEwald)
+    {
+        return bUseAnalyticalEwald ? ElecType::EwaldAna : ElecType::EwaldTab;
+    }
+    else
+    {
+        return bUseAnalyticalEwald ? ElecType::EwaldAnaTwin : ElecType::EwaldTabTwin;
+    }
+}
+
+
+static inline void set_cutoff_parameters(NBParamGpu*                nbp,
+                                         const interaction_const_t& ic,
+                                         const PairlistParams&      listParams)
+{
+    nbp->ewald_beta        = ic.ewaldcoeff_q;
+    nbp->sh_ewald          = ic.sh_ewald;
+    nbp->epsfac            = ic.epsfac;
+    nbp->two_k_rf          = 2.0 * ic.reactionFieldCoefficient;
+    nbp->c_rf              = ic.reactionFieldShift;
+    nbp->rvdw_sq           = ic.rvdw * ic.rvdw;
+    nbp->rcoulomb_sq       = ic.rcoulomb * ic.rcoulomb;
+    nbp->rlistOuter_sq     = listParams.rlistOuter * listParams.rlistOuter;
+    nbp->rlistInner_sq     = listParams.rlistInner * listParams.rlistInner;
+    nbp->useDynamicPruning = listParams.useDynamicPruning;
+
+    nbp->sh_lj_ewald   = ic.sh_lj_ewald;
+    nbp->ewaldcoeff_lj = ic.ewaldcoeff_lj;
+
+    nbp->rvdw_switch      = ic.rvdw_switch;
+    nbp->dispersion_shift = ic.dispersion_shift;
+    nbp->repulsion_shift  = ic.repulsion_shift;
+    nbp->vdw_switch       = ic.vdw_switch;
 }
 
 /*! \brief Sync the nonlocal stream with dependent tasks in the local queue.

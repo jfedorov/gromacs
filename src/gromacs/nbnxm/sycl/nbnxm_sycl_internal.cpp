@@ -35,21 +35,18 @@
 
 /*! \internal \file
  *  \brief
- *  Stubs of functions that must be defined by nbnxm sycl implementation.
+ *  Data management and kernel launch functions for nbnxm sycl.
  *
  *  \ingroup module_nbnxm
  */
 #include "gmxpre.h"
 
-#include "gromacs/gpu_utils/pmalloc.h"
-#include "gromacs/hardware/device_information.h"
-#include "gromacs/mdtypes/interaction_const.h"
-#include "gromacs/nbnxm/atomdata.h"
-#include "gromacs/nbnxm/nbnxm_gpu.h"
 #include "gromacs/nbnxm/nbnxm_gpu_internal.h"
-#include "gromacs/pbcutil/ishift.h"
+#include "gromacs/nbnxm/nbnxm_gpu.h"
 #include "gromacs/utility/exceptions.h"
 
+#include "nbnxm_sycl_kernel.h"
+#include "nbnxm_sycl_kernel_pruneonly.h"
 #include "nbnxm_sycl_types.h"
 
 namespace Nbnxm
@@ -76,6 +73,91 @@ int gpu_min_ci_balanced(NbnxmGpu* nb)
     const cl::sycl::device device = nb->deviceContext_->deviceInfo().syclDevice;
     const int numComputeUnits     = device.get_info<cl::sycl::info::device::max_compute_units>();
     return balancedFactor * numComputeUnits;
+}
+
+void gpu_launch_kernel_pruneonly(NbnxmGpu* nb, const InteractionLocality iloc, const int numParts)
+{
+    gpu_plist* plist = nb->plist[iloc];
+
+    if (plist->haveFreshList)
+    {
+        GMX_ASSERT(numParts == 1, "With first pruning we expect 1 part");
+
+        /* Set rollingPruningNumParts to signal that it is not set */
+        plist->rollingPruningNumParts = 0;
+        plist->rollingPruningPart     = 0;
+    }
+    else
+    {
+        if (plist->rollingPruningNumParts == 0)
+        {
+            plist->rollingPruningNumParts = numParts;
+        }
+        else
+        {
+            GMX_ASSERT(numParts == plist->rollingPruningNumParts,
+                       "It is not allowed to change numParts in between list generation steps");
+        }
+    }
+
+    /* Use a local variable for part and update in plist, so we can return here
+     * without duplicating the part increment code.
+     */
+    const int part = plist->rollingPruningPart;
+
+    plist->rollingPruningPart++;
+    if (plist->rollingPruningPart >= plist->rollingPruningNumParts)
+    {
+        plist->rollingPruningPart = 0;
+    }
+
+    /* Compute the number of list entries to prune in this pass */
+    const int numSciInPart = (plist->nsci - part) / numParts;
+
+    /* Don't launch the kernel if there is no work to do */
+    if (numSciInPart <= 0)
+    {
+        plist->haveFreshList = false;
+        return;
+    }
+
+    launchNbnxmKernelPruneOnly(nb, iloc, numParts, part, numSciInPart);
+
+    if (plist->haveFreshList)
+    {
+        plist->haveFreshList = false;
+        nb->didPrune[iloc]   = true; // Mark that pruning has been done
+    }
+    else
+    {
+        nb->didRollingPrune[iloc] = true; // Mark that rolling pruning has been done
+    }
+}
+
+void gpu_launch_kernel(NbnxmGpu* nb, const gmx::StepWorkload& stepWork, const Nbnxm::InteractionLocality iloc)
+{
+    const NBParamGpu* nbp   = nb->nbparam;
+    gpu_plist*        plist = nb->plist[iloc];
+
+    if (canSkipNonbondedWork(*nb, iloc))
+    {
+        plist->haveFreshList = false;
+        return;
+    }
+
+    if (nbp->useDynamicPruning && plist->haveFreshList)
+    {
+        // Prunes for rlistOuter and rlistInner, sets plist->haveFreshList=false
+        gpu_launch_kernel_pruneonly(nb, iloc, 1);
+    }
+
+    if (plist->nsci == 0)
+    {
+        /* Don't launch an empty local kernel */
+        return;
+    }
+
+    launchNbnxmKernel(nb, stepWork, iloc);
 }
 
 } // namespace Nbnxm

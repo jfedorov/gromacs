@@ -41,9 +41,10 @@
  * \ingroup module_nbnxm
  */
 
-#ifndef GMX_NBNXM_GPU_JIT_SUPPORT_H
-#define GMX_NBNXM_GPU_JIT_SUPPORT_H
+#ifndef GMX_NBNXM_OPENCL_NBNXM_OCL_JIT_SUPPORT_H
+#define GMX_NBNXM_OPENCL_NBNXM_OCL_JIT_SUPPORT_H
 
+#include "gromacs/gpu_utils/gpu_macros.h"
 #include "gromacs/utility/basedefinitions.h"
 
 struct NbnxmGpu;
@@ -51,4 +52,4 @@ struct NbnxmGpu;
 /*! \brief Handles any JIT compilation of nbnxn kernels for the selected device */
 OPENCL_FUNC_QUALIFIER void nbnxn_gpu_compile_kernels(NbnxmGpu gmx_unused* nb) OPENCL_FUNC_TERM;
 
-#endif
+#endif // GMX_NBNXM_OPENCL_NBNXM_OCL_JIT_SUPPORT_H

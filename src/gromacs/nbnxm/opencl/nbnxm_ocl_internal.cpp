@@ -78,6 +78,7 @@
 #include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/nbnxm/nbnxm_gpu.h"
 #include "gromacs/nbnxm/nbnxm_gpu_internal.h"
+#include "gromacs/nbnxm/opencl/nbnxm_ocl_jit_support.h"
 #include "gromacs/nbnxm/pairlist.h"
 #include "gromacs/timing/gpu_timing.h"
 #include "gromacs/utility/cstringutil.h"
@@ -94,6 +95,158 @@ namespace Nbnxm
 static constexpr int c_clSize = c_nbnxnGpuClusterSize;
 //@}
 
+/*! \brief Copies of values from cl_driver_diagnostics_intel.h,
+ * which isn't guaranteed to be available. */
+/**@{*/
+#define CL_CONTEXT_SHOW_DIAGNOSTICS_INTEL 0x4106
+#define CL_CONTEXT_DIAGNOSTICS_LEVEL_GOOD_INTEL 0x1
+#define CL_CONTEXT_DIAGNOSTICS_LEVEL_BAD_INTEL 0x2
+#define CL_CONTEXT_DIAGNOSTICS_LEVEL_NEUTRAL_INTEL 0x4
+/**@}*/
+
+/*! \brief This parameter should be determined heuristically from the
+ * kernel execution times
+ *
+ * This value is best for small systems on a single AMD Radeon R9 290X
+ * (and about 5% faster than 40, which is the default for CUDA
+ * devices). Larger simulation systems were quite insensitive to the
+ * value of this parameter.
+ */
+static unsigned int gpu_min_ci_balanced_factor = 50;
+
+/*! \brief Initializes the OpenCL kernel pointers of the nbnxn_ocl_ptr_t input data structure. */
+static cl_kernel nbnxn_gpu_create_kernel(NbnxmGpu* nb, const char* kernel_name)
+{
+    cl_kernel kernel;
+    cl_int    cl_error;
+
+    kernel = clCreateKernel(nb->dev_rundata->program, kernel_name, &cl_error);
+    if (CL_SUCCESS != cl_error)
+    {
+        gmx_fatal(FARGS,
+                  "Failed to create kernel '%s' for GPU #%s: OpenCL error %d",
+                  kernel_name,
+                  nb->deviceContext_->deviceInfo().device_name,
+                  cl_error);
+    }
+
+    return kernel;
+}
+
+/*! \brief Initializes the OpenCL kernel pointers of the nbnxn_ocl_ptr_t input data structure. */
+static void nbnxn_gpu_init_kernels(NbnxmGpu* nb)
+{
+    /* Init to 0 main kernel arrays */
+    /* They will be later on initialized in select_nbnxn_kernel */
+    // TODO: consider always creating all variants of the kernels here so that there is no
+    // need for late call to clCreateKernel -- if that gives any advantage?
+    memset(nb->kernel_ener_noprune_ptr, 0, sizeof(nb->kernel_ener_noprune_ptr));
+    memset(nb->kernel_ener_prune_ptr, 0, sizeof(nb->kernel_ener_prune_ptr));
+    memset(nb->kernel_noener_noprune_ptr, 0, sizeof(nb->kernel_noener_noprune_ptr));
+    memset(nb->kernel_noener_prune_ptr, 0, sizeof(nb->kernel_noener_prune_ptr));
+
+    /* Init pruning kernels
+     *
+     * TODO: we could avoid creating kernels if dynamic pruning is turned off,
+     * but ATM that depends on force flags not passed into the initialization.
+     */
+    nb->kernel_pruneonly[epruneFirst] = nbnxn_gpu_create_kernel(nb, "nbnxn_kernel_prune_opencl");
+    nb->kernel_pruneonly[epruneRolling] =
+            nbnxn_gpu_create_kernel(nb, "nbnxn_kernel_prune_rolling_opencl");
+}
+
+void gpu_init_platform_specific(NbnxmGpu* nb)
+{
+    /* set device info, just point it to the right GPU among the detected ones */
+    nb->dev_rundata = new gmx_device_runtime_data_t();
+
+    /* Enable LJ param manual prefetch for AMD or Intel or if we request through env. var.
+     * TODO: decide about NVIDIA
+     */
+    nb->bPrefetchLjParam = (getenv("GMX_OCL_DISABLE_I_PREFETCH") == nullptr)
+                           && ((nb->deviceContext_->deviceInfo().deviceVendor == DeviceVendor::Amd)
+                               || (nb->deviceContext_->deviceInfo().deviceVendor == DeviceVendor::Intel)
+                               || (getenv("GMX_OCL_ENABLE_I_PREFETCH") != nullptr));
+
+    /* NOTE: in CUDA we pick L1 cache configuration for the nbnxn kernels here,
+     * but sadly this is not supported in OpenCL (yet?). Consider adding it if
+     * it becomes supported.
+     */
+    nbnxn_gpu_compile_kernels(nb);
+    nbnxn_gpu_init_kernels(nb);
+}
+
+/*! \brief Releases an OpenCL kernel pointer */
+static void free_kernel(cl_kernel* kernel_ptr)
+{
+    GMX_ASSERT(kernel_ptr, "Need a valid kernel pointer");
+
+    if (*kernel_ptr)
+    {
+        cl_int cl_error = clReleaseKernel(*kernel_ptr);
+        GMX_RELEASE_ASSERT(cl_error == CL_SUCCESS,
+                           ("clReleaseKernel failed: " + ocl_get_error_string(cl_error)).c_str());
+
+        *kernel_ptr = nullptr;
+    }
+}
+
+/*! \brief Releases a list of OpenCL kernel pointers */
+static void free_kernels(cl_kernel* kernels, int count)
+{
+    for (int i = 0; i < count; i++)
+    {
+        free_kernel(kernels + i);
+    }
+}
+
+/*! \brief Free the OpenCL program.
+ *
+ *  The function releases the OpenCL program assuciated with the
+ *  device that the calling PP rank is running on.
+ *
+ *  \param program [in]  OpenCL program to release.
+ */
+static void freeGpuProgram(cl_program program)
+{
+    if (program)
+    {
+        cl_int cl_error = clReleaseProgram(program);
+        GMX_RELEASE_ASSERT(cl_error == CL_SUCCESS,
+                           ("clReleaseProgram failed: " + ocl_get_error_string(cl_error)).c_str());
+        program = nullptr;
+    }
+}
+
+//! This function is documented in the header file
+void gpu_free_platform_specific(NbnxmGpu* nb)
+{
+    /* Free kernels */
+    // NOLINTNEXTLINE(bugprone-sizeof-expression)
+    int kernel_count = sizeof(nb->kernel_ener_noprune_ptr) / sizeof(nb->kernel_ener_noprune_ptr[0][0]);
+    free_kernels(nb->kernel_ener_noprune_ptr[0], kernel_count);
+
+    // NOLINTNEXTLINE(bugprone-sizeof-expression)
+    kernel_count = sizeof(nb->kernel_ener_prune_ptr) / sizeof(nb->kernel_ener_prune_ptr[0][0]);
+    free_kernels(nb->kernel_ener_prune_ptr[0], kernel_count);
+
+    // NOLINTNEXTLINE(bugprone-sizeof-expression)
+    kernel_count = sizeof(nb->kernel_noener_noprune_ptr) / sizeof(nb->kernel_noener_noprune_ptr[0][0]);
+    free_kernels(nb->kernel_noener_noprune_ptr[0], kernel_count);
+
+    // NOLINTNEXTLINE(bugprone-sizeof-expression)
+    kernel_count = sizeof(nb->kernel_noener_prune_ptr) / sizeof(nb->kernel_noener_prune_ptr[0][0]);
+    free_kernels(nb->kernel_noener_prune_ptr[0], kernel_count);
+
+    freeGpuProgram(nb->dev_rundata->program);
+    delete nb->dev_rundata;
+}
+
+//! This function is documented in the header file
+int gpu_min_ci_balanced(NbnxmGpu* nb)
+{
+    return nb != nullptr ? gpu_min_ci_balanced_factor * nb->deviceContext_->deviceInfo().compute_units : 0;
+}
 
 /*! \brief Validates the input global work size parameter.
  */

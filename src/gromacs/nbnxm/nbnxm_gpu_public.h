@@ -74,6 +74,23 @@ class Grid;
 GPU_FUNC_QUALIFIER
 void gpu_init_atomdata(NbnxmGpu gmx_unused* nb, const nbnxn_atomdata_t gmx_unused* nbat) GPU_FUNC_TERM;
 
+/*! \brief Set up internal flags that indicate what type of short-range work there is.
+ *
+ * As nonbondeds and bondeds share input/output buffers and GPU queues,
+ * both are considered when checking for work in the current domain.
+ *
+ * This function is expected to be called every time the work-distribution
+ * can change (i.e. at search/domain decomposition steps).
+ *
+ * \param[inout]  nb         Pointer to the nonbonded GPU data structure
+ * \param[in]     gpuBonded  Pointer to the GPU bonded data structure
+ * \param[in]     iLocality  Interaction locality identifier
+ */
+GPU_FUNC_QUALIFIER
+void setupGpuShortRangeWork(NbnxmGpu gmx_unused* nb,
+                            const gmx::GpuBonded gmx_unused* gpuBonded,
+                            gmx::InteractionLocality gmx_unused iLocality) GPU_FUNC_TERM;
+
 /*! \brief Re-generate the GPU Ewald force table, resets rlist, and update the
  *  electrostatic type switching to twin cut-off (or back) if needed.
  */
@@ -192,24 +209,6 @@ float gpu_wait_finish_task(NbnxmGpu gmx_unused*    nb,
                            real gmx_unused*         e_el,
                            gmx::ArrayRef<gmx::RVec> gmx_unused shiftForces,
                            gmx_wallcycle gmx_unused* wcycle) GPU_FUNC_TERM_WITH_RETURN(0.0);
-
-/*! \brief Set up internal flags that indicate what type of short-range work there is.
- *
- * As nonbondeds and bondeds share input/output buffers and GPU queues,
- * both are considered when checking for work in the current domain.
- *
- * This function is expected to be called every time the work-distribution
- * can change (i.e. at search/domain decomposition steps).
- *
- * \param[inout]  nb         Pointer to the nonbonded GPU data structure
- * \param[in]     gpuBonded  Pointer to the GPU bonded data structure
- * \param[in]     iLocality  Interaction locality identifier
- */
-GPU_FUNC_QUALIFIER
-void setupGpuShortRangeWork(NbnxmGpu gmx_unused* nb,
-                            const gmx::GpuBonded gmx_unused* gpuBonded,
-                            gmx::InteractionLocality gmx_unused iLocality) GPU_FUNC_TERM;
-
 
 /** Returns an opaque pointer to the GPU coordinate+charge array
  *  Note: CUDA only.

@@ -48,19 +48,19 @@
 
 #include <string>
 
+#include "nbnxm_ocl_jit_support.h"
+
 #include "gromacs/gpu_utils/gpu_utils.h"
 #include "gromacs/gpu_utils/ocl_compiler.h"
 #include "gromacs/mdtypes/interaction_const.h"
 #include "gromacs/mdtypes/md_enums.h"
-#include "gromacs/nbnxm/gpu_jit_support.h"
 #include "gromacs/nbnxm/nbnxm_gpu.h"
+#include "gromacs/nbnxm/opencl/nbnxm_ocl_types.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/stringutil.h"
-
-#include "nbnxm_ocl_types.h"
 
 /*! \brief Stringifies the input argument
  */

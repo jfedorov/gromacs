@@ -123,6 +123,48 @@ constexpr static int c_bufOpsThreadsPerBlock = 128;
 /*! Nonbonded kernel function pointer type */
 typedef void (*nbnxn_cu_kfunc_ptr_t)(const NBAtomDataGpu, const NBParamGpu, const gpu_plist, bool);
 
+/* This is a heuristically determined parameter for the Kepler
+ * and Maxwell architectures for the minimum size of ci lists by multiplying
+ * this constant with the # of multiprocessors on the current device.
+ * Since the maximum number of blocks per multiprocessor is 16, the ideal
+ * count for small systems is 32 or 48 blocks per multiprocessor. Because
+ * there is a bit of fluctuations in the generated block counts, we use
+ * a target of 44 instead of the ideal value of 48.
+ */
+static unsigned int gpu_min_ci_balanced_factor = 44;
+
+void gpu_init_platform_specific(NbnxmGpu* /* nb */)
+{
+    /* set the kernel type for the current GPU */
+    /* pick L1 cache configuration */
+    cuda_set_cacheconfig();
+}
+
+void gpu_free_platform_specific(NbnxmGpu* /* nb */)
+{
+    // Nothing specific in CUDA
+}
+
+int gpu_min_ci_balanced(NbnxmGpu* nb)
+{
+    return nb != nullptr ? gpu_min_ci_balanced_factor * nb->deviceContext_->deviceInfo().prop.multiProcessorCount
+                         : 0;
+}
+
+void* gpu_get_xq(NbnxmGpu* nb)
+{
+    assert(nb);
+
+    return static_cast<void*>(nb->atdat->xq);
+}
+
+DeviceBuffer<gmx::RVec> gpu_get_fshift(NbnxmGpu* nb)
+{
+    assert(nb);
+
+    return reinterpret_cast<DeviceBuffer<gmx::RVec>>(nb->atdat->fShift);
+}
+
 /*********************************/
 
 /*! Returns the number of blocks to be used for the nonbonded GPU kernel. */
