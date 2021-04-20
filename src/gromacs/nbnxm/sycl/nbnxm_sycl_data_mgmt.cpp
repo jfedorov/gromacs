@@ -46,7 +46,7 @@
 #include "gromacs/mdtypes/interaction_const.h"
 #include "gromacs/nbnxm/atomdata.h"
 #include "gromacs/nbnxm/nbnxm_gpu.h"
-#include "gromacs/nbnxm/nbnxm_gpu_private.h"
+#include "gromacs/nbnxm/nbnxm_gpu_internal.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/utility/exceptions.h"
 

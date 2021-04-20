@@ -60,7 +60,7 @@
 #    include "sycl/nbnxm_sycl_types.h"
 #endif
 
-#include "nbnxm_gpu_private.h"
+#include "nbnxm_gpu_internal.h"
 
 #include "gromacs/gpu_utils/device_stream_manager.h"
 #include "gromacs/gpu_utils/gputraits.h"

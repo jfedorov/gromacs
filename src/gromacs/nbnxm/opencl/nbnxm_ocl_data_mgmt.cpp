@@ -64,7 +64,7 @@
 #include "gromacs/nbnxm/gpu_jit_support.h"
 #include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/nbnxm/nbnxm_gpu.h"
-#include "gromacs/nbnxm/nbnxm_gpu_private.h"
+#include "gromacs/nbnxm/nbnxm_gpu_internal.h"
 #include "gromacs/nbnxm/pairlistsets.h"
 #include "gromacs/timing/gpu_timing.h"
 #include "gromacs/utility/cstringutil.h"

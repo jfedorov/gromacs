@@ -41,8 +41,8 @@
  *  \ingroup module_nbnxm
  */
 
-#ifndef GMX_NBNXM_NBNXM_GPU_PRIVATE_H
-#define GMX_NBNXM_NBNXM_GPU_PRIVATE_H
+#ifndef GMX_NBNXM_NBNXM_GPU_INTERNAL_H
+#define GMX_NBNXM_NBNXM_GPU_INTERNAL_H
 
 #include "gromacs/mdtypes/locality.h"
 #include "gromacs/nbnxm/gpu_types_common.h"
@@ -136,4 +136,4 @@ void gpu_free_platform_specific(NbnxmGpu* nb);
 
 } // namespace Nbnxm
 
-#endif // GMX_NBNXM_NBNXM_GPU_PRIVATE_H
+#endif // GMX_NBNXM_NBNXM_GPU_INTERNAL_H

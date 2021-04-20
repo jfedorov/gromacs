@@ -66,7 +66,7 @@
 #include "gromacs/nbnxm/gridset.h"
 #include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/nbnxm/nbnxm_gpu.h"
-#include "gromacs/nbnxm/nbnxm_gpu_private.h"
+#include "gromacs/nbnxm/nbnxm_gpu_internal.h"
 #include "gromacs/nbnxm/nbnxm_gpu_public.h"
 #include "gromacs/nbnxm/pairlistsets.h"
 #include "gromacs/pbcutil/ishift.h"
