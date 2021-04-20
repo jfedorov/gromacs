@@ -98,26 +98,30 @@ public:
         return c12_.at(ParticleTypeName(particleName.value()));
     }
 
+    //! Get charges of a given particle.
+    [[nodiscard]] Charge charge(const std::string& name) const { return charges_.at(name); }
+
 private:
+    std::unordered_map<std::string, Charge> charges_{ { "Ow", Charge(-0.82) },
+                                                      { "Hw", Charge(+0.41) },
+                                                      { "OMet", Charge(-0.574) },
+                                                      { "CMet", Charge(+0.176) },
+                                                      { "HMet", Charge(+0.398) } };
+
+
     std::map<ParticleTypeName, ParticleType> particles_;
     std::map<ParticleTypeName, C6>           c6_;
     std::map<ParticleTypeName, C12>          c12_;
 };
-
-std::unordered_map<std::string, Charge> Charges{ { "Ow", Charge(-0.82) },
-                                                 { "Hw", Charge(+0.41) },
-                                                 { "OMet", Charge(-0.574) },
-                                                 { "CMet", Charge(+0.176) },
-                                                 { "HMet", Charge(+0.398) } };
 
 WaterMoleculeBuilder::WaterMoleculeBuilder() : water_(MoleculeName("SOL"))
 {
     ParticleLibrary plib;
 
     //! Add the particles
-    water_.addParticle(ParticleName("Oxygen"), Charges.at("Ow"), plib.type("Ow"));
-    water_.addParticle(ParticleName("H1"), Charges.at("Hw"), plib.type("H"));
-    water_.addParticle(ParticleName("H2"), Charges.at("Hw"), plib.type("H"));
+    water_.addParticle(ParticleName("Oxygen"), plib.charge("Ow"), plib.type("Ow"));
+    water_.addParticle(ParticleName("H1"), plib.charge("Hw"), plib.type("H"));
+    water_.addParticle(ParticleName("H2"), plib.charge("Hw"), plib.type("H"));
 
     HarmonicBondType ohBond(1., 1.);
     water_.addInteraction(ParticleName("Oxygen"), ParticleName("H1"), ohBond);
@@ -147,9 +151,9 @@ MethanolMoleculeBuilder::MethanolMoleculeBuilder() : methanol_(MoleculeName("MeO
     ParticleLibrary library;
 
     //! Add the particles
-    methanol_.addParticle(ParticleName("Me1"), Charges.at("CMet"), library.type("CMet"));
-    methanol_.addParticle(ParticleName("O2"), Charges.at("OMet"), library.type("OMet"));
-    methanol_.addParticle(ParticleName("H3"), Charges.at("HMet"), library.type("H"));
+    methanol_.addParticle(ParticleName("Me1"), library.charge("CMet"), library.type("CMet"));
+    methanol_.addParticle(ParticleName("O2"), library.charge("OMet"), library.type("OMet"));
+    methanol_.addParticle(ParticleName("H3"), library.charge("HMet"), library.type("H"));
 
     // Add the exclusions
     methanol_.addExclusion(ParticleName("Me1"), ParticleName("O2"));

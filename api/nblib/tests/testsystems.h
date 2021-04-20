@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2020, by the GROMACS development team, led by
+ * Copyright (c) 2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -72,9 +72,6 @@ struct ArAtom
     //! Argon C12 parameter
     C12 c12{ 9.847044e-06 };
 };
-
-//! Lookup table for charges needed for building topologies
-extern std::unordered_map<std::string, Charge> Charges;
 
 //! \internal \brief Make an SPC water molecule with parameters from gromos43A1
 class WaterMoleculeBuilder

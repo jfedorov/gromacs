@@ -98,7 +98,7 @@ public:
     //! Alternative overload with the energies in an output buffer
     void compute(gmx::ArrayRef<const Vec3> coordinates,
                  gmx::ArrayRef<Vec3>       forces,
-                 EnergyType&               energies,
+                 EnergyType*               energies,
                  bool                      usePbc = false);
 
     /*! \brief We need to declare the destructor here to move the (still default) implementation

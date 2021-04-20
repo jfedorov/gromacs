@@ -75,7 +75,7 @@ private:
     InteractionMap interactionMap_;
 
 public:
-    void   setInteractions(const ParticleTypeName&, const ParticleTypeName&, const C6, const C12);
+    void   setInteractions(const ParticleTypeName&, const ParticleTypeName&, C6, C12);
     size_t count(const NamePairTuple&);
 
     [[nodiscard]] C6  getC6(const ParticleTypeName&, const ParticleTypeName&) const;

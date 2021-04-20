@@ -154,20 +154,24 @@ void for_each_tuple(F&& func, const std::tuple<Ts...>& tuple_)
 
 //! \brief Format strings for use in error messages
 template<class... Args>
-std::string formatString(std::string fmt, Args... args)
+std::string formatString(const std::string& fmt, Args... args)
 {
     std::ostringstream os;
     std::string        delimiter = "{}";
 
-    auto next_token = [](std::string& s, const std::string& delimiter_)
+    auto next_token = [](std::string s, const std::string& delimiter_)
     {
         std::string token = s.substr(0, s.find(delimiter_));
 
         std::size_t next = s.find(delimiter_);
         if (next == std::string::npos)
+        {
             s.clear();
+        }
         else
+        {
             s.erase(0, next + delimiter_.length());
+        }
 
         return token;
     };

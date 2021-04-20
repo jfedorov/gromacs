@@ -85,11 +85,7 @@ class ParticleIdentifier final
 {
 public:
     //! \brief construct form a ParticleName, allow implicit conversion
-    ParticleIdentifier(ParticleName particleName) :
-        particleName_(std::move(particleName)),
-        residueName_()
-    {
-    }
+    ParticleIdentifier(ParticleName particleName) : particleName_(std::move(particleName)) {}
 
     //! \brief construct with a non-default ResidueName
     ParticleIdentifier(ParticleName particleName, ResidueName residueName) :

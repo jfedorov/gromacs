@@ -414,16 +414,9 @@ inline auto fourCenterKernel(T phi, const ProperDihedral& properDihedral)
 
 
 //! \brief Ensure that a geometric quantity lies in (-pi, pi)
-static inline void makeAnglePeriodic(real& angle)
+static inline real makeAnglePeriodic(real angle)
 {
-    if (angle >= M_PI)
-    {
-        angle -= 2 * M_PI;
-    }
-    else if (angle < -M_PI)
-    {
-        angle += 2 * M_PI;
-    }
+    return (angle >= M_PI) ? angle - 2 * M_PI : (angle < -M_PI) ? angle + 2 * M_PI : angle;
 }
 
 //! \brief Computes and returns a dihedral phi angle
@@ -444,7 +437,7 @@ inline auto fourCenterKernel(T phi, const ImproperDihedral& improperDihedral)
 {
     T deltaPhi = phi - improperDihedral.equilDistance();
     /* deltaPhi cannot be outside (-pi,pi) */
-    makeAnglePeriodic(deltaPhi);
+    deltaPhi = makeAnglePeriodic(deltaPhi);
     const T force = -improperDihedral.forceConstant()  * deltaPhi;
     const T ePot = 0.5 * improperDihedral.forceConstant() * deltaPhi * deltaPhi;
     return std::make_tuple(force, ePot);
