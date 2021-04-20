@@ -41,7 +41,7 @@
  */
 #include "gmxpre.h"
 
-#include "gromacs/nbnxm/nbnxm_gpu_private.h"
+#include "gromacs/nbnxm/nbnxm_gpu_internal.h"
 #include "gromacs/utility/exceptions.h"
 
 #include "nbnxm_sycl_kernel.h"
