@@ -204,16 +204,16 @@ static void pull_potential_wrapper(const t_commrec*               cr,
     wallcycle_start(wcycle, WallCycleCounter::PullPot);
     set_pbc(&pbc, ir.pbcType, box);
     dvdl = 0;
-    enerd->term[F_COM_PULL] +=
-            pull_potential(pull_work,
-                           gmx::arrayRefFromArray(mdatoms->massT, mdatoms->nr),
-                           &pbc,
-                           cr,
-                           t,
-                           lambda[static_cast<int>(FreeEnergyPerturbationCouplingType::Restraint)],
-                           x,
-                           force,
-                           &dvdl);
+    enerd->term[F_COM_PULL] += pull_potential(
+            pull_work,
+            mdatoms->massT ? gmx::arrayRefFromArray(mdatoms->massT, mdatoms->nr) : gmx::ArrayRef<real>{},
+            &pbc,
+            cr,
+            t,
+            lambda[static_cast<int>(FreeEnergyPerturbationCouplingType::Restraint)],
+            x,
+            force,
+            &dvdl);
     enerd->dvdl_lin[FreeEnergyPerturbationCouplingType::Restraint] += dvdl;
     wallcycle_stop(wcycle, WallCycleCounter::PullPot);
 }
