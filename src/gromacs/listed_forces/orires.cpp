@@ -180,7 +180,7 @@ t_oriresdata::t_oriresdata(FILE*                 fplog,
         globalState->flags |= enumValueToBitMask(StateEntry::OrireInitF);
         globalState->hist.orire_initf = 1;
         globalState->flags |= enumValueToBitMask(StateEntry::OrireDtav);
-        globalState->hist.orire_Dtav.resize(numRestraint * 5);
+        globalState->hist.orire_Dtav.resize(numRestraints * 5);
     }
 
     oinsl.resize(numRestraints);
