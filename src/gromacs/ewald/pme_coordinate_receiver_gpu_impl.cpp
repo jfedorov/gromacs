@@ -99,7 +99,7 @@ void PmeCoordinateReceiverGpu::launchReceiveCoordinatesFromPpCudaMpi(DeviceBuffe
                "implementation.");
 }
 
-void PmeCoordinateReceiverGpu::waitOrEnqueueWaitReceiveCoordinatesFromPp()
+void PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromPpRanks()
 {
     GMX_ASSERT(!impl_,
                "A CPU stub for PME-PP GPU communication was called instead of the correct "

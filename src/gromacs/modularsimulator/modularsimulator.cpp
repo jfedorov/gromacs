@@ -112,15 +112,16 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
         builder->add<ForceElement>();
         builder->add<StatePropagatorData::Element>();
         if (legacySimulatorData_->inputrec->etc == TemperatureCoupling::VRescale
-            || legacySimulatorData_->inputrec->etc == TemperatureCoupling::Berendsen)
+            || legacySimulatorData_->inputrec->etc == TemperatureCoupling::Berendsen
+            || legacySimulatorData_->inputrec->etc == TemperatureCoupling::NoseHoover)
         {
-            builder->add<VelocityScalingTemperatureCoupling>(-1,
+            builder->add<VelocityScalingTemperatureCoupling>(Offset(-1),
                                                              UseFullStepKE::No,
                                                              ReportPreviousStepConservedEnergy::No,
                                                              PropagatorTag("LeapFrogPropagator"));
         }
-        builder->add<Propagator<IntegrationStep::LeapFrog>>(
-                PropagatorTag("LeapFrogPropagator"), legacySimulatorData_->inputrec->delta_t);
+        builder->add<Propagator<IntegrationStage::LeapFrog>>(
+                PropagatorTag("LeapFrogPropagator"), TimeStep(legacySimulatorData_->inputrec->delta_t));
         if (legacySimulatorData_->constr)
         {
             builder->add<ConstraintsElement<ConstraintVariable::Positions>>();
@@ -128,15 +129,15 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
         builder->add<ComputeGlobalsElement<ComputeGlobalsAlgorithm::LeapFrog>>();
         if (legacySimulatorData_->inputrec->epc == PressureCoupling::ParrinelloRahman)
         {
-            builder->add<ParrinelloRahmanBarostat>(-1, PropagatorTag("LeapFrogPropagator"));
+            builder->add<ParrinelloRahmanBarostat>(Offset(-1), PropagatorTag("LeapFrogPropagator"));
         }
     }
     else if (legacySimulatorData_->inputrec->eI == IntegrationAlgorithm::VV)
     {
         // The velocity verlet integration algorithm
         builder->add<ForceElement>();
-        builder->add<Propagator<IntegrationStep::VelocitiesOnly>>(
-                PropagatorTag("VelocityHalfStep"), 0.5 * legacySimulatorData_->inputrec->delta_t);
+        builder->add<Propagator<IntegrationStage::VelocitiesOnly>>(
+                PropagatorTag("VelocityHalfStep"), TimeStep(0.5 * legacySimulatorData_->inputrec->delta_t));
         if (legacySimulatorData_->constr)
         {
             builder->add<ConstraintsElement<ConstraintVariable::Velocities>>();
@@ -147,13 +148,14 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
             || legacySimulatorData_->inputrec->etc == TemperatureCoupling::Berendsen)
         {
             builder->add<VelocityScalingTemperatureCoupling>(
-                    0,
+                    Offset(0),
                     UseFullStepKE::Yes,
                     ReportPreviousStepConservedEnergy::Yes,
                     PropagatorTag("VelocityHalfAndPositionFullStep"));
         }
-        builder->add<Propagator<IntegrationStep::VelocityVerletPositionsAndVelocities>>(
-                PropagatorTag("VelocityHalfAndPositionFullStep"), legacySimulatorData_->inputrec->delta_t);
+        builder->add<Propagator<IntegrationStage::VelocityVerletPositionsAndVelocities>>(
+                PropagatorTag("VelocityHalfAndPositionFullStep"),
+                TimeStep(legacySimulatorData_->inputrec->delta_t));
         if (legacySimulatorData_->constr)
         {
             builder->add<ConstraintsElement<ConstraintVariable::Positions>>();
@@ -161,7 +163,7 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
         builder->add<ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet>>();
         if (legacySimulatorData_->inputrec->epc == PressureCoupling::ParrinelloRahman)
         {
-            builder->add<ParrinelloRahmanBarostat>(-1, PropagatorTag("VelocityHalfStep"));
+            builder->add<ParrinelloRahmanBarostat>(Offset(-1), PropagatorTag("VelocityHalfStep"));
         }
     }
     else
@@ -230,9 +232,11 @@ bool ModularSimulator::isInputCompatible(bool                             exitOn
     isInputCompatible = isInputCompatible
                         && conditionalAssert(inputrec->etc == TemperatureCoupling::No
                                                      || inputrec->etc == TemperatureCoupling::VRescale
-                                                     || inputrec->etc == TemperatureCoupling::Berendsen,
-                                             "Only v-rescale and Berendsen thermostat are "
-                                             "supported by the modular simulator.");
+                                                     || inputrec->etc == TemperatureCoupling::Berendsen
+                                                     || (inputrec->etc == TemperatureCoupling::NoseHoover
+                                                         && inputrec->eI == IntegrationAlgorithm::MD),
+                                             "Only v-rescale, Berendsen and Nose-Hoover "
+                                             "thermostats are supported by the modular simulator.");
     isInputCompatible =
             isInputCompatible
             && conditionalAssert(

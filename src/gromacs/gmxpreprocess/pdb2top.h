@@ -3,7 +3,7 @@
  *
  * Copyright (c) 1991-2000, University of Groningen, The Netherlands.
  * Copyright (c) 2001-2004, The GROMACS development team.
- * Copyright (c) 2013,2014,2015,2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2013,2014,2015,2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -44,6 +44,7 @@
 #include <vector>
 
 #include "gromacs/math/vectypes.h"
+#include "gromacs/utility/enumerationhelpers.h"
 
 class PreprocessingAtomTypes;
 
@@ -64,16 +65,16 @@ struct PreprocessResidue;
 struct DisulfideBond;
 struct t_symtab;
 
-/* this *MUST* correspond to array in pdb2top.c */
-enum
+/* this *MUST* correspond to array in pdb2top.cpp */
+enum class HistidineStates : int
 {
-    ehisA,
-    ehisB,
-    ehisH,
-    ehis1,
-    ehisNR
+    A,
+    B,
+    H,
+    One,
+    Count
 };
-extern const char* hh[ehisNR];
+const char* enumValueToString(HistidineStates enumValue);
 
 void choose_ff(const char*          ffsel,
                char*                forcefield,
@@ -137,7 +138,7 @@ void write_top(FILE*                                   out,
                const char*                             molname,
                t_atoms*                                at,
                bool                                    bRTPresname,
-               int                                     bts[],
+               gmx::ArrayRef<const int>                bts,
                gmx::ArrayRef<const InteractionsOfType> plist,
                t_excls                                 excls[],
                PreprocessingAtomTypes*                 atype,

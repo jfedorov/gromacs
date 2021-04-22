@@ -46,21 +46,17 @@
 #include <memory>
 
 #include "gromacs/domdec/domdec_struct.h"
-#include "gromacs/fileio/confio.h"
 #include "gromacs/gmxlib/network.h"
 #include "gromacs/gmxlib/nrnb.h"
 #include "gromacs/listed_forces/disre.h"
 #include "gromacs/listed_forces/orires.h"
 #include "gromacs/math/functions.h"
-#include "gromacs/math/invertmatrix.h"
 #include "gromacs/math/paddedvector.h"
 #include "gromacs/math/units.h"
 #include "gromacs/math/vec.h"
-#include "gromacs/math/vecdump.h"
 #include "gromacs/mdlib/boxdeformation.h"
 #include "gromacs/mdlib/constr.h"
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
-#include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/stat.h"
 #include "gromacs/mdlib/tgroup.h"
 #include "gromacs/mdtypes/commrec.h"
@@ -68,9 +64,7 @@
 #include "gromacs/mdtypes/group.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/md_enums.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/state.h"
-#include "gromacs/pbcutil/boxutilities.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/pulling/pull.h"
 #include "gromacs/random/tabulatednormaldistribution.h"
@@ -82,7 +76,6 @@
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/futil.h"
 #include "gromacs/utility/gmxassert.h"
-#include "gromacs/utility/gmxomp.h"
 #include "gromacs/utility/smalloc.h"
 
 using namespace gmx; // TODO: Remove when this file is moved into gmx namespace
@@ -126,7 +119,7 @@ public:
                        bool                                             havePartiallyFrozenAtoms,
                        gmx::ArrayRef<const ParticleType>                ptype,
                        gmx::ArrayRef<const real>                        invMass,
-                       gmx::ArrayRef<rvec>                              invMassPerDim,
+                       gmx::ArrayRef<const rvec>                        invMassPerDim,
                        t_state*                                         state,
                        const gmx::ArrayRefWithPadding<const gmx::RVec>& f,
                        const t_fcdata&                                  fcdata,
@@ -136,11 +129,13 @@ public:
                        const t_commrec*                                 cr,
                        bool                                             haveConstraints);
 
-    void finish_update(const t_inputrec& inputRecord,
-                       const t_mdatoms*  md,
-                       t_state*          state,
-                       gmx_wallcycle_t   wcycle,
-                       bool              haveConstraints);
+    void finish_update(const t_inputrec&                   inputRecord,
+                       bool                                havePartiallyFrozenAtoms,
+                       int                                 homenr,
+                       gmx::ArrayRef<const unsigned short> cFREEZE,
+                       t_state*                            state,
+                       gmx_wallcycle*                      wcycle,
+                       bool                                haveConstraints);
 
     void update_sd_second_half(const t_inputrec&                 inputRecord,
                                int64_t                           step,
@@ -151,17 +146,17 @@ public:
                                t_state*                          state,
                                const t_commrec*                  cr,
                                t_nrnb*                           nrnb,
-                               gmx_wallcycle_t                   wcycle,
+                               gmx_wallcycle*                    wcycle,
                                gmx::Constraints*                 constr,
                                bool                              do_log,
                                bool                              do_ene);
 
-    void update_for_constraint_virial(const t_inputrec&   inputRecord,
-                                      int                 homenr,
-                                      bool                havePartiallyFrozenAtoms,
-                                      gmx::ArrayRef<real> invmass,
-                                      gmx::ArrayRef<rvec> invMassPerDim,
-                                      const t_state&      state,
+    void update_for_constraint_virial(const t_inputrec&         inputRecord,
+                                      int                       homenr,
+                                      bool                      havePartiallyFrozenAtoms,
+                                      gmx::ArrayRef<const real> invmass,
+                                      gmx::ArrayRef<const rvec> invMassPerDim,
+                                      const t_state&            state,
                                       const gmx::ArrayRefWithPadding<const gmx::RVec>& f,
                                       const gmx_ekindata_t&                            ekind);
 
@@ -214,10 +209,14 @@ BoxDeformation* Update::deform() const
     return impl_->deform();
 }
 
-void Update::update_coords(const t_inputrec&                                inputRecord,
-                           int64_t                                          step,
-                           const t_mdatoms*                                 md,
-                           t_state*                                         state,
+void Update::update_coords(const t_inputrec&                 inputRecord,
+                           int64_t                           step,
+                           const int                         homenr,
+                           const bool                        havePartiallyFrozenAtoms,
+                           gmx::ArrayRef<const ParticleType> ptype,
+                           gmx::ArrayRef<const real>         invMass,
+                           gmx::ArrayRef<const rvec>         invMassPerDim,
+                           t_state*                          state,
                            const gmx::ArrayRefWithPadding<const gmx::RVec>& f,
                            const t_fcdata&                                  fcdata,
                            const gmx_ekindata_t*                            ekind,
@@ -228,11 +227,11 @@ void Update::update_coords(const t_inputrec&                                inpu
 {
     return impl_->update_coords(inputRecord,
                                 step,
-                                md->homenr,
-                                md->havePartiallyFrozenAtoms,
-                                gmx::arrayRefFromArray(md->ptype, md->nr),
-                                gmx::arrayRefFromArray(md->invmass, md->nr),
-                                gmx::arrayRefFromArray(md->invMassPerDim, md->nr),
+                                homenr,
+                                havePartiallyFrozenAtoms,
+                                ptype,
+                                invMass,
+                                invMassPerDim,
                                 state,
                                 f,
                                 fcdata,
@@ -244,55 +243,45 @@ void Update::update_coords(const t_inputrec&                                inpu
 }
 
 void Update::finish_update(const t_inputrec& inputRecord,
-                           const t_mdatoms*  md,
+                           const bool        havePartiallyFrozenAtoms,
+                           const int         homenr,
                            t_state*          state,
-                           gmx_wallcycle_t   wcycle,
+                           gmx_wallcycle*    wcycle,
                            const bool        haveConstraints)
 {
-    return impl_->finish_update(inputRecord, md, state, wcycle, haveConstraints);
+    return impl_->finish_update(
+            inputRecord, havePartiallyFrozenAtoms, homenr, impl_->cFREEZE_, state, wcycle, haveConstraints);
 }
 
-void Update::update_sd_second_half(const t_inputrec& inputRecord,
-                                   int64_t           step,
-                                   real*             dvdlambda,
-                                   const t_mdatoms*  md,
-                                   t_state*          state,
-                                   const t_commrec*  cr,
-                                   t_nrnb*           nrnb,
-                                   gmx_wallcycle_t   wcycle,
-                                   gmx::Constraints* constr,
-                                   bool              do_log,
-                                   bool              do_ene)
+void Update::update_sd_second_half(const t_inputrec&                 inputRecord,
+                                   int64_t                           step,
+                                   real*                             dvdlambda,
+                                   const int                         homenr,
+                                   gmx::ArrayRef<const ParticleType> ptype,
+                                   gmx::ArrayRef<const real>         invMass,
+                                   t_state*                          state,
+                                   const t_commrec*                  cr,
+                                   t_nrnb*                           nrnb,
+                                   gmx_wallcycle*                    wcycle,
+                                   gmx::Constraints*                 constr,
+                                   bool                              do_log,
+                                   bool                              do_ene)
 {
-    return impl_->update_sd_second_half(inputRecord,
-                                        step,
-                                        dvdlambda,
-                                        md->homenr,
-                                        gmx::arrayRefFromArray(md->ptype, md->nr),
-                                        gmx::arrayRefFromArray(md->invmass, md->nr),
-                                        state,
-                                        cr,
-                                        nrnb,
-                                        wcycle,
-                                        constr,
-                                        do_log,
-                                        do_ene);
+    return impl_->update_sd_second_half(
+            inputRecord, step, dvdlambda, homenr, ptype, invMass, state, cr, nrnb, wcycle, constr, do_log, do_ene);
 }
 
-void Update::update_for_constraint_virial(const t_inputrec& inputRecord,
-                                          const t_mdatoms&  md,
-                                          const t_state&    state,
+void Update::update_for_constraint_virial(const t_inputrec&         inputRecord,
+                                          const int                 homenr,
+                                          const bool                havePartiallyFrozenAtoms,
+                                          gmx::ArrayRef<const real> invmass,
+                                          gmx::ArrayRef<const rvec> invMassPerDim,
+                                          const t_state&            state,
                                           const gmx::ArrayRefWithPadding<const gmx::RVec>& f,
                                           const gmx_ekindata_t&                            ekind)
 {
-    return impl_->update_for_constraint_virial(inputRecord,
-                                               md.homenr,
-                                               md.havePartiallyFrozenAtoms,
-                                               gmx::arrayRefFromArray(md.invmass, md.nr),
-                                               gmx::arrayRefFromArray(md.invMassPerDim, md.nr),
-                                               state,
-                                               f,
-                                               ekind);
+    return impl_->update_for_constraint_virial(
+            inputRecord, homenr, havePartiallyFrozenAtoms, invmass, invMassPerDim, state, f, ekind);
 }
 
 void Update::update_temperature_constants(const t_inputrec& inputRecord)
@@ -802,10 +791,10 @@ static void doUpdateMDDoNotUpdateVelocities(int         start,
                                             rvec* gmx_restrict xprime,
                                             const rvec* gmx_restrict v,
                                             const rvec* gmx_restrict f,
-                                            bool gmx_unused     havePartiallyFrozenAtoms,
-                                            gmx::ArrayRef<real> gmx_unused invmass,
-                                            gmx::ArrayRef<rvec>            invMassPerDim,
-                                            const gmx_ekindata_t&          ekind)
+                                            bool gmx_unused           havePartiallyFrozenAtoms,
+                                            gmx::ArrayRef<const real> gmx_unused invmass,
+                                            gmx::ArrayRef<const rvec>            invMassPerDim,
+                                            const gmx_ekindata_t&                ekind)
 {
     GMX_ASSERT(nrend == start || xprime != x,
                "For SIMD optimization certain compilers need to have xprime != x");
@@ -1394,7 +1383,7 @@ void Update::Impl::update_sd_second_half(const t_inputrec&                 input
                                          t_state*                          state,
                                          const t_commrec*                  cr,
                                          t_nrnb*                           nrnb,
-                                         gmx_wallcycle_t                   wcycle,
+                                         gmx_wallcycle*                    wcycle,
                                          gmx::Constraints*                 constr,
                                          bool                              do_log,
                                          bool                              do_ene)
@@ -1415,9 +1404,9 @@ void Update::Impl::update_sd_second_half(const t_inputrec&                 input
          */
         real dt = inputRecord.delta_t;
 
-        wallcycle_start(wcycle, ewcUPDATE);
+        wallcycle_start(wcycle, WallCycleCounter::Update);
 
-        int nth = gmx_omp_nthreads_get(emntUpdate);
+        int nth = gmx_omp_nthreads_get(ModuleMultiThread::Update);
 
 #pragma omp parallel for num_threads(nth) schedule(static)
         for (int th = 0; th < nth; th++)
@@ -1448,7 +1437,7 @@ void Update::Impl::update_sd_second_half(const t_inputrec&                 input
             GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR
         }
         inc_nrnb(nrnb, eNR_UPDATE, homenr);
-        wallcycle_stop(wcycle, ewcUPDATE);
+        wallcycle_stop(wcycle, WallCycleCounter::Update);
 
         /* Constrain the coordinates upd->xp for half a time step */
         bool computeVirial = false;
@@ -1470,23 +1459,24 @@ void Update::Impl::update_sd_second_half(const t_inputrec&                 input
     }
 }
 
-void Update::Impl::finish_update(const t_inputrec& inputRecord,
-                                 const t_mdatoms*  md,
-                                 t_state*          state,
-                                 gmx_wallcycle_t   wcycle,
-                                 const bool        haveConstraints)
+void Update::Impl::finish_update(const t_inputrec&                   inputRecord,
+                                 const bool                          havePartiallyFrozenAtoms,
+                                 const int                           homenr,
+                                 gmx::ArrayRef<const unsigned short> cFREEZE,
+                                 t_state*                            state,
+                                 gmx_wallcycle*                      wcycle,
+                                 const bool                          haveConstraints)
 {
     /* NOTE: Currently we always integrate to a temporary buffer and
      * then copy the results back here.
      */
 
-    wallcycle_start_nocount(wcycle, ewcUPDATE);
+    wallcycle_start_nocount(wcycle, WallCycleCounter::Update);
 
-    const int homenr = md->homenr;
-    auto      xp     = makeConstArrayRef(xp_).subArray(0, homenr);
-    auto      x      = makeArrayRef(state->x).subArray(0, homenr);
+    auto xp = makeConstArrayRef(xp_).subArray(0, homenr);
+    auto x  = makeArrayRef(state->x).subArray(0, homenr);
 
-    if (md->havePartiallyFrozenAtoms && haveConstraints)
+    if (havePartiallyFrozenAtoms && haveConstraints)
     {
         /* We have atoms that are frozen along some, but not all dimensions,
          * then constraints will have moved them also along the frozen dimensions.
@@ -1496,7 +1486,7 @@ void Update::Impl::finish_update(const t_inputrec& inputRecord,
 
         for (int i = 0; i < homenr; i++)
         {
-            const int g = md->cFREEZE[i];
+            const int g = cFREEZE[i];
 
             for (int d = 0; d < DIM; d++)
             {
@@ -1512,7 +1502,7 @@ void Update::Impl::finish_update(const t_inputrec& inputRecord,
         /* We have no frozen atoms or fully frozen atoms which have not
          * been moved by the update, so we can simply copy all coordinates.
          */
-        int gmx_unused nth = gmx_omp_nthreads_get(emntUpdate);
+        int gmx_unused nth = gmx_omp_nthreads_get(ModuleMultiThread::Update);
 #pragma omp parallel for num_threads(nth) schedule(static)
         for (int i = 0; i < homenr; i++)
         {
@@ -1521,7 +1511,7 @@ void Update::Impl::finish_update(const t_inputrec& inputRecord,
         }
     }
 
-    wallcycle_stop(wcycle, ewcUPDATE);
+    wallcycle_stop(wcycle, WallCycleCounter::Update);
 }
 
 void Update::Impl::update_coords(const t_inputrec&                 inputRecord,
@@ -1530,7 +1520,7 @@ void Update::Impl::update_coords(const t_inputrec&                 inputRecord,
                                  bool                              havePartiallyFrozenAtoms,
                                  gmx::ArrayRef<const ParticleType> ptype,
                                  gmx::ArrayRef<const real>         invMass,
-                                 gmx::ArrayRef<rvec>               invMassPerDim,
+                                 gmx::ArrayRef<const rvec>         invMassPerDim,
                                  t_state*                          state,
                                  const gmx::ArrayRefWithPadding<const gmx::RVec>& f,
                                  const t_fcdata&                                  fcdata,
@@ -1560,7 +1550,7 @@ void Update::Impl::update_coords(const t_inputrec&                 inputRecord,
     }
 
     /* ############# START The update of velocities and positions ######### */
-    int nth = gmx_omp_nthreads_get(emntUpdate);
+    int nth = gmx_omp_nthreads_get(ModuleMultiThread::Update);
 
 #pragma omp parallel for num_threads(nth) schedule(static)
     for (int th = 0; th < nth; th++)
@@ -1688,12 +1678,12 @@ void Update::Impl::update_coords(const t_inputrec&                 inputRecord,
     }
 }
 
-void Update::Impl::update_for_constraint_virial(const t_inputrec&   inputRecord,
-                                                int                 homenr,
-                                                bool                havePartiallyFrozenAtoms,
-                                                gmx::ArrayRef<real> invmass,
-                                                gmx::ArrayRef<rvec> invMassPerDim,
-                                                const t_state&      state,
+void Update::Impl::update_for_constraint_virial(const t_inputrec&         inputRecord,
+                                                int                       homenr,
+                                                bool                      havePartiallyFrozenAtoms,
+                                                gmx::ArrayRef<const real> invmass,
+                                                gmx::ArrayRef<const rvec> invMassPerDim,
+                                                const t_state&            state,
                                                 const gmx::ArrayRefWithPadding<const gmx::RVec>& f,
                                                 const gmx_ekindata_t& ekind)
 {
@@ -1703,7 +1693,7 @@ void Update::Impl::update_for_constraint_virial(const t_inputrec&   inputRecord,
     // Cast to real for faster code, no loss in precision
     const real dt = inputRecord.delta_t;
 
-    const int nth = gmx_omp_nthreads_get(emntUpdate);
+    const int nth = gmx_omp_nthreads_get(ModuleMultiThread::Update);
 
 #pragma omp parallel for num_threads(nth) schedule(static)
     for (int th = 0; th < nth; th++)

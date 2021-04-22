@@ -86,7 +86,7 @@
 #include "gromacs/utility/keyvaluetreebuilder.h"
 #include "gromacs/utility/keyvaluetreemdpwriter.h"
 #include "gromacs/utility/keyvaluetreetransform.h"
-#include "gromacs/utility/mdmodulenotification.h"
+#include "gromacs/utility/mdmodulesnotifiers.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/strconvert.h"
 #include "gromacs/utility/stringcompare.h"
@@ -116,6 +116,7 @@ struct gmx_inputrec_strings
     char anneal[STRLEN], anneal_npoints[STRLEN], anneal_time[STRLEN], anneal_temp[STRLEN];
 };
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static gmx_inputrec_strings* inputrecStrings = nullptr;
 
 void init_inputrec_strings()
@@ -147,9 +148,11 @@ enum
                         * make a rest group for the remaining particles.    */
 };
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static const char* constraints[eshNR + 1] = { "none",     "h-bonds",    "all-bonds",
                                               "h-angles", "all-angles", nullptr };
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static const char* couple_lam[ecouplamNR + 1] = { "vdw-q", "vdw", "q", "none", nullptr };
 
 static void getSimTemps(int ntemps, t_simtemp* simtemp, gmx::ArrayRef<double> temperature_lambdas)
@@ -2222,7 +2225,7 @@ void get_ir(const char*     mdparin,
     ir->bDoAwh = (getEnum<Boolean>(&inp, "awh", wi) != Boolean::No);
     if (ir->bDoAwh)
     {
-        ir->awhParams = std::make_unique<gmx::AwhParams>(&inp, *ir, wi);
+        ir->awhParams = std::make_unique<gmx::AwhParams>(&inp, wi);
     }
 
     /* Enforced rotation */

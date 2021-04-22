@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -67,23 +67,32 @@ void LeapFrogHostTestRunner::integrate(LeapFrogTestData* testData, int numSteps)
         testData->state_.v[i] = testData->v_[i];
     }
 
-    gmx_omp_nthreads_set(emntUpdate, 1);
+    gmx_omp_nthreads_set(ModuleMultiThread::Update, 1);
 
     for (int step = 0; step < numSteps; step++)
     {
-        testData->update_->update_coords(testData->inputRecord_,
-                                         step,
-                                         &testData->mdAtoms_,
+        testData->update_->update_coords(
+                testData->inputRecord_,
+                step,
+                testData->mdAtoms_.homenr,
+                testData->mdAtoms_.havePartiallyFrozenAtoms,
+                gmx::arrayRefFromArray(testData->mdAtoms_.ptype, testData->mdAtoms_.nr),
+                gmx::arrayRefFromArray(testData->mdAtoms_.invmass, testData->mdAtoms_.nr),
+                gmx::arrayRefFromArray(testData->mdAtoms_.invMassPerDim, testData->mdAtoms_.nr),
+                &testData->state_,
+                testData->f_,
+                testData->forceCalculationData_,
+                &testData->kineticEnergyData_,
+                testData->velocityScalingMatrix_,
+                etrtNONE,
+                nullptr,
+                false);
+        testData->update_->finish_update(testData->inputRecord_,
+                                         testData->mdAtoms_.havePartiallyFrozenAtoms,
+                                         testData->mdAtoms_.homenr,
                                          &testData->state_,
-                                         testData->f_,
-                                         testData->forceCalculationData_,
-                                         &testData->kineticEnergyData_,
-                                         testData->velocityScalingMatrix_,
-                                         etrtNONE,
                                          nullptr,
                                          false);
-        testData->update_->finish_update(
-                testData->inputRecord_, &testData->mdAtoms_, &testData->state_, nullptr, false);
     }
     const auto xp = makeArrayRef(*testData->update_->xp()).subArray(0, testData->numAtoms_);
     for (int i = 0; i < testData->numAtoms_; i++)

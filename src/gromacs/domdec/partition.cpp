@@ -43,6 +43,7 @@
 
 #include "gmxpre.h"
 
+#include "gromacs/utility/arrayref.h"
 #include "partition.h"
 
 #include "config.h"
@@ -570,7 +571,7 @@ static void check_index_consistency(const gmx_domdec_t* dd, int natoms_sys, cons
     int ngl = 0;
     for (int i = 0; i < natoms_sys; i++)
     {
-        if (const auto entry = dd->ga2la->find(i))
+        if (const auto* entry = dd->ga2la->find(i))
         {
             const int a = entry->la;
             if (a >= numAtomsInZones)
@@ -754,7 +755,7 @@ static void comm_dd_ns_cell_sizes(gmx_domdec_t* dd, gmx_ddbox_t* ddbox, rvec cel
 }
 
 //! Compute and communicate to determine the load distribution across PP ranks.
-static void get_load_distribution(gmx_domdec_t* dd, gmx_wallcycle_t wcycle)
+static void get_load_distribution(gmx_domdec_t* dd, gmx_wallcycle* wcycle)
 {
     gmx_domdec_comm_t* comm;
     domdec_load_t*     load;
@@ -766,7 +767,7 @@ static void get_load_distribution(gmx_domdec_t* dd, gmx_wallcycle_t wcycle)
         fprintf(debug, "get_load_distribution start\n");
     }
 
-    wallcycle_start(wcycle, ewcDDCOMMLOAD);
+    wallcycle_start(wcycle, WallCycleCounter::DDCommLoad);
 
     comm = dd->comm;
 
@@ -937,7 +938,7 @@ static void get_load_distribution(gmx_domdec_t* dd, gmx_wallcycle_t wcycle)
         }
     }
 
-    wallcycle_stop(wcycle, ewcDDCOMMLOAD);
+    wallcycle_stop(wcycle, WallCycleCounter::DDCommLoad);
 
     if (debug)
     {
@@ -1847,7 +1848,7 @@ static void setup_dd_communication(gmx_domdec_t* dd, matrix box, gmx_ddbox_t* dd
          * This can not be done in init_domain_decomposition,
          * as the numbers of threads is determined later.
          */
-        int numThreads = gmx_omp_nthreads_get(emntDomdec);
+        int numThreads = gmx_omp_nthreads_get(ModuleMultiThread::Domdec);
         comm->dth.resize(numThreads);
     }
 
@@ -2760,7 +2761,7 @@ void dd_partition_system(FILE*                     fplog,
     int         ncgindex_set;
     char        sbuf[22];
 
-    wallcycle_start(wcycle, ewcDOMDEC);
+    wallcycle_start(wcycle, WallCycleCounter::Domdec);
 
     gmx_domdec_t*      dd   = cr->dd;
     gmx_domdec_comm_t* comm = dd->comm;
@@ -3059,7 +3060,7 @@ void dd_partition_system(FILE*                     fplog,
     int ncg_moved = 0;
     if (bRedist)
     {
-        wallcycle_sub_start(wcycle, ewcsDD_REDIST);
+        wallcycle_sub_start(wcycle, WallCycleSubCounter::DDRedist);
 
         ncgindex_set = dd->ncg_home;
         dd_redistribute_cg(fplog, step, dd, ddbox.tric_dir, state_local, fr, nrnb, &ncg_moved);
@@ -3073,7 +3074,7 @@ void dd_partition_system(FILE*                     fplog,
                     state_local->x);
         }
 
-        wallcycle_sub_stop(wcycle, ewcsDD_REDIST);
+        wallcycle_sub_stop(wcycle, WallCycleSubCounter::DDRedist);
     }
 
     RVec cell_ns_x0, cell_ns_x1;
@@ -3095,7 +3096,7 @@ void dd_partition_system(FILE*                     fplog,
 
     if (bSortCG)
     {
-        wallcycle_sub_start(wcycle, ewcsDD_GRID);
+        wallcycle_sub_start(wcycle, WallCycleSubCounter::DDGrid);
 
         /* Sort the state on charge group position.
          * This enables exact restarts from this step.
@@ -3136,7 +3137,7 @@ void dd_partition_system(FILE*                     fplog,
         dd->ga2la->clear();
         ncgindex_set = 0;
 
-        wallcycle_sub_stop(wcycle, ewcsDD_GRID);
+        wallcycle_sub_stop(wcycle, WallCycleSubCounter::DDGrid);
     }
     else
     {
@@ -3157,7 +3158,7 @@ void dd_partition_system(FILE*                     fplog,
         comm->updateGroupsCog->clear();
     }
 
-    wallcycle_sub_start(wcycle, ewcsDD_SETUPCOMM);
+    wallcycle_sub_start(wcycle, WallCycleSubCounter::DDSetupComm);
 
     /* Set the induces for the home atoms */
     set_zones_ncg_home(dd);
@@ -3175,14 +3176,14 @@ void dd_partition_system(FILE*                     fplog,
     /* When bSortCG=true, we have already set the size for zone 0 */
     set_zones_size(dd, state_local->box, &ddbox, bSortCG ? 1 : 0, comm->zones.n, 0);
 
-    wallcycle_sub_stop(wcycle, ewcsDD_SETUPCOMM);
+    wallcycle_sub_stop(wcycle, WallCycleSubCounter::DDSetupComm);
 
     /*
        write_dd_pdb("dd_home",step,"dump",top_global,cr,
                  -1,state_local->x.rvec_array(),state_local->box);
      */
 
-    wallcycle_sub_start(wcycle, ewcsDD_MAKETOP);
+    wallcycle_sub_start(wcycle, WallCycleSubCounter::DDMakeTop);
 
     /* Extract a local topology from the global topology */
     IVec numPulses;
@@ -3201,9 +3202,9 @@ void dd_partition_system(FILE*                     fplog,
                       top_global,
                       top_local);
 
-    wallcycle_sub_stop(wcycle, ewcsDD_MAKETOP);
+    wallcycle_sub_stop(wcycle, WallCycleSubCounter::DDMakeTop);
 
-    wallcycle_sub_start(wcycle, ewcsDD_MAKECONSTR);
+    wallcycle_sub_start(wcycle, WallCycleSubCounter::DDMakeConstr);
 
     /* Set up the special atom communication */
     int n = comm->atomRanges.end(DDAtomRanges::Type::Zones);
@@ -3238,9 +3239,9 @@ void dd_partition_system(FILE*                     fplog,
         comm->atomRanges.setEnd(range, n);
     }
 
-    wallcycle_sub_stop(wcycle, ewcsDD_MAKECONSTR);
+    wallcycle_sub_stop(wcycle, WallCycleSubCounter::DDMakeConstr);
 
-    wallcycle_sub_start(wcycle, ewcsDD_TOPOTHER);
+    wallcycle_sub_start(wcycle, WallCycleSubCounter::DDTopOther);
 
     /* Make space for the extra coordinates for virtual site
      * or constraint communication.
@@ -3280,7 +3281,7 @@ void dd_partition_system(FILE*                     fplog,
     /* Update atom data for mdatoms and several algorithms */
     mdAlgorithmsSetupAtomData(cr, inputrec, top_global, top_local, fr, f, mdAtoms, constr, vsite, nullptr);
 
-    auto mdatoms = mdAtoms->mdatoms();
+    auto* mdatoms = mdAtoms->mdatoms();
     if (!thisRankHasDuty(cr, DUTY_PME))
     {
         /* Send the charges and/or c6/sigmas to our PME only node */
@@ -3289,11 +3290,14 @@ void dd_partition_system(FILE*                     fplog,
                                 mdatoms->nChargePerturbed != 0,
                                 mdatoms->nTypePerturbed != 0,
                                 gmx::arrayRefFromArray(mdatoms->chargeA, mdatoms->nr),
-                                gmx::arrayRefFromArray(mdatoms->chargeB, mdatoms->nr),
+                                mdatoms->chargeB ? gmx::arrayRefFromArray(mdatoms->chargeB, mdatoms->nr)
+                                                 : gmx::ArrayRef<real>{},
                                 gmx::arrayRefFromArray(mdatoms->sqrt_c6A, mdatoms->nr),
-                                gmx::arrayRefFromArray(mdatoms->sqrt_c6B, mdatoms->nr),
+                                mdatoms->sqrt_c6B ? gmx::arrayRefFromArray(mdatoms->sqrt_c6B, mdatoms->nr)
+                                                  : gmx::ArrayRef<real>{},
                                 gmx::arrayRefFromArray(mdatoms->sigmaA, mdatoms->nr),
-                                gmx::arrayRefFromArray(mdatoms->sigmaB, mdatoms->nr),
+                                mdatoms->sigmaB ? gmx::arrayRefFromArray(mdatoms->sigmaB, mdatoms->nr)
+                                                : gmx::ArrayRef<real>{},
                                 dd_pme_maxshift_x(*dd),
                                 dd_pme_maxshift_y(*dd));
     }
@@ -3325,11 +3329,11 @@ void dd_partition_system(FILE*                     fplog,
      */
     dd_move_x_vsites(*dd, state_local->box, state_local->x.rvec_array());
 
-    wallcycle_sub_stop(wcycle, ewcsDD_TOPOTHER);
+    wallcycle_sub_stop(wcycle, WallCycleSubCounter::DDTopOther);
 
     if (comm->ddSettings.nstDDDump > 0 && step % comm->ddSettings.nstDDDump == 0)
     {
-        dd_move_x(dd, state_local->box, state_local->x, nullWallcycle);
+        dd_move_x(dd, state_local->box, state_local->x, nullptr);
         write_dd_pdb("dd_dump",
                      step,
                      "dump",
@@ -3361,7 +3365,7 @@ void dd_partition_system(FILE*                     fplog,
         check_index_consistency(dd, top_global.natoms, "after partitioning");
     }
 
-    wallcycle_stop(wcycle, ewcDOMDEC);
+    wallcycle_stop(wcycle, WallCycleCounter::Domdec);
 }
 
 } // namespace gmx

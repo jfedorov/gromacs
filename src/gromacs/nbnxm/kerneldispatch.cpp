@@ -256,10 +256,10 @@ static void nbnxn_kernel_cpu(const PairlistSet&             pairlistSet,
 
     gmx::ArrayRef<const NbnxnPairlistCpu> pairlists = pairlistSet.cpuLists();
 
-    auto shiftVecPointer = as_rvec_array(shiftVectors.data());
+    const auto* shiftVecPointer = as_rvec_array(shiftVectors.data());
 
-    int gmx_unused nthreads = gmx_omp_nthreads_get(emntNonbonded);
-    wallcycle_sub_start(wcycle, ewcsNONBONDED_CLEAR);
+    int gmx_unused nthreads = gmx_omp_nthreads_get(ModuleMultiThread::Nonbonded);
+    wallcycle_sub_start(wcycle, WallCycleSubCounter::NonbondedClear);
 #pragma omp parallel for schedule(static) num_threads(nthreads)
     for (gmx::index nb = 0; nb < pairlists.ssize(); nb++)
     {
@@ -276,8 +276,8 @@ static void nbnxn_kernel_cpu(const PairlistSet&             pairlistSet,
 
         if (nb == 0)
         {
-            wallcycle_sub_stop(wcycle, ewcsNONBONDED_CLEAR);
-            wallcycle_sub_start(wcycle, ewcsNONBONDED_KERNEL);
+            wallcycle_sub_stop(wcycle, WallCycleSubCounter::NonbondedClear);
+            wallcycle_sub_start(wcycle, WallCycleSubCounter::NonbondedKernel);
         }
 
         // TODO: Change to reference
@@ -375,7 +375,7 @@ static void nbnxn_kernel_cpu(const PairlistSet&             pairlistSet,
             }
         }
     }
-    wallcycle_sub_stop(wcycle, ewcsNONBONDED_KERNEL);
+    wallcycle_sub_stop(wcycle, WallCycleSubCounter::NonbondedKernel);
 
     if (stepWork.computeEnergy)
     {
@@ -544,10 +544,10 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
     gmx::ArrayRef<real> energygrp_elec = enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::CoulombSR];
     gmx::ArrayRef<real> energygrp_vdw = enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::LJSR];
 
-    GMX_ASSERT(gmx_omp_nthreads_get(emntNonbonded) == nbl_fep.ssize(),
+    GMX_ASSERT(gmx_omp_nthreads_get(ModuleMultiThread::Nonbonded) == nbl_fep.ssize(),
                "Number of lists should be same as number of NB threads");
 
-    wallcycle_sub_start(wcycle_, ewcsNONBONDED_FEP);
+    wallcycle_sub_start(wcycle_, WallCycleSubCounter::NonbondedFep);
 #pragma omp parallel for schedule(static) num_threads(nbl_fep.ssize())
     for (gmx::index th = 0; th < nbl_fep.ssize(); th++)
     {
@@ -556,7 +556,13 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
             gmx_nb_free_energy_kernel(*nbl_fep[th],
                                       coords,
                                       forceWithShiftForces,
-                                      fr,
+                                      fr.use_simd_kernels,
+                                      fr.ntype,
+                                      fr.rlist,
+                                      *fr.ic,
+                                      fr.shift_vec,
+                                      fr.nbfp,
+                                      fr.ljpme_c6grid,
                                       chargeA,
                                       chargeB,
                                       typeA,
@@ -617,7 +623,13 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
                     gmx_nb_free_energy_kernel(*nbl_fep[th],
                                               coords,
                                               forceWithShiftForces,
-                                              fr,
+                                              fr.use_simd_kernels,
+                                              fr.ntype,
+                                              fr.rlist,
+                                              *fr.ic,
+                                              fr.shift_vec,
+                                              fr.nbfp,
+                                              fr.ljpme_c6grid,
                                               chargeA,
                                               chargeB,
                                               typeA,
@@ -640,5 +652,5 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
                             + dvdl_nb[FreeEnergyPerturbationCouplingType::Coul]);
         }
     }
-    wallcycle_sub_stop(wcycle_, ewcsNONBONDED_FEP);
+    wallcycle_sub_stop(wcycle_, WallCycleSubCounter::NonbondedFep);
 }

@@ -162,7 +162,7 @@
 #include "gromacs/utility/logger.h"
 #include "gromacs/utility/loggerbuilder.h"
 #include "gromacs/utility/messagestringcollector.h"
-#include "gromacs/utility/mdmodulenotification.h"
+#include "gromacs/utility/mdmodulesnotifiers.h"
 #include "gromacs/utility/physicalnodecommunicator.h"
 #include "gromacs/utility/pleasecite.h"
 #include "gromacs/utility/programcontext.h"
@@ -544,7 +544,7 @@ static void mdrunner_start_fn(const void* arg)
 {
     try
     {
-        auto masterMdrunner = reinterpret_cast<const gmx::Mdrunner*>(arg);
+        const auto* masterMdrunner = reinterpret_cast<const gmx::Mdrunner*>(arg);
         /* copy the arg list to make sure that it's thread-local. This
            doesn't copy pointed-to items, of course; fnm, cr and fplog
            are reset in the call below, all others should be const. */
@@ -770,7 +770,7 @@ static void finish_run(FILE*                     fplog,
                        const t_commrec*          cr,
                        const t_inputrec&         inputrec,
                        t_nrnb                    nrnb[],
-                       gmx_wallcycle_t           wcycle,
+                       gmx_wallcycle*            wcycle,
                        gmx_walltime_accounting_t walltime_accounting,
                        nonbonded_verlet_t*       nbv,
                        const gmx_pme_t*          pme,
@@ -857,15 +857,15 @@ static void finish_run(FILE*                     fplog,
      * to the code that handled the thread region, so that there's a
      * mechanism to keep cycle counting working during the transition
      * to task parallelism. */
-    int nthreads_pp  = gmx_omp_nthreads_get(emntNonbonded);
-    int nthreads_pme = gmx_omp_nthreads_get(emntPME);
+    int nthreads_pp  = gmx_omp_nthreads_get(ModuleMultiThread::Nonbonded);
+    int nthreads_pme = gmx_omp_nthreads_get(ModuleMultiThread::Pme);
     wallcycle_scale_by_num_threads(
             wcycle, thisRankHasDuty(cr, DUTY_PME) && !thisRankHasDuty(cr, DUTY_PP), nthreads_pp, nthreads_pme);
     auto cycle_sum(wallcycle_sum(cr, wcycle));
 
     if (printReport)
     {
-        auto nbnxn_gpu_timings =
+        auto* nbnxn_gpu_timings =
                 (nbv != nullptr && nbv->useGpu()) ? Nbnxm::gpu_get_timings(nbv->gpu_nbv) : nullptr;
         gmx_wallclock_gpu_pme_t pme_gpu_timings = {};
 
@@ -920,7 +920,6 @@ int Mdrunner::mdrunner()
     real                        ewaldcoeff_q     = 0;
     real                        ewaldcoeff_lj    = 0;
     int                         nChargePerturbed = -1, nTypePerturbed = 0;
-    gmx_wallcycle_t             wcycle;
     gmx_walltime_accounting_t   walltime_accounting = nullptr;
     MembedHolder                membedHolder(filenames.size(), filenames.data());
 
@@ -1669,8 +1668,9 @@ int Mdrunner::mdrunner()
        PME: env variable should be read only on one node to make sure it is
        identical everywhere;
      */
-    const int numThreadsOnThisRank = thisRankHasDuty(cr, DUTY_PP) ? gmx_omp_nthreads_get(emntNonbonded)
-                                                                  : gmx_omp_nthreads_get(emntPME);
+    const int numThreadsOnThisRank = thisRankHasDuty(cr, DUTY_PP)
+                                             ? gmx_omp_nthreads_get(ModuleMultiThread::Nonbonded)
+                                             : gmx_omp_nthreads_get(ModuleMultiThread::Pme);
     checkHardwareOversubscription(
             numThreadsOnThisRank, cr->nodeid, *hwinfo_->hardwareTopology, physicalNodeComm, mdlog);
 
@@ -1715,15 +1715,16 @@ int Mdrunner::mdrunner()
                         "The -resetstep functionality is deprecated, and may be removed in a "
                         "future version.");
     }
-    wcycle = wallcycle_init(fplog, mdrunOptions.timingOptions.resetStep, cr);
+    std::unique_ptr<gmx_wallcycle> wcycle =
+            wallcycle_init(fplog, mdrunOptions.timingOptions.resetStep, cr);
 
     if (PAR(cr))
     {
         /* Master synchronizes its value of reset_counters with all nodes
          * including PME only nodes */
-        int64_t reset_counters = wcycle_get_reset_counters(wcycle);
+        int64_t reset_counters = wcycle_get_reset_counters(wcycle.get());
         gmx_bcast(sizeof(reset_counters), &reset_counters, cr->mpi_comm_mysim);
-        wcycle_set_reset_counters(wcycle, reset_counters);
+        wcycle_set_reset_counters(wcycle.get(), reset_counters);
     }
 
     // Membrane embedding must be initialized before we call init_forcerec()
@@ -1797,7 +1798,7 @@ int Mdrunner::mdrunner()
                                         deviceStreamManager.get(),
                                         mtop,
                                         box,
-                                        wcycle);
+                                        wcycle.get());
         // TODO: Move the logic below to a GPU bonded builder
         if (runScheduleWork.simulationWork.useGpuBonded)
         {
@@ -1809,7 +1810,7 @@ int Mdrunner::mdrunner()
                     fr->ic->epsfac * fr->fudgeQQ,
                     deviceStreamManager->context(),
                     deviceStreamManager->bondedStream(havePPDomainDecomposition(cr)),
-                    wcycle);
+                    wcycle.get());
             fr->gpuBonded = gpuBonded.get();
         }
 
@@ -1942,7 +1943,7 @@ int Mdrunner::mdrunner()
                                        mdrunOptions.reproducible,
                                        ewaldcoeff_q,
                                        ewaldcoeff_lj,
-                                       gmx_omp_nthreads_get(emntPME),
+                                       gmx_omp_nthreads_get(ModuleMultiThread::Pme),
                                        pmeRunMode,
                                        nullptr,
                                        deviceContext,
@@ -1969,7 +1970,7 @@ int Mdrunner::mdrunner()
     if (thisRankHasDuty(cr, DUTY_PP))
     {
         /* Assumes uniform use of the number of OpenMP threads */
-        walltime_accounting = walltime_accounting_init(gmx_omp_nthreads_get(emntDefault));
+        walltime_accounting = walltime_accounting_init(gmx_omp_nthreads_get(ModuleMultiThread::Default));
 
         if (inputrec->bPull)
         {
@@ -2027,7 +2028,7 @@ int Mdrunner::mdrunner()
 
         /* Let makeConstraints know whether we have essential dynamics constraints. */
         auto constr = makeConstraints(
-                mtop, *inputrec, pull_work, doEssentialDynamics, fplog, cr, ms, &nrnb, wcycle, fr->bMolPBC);
+                mtop, *inputrec, pull_work, doEssentialDynamics, fplog, cr, ms, &nrnb, wcycle.get(), fr->bMolPBC);
 
         /* Energy terms and groups */
         gmx_enerdata_t enerd(mtop.groups.groups[SimulationAtomGroupType::EnergyOutput].size(),
@@ -2039,12 +2040,14 @@ int Mdrunner::mdrunner()
                            "cos_acceleration is only supported by integrator=md");
 
         /* Kinetic energy data */
-        gmx_ekindata_t ekind(inputrec->opts.ngtc, inputrec->cos_accel, gmx_omp_nthreads_get(emntUpdate));
+        gmx_ekindata_t ekind(inputrec->opts.ngtc,
+                             inputrec->cos_accel,
+                             gmx_omp_nthreads_get(ModuleMultiThread::Update));
 
         /* Set up interactive MD (IMD) */
         auto imdSession = makeImdSession(inputrec.get(),
                                          cr,
-                                         wcycle,
+                                         wcycle.get(),
                                          &enerd,
                                          ms,
                                          mtop,
@@ -2077,11 +2080,11 @@ int Mdrunner::mdrunner()
             fr->gpuForceReduction[gmx::AtomLocality::Local] = std::make_unique<gmx::GpuForceReduction>(
                     deviceStreamManager->context(),
                     deviceStreamManager->stream(gmx::DeviceStreamType::NonBondedLocal),
-                    wcycle);
+                    wcycle.get());
             fr->gpuForceReduction[gmx::AtomLocality::NonLocal] = std::make_unique<gmx::GpuForceReduction>(
                     deviceStreamManager->context(),
                     deviceStreamManager->stream(gmx::DeviceStreamType::NonBondedNonLocal),
-                    wcycle);
+                    wcycle.get());
         }
 
         std::unique_ptr<gmx::StatePropagatorDataGpu> stateGpu;
@@ -2096,7 +2099,7 @@ int Mdrunner::mdrunner()
             GMX_RELEASE_ASSERT(deviceStreamManager != nullptr,
                                "GPU device stream manager should be initialized to use GPU.");
             stateGpu = std::make_unique<gmx::StatePropagatorDataGpu>(
-                    *deviceStreamManager, transferKind, pme_gpu_get_block_size(fr->pmedata), wcycle);
+                    *deviceStreamManager, transferKind, pme_gpu_get_block_size(fr->pmedata), wcycle.get());
             fr->stateGpu = stateGpu.get();
         }
 
@@ -2110,7 +2113,7 @@ int Mdrunner::mdrunner()
 
 
         simulatorBuilder.add(SimulatorEnv(fplog, cr, ms, mdlog, oenv));
-        simulatorBuilder.add(Profiling(&nrnb, walltime_accounting, wcycle));
+        simulatorBuilder.add(Profiling(&nrnb, walltime_accounting, wcycle.get()));
         simulatorBuilder.add(ConstraintsParam(
                 constr.get(), enforcedRotation ? enforcedRotation->getLegacyEnfrot() : nullptr, vsite.get()));
         // TODO: Separate `fr` to a separate add, and make the `build` handle the coupling sensibly.
@@ -2146,11 +2149,11 @@ int Mdrunner::mdrunner()
     {
         GMX_RELEASE_ASSERT(pmedata, "pmedata was NULL while cr->duty was not DUTY_PP");
         /* do PME only */
-        walltime_accounting = walltime_accounting_init(gmx_omp_nthreads_get(emntPME));
+        walltime_accounting = walltime_accounting_init(gmx_omp_nthreads_get(ModuleMultiThread::Pme));
         gmx_pmeonly(pmedata,
                     cr,
                     &nrnb,
-                    wcycle,
+                    wcycle.get(),
                     walltime_accounting,
                     inputrec.get(),
                     pmeRunMode,
@@ -2158,7 +2161,7 @@ int Mdrunner::mdrunner()
                     deviceStreamManager.get());
     }
 
-    wallcycle_stop(wcycle, ewcRUN);
+    wallcycle_stop(wcycle.get(), WallCycleCounter::Run);
 
     /* Finish up, write some stuff
      * if rerunMD, don't write last frame again
@@ -2168,14 +2171,12 @@ int Mdrunner::mdrunner()
                cr,
                *inputrec,
                &nrnb,
-               wcycle,
+               wcycle.get(),
                walltime_accounting,
                fr ? fr->nbv.get() : nullptr,
                pmedata,
                EI_DYNAMICS(inputrec->eI) && !isMultiSim(ms));
 
-    // clean up cycle counter
-    wallcycle_destroy(wcycle);
 
     deviceStreamManager.reset(nullptr);
     // Free PME data

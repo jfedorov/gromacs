@@ -140,18 +140,18 @@ typedef struct em_state
 static void print_em_start(FILE*                     fplog,
                            const t_commrec*          cr,
                            gmx_walltime_accounting_t walltime_accounting,
-                           gmx_wallcycle_t           wcycle,
+                           gmx_wallcycle*            wcycle,
                            const char*               name)
 {
     walltime_accounting_start_time(walltime_accounting);
-    wallcycle_start(wcycle, ewcRUN);
+    wallcycle_start(wcycle, WallCycleCounter::Run);
     print_start(fplog, cr, walltime_accounting, name);
 }
 
 //! Stop counting time for EM
-static void em_time_end(gmx_walltime_accounting_t walltime_accounting, gmx_wallcycle_t wcycle)
+static void em_time_end(gmx_walltime_accounting_t walltime_accounting, gmx_wallcycle* wcycle)
 {
-    wallcycle_stop(wcycle, ewcRUN);
+    wallcycle_stop(wcycle, WallCycleCounter::Run);
 
     walltime_accounting_end_time(walltime_accounting);
 }
@@ -516,7 +516,7 @@ static void init_em(FILE*                fplog,
 static void finish_em(const t_commrec*          cr,
                       gmx_mdoutf_t              outf,
                       gmx_walltime_accounting_t walltime_accounting,
-                      gmx_wallcycle_t           wcycle)
+                      gmx_wallcycle*            wcycle)
 {
     if (!thisRankHasDuty(cr, DUTY_PME))
     {
@@ -670,7 +670,7 @@ static bool do_em_step(const t_commrec*                          cr,
     start = 0;
     end   = md->homenr;
 
-    nthreads = gmx_omp_nthreads_get(emntUpdate);
+    nthreads = gmx_omp_nthreads_get(ModuleMultiThread::Update);
 #pragma omp parallel num_threads(nthreads)
     {
         const rvec* x1 = s1->x.rvec_array();
@@ -793,7 +793,7 @@ static void em_dd_partition_system(FILE*                fplog,
                                    VirtualSitesHandler* vsite,
                                    gmx::Constraints*    constr,
                                    t_nrnb*              nrnb,
-                                   gmx_wallcycle_t      wcycle)
+                                   gmx_wallcycle*       wcycle)
 {
     /* Repartition the domain decomposition */
     dd_partition_system(fplog,
@@ -828,7 +828,7 @@ void setCoordinates(std::vector<RVec>* coords, ArrayRef<const RVec> refCoords)
 {
     coords->resize(refCoords.size());
 
-    const int gmx_unused nthreads = gmx_omp_nthreads_get(emntUpdate);
+    const int gmx_unused nthreads = gmx_omp_nthreads_get(ModuleMultiThread::Update);
 #pragma omp parallel for num_threads(nthreads) schedule(static)
     for (int i = 0; i < ssize(refCoords); i++)
     {
@@ -837,13 +837,13 @@ void setCoordinates(std::vector<RVec>* coords, ArrayRef<const RVec> refCoords)
 }
 
 //! Returns the maximum difference an atom moved between two coordinate sets, over all ranks
-real maxCoordinateDifference(ArrayRef<const RVec> coords1, ArrayRef<const RVec> coords2, const MPI_Comm mpiCommMyGroup)
+real maxCoordinateDifference(ArrayRef<const RVec> coords1, ArrayRef<const RVec> coords2, MPI_Comm mpiCommMyGroup)
 {
     GMX_RELEASE_ASSERT(coords1.size() == coords2.size(), "Coordinate counts should match");
 
     real maxDiffSquared = 0;
 
-    const int gmx_unused nthreads = gmx_omp_nthreads_get(emntUpdate);
+    const int gmx_unused nthreads = gmx_omp_nthreads_get(ModuleMultiThread::Update);
 #pragma omp parallel for reduction(max : maxDiffSquared) num_threads(nthreads) schedule(static)
     for (int i = 0; i < ssize(coords1); i++)
     {
@@ -915,7 +915,7 @@ public:
     //! Manages flop accounting.
     t_nrnb* nrnb;
     //! Manages wall cycle accounting.
-    gmx_wallcycle_t wcycle;
+    gmx_wallcycle* wcycle;
     //! Coordinates global reduction.
     gmx_global_stat_t gstat;
     //! Handles virtual sites.
@@ -1026,7 +1026,7 @@ void EnergyEvaluator::run(em_state_t* ems, rvec mu_tot, tensor vir, tensor pres,
     /* Communicate stuff when parallel */
     if (PAR(cr) && inputrec->eI != IntegrationAlgorithm::NM)
     {
-        wallcycle_start(wcycle, ewcMoveE);
+        wallcycle_start(wcycle, WallCycleCounter::MoveE);
 
         global_stat(*gstat,
                     cr,
@@ -1041,7 +1041,7 @@ void EnergyEvaluator::run(em_state_t* ems, rvec mu_tot, tensor vir, tensor pres,
                     FALSE,
                     CGLO_ENERGY | CGLO_PRESSURE | CGLO_CONSTRAINT);
 
-        wallcycle_stop(wcycle, ewcMoveE);
+        wallcycle_stop(wcycle, WallCycleCounter::MoveE);
     }
 
     if (fr->dispersionCorrection)
@@ -1243,7 +1243,7 @@ void LegacySimulator::do_cg()
     tensor            vir, pres;
     int               number_steps, neval = 0, nstcg = inputrec->nstcgsteep;
     int               m, step, nminstep;
-    auto              mdatoms = mdAtoms->mdatoms();
+    auto*             mdatoms = mdAtoms->mdatoms();
 
     GMX_LOG(mdlog.info)
             .asParagraph()
@@ -1935,7 +1935,7 @@ void LegacySimulator::do_lbfgs()
     em_state_t         ems;
     gmx_localtop_t     top(top_global.ffparams);
     gmx_global_stat_t  gstat;
-    auto               mdatoms = mdAtoms->mdatoms();
+    auto*              mdatoms = mdAtoms->mdatoms();
 
     GMX_LOG(mdlog.info)
             .asParagraph()
@@ -2746,7 +2746,7 @@ void LegacySimulator::do_steep()
     int               nsteps;
     int               count          = 0;
     int               steps_accepted = 0;
-    auto              mdatoms        = mdAtoms->mdatoms();
+    auto*             mdatoms        = mdAtoms->mdatoms();
 
     GMX_LOG(mdlog.info)
             .asParagraph()
@@ -3064,11 +3064,11 @@ void LegacySimulator::do_nm()
     real*               full_matrix   = nullptr;
 
     /* added with respect to mdrun */
-    int  row, col;
-    real der_range = 10.0 * std::sqrt(GMX_REAL_EPS);
-    real x_min;
-    bool bIsMaster = MASTER(cr);
-    auto mdatoms   = mdAtoms->mdatoms();
+    int   row, col;
+    real  der_range = 10.0 * std::sqrt(GMX_REAL_EPS);
+    real  x_min;
+    bool  bIsMaster = MASTER(cr);
+    auto* mdatoms   = mdAtoms->mdatoms();
 
     GMX_LOG(mdlog.info)
             .asParagraph()

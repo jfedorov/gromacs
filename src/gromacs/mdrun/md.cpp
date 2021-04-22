@@ -796,7 +796,7 @@ void gmx::LegacySimulator::do_md()
     }
 
     walltime_accounting_start_time(walltime_accounting);
-    wallcycle_start(wcycle, ewcRUN);
+    wallcycle_start(wcycle, WallCycleCounter::Run);
     print_start(fplog, cr, walltime_accounting, "mdrun");
 
     /***********************************************************
@@ -890,7 +890,7 @@ void gmx::LegacySimulator::do_md()
                            simulationWork.useGpuPmePpCommunication);
         }
 
-        wallcycle_start(wcycle, ewcSTEP);
+        wallcycle_start(wcycle, WallCycleCounter::Step);
 
         bLastStep = (step_rel == ir->nsteps);
         t         = t0 + step * ir->delta_t;
@@ -962,7 +962,7 @@ void gmx::LegacySimulator::do_md()
         if (vsite != nullptr)
         {
             // Virtual sites need to be updated before domain decomposition and forces are calculated
-            wallcycle_start(wcycle, ewcVSITECONSTR);
+            wallcycle_start(wcycle, WallCycleCounter::VsiteConstr);
             // md-vv calculates virtual velocities once it has full-step real velocities
             vsite->construct(state->x,
                              state->v,
@@ -970,7 +970,7 @@ void gmx::LegacySimulator::do_md()
                              (!EI_VV(inputrec->eI) && needVirtualVelocitiesThisStep)
                                      ? VSiteOperation::PositionsAndVelocities
                                      : VSiteOperation::Positions);
-            wallcycle_stop(wcycle, ewcVSITECONSTR);
+            wallcycle_stop(wcycle, WallCycleCounter::VsiteConstr);
         }
 
         if (bNS && !(bFirstStep && ir->bContinuation))
@@ -1264,9 +1264,9 @@ void gmx::LegacySimulator::do_md()
             if (vsite != nullptr && needVirtualVelocitiesThisStep)
             {
                 // Positions were calculated earlier
-                wallcycle_start(wcycle, ewcVSITECONSTR);
+                wallcycle_start(wcycle, WallCycleCounter::VsiteConstr);
                 vsite->construct(state->x, state->v, state->box, VSiteOperation::Velocities);
-                wallcycle_stop(wcycle, ewcVSITECONSTR);
+                wallcycle_stop(wcycle, WallCycleCounter::VsiteConstr);
             }
         }
 
@@ -1407,7 +1407,7 @@ void gmx::LegacySimulator::do_md()
 
         if (!useGpuForUpdate)
         {
-            wallcycle_start(wcycle, ewcUPDATE);
+            wallcycle_start(wcycle, WallCycleCounter::Update);
         }
         /* UPDATE PRESSURE VARIABLES IN TROTTER FORMULATION WITH CONSTRAINTS */
         if (bTrotter)
@@ -1544,7 +1544,14 @@ void gmx::LegacySimulator::do_md()
                 if (fr->useMts && bCalcVir && constr != nullptr)
                 {
                     upd.update_for_constraint_virial(
-                            *ir, *mdatoms, *state, f.view().forceWithPadding(), *ekind);
+                            *ir,
+                            mdatoms->homenr,
+                            mdatoms->havePartiallyFrozenAtoms,
+                            gmx::arrayRefFromArray(mdatoms->invmass, mdatoms->nr),
+                            gmx::arrayRefFromArray(mdatoms->invMassPerDim, mdatoms->nr),
+                            *state,
+                            f.view().forceWithPadding(),
+                            *ekind);
 
                     constrain_coordinates(constr,
                                           do_log,
@@ -1561,10 +1568,23 @@ void gmx::LegacySimulator::do_md()
                         (fr->useMts && step % ir->mtsLevels[1].stepFactor == 0)
                                 ? f.view().forceMtsCombinedWithPadding()
                                 : f.view().forceWithPadding();
-                upd.update_coords(
-                        *ir, step, mdatoms, state, forceCombined, fcdata, ekind, M, etrtPOSITION, cr, constr != nullptr);
+                upd.update_coords(*ir,
+                                  step,
+                                  mdatoms->homenr,
+                                  mdatoms->havePartiallyFrozenAtoms,
+                                  gmx::arrayRefFromArray(md->ptype, md->nr),
+                                  gmx::arrayRefFromArray(md->invmass, md->nr),
+                                  gmx::arrayRefFromArray(md->invMassPerDim, md->nr),
+                                  state,
+                                  forceCombined,
+                                  fcdata,
+                                  ekind,
+                                  M,
+                                  etrtPOSITION,
+                                  cr,
+                                  constr != nullptr);
 
-                wallcycle_stop(wcycle, ewcUPDATE);
+                wallcycle_stop(wcycle, WallCycleCounter::Update);
 
                 constrain_coordinates(constr,
                                       do_log,
@@ -1576,9 +1596,21 @@ void gmx::LegacySimulator::do_md()
                                       bCalcVir && !fr->useMts,
                                       shake_vir);
 
-                upd.update_sd_second_half(
-                        *ir, step, &dvdl_constr, mdatoms, state, cr, nrnb, wcycle, constr, do_log, do_ene);
-                upd.finish_update(*ir, mdatoms, state, wcycle, constr != nullptr);
+                upd.update_sd_second_half(*ir,
+                                          step,
+                                          &dvdl_constr,
+                                          mdatoms->homenr,
+                                          gmx::arrayRefFromArray(md->ptype, md->nr),
+                                          gmx::arrayRefFromArray(md->invmass, md->nr),
+                                          state,
+                                          cr,
+                                          nrnb,
+                                          wcycle,
+                                          constr,
+                                          do_log,
+                                          do_ene);
+                upd.finish_update(
+                        *ir, mdatoms->havePartiallyFrozenAtoms, mdatoms->homenr, state, wcycle, constr != nullptr);
             }
 
             if (ir->bPull && ir->pull->bSetPbcRefToPrevStepCOM)
@@ -1934,7 +1966,7 @@ void gmx::LegacySimulator::do_md()
             rescale_membed(step_rel, membed, as_rvec_array(state_global->x.data()));
         }
 
-        cycles = wallcycle_stop(wcycle, ewcSTEP);
+        cycles = wallcycle_stop(wcycle, WallCycleCounter::Step);
         if (DOMAINDECOMP(cr) && wcycle)
         {
             dd_cycles_add(cr->dd, cycles, ddCyclStep);

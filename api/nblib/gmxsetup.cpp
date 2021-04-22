@@ -103,8 +103,8 @@ NbvSetupUtil::NbvSetupUtil() : gmxForceCalculator_(std::make_unique<GmxForceCalc
 void NbvSetupUtil::setExecutionContext(const NBKernelOptions& options)
 {
     // Todo: find a more general way to initialize hardware
-    gmx_omp_nthreads_set(emntPairsearch, options.numOpenMPThreads);
-    gmx_omp_nthreads_set(emntNonbonded, options.numOpenMPThreads);
+    gmx_omp_nthreads_set(ModuleMultiThread::Pairsearch, options.numOpenMPThreads);
+    gmx_omp_nthreads_set(ModuleMultiThread::Nonbonded, options.numOpenMPThreads);
 }
 
 Nbnxm::KernelSetup NbvSetupUtil::getKernelSetup(const NBKernelOptions& options)
@@ -206,7 +206,7 @@ void NbvSetupUtil::setupNbnxmInstance(const size_t numParticleTypes, const NBKer
 
     // Put everything together
     auto nbv = std::make_unique<nonbonded_verlet_t>(
-            std::move(pairlistSets), std::move(pairSearch), std::move(atomData), kernelSetup, nullptr, nullWallcycle);
+            std::move(pairlistSets), std::move(pairSearch), std::move(atomData), kernelSetup, nullptr, nullptr);
 
     gmxForceCalculator_->nbv_ = std::move(nbv);
 }

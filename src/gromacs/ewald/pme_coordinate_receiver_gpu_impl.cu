@@ -129,7 +129,7 @@ void PmeCoordinateReceiverGpu::Impl::launchReceiveCoordinatesFromPpCudaMpi(Devic
 #endif
 }
 
-void PmeCoordinateReceiverGpu::Impl::waitOrEnqueueWaitReceiveCoordinatesFromPp()
+void PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesFromPpRanks()
 {
     if (recvCount_ > 0)
     {
@@ -180,9 +180,9 @@ void PmeCoordinateReceiverGpu::launchReceiveCoordinatesFromPpCudaMpi(DeviceBuffe
     impl_->launchReceiveCoordinatesFromPpCudaMpi(recvbuf, numAtoms, numBytes, ppRank);
 }
 
-void PmeCoordinateReceiverGpu::waitOrEnqueueWaitReceiveCoordinatesFromPp()
+void PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromPpRanks()
 {
-    impl_->waitOrEnqueueWaitReceiveCoordinatesFromPp();
+    impl_->synchronizeOnCoordinatesFromPpRanks();
 }
 
 } // namespace gmx

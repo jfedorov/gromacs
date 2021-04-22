@@ -95,7 +95,7 @@ public:
      * For lib MPI, wait for coordinates from PP ranks
      * For thread MPI, enqueue PP co-ordinate transfer event into PME stream
      */
-    void waitOrEnqueueWaitReceiveCoordinatesFromPp();
+    void synchronizeOnCoordinatesFromPpRanks();
 
 private:
     class Impl;

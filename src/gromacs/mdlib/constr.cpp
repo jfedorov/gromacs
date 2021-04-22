@@ -414,7 +414,7 @@ bool Constraints::Impl::apply(bool                      bLog,
     char  buf[22];
     int   nth;
 
-    wallcycle_start(wcycle, ewcCONSTR);
+    wallcycle_start(wcycle, WallCycleCounter::Constr);
 
     if (econq == ConstraintVariable::ForceDispl && !EI_ENERGY_MINIMIZATION(ir.eI))
     {
@@ -459,7 +459,7 @@ bool Constraints::Impl::apply(bool                      bLog,
 
     if (nsettle > 0)
     {
-        nth = gmx_omp_nthreads_get(emntSETTLE);
+        nth = gmx_omp_nthreads_get(ModuleMultiThread::Settle);
     }
     else
     {
@@ -781,7 +781,7 @@ bool Constraints::Impl::apply(bool                      bLog,
             do_edsam(&ir, step, cr, xprime.unpaddedArrayRef(), v.unpaddedArrayRef(), box, ed);
         }
     }
-    wallcycle_stop(wcycle, ewcCONSTR);
+    wallcycle_stop(wcycle, WallCycleCounter::Constr);
 
     const bool haveVelocities = (!v.empty() || econq == ConstraintVariable::Velocities);
     if (haveVelocities && !cFREEZE_.empty())
@@ -797,7 +797,7 @@ bool Constraints::Impl::apply(bool                      bLog,
             vRef = v.unpaddedArrayRef();
         }
 
-        int gmx_unused numThreads = gmx_omp_nthreads_get(emntUpdate);
+        int gmx_unused numThreads = gmx_omp_nthreads_get(ModuleMultiThread::Update);
 
 #pragma omp parallel for num_threads(numThreads) schedule(static)
         for (int i = 0; i < numHomeAtoms_; i++)
@@ -1200,7 +1200,7 @@ Constraints::Impl::Impl(const gmx_mtop_t&     mtop_p,
         }
 
         /* Allocate thread-local work arrays */
-        int nthreads = gmx_omp_nthreads_get(emntSETTLE);
+        int nthreads = gmx_omp_nthreads_get(ModuleMultiThread::Settle);
         if (nthreads > 1 && threadConstraintsVirial == nullptr)
         {
             snew(threadConstraintsVirial, nthreads);
