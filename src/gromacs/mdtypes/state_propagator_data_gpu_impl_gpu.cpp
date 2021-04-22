@@ -442,17 +442,9 @@ void StatePropagatorDataGpu::Impl::copyForcesToGpu(const gmx::ArrayRef<const gmx
     wallcycle_stop(wcycle_, ewcLAUNCH_GPU);
 }
 
-GpuEventSynchronizer* StatePropagatorDataGpu::Impl::getForcesReadyOnDeviceEvent(AtomLocality atomLocality,
-                                                                                bool useGpuFBufferOps)
+GpuEventSynchronizer* StatePropagatorDataGpu::Impl::getForcesReadyOnDeviceEvent(AtomLocality atomLocality)
 {
-    if ((atomLocality == AtomLocality::Local || atomLocality == AtomLocality::NonLocal) && useGpuFBufferOps)
-    {
-        return &fReducedOnDevice_;
-    }
-    else
-    {
-        return &fReadyOnDevice_[atomLocality];
-    }
+    return &fReadyOnDevice_[atomLocality];
 }
 
 GpuEventSynchronizer* StatePropagatorDataGpu::Impl::fReducedOnDevice()
@@ -612,10 +604,9 @@ void StatePropagatorDataGpu::copyForcesToGpu(const gmx::ArrayRef<const gmx::RVec
     return impl_->copyForcesToGpu(h_f, atomLocality);
 }
 
-GpuEventSynchronizer* StatePropagatorDataGpu::getForcesReadyOnDeviceEvent(AtomLocality atomLocality,
-                                                                          bool useGpuFBufferOps)
+GpuEventSynchronizer* StatePropagatorDataGpu::getForcesReadyOnDeviceEvent(AtomLocality atomLocality)
 {
-    return impl_->getForcesReadyOnDeviceEvent(atomLocality, useGpuFBufferOps);
+    return impl_->getForcesReadyOnDeviceEvent(atomLocality);
 }
 
 GpuEventSynchronizer* StatePropagatorDataGpu::fReducedOnDevice()

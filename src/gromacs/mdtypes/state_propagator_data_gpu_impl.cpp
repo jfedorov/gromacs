@@ -206,8 +206,7 @@ void StatePropagatorDataGpu::copyForcesToGpu(const gmx::ArrayRef<const gmx::RVec
                "GPU implementation.");
 }
 
-GpuEventSynchronizer* StatePropagatorDataGpu::getForcesReadyOnDeviceEvent(AtomLocality /* atomLocality */,
-                                                                          bool /* useGpuFBufferOps */)
+GpuEventSynchronizer* StatePropagatorDataGpu::getForcesReadyOnDeviceEvent(AtomLocality /* atomLocality */)
 {
     GMX_ASSERT(!impl_,
                "A CPU stub method from GPU state propagator data was called instead of one from "
