@@ -1199,8 +1199,8 @@ void EnergyOutput::printStepToEnergyFile(ener_file* fp_ene,
         nr[enxORI]    = (orires.oinsl.data() != orires.otav.data()) ? orires.numRestraints : 0;
         block[enxORI] = orires.oinsl.data();
         id[enxORI]    = enxORI;
-        nr[enxORT]    = orires.numExperiments * t_oriresdata::c_numEigenRealsPerExperiment;
-        block[enxORT] = orires.eig.data();
+        nr[enxORT]    = ssize(orires.eigenOutput);
+        block[enxORT] = orires.eigenOutput.data();
         id[enxORT]    = enxORT;
     }
 

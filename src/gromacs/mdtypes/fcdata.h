@@ -165,7 +165,7 @@ struct t_oriresdata
     //! The number of eigenvalues + eigenvectors per experiment
     static constexpr int c_numEigenRealsPerExperiment = 12;
     //! Eigenvalues/vectors, for output only (numExperiments x 12)
-    std::vector<real> eig;
+    std::vector<real> eigenOutput;
 
     // variables for diagonalization with diagonalize_orires_tensors()
     //! Tensor to diagonalize

@@ -216,7 +216,7 @@ t_oriresdata::t_oriresdata(FILE*                 fplog,
     xref.resize(numReferenceAtoms);
     xtmp.resize(numReferenceAtoms);
 
-    eig.resize(numExperiments * c_numEigenRealsPerExperiment);
+    eigenOutput.resize(numExperiments * c_numEigenRealsPerExperiment);
 
     /* Determine the reference structure on the master node.
      * Copy it to the other nodes after checking multi compatibility,
@@ -340,13 +340,13 @@ void diagonalize_orires_tensors(t_oriresdata* od)
 
         for (int i = 0; i < DIM; i++)
         {
-            od->eig[ex * t_oriresdata::c_numEigenRealsPerExperiment + i] = od->eig_diag[ord[i]];
+            od->eigenOutput[ex * t_oriresdata::c_numEigenRealsPerExperiment + i] = od->eig_diag[ord[i]];
         }
         for (int i = 0; i < DIM; i++)
         {
             for (int j = 0; j < DIM; j++)
             {
-                od->eig[ex * t_oriresdata::c_numEigenRealsPerExperiment + 3 + 3 * i + j] =
+                od->eigenOutput[ex * t_oriresdata::c_numEigenRealsPerExperiment + 3 + 3 * i + j] =
                         od->v[j][ord[i]];
             }
         }
@@ -359,7 +359,7 @@ void print_orires_log(FILE* log, t_oriresdata* od)
 
     for (int ex = 0; ex < od->numExperiments; ex++)
     {
-        const real* eig = od->eig.data() + ex * t_oriresdata::c_numEigenRealsPerExperiment;
+        const real* eig = od->eigenOutput.data() + ex * t_oriresdata::c_numEigenRealsPerExperiment;
         fprintf(log, "  Orientation experiment %d:\n", ex + 1);
         fprintf(log, "    order parameter: %g\n", eig[0]);
         for (int i = 0; i < DIM; i++)
