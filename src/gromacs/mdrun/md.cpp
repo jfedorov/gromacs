@@ -1286,8 +1286,9 @@ void gmx::LegacySimulator::do_md()
                     (ir->etc != etcNO && do_per_step(step + ir->nsttcouple - 1, ir->nsttcouple));
 
             // This applies Leap-Frog, LINCS and SETTLE in succession
-            integrator->integrate(stateGpu->getForcesReadyOnDeviceEvent(
-                                          AtomLocality::Local, runScheduleWork->stepWork.useGpuFBufferOps),
+            integrator->integrate(runScheduleWork->stepWork.useGpuFBufferOps
+                                          ? stateGpu->fReducedOnDevice()
+                                          : stateGpu->getForcesReadyOnDeviceEvent(AtomLocality::Local),
                                   ir->delta_t, true, bCalcVir, shake_vir, doTemperatureScaling,
                                   ekind->tcstat, doParrinelloRahman, ir->nstpcouple * ir->delta_t, M);
 

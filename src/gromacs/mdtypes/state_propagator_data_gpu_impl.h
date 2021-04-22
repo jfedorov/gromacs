@@ -263,21 +263,13 @@ public:
      */
     void copyForcesToGpu(gmx::ArrayRef<const gmx::RVec> h_f, AtomLocality atomLocality);
 
-    /*! \brief Get the event synchronizer for the forces ready on device.
-     *
-     *  Returns either of the event synchronizers, depending on the offload scenario
-     *  for the current simulation timestep:
-     *  1. The forces are copied to the device (when GPU buffer ops are off)
-     *  2. The forces are reduced on the device (GPU buffer ops are on)
-     *
-     *  \todo Pass step workload instead of the useGpuFBufferOps boolean.
+    /*! \brief Get the event synchronizer for the forces ready on device after H2D copy.
      *
      *  \param[in] atomLocality      Locality of the particles to wait for.
-     *  \param[in] useGpuFBufferOps  If the force buffer ops are offloaded to the GPU.
      *
      *  \returns  The event to synchronize the stream that consumes forces on device.
      */
-    GpuEventSynchronizer* getForcesReadyOnDeviceEvent(AtomLocality atomLocality, bool useGpuFBufferOps);
+    GpuEventSynchronizer* getForcesReadyOnDeviceEvent(AtomLocality atomLocality);
 
     /*! \brief Getter for the event synchronizer for the forces are reduced on the GPU.
      *
@@ -352,7 +344,9 @@ private:
 
     //! An array of events that indicate H2D copy of forces is complete (one event for each atom locality)
     EnumerationArray<AtomLocality, GpuEventSynchronizer> fReadyOnDevice_;
-    //! An event that the forces were reduced on the GPU
+    /*! \brief An event that the forces were reduced on the GPU
+     *  \todo This should be owned by the force reduction module.
+     */
     GpuEventSynchronizer fReducedOnDevice_;
     //! An array of events that indicate D2H copy of forces is complete (one event for each atom locality)
     EnumerationArray<AtomLocality, GpuEventSynchronizer> fReadyOnHost_;
