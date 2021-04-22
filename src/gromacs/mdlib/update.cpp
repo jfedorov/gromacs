@@ -339,7 +339,7 @@ enum class ApplyParrinelloRahmanVScaling
  * aligned (and padded) memory, possibly with some hints for the compilers.
  */
 template<StoreUpdatedVelocities storeUpdatedVelocities, NumTempScaleValues numTempScaleValues, ApplyParrinelloRahmanVScaling applyPRVScaling, typename VelocityType>
-static std::enable_if_t<std::is_same<VelocityType, rvec>::value || std::is_same<VelocityType, const rvec>::value, void>
+static std::enable_if_t<std::is_same<VelocityType, gmx::RVec>::value || std::is_same<VelocityType, const gmx::RVec>::value, void>
 updateMDLeapfrogSimple(int                                 start,
                        int                                 nrend,
                        real                                dt,
@@ -348,10 +348,10 @@ updateMDLeapfrogSimple(int                                 start,
                        gmx::ArrayRef<const t_grp_tcstat>   tcstat,
                        gmx::ArrayRef<const unsigned short> cTC,
                        const rvec                          pRVScaleMatrixDiagonal,
-                       const rvec* gmx_restrict x,
-                       rvec* gmx_restrict xprime,
-                       VelocityType* gmx_restrict v,
-                       const rvec* gmx_restrict f)
+                       gmx::ArrayRef<const gmx::RVec>      x,
+                       gmx::ArrayRef<gmx::RVec>            xprime,
+                       gmx::ArrayRef<VelocityType>         v,
+                       gmx::ArrayRef<const gmx::RVec>      f)
 {
     real lambdaGroup;
 
@@ -412,7 +412,8 @@ updateMDLeapfrogSimple(int                                 start,
  * \param[out] r1     Pointer to second SIMD register
  * \param[out] r2     Pointer to third SIMD register
  */
-static inline void simdLoadRvecs(const rvec* r, int index, SimdReal* r0, SimdReal* r1, SimdReal* r2)
+static inline void
+simdLoadRvecs(gmx::ArrayRef<const gmx::RVec> r, int index, SimdReal* r0, SimdReal* r1, SimdReal* r2)
 {
     const real* realPtr = r[index];
 
@@ -436,7 +437,7 @@ static inline void simdLoadRvecs(const rvec* r, int index, SimdReal* r0, SimdRea
  * \param[in]  r1     Second SIMD register
  * \param[in]  r2     Third SIMD register
  */
-static inline void simdStoreRvecs(rvec* r, int index, SimdReal r0, SimdReal r1, SimdReal r2)
+static inline void simdStoreRvecs(gmx::ArrayRef<gmx::RVec> r, int index, SimdReal r0, SimdReal r1, SimdReal r2)
 {
     real* realPtr = r[index];
 
@@ -461,16 +462,16 @@ static inline void simdStoreRvecs(rvec* r, int index, SimdReal r0, SimdReal r1, 
  * \param[in]    f                      Forces
  */
 template<StoreUpdatedVelocities storeUpdatedVelocities, typename VelocityType>
-static std::enable_if_t<std::is_same<VelocityType, rvec>::value || std::is_same<VelocityType, const rvec>::value, void>
+static std::enable_if_t<std::is_same<VelocityType, gmx::RVec>::value || std::is_same<VelocityType, const gmx::RVec>::value, void>
 updateMDLeapfrogSimpleSimd(int                               start,
                            int                               nrend,
                            real                              dt,
                            gmx::ArrayRef<const real>         invMass,
                            gmx::ArrayRef<const t_grp_tcstat> tcstat,
-                           const rvec* gmx_restrict x,
-                           rvec* gmx_restrict xprime,
-                           VelocityType* gmx_restrict v,
-                           const rvec* gmx_restrict f)
+                           gmx::ArrayRef<const gmx::RVec>    x,
+                           gmx::ArrayRef<gmx::RVec>          xprime,
+                           gmx::ArrayRef<VelocityType>       v,
+                           gmx::ArrayRef<const gmx::RVec>    f)
 {
     SimdReal timestep(dt);
     SimdReal lambdaSystem(tcstat[0].lambda);
@@ -551,13 +552,13 @@ static void updateMDLeapfrogGeneral(int                                 start,
                                     gmx::ArrayRef<const rvec>           invMassPerDim,
                                     const gmx_ekindata_t*               ekind,
                                     const matrix                        box,
-                                    const rvec* gmx_restrict x,
-                                    rvec* gmx_restrict xprime,
-                                    rvec* gmx_restrict v,
-                                    const rvec* gmx_restrict f,
-                                    const double* gmx_restrict nh_vxi,
-                                    const int                  nsttcouple,
-                                    const matrix               M)
+                                    gmx::ArrayRef<const gmx::RVec>      x,
+                                    gmx::ArrayRef<gmx::RVec>            xprime,
+                                    gmx::ArrayRef<gmx::RVec>            v,
+                                    gmx::ArrayRef<const gmx::RVec>      f,
+                                    gmx::ArrayRef<const double>         nh_vxi,
+                                    const int                           nsttcouple,
+                                    const matrix                        M)
 {
     /* This is a version of the leap-frog integrator that supports
      * all combinations of T-coupling, P-coupling and NEMD.
@@ -628,14 +629,14 @@ static void updateMDLeapfrogGeneral(int                                 start,
 }
 
 /*! \brief Handles the Leap-frog MD x and v integration */
-static void do_update_md(int         start,
-                         int         nrend,
-                         real        dt,
-                         int64_t     step,
-                         const rvec* gmx_restrict x,
-                         rvec* gmx_restrict xprime,
-                         rvec* gmx_restrict v,
-                         const rvec* gmx_restrict            f,
+static void do_update_md(int                                 start,
+                         int                                 nrend,
+                         real                                dt,
+                         int64_t                             step,
+                         gmx::ArrayRef<const gmx::RVec>      x,
+                         gmx::ArrayRef<gmx::RVec>            xprime,
+                         gmx::ArrayRef<gmx::RVec>            v,
+                         gmx::ArrayRef<const gmx::RVec>      f,
                          const TemperatureCoupling           etc,
                          const PressureCoupling              epc,
                          const int                           nsttcouple,
@@ -645,11 +646,11 @@ static void do_update_md(int         start,
                          gmx::ArrayRef<const rvec>            invMassPerDim,
                          const gmx_ekindata_t*                ekind,
                          const matrix                         box,
-                         const double* gmx_restrict nh_vxi,
-                         const matrix               M,
+                         gmx::ArrayRef<const double>          nh_vxi,
+                         const matrix                         M,
                          bool gmx_unused havePartiallyFrozenAtoms)
 {
-    GMX_ASSERT(nrend == start || xprime != x,
+    GMX_ASSERT(nrend == start || xprime.begin() != x.begin(),
                "For SIMD optimization certain compilers need to have xprime != x");
 
     /* Note: Berendsen pressure scaling is handled after do_update_md() */
@@ -784,19 +785,19 @@ static void do_update_md(int         start,
     }
 }
 /*! \brief Handles the Leap-frog MD x and v integration */
-static void doUpdateMDDoNotUpdateVelocities(int         start,
-                                            int         nrend,
-                                            real        dt,
-                                            const rvec* gmx_restrict x,
-                                            rvec* gmx_restrict xprime,
-                                            const rvec* gmx_restrict v,
-                                            const rvec* gmx_restrict f,
+static void doUpdateMDDoNotUpdateVelocities(int                            start,
+                                            int                            nrend,
+                                            real                           dt,
+                                            gmx::ArrayRef<const gmx::RVec> x,
+                                            gmx::ArrayRef<gmx::RVec>       xprime,
+                                            gmx::ArrayRef<const gmx::RVec> v,
+                                            gmx::ArrayRef<const gmx::RVec> f,
                                             bool gmx_unused           havePartiallyFrozenAtoms,
                                             gmx::ArrayRef<const real> gmx_unused invmass,
                                             gmx::ArrayRef<const rvec>            invMassPerDim,
                                             const gmx_ekindata_t&                ekind)
 {
-    GMX_ASSERT(nrend == start || xprime != x,
+    GMX_ASSERT(nrend == start || xprime.begin() != x.begin(),
                "For SIMD optimization certain compilers need to have xprime != x");
 
     gmx::ArrayRef<const t_grp_tcstat> tcstat = ekind.tcstat;
@@ -823,8 +824,8 @@ static void do_update_vv_vel(int                                 start,
                              gmx::ArrayRef<const real>           invmass,
                              gmx::ArrayRef<const ParticleType>   ptype,
                              gmx::ArrayRef<const unsigned short> cFREEZE,
-                             rvec                                v[],
-                             const rvec                          f[],
+                             gmx::ArrayRef<gmx::RVec>            v,
+                             gmx::ArrayRef<const gmx::RVec>      f,
                              gmx_bool                            bExtended,
                              real                                veta,
                              real                                alpha)
@@ -872,9 +873,9 @@ static void do_update_vv_pos(int                                 start,
                              gmx::ArrayRef<const ivec>           nFreeze,
                              gmx::ArrayRef<const ParticleType>   ptype,
                              gmx::ArrayRef<const unsigned short> cFREEZE,
-                             const rvec                          x[],
-                             rvec                                xprime[],
-                             const rvec                          v[],
+                             gmx::ArrayRef<const gmx::RVec>      x,
+                             gmx::ArrayRef<gmx::RVec>            xprime,
+                             gmx::ArrayRef<const gmx::RVec>      v,
                              gmx_bool                            bExtended,
                              real                                veta)
 {
@@ -1049,10 +1050,10 @@ static void doSDUpdateGeneral(const gmx_stochd_t&                 sd,
                               gmx::ArrayRef<const ParticleType>   ptype,
                               gmx::ArrayRef<const unsigned short> cFREEZE,
                               gmx::ArrayRef<const unsigned short> cTC,
-                              const rvec                          x[],
-                              rvec                                xprime[],
-                              rvec                                v[],
-                              const rvec                          f[],
+                              gmx::ArrayRef<const gmx::RVec>      x,
+                              gmx::ArrayRef<gmx::RVec>            xprime,
+                              gmx::ArrayRef<gmx::RVec>            v,
+                              gmx::ArrayRef<const gmx::RVec>      f,
                               int64_t                             step,
                               int                                 seed,
                               const int*                          gatindex)
@@ -1062,16 +1063,16 @@ static void doSDUpdateGeneral(const gmx_stochd_t&                 sd,
     // values.
     if (updateType == SDUpdate::ForcesOnly)
     {
-        GMX_ASSERT(f != nullptr, "SD update with only forces requires forces");
+        GMX_ASSERT(!f.empty(), "SD update with only forces requires forces");
         GMX_ASSERT(cTC.empty(), "SD update with only forces cannot handle temperature groups");
     }
     if (updateType == SDUpdate::FrictionAndNoiseOnly)
     {
-        GMX_ASSERT(f == nullptr, "SD update with only noise cannot handle forces");
+        GMX_ASSERT(f.empty(), "SD update with only noise cannot handle forces");
     }
     if (updateType == SDUpdate::Combined)
     {
-        GMX_ASSERT(f != nullptr, "SD update with forces and noise requires forces");
+        GMX_ASSERT(!f.empty(), "SD update with forces and noise requires forces");
     }
 
     // Even 0 bits internal counter gives 2x64 ints (more than enough for three table lookups)
@@ -1137,14 +1138,14 @@ static void doSDUpdateGeneral(const gmx_stochd_t&                 sd,
     }
 }
 
-static void do_update_sd(int         start,
-                         int         nrend,
-                         real        dt,
-                         int64_t     step,
-                         const rvec* gmx_restrict x,
-                         rvec* gmx_restrict xprime,
-                         rvec* gmx_restrict v,
-                         const rvec* gmx_restrict            f,
+static void do_update_sd(int                                 start,
+                         int                                 nrend,
+                         real                                dt,
+                         int64_t                             step,
+                         gmx::ArrayRef<const gmx::RVec>      x,
+                         gmx::ArrayRef<gmx::RVec>            xprime,
+                         gmx::ArrayRef<gmx::RVec>            v,
+                         gmx::ArrayRef<const gmx::RVec>      f,
                          gmx::ArrayRef<const ivec>           nFreeze,
                          gmx::ArrayRef<const real>           invmass,
                          gmx::ArrayRef<const ParticleType>   ptype,
@@ -1196,14 +1197,14 @@ static void do_update_sd(int         start,
     }
 }
 
-static void do_update_bd(int         start,
-                         int         nrend,
-                         real        dt,
-                         int64_t     step,
-                         const rvec* gmx_restrict x,
-                         rvec* gmx_restrict xprime,
-                         rvec* gmx_restrict v,
-                         const rvec* gmx_restrict            f,
+static void do_update_bd(int                                 start,
+                         int                                 nrend,
+                         real                                dt,
+                         int64_t                             step,
+                         gmx::ArrayRef<const gmx::RVec>      x,
+                         gmx::ArrayRef<gmx::RVec>            xprime,
+                         gmx::ArrayRef<gmx::RVec>            v,
+                         gmx::ArrayRef<const gmx::RVec>      f,
                          gmx::ArrayRef<const ivec>           nFreeze,
                          gmx::ArrayRef<const real>           invmass,
                          gmx::ArrayRef<const ParticleType>   ptype,
@@ -1426,10 +1427,10 @@ void Update::Impl::update_sd_second_half(const t_inputrec&                 input
                         ptype,
                         cFREEZE_,
                         cTC_,
-                        state->x.rvec_array(),
-                        xp_.rvec_array(),
-                        state->v.rvec_array(),
-                        nullptr,
+                        state->x,
+                        xp_,
+                        state->v,
+                        gmx::ArrayRef<const gmx::RVec>(),
                         step,
                         inputRecord.ld_seed,
                         DOMAINDECOMP(cr) ? cr->dd->globalAtomIndices.data() : nullptr);
@@ -1560,11 +1561,6 @@ void Update::Impl::update_coords(const t_inputrec&                 inputRecord,
             int start_th, end_th;
             getThreadAtomRange(nth, th, homenr, &start_th, &end_th);
 
-            const rvec* x_rvec  = state->x.rvec_array();
-            rvec*       xp_rvec = xp_.rvec_array();
-            rvec*       v_rvec  = state->v.rvec_array();
-            const rvec* f_rvec  = as_rvec_array(f.unpaddedConstArrayRef().data());
-
             switch (inputRecord.eI)
             {
                 case (IntegrationAlgorithm::MD):
@@ -1572,10 +1568,10 @@ void Update::Impl::update_coords(const t_inputrec&                 inputRecord,
                                  end_th,
                                  dt,
                                  step,
-                                 x_rvec,
-                                 xp_rvec,
-                                 v_rvec,
-                                 f_rvec,
+                                 state->x,
+                                 xp_,
+                                 state->v,
+                                 f.unpaddedConstArrayRef(),
                                  inputRecord.etc,
                                  inputRecord.epc,
                                  inputRecord.nsttcouple,
@@ -1585,7 +1581,7 @@ void Update::Impl::update_coords(const t_inputrec&                 inputRecord,
                                  invMassPerDim,
                                  ekind,
                                  state->box,
-                                 state->nosehoover_vxi.data(),
+                                 state->nosehoover_vxi,
                                  M,
                                  havePartiallyFrozenAtoms);
                     break;
@@ -1594,10 +1590,10 @@ void Update::Impl::update_coords(const t_inputrec&                 inputRecord,
                                  end_th,
                                  dt,
                                  step,
-                                 x_rvec,
-                                 xp_rvec,
-                                 v_rvec,
-                                 f_rvec,
+                                 state->x,
+                                 xp_,
+                                 state->v,
+                                 f.unpaddedConstArrayRef(),
                                  gmx::arrayRefFromArray(inputRecord.opts.nFreeze, inputRecord.opts.ngfrz),
                                  invMass,
                                  ptype,
@@ -1613,10 +1609,10 @@ void Update::Impl::update_coords(const t_inputrec&                 inputRecord,
                                  end_th,
                                  dt,
                                  step,
-                                 x_rvec,
-                                 xp_rvec,
-                                 v_rvec,
-                                 f_rvec,
+                                 state->x,
+                                 xp_,
+                                 state->v,
+                                 f.unpaddedConstArrayRef(),
                                  gmx::arrayRefFromArray(inputRecord.opts.nFreeze, inputRecord.opts.ngfrz),
                                  invMass,
                                  ptype,
@@ -1648,8 +1644,8 @@ void Update::Impl::update_coords(const t_inputrec&                 inputRecord,
                                              invMass,
                                              ptype,
                                              cFREEZE_,
-                                             v_rvec,
-                                             f_rvec,
+                                             state->v,
+                                             f.unpaddedConstArrayRef(),
                                              bExtended,
                                              state->veta,
                                              alpha);
@@ -1662,9 +1658,9 @@ void Update::Impl::update_coords(const t_inputrec&                 inputRecord,
                                                                     inputRecord.opts.ngfrz),
                                              ptype,
                                              cFREEZE_,
-                                             x_rvec,
-                                             xp_rvec,
-                                             v_rvec,
+                                             state->x,
+                                             xp_,
+                                             state->v,
                                              bExtended,
                                              state->veta);
                             break;
@@ -1703,13 +1699,17 @@ void Update::Impl::update_for_constraint_virial(const t_inputrec&         inputR
             int start_th, end_th;
             getThreadAtomRange(nth, th, homenr, &start_th, &end_th);
 
-            const rvec* x_rvec  = state.x.rvec_array();
-            rvec*       xp_rvec = xp_.rvec_array();
-            const rvec* v_rvec  = state.v.rvec_array();
-            const rvec* f_rvec  = as_rvec_array(f.unpaddedConstArrayRef().data());
-
-            doUpdateMDDoNotUpdateVelocities(
-                    start_th, end_th, dt, x_rvec, xp_rvec, v_rvec, f_rvec, havePartiallyFrozenAtoms, invmass, invMassPerDim, ekind);
+            doUpdateMDDoNotUpdateVelocities(start_th,
+                                            end_th,
+                                            dt,
+                                            state.x,
+                                            xp_,
+                                            state.v,
+                                            f.unpaddedConstArrayRef(),
+                                            havePartiallyFrozenAtoms,
+                                            invmass,
+                                            invMassPerDim,
+                                            ekind);
         }
         GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR
     }
