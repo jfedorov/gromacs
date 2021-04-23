@@ -102,10 +102,11 @@ t_oriresdata::t_oriresdata(FILE*                 fplog,
                 "in the system"));
     }
 
-    if (cr && havePPDomainDecomposition(cr))
+    if (cr && PAR(cr))
     {
         GMX_THROW(gmx::InvalidInputError(
-                "Orientation restraints are not supported with domain decomposition"));
+                "Orientation restraints do not work with MPI parallelization. Choose 1 MPI rank, "
+                "if possible."));
     }
 
     GMX_RELEASE_ASSERT(globalState != nullptr, "We need a valid global state in init_orires");
