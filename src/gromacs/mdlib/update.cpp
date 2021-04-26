@@ -330,7 +330,7 @@ enum class ApplyParrinelloRahmanVScaling
  * \param[in]    pRVScaleMatrixDiagonal Parrinello-Rahman v-scale matrix diagonal
  * \param[in]    x                      Input coordinates
  * \param[out]   xprime                 Updated coordinates
- * \param[inout] v                      Velocities, type either rvec* or const rvec*
+ * \param[inout] v                      Velocities, type either RVec or const RVec
  * \param[in]    f                      Forces
  *
  * We expect this template to get good SIMD acceleration by most compilers,
@@ -399,15 +399,15 @@ updateMDLeapfrogSimple(int                                 start,
 
 #if GMX_HAVE_SIMD_UPDATE
 
-/*! \brief Load (aligned) the contents of GMX_SIMD_REAL_WIDTH rvec elements sequentially into 3 SIMD registers
+/*! \brief Load (aligned) the contents of GMX_SIMD_REAL_WIDTH RVec elements sequentially into 3 SIMD registers
  *
  * The loaded output is:
  * \p r0: { r[index][XX], r[index][YY], ... }
  * \p r1: { ... }
  * \p r2: { ..., r[index+GMX_SIMD_REAL_WIDTH-1][YY], r[index+GMX_SIMD_REAL_WIDTH-1][ZZ] }
  *
- * \param[in]  r      Real to an rvec array, has to be aligned to SIMD register width
- * \param[in]  index  Index of the first rvec triplet of reals to load
+ * \param[in]  r      Real to an RVec array, has to be aligned to SIMD register width
+ * \param[in]  index  Index of the first RVec triplet of reals to load
  * \param[out] r0     Pointer to first SIMD register
  * \param[out] r1     Pointer to second SIMD register
  * \param[out] r2     Pointer to third SIMD register
@@ -424,15 +424,15 @@ simdLoadRvecs(gmx::ArrayRef<const gmx::RVec> r, int index, SimdReal* r0, SimdRea
     *r2 = simdLoad(realPtr + 2 * GMX_SIMD_REAL_WIDTH);
 }
 
-/*! \brief Store (aligned) 3 SIMD registers sequentially to GMX_SIMD_REAL_WIDTH rvec elements
+/*! \brief Store (aligned) 3 SIMD registers sequentially to GMX_SIMD_REAL_WIDTH RVec elements
  *
  * The stored output is:
  * \p r[index] = { { r0[0], r0[1], ... }
  * ...
  * \p r[index+GMX_SIMD_REAL_WIDTH-1] =  { ... , r2[GMX_SIMD_REAL_WIDTH-2], r2[GMX_SIMD_REAL_WIDTH-1] }
  *
- * \param[out] r      Pointer to an rvec array, has to be aligned to SIMD register width
- * \param[in]  index  Index of the first rvec triplet of reals to store to
+ * \param[out] r      Pointer to an RVec array, has to be aligned to SIMD register width
+ * \param[in]  index  Index of the first RVec triplet of reals to store to
  * \param[in]  r0     First SIMD register
  * \param[in]  r1     Second SIMD register
  * \param[in]  r2     Third SIMD register
@@ -458,7 +458,7 @@ static inline void simdStoreRvecs(gmx::ArrayRef<gmx::RVec> r, int index, SimdRea
  * \param[in]    tcstat                 Temperature coupling information
  * \param[in]    x                      Input coordinates
  * \param[out]   xprime                 Updated coordinates
- * \param[inout] v                      Velocities, type either rvec* or const rvec*
+ * \param[inout] v                      Velocities, type either RVec or const RVec
  * \param[in]    f                      Forces
  */
 template<StoreUpdatedVelocities storeUpdatedVelocities, typename VelocityType>
@@ -650,7 +650,7 @@ static void do_update_md(int                                 start,
                          const matrix                         M,
                          bool gmx_unused havePartiallyFrozenAtoms)
 {
-    GMX_ASSERT(nrend == start || xprime.begin() != x.begin(),
+    GMX_ASSERT(nrend == start || xprime.data() != x.data(),
                "For SIMD optimization certain compilers need to have xprime != x");
 
     /* Note: Berendsen pressure scaling is handled after do_update_md() */
@@ -797,7 +797,7 @@ static void doUpdateMDDoNotUpdateVelocities(int                            start
                                             gmx::ArrayRef<const rvec>            invMassPerDim,
                                             const gmx_ekindata_t&                ekind)
 {
-    GMX_ASSERT(nrend == start || xprime.begin() != x.begin(),
+    GMX_ASSERT(nrend == start || xprime.data() != x.data(),
                "For SIMD optimization certain compilers need to have xprime != x");
 
     gmx::ArrayRef<const t_grp_tcstat> tcstat = ekind.tcstat;
