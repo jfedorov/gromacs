@@ -49,8 +49,8 @@
 #include "gmxpre.h"
 
 #include "gromacs/mdlib/leapfrog_gpu.h"
-#include "gromacs/mdlib/lincs_gpu.cuh"
-#include "gromacs/mdlib/settle_gpu.cuh"
+#include "gromacs/mdlib/lincs_gpu.h"
+#include "gromacs/mdlib/settle_gpu.h"
 #include "gromacs/mdlib/update_constrain_gpu.h"
 #include "gromacs/mdtypes/inputrec.h"
 

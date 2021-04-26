@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2013,2014,2018,2019,2021, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -32,27 +32,40 @@
  * To help us fund GROMACS development, we humbly ask that you cite
  * the research papers on the package. Check out http://www.gromacs.org.
  */
-#ifndef GMX_FILEIO_TIMECONTROL_H
-#define GMX_FILEIO_TIMECONTROL_H
-
-#include "gromacs/utility/basedefinitions.h"
-#include "gromacs/utility/real.h"
-
-/* The code below is to facilitate controlled begin and end of
- * trajectory reading.
+/*! \internal \file
+ *
+ * \brief Declare backend-specific LINCS GPU functions
+ *
+ * \author Artem Zhmurov <zhmurov@gmail.com>
+ * \author Alan Gray <alang@nvidia.com>
+ *
+ * \ingroup module_mdlib
  */
-enum class TimeControl : int
+#ifndef GMX_MDLIB_LINCS_GPU_INTERNAL_H
+#define GMX_MDLIB_LINCS_GPU_INTERNAL_H
+
+#include "gromacs/gpu_utils/devicebuffer_datatype.h"
+#include "gromacs/gpu_utils/gputraits.h"
+
+class DeviceStream;
+
+namespace gmx
 {
-    Begin,
-    End,
-    Delta,
-    Count
-};
 
-bool bTimeSet(TimeControl tcontrol);
+struct LincsGpuKernelParameters;
 
-real rTimeValue(TimeControl tcontrol);
+//! Number of threads in a GPU block
+constexpr static int c_threadsPerBlock = 256;
 
-void setTimeValue(TimeControl tcontrol, real value);
+void launchLincsGpuKernel(LincsGpuKernelParameters&  kernelParams,
+                          const DeviceBuffer<Float3> d_x,
+                          DeviceBuffer<Float3>       d_xp,
+                          const bool                 updateVelocities,
+                          DeviceBuffer<Float3>       d_v,
+                          const real                 invdt,
+                          const bool                 computeVirial,
+                          const DeviceStream&        deviceStream);
 
-#endif
+} // namespace gmx
+
+#endif // GMX_MDLIB_LINCS_GPU_INTERNAL_H
