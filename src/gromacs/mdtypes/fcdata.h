@@ -134,30 +134,30 @@ struct t_oriresdata
     int numReferenceAtoms;
     //! The masses of the reference atoms
     std::vector<real> mref;
-    //! The reference coordinates for the fit (nref)
+    //! The reference coordinates for the fit
     std::vector<gmx::RVec> xref;
-    //! Temporary array for fitting (nref)
+    //! Temporary array for fitting
     std::vector<gmx::RVec> xtmp;
     //! Rotation matrix to rotate to the reference coordinates
-    matrix R;
-    //! Array of order tensors for each experiment (nexp)
-    tensor* S = nullptr;
-    //! The order matrix D for all restraints (nr x 5)
-    rvec5* Dinsl = nullptr;
-    //! The ensemble averaged D (nr x 5)
-    rvec5* Dins = nullptr;
-    //! The time and ensemble averaged D (nr x 5)
-    rvec5* Dtav = nullptr;
+    matrix rotationMatrix;
+    //! Array of order tensors, one for each experiment
+    tensor* orderTensors = nullptr;
+    //! The order tensor D for all restraints
+    rvec5* DTensors = nullptr;
+    //! The ensemble averaged D for all restraints
+    rvec5* DTensorsEnsembleAv = nullptr;
+    //! The time and ensemble averaged D restraints
+    rvec5* DTensorsTimeAndEnsembleAv = nullptr;
     //! The calculated instantaneous orientations
-    std::vector<real> oinsl;
+    std::vector<real> orientations;
     //! The calculated emsemble averaged orientations
-    gmx::ArrayRef<real> oins;
+    gmx::ArrayRef<real> orientationsEnsembleAv;
     //! Buffer for the calculated emsemble averaged orientations, only used with ensemble averaging
-    std::vector<real> oinsBuffer;
+    std::vector<real> orientationsEnsembleAvBuffer;
     //! The calculated time and ensemble averaged orientations
-    gmx::ArrayRef<real> otav;
+    gmx::ArrayRef<real> orientationsTimeAndEnsembleAv;
     //! The weighted (using kfac) RMS deviation
-    std::vector<real> otavBuffer;
+    std::vector<real> orientationsTimeAndEnsembleAvBuffer;
     //! Buffer for the weighted (using kfac) RMS deviation, only used with time averaging
     real rmsdev;
     //! An temporary array of matrix + rhs

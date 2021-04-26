@@ -109,7 +109,7 @@ t_oriresdata::t_oriresdata(FILE*                 fplog,
                 "if possible."));
     }
 
-    GMX_RELEASE_ASSERT(globalState != nullptr, "We need a valid global state in init_orires");
+    GMX_RELEASE_ASSERT(globalState != nullptr, "We need a valid global state in t_oriresdata()");
 
     fc             = ir.orires_fc;
     numExperiments = 0;
@@ -150,30 +150,30 @@ t_oriresdata::t_oriresdata(FILE*                 fplog,
             typeMax - typeMin + 1 == numRestraints,
             "All orientation restraint parameter entries in the topology should be consecutive");
 
-    snew(S, numExperiments);
+    snew(orderTensors, numExperiments);
     /* When not doing time averaging, the instaneous and time averaged data
      * are indentical and the pointers can point to the same memory.
      */
-    snew(Dinsl, numRestraints);
+    snew(DTensors, numRestraints);
 
     if (ms)
     {
-        snew(Dins, numRestraints);
+        snew(DTensorsEnsembleAv, numRestraints);
     }
     else
     {
-        Dins = Dinsl;
+        DTensorsEnsembleAv = DTensors;
     }
 
     if (ir.orires_tau == 0)
     {
-        Dtav  = Dins;
-        edt   = 0.0;
-        edt_1 = 1.0;
+        DTensorsTimeAndEnsembleAv = DTensorsEnsembleAv;
+        edt                       = 0.0;
+        edt_1                     = 1.0;
     }
     else
     {
-        snew(Dtav, numRestraints);
+        snew(DTensorsTimeAndEnsembleAv, numRestraints);
         edt   = std::exp(-ir.delta_t / ir.orires_tau);
         edt_1 = 1.0 - edt;
 
@@ -184,24 +184,24 @@ t_oriresdata::t_oriresdata(FILE*                 fplog,
         globalState->hist.orire_Dtav.resize(numRestraints * 5);
     }
 
-    oinsl.resize(numRestraints);
+    orientations.resize(numRestraints);
     if (ms)
     {
-        oinsBuffer.resize(numRestraints);
-        oins = oinsBuffer;
+        orientationsEnsembleAvBuffer.resize(numRestraints);
+        orientationsEnsembleAv = orientationsEnsembleAvBuffer;
     }
     else
     {
-        oins = oinsl;
+        orientationsEnsembleAv = orientations;
     }
     if (ir.orires_tau == 0)
     {
-        otav = oins;
+        orientationsTimeAndEnsembleAv = orientationsEnsembleAv;
     }
     else
     {
-        otavBuffer.resize(numRestraints);
-        otav = otavBuffer;
+        orientationsTimeAndEnsembleAvBuffer.resize(numRestraints);
+        orientationsTimeAndEnsembleAv = orientationsTimeAndEnsembleAvBuffer;
     }
     tmpEq.resize(numExperiments);
 
@@ -291,16 +291,16 @@ t_oriresdata::t_oriresdata(FILE*                 fplog,
 
 t_oriresdata::~t_oriresdata()
 {
-    sfree(S);
-    if (Dtav != Dins)
+    sfree(orderTensors);
+    if (DTensorsTimeAndEnsembleAv != DTensorsEnsembleAv)
     {
-        sfree(Dtav);
+        sfree(DTensorsTimeAndEnsembleAv);
     }
-    if (Dins != Dinsl)
+    if (DTensorsEnsembleAv != DTensors)
     {
-        sfree(Dins);
+        sfree(DTensorsEnsembleAv);
     }
-    sfree(Dinsl);
+    sfree(DTensors);
 }
 
 void diagonalize_orires_tensors(t_oriresdata* od)
@@ -309,8 +309,8 @@ void diagonalize_orires_tensors(t_oriresdata* od)
     {
         /* Rotate the S tensor back to the reference frame */
         matrix S, TMP;
-        mmul(od->R, od->S[ex], TMP);
-        mtmul(TMP, od->R, S);
+        mmul(od->rotationMatrix, od->orderTensors[ex], TMP);
+        mtmul(TMP, od->rotationMatrix, S);
         for (int i = 0; i < DIM; i++)
         {
             for (int j = 0; j < DIM; j++)
@@ -449,7 +449,7 @@ real calc_orires_dev(const gmx_multisim_t* ms,
         rvec_dec(xtmp[j], com);
     }
     /* Calculate the rotation matrix to rotate x to the reference orientation */
-    calc_fit_R(DIM, nref, mref.data(), as_rvec_array(xref.data()), as_rvec_array(xtmp.data()), od->R);
+    calc_fit_R(DIM, nref, mref.data(), as_rvec_array(xref.data()), as_rvec_array(xtmp.data()), od->rotationMatrix);
 
     for (int fa = 0; fa < nfa; fa += 3)
     {
@@ -463,7 +463,7 @@ real calc_orires_dev(const gmx_multisim_t* ms,
         {
             rvec_sub(x[forceatoms[fa + 1]], x[forceatoms[fa + 2]], r_unrot);
         }
-        mvmul(od->R, r_unrot, r);
+        mvmul(od->rotationMatrix, r_unrot, r);
         r2   = norm2(r);
         invr = gmx::invsqrt(r2);
         /* Calculate the prefactor for the D tensor, this includes the factor 3! */
@@ -472,7 +472,7 @@ real calc_orires_dev(const gmx_multisim_t* ms,
         {
             pfac *= invr;
         }
-        rvec5& Dinsl = od->Dinsl[restraintIndex];
+        rvec5& Dinsl = od->DTensors[restraintIndex];
         Dinsl[0]     = pfac * (2 * r[0] * r[0] + r[1] * r[1] - r2);
         Dinsl[1]     = pfac * (2 * r[0] * r[1]);
         Dinsl[2]     = pfac * (2 * r[0] * r[2]);
@@ -483,14 +483,14 @@ real calc_orires_dev(const gmx_multisim_t* ms,
         {
             for (int i = 0; i < 5; i++)
             {
-                od->Dins[restraintIndex][i] = Dinsl[i] * invn;
+                od->DTensorsEnsembleAv[restraintIndex][i] = Dinsl[i] * invn;
             }
         }
     }
 
     if (ms)
     {
-        gmx_sum_sim(5 * od->numRestraints, od->Dins[0], ms);
+        gmx_sum_sim(5 * od->numRestraints, od->DTensorsEnsembleAv[0], ms);
     }
 
     /* Calculate the order tensor S for each experiment via optimization */
@@ -510,17 +510,17 @@ real calc_orires_dev(const gmx_multisim_t* ms,
     {
         const int type           = forceatoms[fa];
         const int restraintIndex = type - od->typeMin;
-        rvec5&    Dtav           = od->Dtav[restraintIndex];
+        rvec5&    Dtav           = od->DTensorsTimeAndEnsembleAv[restraintIndex];
         if (bTAV)
         {
-            /* Here we update Dtav in t_fcdata using the data in history_t.
+            /* Here we update DTensorsTimeAndEnsembleAv in t_fcdata using the data in history_t.
              * Thus the results stay correct when this routine
              * is called multiple times.
              */
             for (int i = 0; i < 5; i++)
             {
                 Dtav[i] = edt * hist->orire_Dtav[restraintIndex * 5 + i]
-                          + edt_1 * od->Dins[restraintIndex][i];
+                          + edt_1 * od->DTensorsEnsembleAv[restraintIndex][i];
             }
         }
 
@@ -553,7 +553,7 @@ real calc_orires_dev(const gmx_multisim_t* ms,
         }
         m_inv_gen(&eq.mat[0][0], 5, &eq.mat[0][0]);
         /* Calculate the orientation tensor S for this experiment */
-        matrix& S = od->S[ex];
+        matrix& S = od->orderTensors[ex];
         S[0][0]   = 0;
         S[0][1]   = 0;
         S[0][2]   = 0;
@@ -573,7 +573,7 @@ real calc_orires_dev(const gmx_multisim_t* ms,
         S[2][2] = -S[0][0] - S[1][1];
     }
 
-    const matrix* S = od->S;
+    const matrix* S = od->orderTensors;
 
     wsv2 = 0;
     sw   = 0;
@@ -584,15 +584,15 @@ real calc_orires_dev(const gmx_multisim_t* ms,
         const int restraintIndex = type - od->typeMin;
         const int ex             = ip[type].orires.ex;
 
-        const rvec5& Dtav = od->Dtav[restraintIndex];
-        od->otav[restraintIndex] =
+        const rvec5& Dtav = od->DTensorsTimeAndEnsembleAv[restraintIndex];
+        od->orientationsTimeAndEnsembleAv[restraintIndex] =
                 two_thr * corrfac
                 * (S[ex][0][0] * Dtav[0] + S[ex][0][1] * Dtav[1] + S[ex][0][2] * Dtav[2]
                    + S[ex][1][1] * Dtav[3] + S[ex][1][2] * Dtav[4]);
         if (bTAV)
         {
-            const rvec5& Dins = od->Dins[restraintIndex];
-            od->oins[restraintIndex] =
+            const rvec5& Dins = od->DTensorsEnsembleAv[restraintIndex];
+            od->orientationsEnsembleAv[restraintIndex] =
                     two_thr
                     * (S[ex][0][0] * Dins[0] + S[ex][0][1] * Dins[1] + S[ex][0][2] * Dins[2]
                        + S[ex][1][1] * Dins[3] + S[ex][1][2] * Dins[4]);
@@ -602,14 +602,14 @@ real calc_orires_dev(const gmx_multisim_t* ms,
             /* When ensemble averaging is used recalculate the local orientation
              * for output to the energy file.
              */
-            const rvec5& Dinsl = od->Dinsl[restraintIndex];
-            od->oinsl[restraintIndex] =
+            const rvec5& Dinsl = od->DTensors[restraintIndex];
+            od->orientations[restraintIndex] =
                     two_thr
                     * (S[ex][0][0] * Dinsl[0] + S[ex][0][1] * Dinsl[1] + S[ex][0][2] * Dinsl[2]
                        + S[ex][1][1] * Dinsl[3] + S[ex][1][2] * Dinsl[4]);
         }
 
-        dev = od->otav[restraintIndex] - ip[type].orires.obs;
+        dev = od->orientationsTimeAndEnsembleAv[restraintIndex] - ip[type].orires.obs;
 
         wsv2 += ip[type].orires.kfac * gmx::square(dev);
         sw += ip[type].orires.kfac;
@@ -620,8 +620,8 @@ real calc_orires_dev(const gmx_multisim_t* ms,
     for (int ex = 0; ex < od->numExperiments; ex++)
     {
         matrix RS;
-        tmmul(od->R, od->S[ex], RS);
-        mmul(RS, od->R, od->S[ex]);
+        tmmul(od->rotationMatrix, od->orderTensors[ex], RS);
+        mmul(RS, od->rotationMatrix, od->orderTensors[ex]);
     }
 
     return od->rmsdev;
@@ -683,7 +683,7 @@ real orires(int             nfa,
             ex    = ip[type].orires.ex;
             power = ip[type].orires.power;
             fc    = smooth_fc * ip[type].orires.kfac;
-            dev   = oriresdata->otav[restraintIndex] - ip[type].orires.obs;
+            dev   = oriresdata->orientationsTimeAndEnsembleAv[restraintIndex] - ip[type].orires.obs;
 
             /* NOTE:
              * there is no real potential when time averaging is applied
@@ -693,7 +693,7 @@ real orires(int             nfa,
             if (bTAV)
             {
                 /* Calculate the force as the sqrt of tav times instantaneous */
-                devins = oriresdata->oins[restraintIndex] - ip[type].orires.obs;
+                devins = oriresdata->orientationsEnsembleAv[restraintIndex] - ip[type].orires.obs;
                 if (dev * devins <= 0)
                 {
                     dev = 0;
@@ -713,7 +713,7 @@ real orires(int             nfa,
             {
                 pfac *= invr;
             }
-            mvmul(oriresdata->S[ex], r, Sr);
+            mvmul(oriresdata->orderTensors[ex], r, Sr);
             for (int i = 0; i < DIM; i++)
             {
                 fij[i] = -pfac * dev * (4 * Sr[i] - 2 * (2 + power) * invr2 * iprod(Sr, r) * r[i]);
@@ -749,7 +749,7 @@ void update_orires_history(const t_oriresdata& od, history_t* hist)
         {
             for (int i = 0; i < 5; i++)
             {
-                hist->orire_Dtav[pair * 5 + i] = od.Dtav[pair][i];
+                hist->orire_Dtav[pair * 5 + i] = od.DTensorsTimeAndEnsembleAv[pair][i];
             }
         }
     }
