@@ -1660,7 +1660,8 @@ int Mdrunner::mdrunner()
 
         if (gmx_mtop_ftype_count(mtop, F_ORIRES) > 0)
         {
-            fr->fcdata->orires = std::make_unique<t_oriresdata>(fplog, mtop, *inputrec, cr, ms, globalState.get());
+            fr->fcdata->orires =
+                    std::make_unique<t_oriresdata>(fplog, mtop, *inputrec, cr, ms, globalState.get());
         }
         else
         {
