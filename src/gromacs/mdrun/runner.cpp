@@ -1208,12 +1208,6 @@ int Mdrunner::mdrunner()
                 globalState.get(),
                 replExParams.exchangeInterval > 0);
 
-    std::unique_ptr<t_oriresdata> oriresData;
-    if (gmx_mtop_ftype_count(mtop, F_ORIRES) > 0)
-    {
-        oriresData = std::make_unique<t_oriresdata>(fplog, mtop, *inputrec, cr, ms, globalState.get());
-    }
-
     auto deform = prepareBoxDeformation(globalState != nullptr ? globalState->box : box,
                                         MASTER(cr) ? DDRole::Master : DDRole::Agent,
                                         PAR(cr) ? NumRanks::Multiple : NumRanks::Single,
@@ -1663,7 +1657,15 @@ int Mdrunner::mdrunner()
                       pforce);
         // Dirty hack, for fixing disres and orires should be made mdmodules
         fr->fcdata->disres = disresdata;
-        fr->fcdata->orires.swap(oriresData);
+
+        if (gmx_mtop_ftype_count(mtop, F_ORIRES) > 0)
+        {
+            fr->fcdata->orires = std::make_unique<t_oriresdata>(fplog, mtop, *inputrec, cr, ms, globalState.get());
+        }
+        else
+        {
+            fr->fcdata->orires = std::unique_ptr<t_oriresdata>();
+        }
 
         // Save a handle to device stream manager to use elsewhere in the code
         // TODO: Forcerec is not a correct place to store it.
