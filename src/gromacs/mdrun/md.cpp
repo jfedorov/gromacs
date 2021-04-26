@@ -396,16 +396,6 @@ void gmx::LegacySimulator::do_md()
                 "Free energy perturbation of masses and constraints are not supported with the GPU "
                 "update.");
 
-        if (constr != nullptr && constr->numConstraintsTotal() > 0)
-        {
-            GMX_LOG(mdlog.info)
-                    .asParagraph()
-                    .appendText("Updating coordinates and applying constraints on the GPU.");
-        }
-        else
-        {
-            GMX_LOG(mdlog.info).asParagraph().appendText("Updating coordinates on the GPU.");
-        }
         GMX_RELEASE_ASSERT(fr->deviceStreamManager != nullptr,
                            "Device stream manager should be initialized in order to use GPU "
                            "update-constraints.");
