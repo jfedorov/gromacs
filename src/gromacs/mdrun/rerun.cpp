@@ -270,13 +270,20 @@ void gmx::LegacySimulator::do_rerun()
     const SimulationGroups* groups = &top_global.groups;
     if (ir->eI == IntegrationAlgorithm::Mimic)
     {
-        auto nonConstGlobalTopology                          = const_cast<gmx_mtop_t*>(&top_global);
+        auto* nonConstGlobalTopology                         = const_cast<gmx_mtop_t*>(&top_global);
         nonConstGlobalTopology->intermolecularExclusionGroup = genQmmmIndices(top_global);
     }
     int*                fep_state = MASTER(cr) ? &state_global->fep_state : nullptr;
     gmx::ArrayRef<real> lambda    = MASTER(cr) ? state_global->lambda : gmx::ArrayRef<real>();
-    initialize_lambdas(
-            fplog, *ir, gmx::arrayRefFromArray(ir->opts.ref_t, ir->opts.ngtc), MASTER(cr), fep_state, lambda);
+    initialize_lambdas(fplog,
+                       ir->efep,
+                       ir->bSimTemp,
+                       *ir->fepvals,
+                       ir->simtempvals->temperatures,
+                       gmx::arrayRefFromArray(ir->opts.ref_t, ir->opts.ngtc),
+                       MASTER(cr),
+                       fep_state,
+                       lambda);
     const bool        simulationsShareState = false;
     gmx_mdoutf*       outf                  = init_mdoutf(fplog,
                                    nfile,
@@ -362,7 +369,7 @@ void gmx::LegacySimulator::do_rerun()
         mdAlgorithmsSetupAtomData(cr, *ir, top_global, &top, fr, &f, mdAtoms, constr, vsite, shellfc);
     }
 
-    auto mdatoms = mdAtoms->mdatoms();
+    auto* mdatoms = mdAtoms->mdatoms();
 
     // NOTE: The global state is no longer used at this point.
     // But state_global is still used as temporary storage space for writing

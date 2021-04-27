@@ -209,7 +209,7 @@ void gmx::LegacySimulator::do_mimic()
     if (MASTER(cr))
     {
         MimicCommunicator::init();
-        auto nonConstGlobalTopology = const_cast<gmx_mtop_t*>(&top_global);
+        auto* nonConstGlobalTopology = const_cast<gmx_mtop_t*>(&top_global);
         MimicCommunicator::sendInitData(nonConstGlobalTopology, state_global->x);
         // TODO: Avoid changing inputrec (#3854)
         auto* nonConstInputrec   = const_cast<t_inputrec*>(inputrec);
@@ -224,12 +224,15 @@ void gmx::LegacySimulator::do_mimic()
 
     const SimulationGroups* groups = &top_global.groups;
     {
-        auto nonConstGlobalTopology                          = const_cast<gmx_mtop_t*>(&top_global);
+        auto* nonConstGlobalTopology                         = const_cast<gmx_mtop_t*>(&top_global);
         nonConstGlobalTopology->intermolecularExclusionGroup = genQmmmIndices(top_global);
     }
 
     initialize_lambdas(fplog,
-                       *ir,
+                       ir->efep,
+                       ir->bSimTemp,
+                       *ir->fepvals,
+                       ir->simtempvals->temperatures,
                        gmx::arrayRefFromArray(ir->opts.ref_t, ir->opts.ngtc),
                        MASTER(cr),
                        &state_global->fep_state,
@@ -322,7 +325,7 @@ void gmx::LegacySimulator::do_mimic()
         mdAlgorithmsSetupAtomData(cr, *ir, top_global, &top, fr, &f, mdAtoms, constr, vsite, shellfc);
     }
 
-    auto mdatoms = mdAtoms->mdatoms();
+    auto* mdatoms = mdAtoms->mdatoms();
 
     // NOTE: The global state is no longer used at this point.
     // But state_global is still used as temporary storage space for writing

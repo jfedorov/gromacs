@@ -257,8 +257,15 @@ void gmx::LegacySimulator::do_md()
 
     int*                fep_state = MASTER(cr) ? &state_global->fep_state : nullptr;
     gmx::ArrayRef<real> lambda    = MASTER(cr) ? state_global->lambda : gmx::ArrayRef<real>();
-    initialize_lambdas(
-            fplog, *ir, gmx::arrayRefFromArray(ir->opts.ref_t, ir->opts.ngtc), MASTER(cr), fep_state, lambda);
+    initialize_lambdas(fplog,
+                       ir->efep,
+                       ir->bSimTemp,
+                       *ir->fepvals,
+                       ir->simtempvals->temperatures,
+                       gmx::arrayRefFromArray(ir->opts.ref_t, ir->opts.ngtc),
+                       MASTER(cr),
+                       fep_state,
+                       lambda);
     Update upd(*ir, deform);
     bool   doSimulatedAnnealing = false;
     {
@@ -356,8 +363,6 @@ void gmx::LegacySimulator::do_md()
 
     gmx_localtop_t top(top_global.ffparams);
 
-    auto mdatoms = mdAtoms->mdatoms();
-
     ForceBuffers     f(fr->useMts,
                    ((useGpuForNonbonded && useGpuForBufferOps) || useGpuForUpdate)
                            ? PinningPolicy::PinnedIfSupported
@@ -440,7 +445,7 @@ void gmx::LegacySimulator::do_md()
                         || ir->epc == PressureCoupling::Berendsen || ir->epc == PressureCoupling::CRescale,
                 "Only Parrinello-Rahman, Berendsen, and C-rescale pressure coupling are supported "
                 "with the GPU update.\n");
-        GMX_RELEASE_ASSERT(!mdatoms->haveVsites,
+        GMX_RELEASE_ASSERT(!md->haveVsites,
                            "Virtual sites are not supported with the GPU update.\n");
         GMX_RELEASE_ASSERT(ed == nullptr,
                            "Essential dynamics is not supported with the GPU update.\n");
@@ -497,7 +502,7 @@ void gmx::LegacySimulator::do_md()
     // the global state to file and potentially for replica exchange.
     // (Global topology should persist.)
 
-    update_mdatoms(mdatoms, state->lambda[FreeEnergyPerturbationCouplingType::Mass]);
+    update_mdatoms(mdAtoms->mdatoms(), state->lambda[FreeEnergyPerturbationCouplingType::Mass]);
 
     if (ir->bExpanded)
     {
@@ -517,7 +522,7 @@ void gmx::LegacySimulator::do_md()
 
     preparePrevStepPullCom(ir,
                            pull_work,
-                           gmx::arrayRefFromArray(mdatoms->massT, mdatoms->nr),
+                           gmx::arrayRefFromArray(md->massT, md->nr),
                            state,
                            state_global,
                            cr,
@@ -556,17 +561,17 @@ void gmx::LegacySimulator::do_md()
         {
             auto v = makeArrayRef(state->v);
             /* Set the velocities of vsites, shells and frozen atoms to zero */
-            for (i = 0; i < mdatoms->homenr; i++)
+            for (i = 0; i < md->homenr; i++)
             {
-                if (mdatoms->ptype[i] == ParticleType::Shell)
+                if (md->ptype[i] == ParticleType::Shell)
                 {
                     clear_rvec(v[i]);
                 }
-                else if (mdatoms->cFREEZE)
+                else if (md->cFREEZE)
                 {
                     for (m = 0; m < DIM; m++)
                     {
-                        if (ir->opts.nFreeze[mdatoms->cFREEZE[i]][m])
+                        if (ir->opts.nFreeze[md->cFREEZE[i]][m])
                         {
                             v[i][m] = 0;
                         }
@@ -581,8 +586,8 @@ void gmx::LegacySimulator::do_md()
             do_constrain_first(fplog,
                                constr,
                                ir,
-                               mdatoms->nr,
-                               mdatoms->homenr,
+                               md->nr,
+                               md->homenr,
                                state->x.arrayRefWithPadding(),
                                state->v.arrayRefWithPadding(),
                                state->box,
@@ -669,7 +674,7 @@ void gmx::LegacySimulator::do_md()
                         makeConstArrayRef(state->x),
                         makeConstArrayRef(state->v),
                         state->box,
-                        mdatoms,
+                        md,
                         nrnb,
                         &vcm,
                         nullptr,
@@ -691,8 +696,8 @@ void gmx::LegacySimulator::do_md()
             auto x = (vcm.mode == ComRemovalAlgorithm::LinearAccelerationCorrection)
                              ? ArrayRef<RVec>()
                              : makeArrayRef(state->x);
-            process_and_stopcm_grp(fplog, &vcm, *mdatoms, x, makeArrayRef(state->v));
-            inc_nrnb(nrnb, eNR_STOPCM, mdatoms->homenr);
+            process_and_stopcm_grp(fplog, &vcm, *md, x, makeArrayRef(state->v));
+            inc_nrnb(nrnb, eNR_STOPCM, md->homenr);
         }
     }
     if (DOMAINDECOMP(cr))
@@ -716,7 +721,7 @@ void gmx::LegacySimulator::do_md()
                         makeConstArrayRef(state->x),
                         makeConstArrayRef(state->v),
                         state->box,
-                        mdatoms,
+                        md,
                         nrnb,
                         &vcm,
                         nullptr,
@@ -1043,7 +1048,7 @@ void gmx::LegacySimulator::do_md()
 
         if (ir->efep != FreeEnergyPerturbationType::No)
         {
-            update_mdatoms(mdatoms, state->lambda[FreeEnergyPerturbationCouplingType::Mass]);
+            update_mdatoms(mdAtoms->mdatoms(), state->lambda[FreeEnergyPerturbationCouplingType::Mass]);
         }
 
         if (bExchanged)
@@ -1064,7 +1069,7 @@ void gmx::LegacySimulator::do_md()
                             makeConstArrayRef(state->x),
                             makeConstArrayRef(state->v),
                             state->box,
-                            mdatoms,
+                            md,
                             nrnb,
                             &vcm,
                             wcycle,
@@ -1151,7 +1156,7 @@ void gmx::LegacySimulator::do_md()
                                 &state->hist,
                                 &f.view(),
                                 force_vir,
-                                *mdatoms,
+                                *md,
                                 nrnb,
                                 wcycle,
                                 shellfc,
@@ -1199,7 +1204,7 @@ void gmx::LegacySimulator::do_md()
                      &state->hist,
                      &f.view(),
                      force_vir,
-                     mdatoms,
+                     md,
                      enerd,
                      state->lambda,
                      fr,
@@ -1227,7 +1232,7 @@ void gmx::LegacySimulator::do_md()
                                  fr,
                                  cr,
                                  state,
-                                 mdatoms,
+                                 mdAtoms->mdatoms(),
                                  fcdata,
                                  &MassQ,
                                  &vcm,
@@ -1291,7 +1296,7 @@ void gmx::LegacySimulator::do_md()
                                               state->dfhist,
                                               step,
                                               state->v.rvec_array(),
-                                              mdatoms);
+                                              md);
             /* history is maintained in state->dfhist, but state_global is what is sent to trajectory and log output */
             if (MASTER(cr))
             {
@@ -1389,7 +1394,7 @@ void gmx::LegacySimulator::do_md()
         if (ETC_ANDERSEN(ir->etc)) /* keep this outside of update_tcouple because of the extra info required to pass */
         {
             gmx_bool bIfRandomize;
-            bIfRandomize = update_randomize_velocities(ir, step, cr, mdatoms, state->v, &upd, constr);
+            bIfRandomize = update_randomize_velocities(ir, step, cr, md, state->v, &upd, constr);
             /* if we have constraints, we have to remove the kinetic energy parallel to the bonds */
             if (constr && bIfRandomize)
             {
@@ -1412,7 +1417,7 @@ void gmx::LegacySimulator::do_md()
         /* UPDATE PRESSURE VARIABLES IN TROTTER FORMULATION WITH CONSTRAINTS */
         if (bTrotter)
         {
-            trotter_update(ir, step, ekind, enerd, state, total_vir, mdatoms, &MassQ, trotter_seq, ettTSEQ3);
+            trotter_update(ir, step, ekind, enerd, state, total_vir, md, &MassQ, trotter_seq, ettTSEQ3);
             /* We can only do Berendsen coupling after we have summed
              * the kinetic energy or virial. Since the happens
              * in global_state after update, we should only do it at
@@ -1421,7 +1426,7 @@ void gmx::LegacySimulator::do_md()
         }
         else
         {
-            update_tcouple(step, ir, state, ekind, &MassQ, mdatoms);
+            update_tcouple(step, ir, state, ekind, &MassQ, md);
             update_pcouple_before_coordinates(fplog, step, ir, state, pressureCouplingMu, M, bInitStep);
         }
 
@@ -1447,7 +1452,7 @@ void gmx::LegacySimulator::do_md()
                                   fr,
                                   cr,
                                   state,
-                                  mdatoms,
+                                  mdAtoms->mdatoms(),
                                   fcdata,
                                   &MassQ,
                                   &vcm,
@@ -1486,7 +1491,7 @@ void gmx::LegacySimulator::do_md()
                                     stateGpu->getVelocities(),
                                     stateGpu->getForces(),
                                     top.idef,
-                                    *mdatoms);
+                                    *md);
 
                     // Copy data to the GPU after buffers might have being reinitialized
                     stateGpu->copyVelocitiesToGpu(state->v, AtomLocality::Local);
@@ -1543,8 +1548,14 @@ void gmx::LegacySimulator::do_md()
                  */
                 if (fr->useMts && bCalcVir && constr != nullptr)
                 {
-                    upd.update_for_constraint_virial(
-                            *ir, *mdatoms, *state, f.view().forceWithPadding(), *ekind);
+                    upd.update_for_constraint_virial(*ir,
+                                                     md->homenr,
+                                                     md->havePartiallyFrozenAtoms,
+                                                     gmx::arrayRefFromArray(md->invmass, md->nr),
+                                                     gmx::arrayRefFromArray(md->invMassPerDim, md->nr),
+                                                     *state,
+                                                     f.view().forceWithPadding(),
+                                                     *ekind);
 
                     constrain_coordinates(constr,
                                           do_log,
@@ -1561,8 +1572,21 @@ void gmx::LegacySimulator::do_md()
                         (fr->useMts && step % ir->mtsLevels[1].stepFactor == 0)
                                 ? f.view().forceMtsCombinedWithPadding()
                                 : f.view().forceWithPadding();
-                upd.update_coords(
-                        *ir, step, mdatoms, state, forceCombined, fcdata, ekind, M, etrtPOSITION, cr, constr != nullptr);
+                upd.update_coords(*ir,
+                                  step,
+                                  md->homenr,
+                                  md->havePartiallyFrozenAtoms,
+                                  gmx::arrayRefFromArray(md->ptype, md->nr),
+                                  gmx::arrayRefFromArray(md->invmass, md->nr),
+                                  gmx::arrayRefFromArray(md->invMassPerDim, md->nr),
+                                  state,
+                                  forceCombined,
+                                  fcdata,
+                                  ekind,
+                                  M,
+                                  etrtPOSITION,
+                                  cr,
+                                  constr != nullptr);
 
                 wallcycle_stop(wcycle, WallCycleCounter::Update);
 
@@ -1576,9 +1600,21 @@ void gmx::LegacySimulator::do_md()
                                       bCalcVir && !fr->useMts,
                                       shake_vir);
 
-                upd.update_sd_second_half(
-                        *ir, step, &dvdl_constr, mdatoms, state, cr, nrnb, wcycle, constr, do_log, do_ene);
-                upd.finish_update(*ir, mdatoms, state, wcycle, constr != nullptr);
+                upd.update_sd_second_half(*ir,
+                                          step,
+                                          &dvdl_constr,
+                                          md->homenr,
+                                          gmx::arrayRefFromArray(md->ptype, md->nr),
+                                          gmx::arrayRefFromArray(md->invmass, md->nr),
+                                          state,
+                                          cr,
+                                          nrnb,
+                                          wcycle,
+                                          constr,
+                                          do_log,
+                                          do_ene);
+                upd.finish_update(
+                        *ir, md->havePartiallyFrozenAtoms, md->homenr, state, wcycle, constr != nullptr);
             }
 
             if (ir->bPull && ir->pull->bSetPbcRefToPrevStepCOM)
@@ -1626,7 +1662,7 @@ void gmx::LegacySimulator::do_md()
                         makeConstArrayRef(state->x),
                         makeConstArrayRef(state->v),
                         state->box,
-                        mdatoms,
+                        md,
                         nrnb,
                         &vcm,
                         wcycle,
@@ -1655,8 +1691,8 @@ void gmx::LegacySimulator::do_md()
                 if (!EI_VV(ir->eI) && bStopCM)
                 {
                     process_and_stopcm_grp(
-                            fplog, &vcm, *mdatoms, makeArrayRef(state->x), makeArrayRef(state->v));
-                    inc_nrnb(nrnb, eNR_STOPCM, mdatoms->homenr);
+                            fplog, &vcm, *md, makeArrayRef(state->x), makeArrayRef(state->v));
+                    inc_nrnb(nrnb, eNR_STOPCM, md->homenr);
 
                     // TODO: The special case of removing CM motion should be dealt more gracefully
                     if (useGpuForUpdate)
@@ -1691,7 +1727,7 @@ void gmx::LegacySimulator::do_md()
         }
 
         update_pcouple_after_coordinates(
-                fplog, step, ir, mdatoms, pres, force_vir, shake_vir, pressureCouplingMu, state, nrnb, upd.deform(), !useGpuForUpdate);
+                fplog, step, ir, md, pres, force_vir, shake_vir, pressureCouplingMu, state, nrnb, upd.deform(), !useGpuForUpdate);
 
         const bool doBerendsenPressureCoupling = (inputrec->epc == PressureCoupling::Berendsen
                                                   && do_per_step(step, inputrec->nstpcouple));
@@ -1767,7 +1803,7 @@ void gmx::LegacySimulator::do_md()
                 energyOutput.addDataAtEnergyStep(bDoDHDL,
                                                  bCalcEnerStep,
                                                  t,
-                                                 mdatoms->tmass,
+                                                 md->tmass,
                                                  enerd,
                                                  ir->fepvals.get(),
                                                  ir->expandedvals.get(),

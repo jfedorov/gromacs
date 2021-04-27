@@ -418,8 +418,6 @@ std::unique_ptr<nonbonded_verlet_t> init_nb_verlet(const gmx::MDLogger& mdlog,
     auto pinPolicy = (useGpuForNonbonded ? gmx::PinningPolicy::PinnedIfSupported
                                          : gmx::PinningPolicy::CannotBePinned);
 
-    auto nbat = std::make_unique<nbnxn_atomdata_t>(pinPolicy);
-
     int mimimumNumEnergyGroupNonbonded = inputrec.opts.ngener;
     if (inputrec.opts.ngener - inputrec.nwall == 1)
     {
@@ -429,14 +427,16 @@ std::unique_ptr<nonbonded_verlet_t> init_nb_verlet(const gmx::MDLogger& mdlog,
          */
         mimimumNumEnergyGroupNonbonded = 1;
     }
-    nbnxn_atomdata_init(mdlog,
-                        nbat.get(),
-                        kernelSetup.kernelType,
-                        enbnxninitcombrule,
-                        forcerec.ntype,
-                        forcerec.nbfp,
-                        mimimumNumEnergyGroupNonbonded,
-                        (useGpuForNonbonded || emulateGpu) ? 1 : gmx_omp_nthreads_get(emntNonbonded));
+
+    auto nbat = std::make_unique<nbnxn_atomdata_t>(
+            pinPolicy,
+            mdlog,
+            kernelSetup.kernelType,
+            enbnxninitcombrule,
+            forcerec.ntype,
+            forcerec.nbfp,
+            mimimumNumEnergyGroupNonbonded,
+            (useGpuForNonbonded || emulateGpu) ? 1 : gmx_omp_nthreads_get(ModuleMultiThread::Nonbonded));
 
     NbnxmGpu* gpu_nbv                          = nullptr;
     int       minimumIlistCountForGpuBalancing = 0;
@@ -463,7 +463,7 @@ std::unique_ptr<nonbonded_verlet_t> init_nb_verlet(const gmx::MDLogger& mdlog,
                                          DOMAINDECOMP(commrec) ? domdec_zones(commrec->dd) : nullptr,
                                          pairlistParams.pairlistType,
                                          bFEP_NonBonded,
-                                         gmx_omp_nthreads_get(emntPairsearch),
+                                         gmx_omp_nthreads_get(ModuleMultiThread::Pairsearch),
                                          pinPolicy);
 
     return std::make_unique<nonbonded_verlet_t>(
