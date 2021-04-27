@@ -158,16 +158,12 @@ void ListedForceCalculator::compute(gmx::ArrayRef<const Vec3> coordinates, gmx::
 }
 void ListedForceCalculator::compute(gmx::ArrayRef<const Vec3> coordinates,
                                     gmx::ArrayRef<Vec3>       forces,
-                                    EnergyType*               energies,
+                                    EnergyType&               energies,
                                     bool                      usePbc)
 {
-    if (!energies)
-    {
-        throw InputException("Need valid energies object");
-    }
     compute(coordinates, forces, usePbc);
 
-    *energies = energyBuffer_;
+    energies = energyBuffer_;
 }
 
 } // namespace nblib

@@ -83,7 +83,7 @@ class NoPbc
 public:
 
     //! \brief calculate r1-r2, ignore pbc
-    static inline void dxAiuc(const rvec& r1, const rvec& r2, rvec dr)
+    inline void dxAiuc(const rvec& r1, const rvec& r2, rvec dr) const
     {
         rvec_sub(r1, r2, dr);
     }

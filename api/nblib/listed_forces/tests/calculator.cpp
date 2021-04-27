@@ -234,7 +234,7 @@ TEST_F(LinearChainDataFixture, Multithreading)
 
     std::vector<Vec3>                 forces(x.size(), Vec3{ 0, 0, 0 });
     ListedForceCalculator::EnergyType energies;
-    lfCalculator.compute(x, forces, &energies);
+    lfCalculator.compute(x, forces, energies);
 
     testEnergies(energies);
     testForces(forces);

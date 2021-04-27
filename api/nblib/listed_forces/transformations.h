@@ -151,7 +151,7 @@ interactionSortKey(const InteractionIndex<Interaction>& lhs, const InteractionIn
 }
 
 //! \brief sorts all interaction indices according to the keys defined in the implementation
-void sortInteractions(ListedInteractionData* interactions);
+void sortInteractions(ListedInteractionData& interactions);
 
 } // namespace nblib
 #endif // NBLIB_LISTEDFORCES_TRANSFORMATIONS_H

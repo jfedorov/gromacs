@@ -68,7 +68,6 @@ public:
         pickType<HarmonicAngleType>(interactions).parameters = angles;
 
         std::vector<InteractionIndex<HarmonicBondType>> bondIndices;
-        bondIndices.reserve(nParticles-1);
         for (int i = 0; i < nParticles - 1; ++i)
         {
             // third index: alternate between the two bond parameters
@@ -77,7 +76,6 @@ public:
         pickType<HarmonicBondType>(interactions).indices = bondIndices;
 
         std::vector<InteractionIndex<HarmonicAngleType>> angleIndices;
-        angleIndices.reserve(nParticles-2);
         for (int i = 0; i < nParticles - 2; ++i)
         {
             angleIndices.push_back(InteractionIndex<HarmonicAngleType>{ i, i + 1, i + 2, 0 });

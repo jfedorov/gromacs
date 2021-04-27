@@ -44,8 +44,6 @@
  * \author Sebastian Keller <keller@cscs.ch>
  * \author Artem Zhmurov <zhmurov@gmail.com>
  */
-#include "nblib/exception.h"
-
 #include "nblib/listed_forces/transformations.h"
 
 #include "nblib/util/util.hpp"
@@ -53,7 +51,7 @@
 namespace nblib
 {
 
-void sortInteractions(ListedInteractionData* interactions)
+void sortInteractions(ListedInteractionData& interactions)
 {
     auto sortOneElement = [](auto& interactionElement) {
         using InteractionContainerType = std::decay_t<decltype(interactionElement)>;
@@ -64,11 +62,7 @@ void sortInteractions(ListedInteractionData* interactions)
                   interactionSortKey<InteractionType>);
     };
 
-    if (!interactions)
-    {
-        throw InputException("Need valid interactions object");
-    }
-    for_each_tuple(sortOneElement, *interactions);
+    for_each_tuple(sortOneElement, interactions);
 }
 
 } // namespace nblib

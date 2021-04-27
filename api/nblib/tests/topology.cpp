@@ -78,17 +78,6 @@ void compareLists(const gmx::ListOfLists<T>& list, const std::vector<std::vector
     }
 }
 
-Charge charges(const std::string& name)
-{
-    const std::unordered_map<std::string, Charge> charges{ { "Ow", Charge(-0.82) },
-                                                           { "Hw", Charge(+0.41) },
-                                                           { "OMet", Charge(-0.574) },
-                                                           { "CMet", Charge(+0.176) },
-                                                           { "HMet", Charge(+0.398) } };
-    return charges.at(name);
-}
-
-
 // This is defined in src/gromacs/mdtypes/forcerec.h but there is also a
 // legacy C6 macro defined there that conflicts with the nblib C6 type.
 // Todo: Once that C6 has been refactored into a regular function, this
@@ -110,8 +99,8 @@ TEST(NBlibTest, TopologyHasCharges)
     WaterTopologyBuilder     waters;
     Topology                 watersTopology = waters.buildTopology(2);
     const std::vector<real>& test           = watersTopology.getCharges();
-    const std::vector<real>& ref            = { charges("Ow"), charges("Hw"), charges("Hw"),
-                                     charges("Ow"), charges("Hw"), charges("Hw") };
+    const std::vector<real>& ref = { Charges.at("Ow"), Charges.at("Hw"), Charges.at("Hw"),
+                                     Charges.at("Ow"), Charges.at("Hw"), Charges.at("Hw") };
     EXPECT_EQ(ref, test);
 }
 
@@ -261,7 +250,7 @@ TEST(NBlibTest, TopologyCanSequencePairIDs)
     int MeH = particleSequencer(MoleculeName("MeOH"), 0, ResidueName("MeOH"), ParticleName("H3"));
 
     /// \cond DO_NOT_DOCUMENT
-#define SORT(i, j) ((i) < (j)) ? (i) : (j), ((i) < (j)) ? (j) : (i)
+#define SORT(i, j) (i < j) ? i : j, (i < j) ? j : i
 
     std::vector<CoordinateIndex<HarmonicBondType>> pairs_reference{
         { SORT(Ow1, H11) }, { SORT(Ow1, H12) }, { SORT(Ow2, H21) },
@@ -356,7 +345,7 @@ TEST(NBlibTest, TopologyListedInteractions)
     int MeH2 = spcTopology.sequenceID(MoleculeName("MeOH"), 1, ResidueName("MeOH"), ParticleName("H3"));
 
     /// \cond DO_NOT_DOCUMENT
-#define SORT(i, j) ((i) < (j)) ? (i) : (j), ((i) < (j)) ? (j) : (i)
+#define SORT(i, j) (i < j) ? i : j, (i < j) ? j : i
     interactions_reference[std::make_tuple(SORT(Ow, H1))]     = ohBond;
     interactions_reference[std::make_tuple(SORT(Ow, H2))]     = ohBond;
     interactions_reference[std::make_tuple(SORT(MeO1, MeH1))] = ohBondMethanol;

@@ -77,7 +77,7 @@ ListedInteractionData unsortedInteractions()
 TEST(ListedTransformations, SortInteractionIndices)
 {
     ListedInteractionData interactions = unsortedInteractions();
-    sortInteractions(&interactions);
+    sortInteractions(interactions);
 
     std::vector<InteractionIndex<HarmonicBondType>> refBondIndices{ { 0, 1, 0 }, { 0, 2, 0 } };
     std::vector<InteractionIndex<HarmonicAngleType>> refAngleIndices{ { 1, 0, 2, 0 }, { 0, 1, 2, 0 } };

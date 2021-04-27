@@ -120,36 +120,36 @@ namespace detail
 
 template<class InteractionData>
 void transferParameters([[maybe_unused]] const InteractionData& interactionData,
-                        [[maybe_unused]] gmx_ffparams_t*        gmx_params)
+                        [[maybe_unused]] gmx_ffparams_t&        gmx_params)
 {
 }
 
 template<>
-inline void transferParameters(const ListedTypeData<HarmonicBondType>& interactions, gmx_ffparams_t* gmx_params)
+void transferParameters(const ListedTypeData<HarmonicBondType>& interactions, gmx_ffparams_t& gmx_params)
 {
     for (const auto& hbond : interactions.parameters)
     {
         t_iparams param;
         param.harmonic.krA = hbond.forceConstant();
         param.harmonic.rA  = hbond.equilDistance();
-        gmx_params->iparams.push_back(param);
+        gmx_params.iparams.push_back(param);
     }
 }
 
 template<>
-inline void transferParameters(const ListedTypeData<HarmonicAngleType>& interactions, gmx_ffparams_t* gmx_params)
+void transferParameters(const ListedTypeData<HarmonicAngleType>& interactions, gmx_ffparams_t& gmx_params)
 {
     for (const auto& angle : interactions.parameters)
     {
         t_iparams param;
         param.harmonic.krA = angle.forceConstant();
         param.harmonic.rA  = angle.equilDistance() / DEG2RAD;
-        gmx_params->iparams.push_back(param);
+        gmx_params.iparams.push_back(param);
     }
 }
 
 template<>
-inline void transferParameters(const ListedTypeData<ProperDihedral>& interactions, gmx_ffparams_t* gmx_params)
+void transferParameters(const ListedTypeData<ProperDihedral>& interactions, gmx_ffparams_t& gmx_params)
 {
     for (const auto& dihedral : interactions.parameters)
     {
@@ -157,71 +157,71 @@ inline void transferParameters(const ListedTypeData<ProperDihedral>& interaction
         param.pdihs.phiA = dihedral.equilDistance() / DEG2RAD;
         param.pdihs.cpA  = dihedral.forceConstant();
         param.pdihs.mult = dihedral.multiplicity();
-        gmx_params->iparams.push_back(param);
+        gmx_params.iparams.push_back(param);
     }
 }
 
 template<class TwoCenterType>
 std::enable_if_t<Contains<TwoCenterType, SupportedTwoCenterTypes>{}>
-transferIndicesImpl(const ListedTypeData<TwoCenterType>& interactions, InteractionDefinitions* idef, int offset)
+transferIndicesImpl(const ListedTypeData<TwoCenterType>& interactions, InteractionDefinitions& idef, int offset)
 {
     for (const auto& index : interactions.indices)
     {
         int parameterIndex = index[2] + offset;
-        idef->il[ListedIndex<TwoCenterType>::value].iatoms.push_back(parameterIndex);
-        idef->il[ListedIndex<TwoCenterType>::value].iatoms.push_back(index[0]);
-        idef->il[ListedIndex<TwoCenterType>::value].iatoms.push_back(index[1]);
+        idef.il[ListedIndex<TwoCenterType>::value].iatoms.push_back(parameterIndex);
+        idef.il[ListedIndex<TwoCenterType>::value].iatoms.push_back(index[0]);
+        idef.il[ListedIndex<TwoCenterType>::value].iatoms.push_back(index[1]);
     }
 }
 
 template<class ThreeCenterType>
 std::enable_if_t<Contains<ThreeCenterType, SupportedThreeCenterTypes>{}>
-transferIndicesImpl(const ListedTypeData<ThreeCenterType>& interactions, InteractionDefinitions* idef, int offset)
+transferIndicesImpl(const ListedTypeData<ThreeCenterType>& interactions, InteractionDefinitions& idef, int offset)
 {
     for (const auto& index : interactions.indices)
     {
         int parameterIndex = index[3] + offset;
-        idef->il[ListedIndex<ThreeCenterType>::value].iatoms.push_back(parameterIndex);
-        idef->il[ListedIndex<ThreeCenterType>::value].iatoms.push_back(index[0]);
-        idef->il[ListedIndex<ThreeCenterType>::value].iatoms.push_back(index[1]);
-        idef->il[ListedIndex<ThreeCenterType>::value].iatoms.push_back(index[2]);
+        idef.il[ListedIndex<ThreeCenterType>::value].iatoms.push_back(parameterIndex);
+        idef.il[ListedIndex<ThreeCenterType>::value].iatoms.push_back(index[0]);
+        idef.il[ListedIndex<ThreeCenterType>::value].iatoms.push_back(index[1]);
+        idef.il[ListedIndex<ThreeCenterType>::value].iatoms.push_back(index[2]);
     }
 }
 
 template<class FourCenterType>
 std::enable_if_t<Contains<FourCenterType, SupportedFourCenterTypes>{}>
-transferIndicesImpl(const ListedTypeData<FourCenterType>& interactions, InteractionDefinitions* idef, int offset)
+transferIndicesImpl(const ListedTypeData<FourCenterType>& interactions, InteractionDefinitions& idef, int offset)
 {
     for (const auto& index : interactions.indices)
     {
         int parameterIndex = index[4] + offset;
-        idef->il[ListedIndex<FourCenterType>::value].iatoms.push_back(parameterIndex);
-        idef->il[ListedIndex<FourCenterType>::value].iatoms.push_back(index[0]);
-        idef->il[ListedIndex<FourCenterType>::value].iatoms.push_back(index[1]);
-        idef->il[ListedIndex<FourCenterType>::value].iatoms.push_back(index[2]);
-        idef->il[ListedIndex<FourCenterType>::value].iatoms.push_back(index[3]);
+        idef.il[ListedIndex<FourCenterType>::value].iatoms.push_back(parameterIndex);
+        idef.il[ListedIndex<FourCenterType>::value].iatoms.push_back(index[0]);
+        idef.il[ListedIndex<FourCenterType>::value].iatoms.push_back(index[1]);
+        idef.il[ListedIndex<FourCenterType>::value].iatoms.push_back(index[2]);
+        idef.il[ListedIndex<FourCenterType>::value].iatoms.push_back(index[3]);
     }
 }
 
 template<class FiveCenterType>
 std::enable_if_t<Contains<FiveCenterType, SupportedFiveCenterTypes>{}>
-transferIndicesImpl(const ListedTypeData<FiveCenterType>& interactions, InteractionDefinitions* idef, int offset)
+transferIndicesImpl(const ListedTypeData<FiveCenterType>& interactions, InteractionDefinitions& idef, int offset)
 {
     for (const auto& index : interactions.indices)
     {
         int parameterIndex = index[5] + offset;
-        idef->il[ListedIndex<FiveCenterType>::value].iatoms.push_back(parameterIndex);
-        idef->il[ListedIndex<FiveCenterType>::value].iatoms.push_back(index[0]);
-        idef->il[ListedIndex<FiveCenterType>::value].iatoms.push_back(index[1]);
-        idef->il[ListedIndex<FiveCenterType>::value].iatoms.push_back(index[2]);
-        idef->il[ListedIndex<FiveCenterType>::value].iatoms.push_back(index[3]);
-        idef->il[ListedIndex<FiveCenterType>::value].iatoms.push_back(index[4]);
+        idef.il[ListedIndex<FiveCenterType>::value].iatoms.push_back(parameterIndex);
+        idef.il[ListedIndex<FiveCenterType>::value].iatoms.push_back(index[0]);
+        idef.il[ListedIndex<FiveCenterType>::value].iatoms.push_back(index[1]);
+        idef.il[ListedIndex<FiveCenterType>::value].iatoms.push_back(index[2]);
+        idef.il[ListedIndex<FiveCenterType>::value].iatoms.push_back(index[3]);
+        idef.il[ListedIndex<FiveCenterType>::value].iatoms.push_back(index[4]);
     }
 }
 
 template<template<class> class Container, class InteractionType>
 void transferIndices(const Container<InteractionType>&  interactionData,
-                     [[maybe_unused]] InteractionDefinitions* idef,
+                     InteractionDefinitions& idef,
                      [[maybe_unused]] int offset)
 {
     if constexpr (ListedTypeIsImplemented<InteractionType>{})
@@ -242,15 +242,18 @@ void transferIndices(const Container<InteractionType>&  interactionData,
 std::tuple<std::unique_ptr<InteractionDefinitions>, std::unique_ptr<gmx_ffparams_t>>
 createFFparams(const ListedInteractionData& interactions);
 
-inline std::tuple<std::unique_ptr<InteractionDefinitions>, std::unique_ptr<gmx_ffparams_t>>
+std::tuple<std::unique_ptr<InteractionDefinitions>, std::unique_ptr<gmx_ffparams_t>>
 createFFparams(const ListedInteractionData& interactions)
 {
     std::unique_ptr<gmx_ffparams_t> ffparamsHolder = std::make_unique<gmx_ffparams_t>();
     std::unique_ptr<InteractionDefinitions> idefHolder = std::make_unique<InteractionDefinitions>(*ffparamsHolder);
 
-    auto copyParamsOneType = [&ffparamsHolder](const auto& interactionElement)
+    gmx_ffparams_t& ffparams = *ffparamsHolder;
+    InteractionDefinitions& idef = *idefHolder;
+
+    auto copyParamsOneType = [&ffparams](const auto& interactionElement)
     {
-        detail::transferParameters(interactionElement, ffparamsHolder.get());
+        detail::transferParameters(interactionElement, ffparams);
     };
     for_each_tuple(copyParamsOneType, interactions);
 
@@ -267,10 +270,10 @@ createFFparams(const ListedInteractionData& interactions)
     };
     for_each_tuple(extractNIndices, interactions);
 
-    auto copyIndicesOneType = [&idefHolder, &indexOffsets](const auto& interactionElement)
+    auto copyIndicesOneType = [&idef, &indexOffsets](const auto& interactionElement)
     {
         constexpr int elementIndex = FindIndex<std::decay_t<decltype(interactionElement)>, ListedInteractionData>::value;
-        detail::transferIndices(interactionElement, idefHolder.get(), indexOffsets[elementIndex]);
+        detail::transferIndices(interactionElement, idef, indexOffsets[elementIndex]);
     };
     for_each_tuple(copyIndicesOneType, interactions);
 
