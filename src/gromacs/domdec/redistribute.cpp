@@ -740,10 +740,10 @@ void dd_redistribute_cg(FILE*         fplog,
     copyMovedUpdateGroupCogs(move, nvec, state->x, comm);
 
     int vectorIndex = 0;
-    copyMovedAtomsToBufferPerAtom(move, nvec, vectorIndex++, makeArrayRef(state->x), comm);
+    copyMovedAtomsToBufferPerAtom(move, nvec, vectorIndex++, state->x, comm);
     if (bV)
     {
-        copyMovedAtomsToBufferPerAtom(move, nvec, vectorIndex++, makeArrayRef(state->v), comm);
+        copyMovedAtomsToBufferPerAtom(move, nvec, vectorIndex++, state->v, comm);
     }
     for (const auto rvecVector : state->rvecVectors())
     {

@@ -271,10 +271,8 @@ static void dd_distribute_state(gmx_domdec_t* dd, const t_state* state, t_state*
     {
         distributeVec(dd, DDMASTER(dd) ? state->v : gmx::ArrayRef<const gmx::RVec>(), state_local->v);
     }
-    if (DDMASTER(dd) && state_local->rvecVectors().size() != state->rvecVectors().size())
-    {
-        GMX_THROW(gmx::InvalidInputError("state and state_local should have matching entries"));
-    }
+    GMX_RELEASE_ASSERT(!DDMASTER(dd) || (state_local->rvecVectors().size() == state->rvecVectors().size()),
+                       "state and state_local should have matching entries");
     for (gmx::index i = 0; i < ssize(state_local->rvecVectors()); i++)
     {
         distributeVec(dd,

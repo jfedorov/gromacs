@@ -369,14 +369,12 @@ static void get_state_f_norm_max(const t_commrec* cr, const t_grpopts* opts, t_m
     get_f_norm_max(cr, opts, mdatoms, ems->f.view().force(), &ems->fnorm, &ems->fmax, &ems->a_fmax);
 }
 
-//! Copies flags, coordinates, other state vectos and box and with FEP also lambas
+//! Copies flags, coordinates, other state vectors and box and with FEP also lambas
 static void copyCoordinatesAndBox(em_state_t* ems, const t_state& state)
 {
     ems->s.flags = state.flags;
     ems->s.changeNumAtoms(state.natoms);
-    const auto xSrc  = gmx::makeArrayRef(state.x);
-    auto       xDest = gmx::makeArrayRef(ems->s.x);
-    std::copy(xSrc.begin(), xSrc.end(), xDest.begin());
+    ems->s.x = state.x;
     copy_mat(state.box, ems->s.box);
     GMX_ASSERT(ems->s.rvecVectors().size() == state.rvecVectors().size(),
                "size of rvecVectors should match");
@@ -401,7 +399,6 @@ em_state_t& em_state_t::operator=(const em_state_t& right)
     const auto fSrc = right.f.view().force();
     f.resize(fSrc.size());
     auto fDest = f.view().force();
-    GMX_RELEASE_ASSERT(fDest.size() == fSrc.size(), "Number of atoms should match");
     std::copy(fSrc.begin(), fSrc.end(), fDest.begin());
     epot   = right.epot;
     fnorm  = right.fnorm;
@@ -1290,10 +1287,7 @@ static void copyCGP(CGState* dest, const CGState& src)
 {
     GMX_ASSERT(dest->p.size() == src.p.size(), "Sizes of p should match");
 
-    for (gmx::index i = 0; i < ssize(dest->p); i++)
-    {
-        dest->p[i] = src.p[i];
-    }
+    std::copy(src.p.begin(), src.p.end(), dest->p.begin());
 }
 
 namespace gmx
