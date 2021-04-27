@@ -53,8 +53,6 @@
 #include <memory>
 
 #include "gromacs/math/vectypes.h"
-#include "gromacs/mdtypes/locality.h"
-#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/real.h"
 
 #include "pairlist.h"
@@ -64,12 +62,14 @@ struct PairlistParams;
 struct PairsearchWork;
 struct SearchCycleCounting;
 struct t_nrnb;
+struct t_nblist;
 
 namespace gmx
 {
 template<typename>
 class ListOfLists;
-}
+enum class AtomLocality;
+} // namespace gmx
 
 namespace Nbnxm
 {

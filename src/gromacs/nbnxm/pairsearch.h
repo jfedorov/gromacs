@@ -66,6 +66,7 @@
 
 struct gmx_domdec_zones_t;
 struct PairsearchWork;
+struct t_nblist;
 
 
 /*! \brief Convenience declaration for an std::vector with aligned memory */
@@ -152,9 +153,6 @@ struct PairsearchWork
 
     //! Buffer to avoid cache pollution
     gmx_cache_protect_t cp0;
-
-    //! Temporary buffer for sorting atoms within a grid column
-    std::vector<int> sortBuffer;
 
     //! Flags for force buffer access
     std::vector<gmx_bitmask_t> buffer_flags;

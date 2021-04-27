@@ -42,16 +42,13 @@
 #include "gromacs/gpu_utils/hostallocator.h"
 #include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/locality.h"
-#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/defaultinitializationallocator.h"
-#include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/real.h"
 
 #include "pairlistparams.h"
 
 struct NbnxnPairlistCpuWork;
 struct NbnxnPairlistGpuWork;
-struct t_nblist;
 
 
 //! Convenience type for vector with aligned memory
@@ -247,9 +244,6 @@ struct NbnxnPairlistCpu
     FastVector<nbnxn_cj_t> cjOuter;
     //! The number of j-clusters that are used by ci entries in this list, will be <= cj.size()
     int ncjInUse;
-
-    //! The total number of i clusters
-    int nci_tot;
 
     //! Working data storage for list construction
     std::unique_ptr<NbnxnPairlistCpuWork> work;
