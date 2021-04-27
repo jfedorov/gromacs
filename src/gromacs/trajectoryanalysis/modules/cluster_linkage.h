@@ -56,12 +56,13 @@ class MDLogger;
 class ClusterLinkage : public ICluster
 {
 public:
-    explicit ClusterLinkage(const t_mat* inputMatrix, real rmsdCutOff, const MDLogger& logger) :
+    explicit ClusterLinkage(const t_mat* inputMatrix, real rmsdCutOff, int numFrames, const MDLogger& logger) :
         finished_(false),
         rmsdCutOff_(rmsdCutOff),
         matrix_(inputMatrix),
         logger_(logger)
     {
+        clusters_.resize(numFrames);
         makeClusters();
     }
     ~ClusterLinkage() override = default;

@@ -4,7 +4,7 @@
  * Copyright (c) 1991-2000, University of Groningen, The Netherlands.
  * Copyright (c) 2001-2004, The GROMACS development team.
  * Copyright (c) 2013,2014,2015,2017,2018 by the GROMACS development team.
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -1219,4 +1219,39 @@ void write_xpm(FILE*              out,
     writeXpmAxis(out, "x", ArrayRef<real>(axis_x, axis_x + n_x + ((flags & MAT_SPATIAL_X) != 0U ? 1 : 0)));
     writeXpmAxis(out, "y", ArrayRef<real>(axis_y, axis_y + n_y + ((flags & MAT_SPATIAL_Y) != 0U ? 1 : 0)));
     write_xpm_data(out, n_x, n_y, mat, lo, hi, *nlevels);
+}
+
+void write_xpm(FILE*                                          out,
+               unsigned int                                   flags,
+               const std::string&                             title,
+               const std::string&                             legend,
+               const std::string&                             label_x,
+               const std::string&                             label_y,
+               int                                            n_x,
+               int                                            n_y,
+               real                                           t_x[],
+               real                                           t_y[],
+               gmx::basic_mdspan<real, gmx::dynamicExtents2D> mat,
+               real                                           lo,
+               real                                           hi,
+               t_rgb                                          rlo,
+               t_rgb                                          rhi,
+               int*                                           nlevels)
+{
+    real** tempMatrix;
+    snew(tempMatrix, mat.extent(0));
+    for (int i = 0; i < mat.extent(0); ++i)
+    {
+        snew(tempMatrix[i], mat.extent(1));
+        for (int j = 0; j < mat.extent(1); ++j)
+        {
+            tempMatrix[i][j] = mat(i, j);
+        }
+    }
+    write_xpm(out, flags, title, legend, label_x, label_y, n_x, n_y, t_x, t_y, tempMatrix, lo, hi, rlo, rhi, nlevels);
+    for (int i = 0; i < mat.extent(0); ++i)
+    {
+        sfree(tempMatrix[i]);
+    }
+    sfree(tempMatrix);
 }

@@ -51,9 +51,16 @@
 #include <string>
 #include <vector>
 
+#include "gromacs/analysisdata/analysisdata.h"
+#include "gromacs/analysisdata/modules/histogram.h"
+#include "gromacs/analysisdata/modules/plot.h"
+#include "gromacs/analysisdata/paralleloptions.h"
 #include "gromacs/coordinateio/coordinatefile.h"
 #include "gromacs/coordinateio/requirements.h"
 #include "gromacs/fileio/filetypes.h"
+#include "gromacs/fileio/gmxfio.h"
+#include "gromacs/fileio/matio.h"
+#include "gromacs/fileio/rgb.h"
 #include "gromacs/fileio/trxio.h"
 #include "gromacs/gmxana/cmat.h"
 #include "gromacs/math/do_fit.h"
@@ -77,6 +84,7 @@
 #include "gromacs/trajectoryanalysis/topologyinformation.h"
 #include "gromacs/utility/filestream.h"
 #include "gromacs/utility/loggerbuilder.h"
+#include "gromacs/utility/path.h"
 
 namespace gmx
 {
@@ -97,12 +105,16 @@ constexpr gmx::EnumerationArray<ClusterMethods, const char*> c_clusterMethodName
 
 struct ClusterTrajectoryData
 {
+    //! Get size of all frames.
+    int size() const { return frames.size(); }
     //! All frames in the trajectory for clustering
     std::vector<std::vector<RVec>> frames;
     //! All times for the trajectory frames.
     std::vector<real> times;
     //! Trajectory frame boxes.
     std::vector<Matrix3x3> boxes;
+    //! Which actual trajectory frame the cluster frame corresponds to.
+    std::vector<int> frameIndex;
 };
 
 void calculateDistance(ArrayRef<const RVec>                                        x,
@@ -139,6 +151,7 @@ real rmsDistance(int                                                            
 }
 
 void addClusterFrame(ClusterTrajectoryData* data,
+                     int                    currentFrame,
                      const t_trxframe&      fr,
                      ArrayRef<const int>    index,
                      ArrayRef<const real>   masses,
@@ -152,6 +165,7 @@ void addClusterFrame(ClusterTrajectoryData* data,
     }
     data->times.emplace_back(fr.time);
     data->boxes.emplace_back(createMatrix3x3FromLegacyMatrix(fr.box));
+    data->frames.emplace_back(currentFrame);
     if (useLeastSquaresFitting)
     {
         reset_x(index.size(),
@@ -163,9 +177,32 @@ void addClusterFrame(ClusterTrajectoryData* data,
     }
 }
 
+void addCoordsToFile(int                    frame,
+                     TrajectoryFrameWriter* writer,
+                     ArrayRef<const RVec>   coords,
+                     ArrayRef<const int>    index,
+                     real                   time,
+                     Matrix3x3ConstSpan     box)
+{
+    t_trxframe writeFrame;
+    clear_trxframe(&writeFrame, true);
+    fillLegacyMatrix(box, writeFrame.box);
+    writeFrame.bBox   = true;
+    writeFrame.natoms = coords.size();
+    writeFrame.index  = const_cast<int*>(index.data());
+    writeFrame.bIndex = true;
+    writeFrame.x      = const_cast<rvec*>(as_rvec_array(coords.data()));
+    writeFrame.time   = time;
+    writer->prepareAndWriteFrame(frame, writeFrame);
+}
+
 t_mat* generateClusterMatrix(int                                   numFrames,
                              int                                   numCoordinates,
+                             real                                  rmsdCutoff,
+                             real                                  minimumRmsDistance,
+                             bool                                  runFullAnalysis,
                              bool                                  oneDimensional,
+                             bool                                  useRmsdCutoff,
                              bool                                  useRmsdDistances,
                              bool                                  useLeastSquaresFitting,
                              const std::vector<std::vector<RVec>>& coordinates,
@@ -234,6 +271,33 @@ t_mat* generateClusterMatrix(int                                   numFrames,
                             numEntries);
         }
     }
+    GMX_LOG(logger.info).appendTextFormatted("The RMSD ranges from %g to %g nm", matrix->minrms, matrix->maxrms);
+    GMX_LOG(logger.info).appendTextFormatted("Average RMSD is %g", 2 * matrix->sumrms / (numFrames * (numFrames - 1)));
+    GMX_LOG(logger.info).appendTextFormatted("Number of structures for matrix %d", numFrames);
+    GMX_LOG(logger.info).appendTextFormatted("Energy of the matrix is %g.", mat_energy(matrix));
+    if (useRmsdCutoff && (rmsdCutoff < matrix->minrms || rmsdCutoff > matrix->maxrms))
+    {
+        GMX_LOG(logger.warning)
+                .asParagraph()
+                .appendTextFormatted(
+                        "WARNING: rmsd cutoff %g is outside range of rmsd values "
+                        "%g to %g",
+                        rmsdCutoff,
+                        matrix->minrms,
+                        matrix->maxrms);
+    }
+    if (runFullAnalysis)
+    {
+        if (minimumRmsDistance < matrix->minrms)
+        {
+            GMX_LOG(logger.warning)
+                    .asParagraph()
+                    .appendTextFormatted("WARNING: rmsd minimum %g is below lowest rmsd value %g",
+                                         minimumRmsDistance,
+                                         matrix->minrms);
+        }
+    }
+
     return matrix;
 }
 
@@ -255,6 +319,170 @@ void convertToBinary(t_mat* matrix, int numFrames, real rmsdCutoff)
     }
 }
 
+void convertBinaryToMaxRms(t_mat* matrix, int numFrames)
+{
+    for (int i2 = 0; i2 < numFrames; ++i2)
+    {
+        for (int i1 = i2 + 1; i1 < numFrames; ++i1)
+        {
+            if (matrix->mat[i1][i2] != 0.0F)
+            {
+                matrix->mat[i1][i2] = matrix->maxrms;
+            }
+        }
+    }
+}
+
+void calculateClusterTransitions(ArrayRef<const int> clusterIndex,
+                                 bool                writeClusterTransitions,
+                                 bool                writeNumClusterTransitions,
+                                 const std::string&  clusterTransitionsFileName,
+                                 AnalysisDataHandle* transitionDataHandle,
+                                 const MDLogger&     logger)
+{
+    MultiDimArray<std::vector<real>, extents<dynamic_extent, dynamic_extent>> transitions;
+    std::vector<int>  numTransitions(clusterIndex.size(), 0);
+    std::vector<real> transitionAxis(clusterIndex.size());
+    transitions.resize(clusterIndex.ssize(), clusterIndex.ssize());
+    std::iota(transitionAxis.begin(), transitionAxis.end(), 1);
+    std::fill(transitions.toArrayRef().begin(), transitions.toArrayRef().end(), 0);
+    int maximumNumTransitions = 0;
+    int totalTransitions      = 0;
+    for (auto it = clusterIndex.begin() + 1; it != clusterIndex.end(); ++it)
+    {
+        const auto prevIt = it - 1;
+        if (*it != *prevIt)
+        {
+            totalTransitions++;
+            const int currPos = (*it) - 1;
+            const int prevPos = (*prevIt) - 1;
+            numTransitions[prevPos]++;
+            numTransitions[currPos]++;
+            transitions(prevPos, currPos)++;
+            maximumNumTransitions =
+                    std::max(static_cast<real>(maximumNumTransitions), transitions(prevPos, currPos));
+        }
+    }
+    GMX_LOG(logger.info)
+            .asParagraph()
+            .appendTextFormatted(
+                    "Counted %d transitions in total, "
+                    "max %d between two specific clusters\n",
+                    totalTransitions,
+                    maximumNumTransitions);
+    if (writeClusterTransitions)
+    {
+        constexpr t_rgb rlo   = { 1.0, 1.0, 1.0 };
+        constexpr t_rgb rhi   = { 0.0, 0.0, 1.0 };
+        FILE*           out   = gmx_ffopen(clusterTransitionsFileName, "w");
+        int             scale = std::min(maximumNumTransitions + 1, 80);
+        write_xpm(out,
+                  0,
+                  "Cluster Transitions",
+                  "# transitions",
+                  "from cluster",
+                  "to cluster",
+                  clusterIndex.size(),
+                  clusterIndex.size(),
+                  transitionAxis.data(),
+                  transitionAxis.data(),
+                  transitions,
+                  0,
+                  maximumNumTransitions,
+                  rlo,
+                  rhi,
+                  &scale);
+    }
+    if (writeNumClusterTransitions)
+    {
+        for (int i = 0; i < clusterIndex.ssize(); ++i)
+        {
+            transitionDataHandle->startFrame(i, i + 1);
+            transitionDataHandle->setPoint(0, numTransitions[i]);
+            transitionDataHandle->finishFrame();
+        }
+        transitionDataHandle->finishData();
+    }
+}
+
+int colorClustersWithMinimumPopulation(t_mat*              matrix,
+                                       ArrayRef<const int> clusters,
+                                       int                 minNumForColoring,
+                                       const MDLogger&     logger)
+{
+    const int        numFrames = clusters.size();
+    std::vector<int> clusterNumbers(numFrames, 0);
+    std::vector<int> clusterColorIndex(numFrames, 0);
+    for (int i = 0; i < numFrames; ++i)
+    {
+        clusterNumbers[clusters[i]]++;
+    }
+    int totalNumClusters = 0;
+    for (int i = 0; i < numFrames; ++i)
+    {
+        if (clusterNumbers[i] > minNumForColoring)
+        {
+            totalNumClusters++;
+            for (int j = 0; j < numFrames; ++j)
+            {
+                if (clusters[j] == i)
+                {
+                    clusterColorIndex[j] = totalNumClusters;
+                }
+            }
+        }
+    }
+    totalNumClusters++;
+    GMX_LOG(logger.info)
+            .asParagraph()
+            .appendTextFormatted("There are %d clusters with at least %d conformations\n",
+                                 totalNumClusters,
+                                 minNumForColoring);
+    for (int i = 0; i < numFrames; ++i)
+    {
+        const int clusterID = clusters[i];
+        for (int j = 0; j < i; ++j)
+        {
+            if ((clusterID == clusters[j]) && (clusterNumbers[clusterID] >= minNumForColoring))
+            {
+                matrix->mat[i][j] = clusterColorIndex[i];
+            }
+            else
+            {
+                matrix->mat[i][j] = 0;
+            }
+        }
+    }
+    return totalNumClusters;
+}
+
+void markClusterWithValue(t_mat* matrix, ArrayRef<const int> clusters)
+{
+    const int numFrames = clusters.size();
+    for (int i = 0; i < numFrames; ++i)
+    {
+        for (int j = 0; j < i; ++j)
+        {
+            if (clusters[i] == clusters[j])
+            {
+                matrix->mat[i][j] = matrix->maxrms;
+            }
+            else
+            {
+                matrix->mat[i][j] = 0;
+            }
+        }
+    }
+}
+
+TrajectoryFrameWriterPointer openClusterOutputFile(const std::string&                     fileName,
+                                                   const OutputRequirementOptionDirector& requirementsBuilder,
+                                                   const TopologyInformation&             top,
+                                                   const Selection&                       sel)
+{
+    return createTrajectoryFrameWriter(
+            top.mtop(), sel, fileName, top.copyAtoms(), requirementsBuilder.process());
+}
 
 /*
  * Cluster
@@ -289,14 +517,17 @@ private:
     std::string                     clusterIDFileName_;
     std::string                     clusterMappingFileName_;
     OutputRequirementOptionDirector requirementsBuilder_;
+    bool                            useRmsdCutoff_                    = false;
     bool                            useRmsdDistances_                 = false;
     bool                            useLeastSquaresFitting_           = false;
     bool                            setMaximumRmsdLevel_              = false;
     bool                            writeAverageStructure_            = false;
-    bool                            writeNumCluster_                  = false;
+    bool                            useWriteNumCluster_               = false;
     bool                            useBinaryValues_                  = false;
-    bool                            useNearestNeghbors_               = false;
+    bool                            useNearestNeighbors_              = false;
     bool                            useRandomMCSteps_                 = false;
+    bool                            useWriteOverThisCount_            = false;
+    bool                            useWriteOutputFile_               = false;
     bool                            writeRmsdDistribution_            = false;
     bool                            writeRmsdEigenVectors_            = false;
     bool                            writeMCConversion_                = false;
@@ -322,7 +553,20 @@ private:
     ClusterTrajectoryData           frameData_;
     std::vector<int>                localIndices_;
     std::vector<real>               masses_;
+    std::vector<RVec>               referenceCoordinates_;
     std::unique_ptr<LoggerOwner>    loggerOwner_;
+    std::unique_ptr<ICluster>       clusterMethod_;
+
+    t_mat* clusterMatrixHandle_ = nullptr;
+
+    const TopologyInformation* top_ = nullptr;
+
+    AnalysisDataPlotSettings  plotSettings_;
+    AnalysisData              clusterTransitionData_;
+    AnalysisData              clusterRmsd_;
+    AnalysisData              clusterSizeData_;
+    AnalysisData              clusterIdData_;
+    AnalysisHistogramSettings histogramSettings_;
 };
 
 Cluster::Cluster()
@@ -338,8 +582,7 @@ void Cluster::initOptions(IOptionsContainer* options, TrajectoryAnalysisSettings
 {
     static const char* const desc[] = {
         "[THISMODULE] can cluster structures using several different methods.",
-        "Distances between structures can be determined from a trajectory",
-        "or read from an [REF].xpm[ref] matrix file with the [TT]-dm[tt] option.",
+        "Distances between structures can be determined from a trajectory.",
         "RMS deviation after fitting or RMS deviation of atom-pair distances",
         "can be used to define the distance between structures.[PAR]",
 
@@ -423,8 +666,9 @@ void Cluster::initOptions(IOptionsContainer* options, TrajectoryAnalysisSettings
                                .defaultValue(40));
     options->addOption(RealOption("cutoff")
                                .store(&rmsdCutoff_)
+                               .storeIsSet(&useRmsdCutoff_)
                                .description("RMSD cut-off in nm for two structures to be neighbor")
-                               .defaultValue(0.1));
+                               .defaultValueIfSet(0.1));
     options->addOption(BooleanOption("fit")
                                .store(&useLeastSquaresFitting_)
                                .description("Use least squares fitting before RMSD calculation")
@@ -442,15 +686,16 @@ void Cluster::initOptions(IOptionsContainer* options, TrajectoryAnalysisSettings
     options->addOption(
             IntegerOption("wcl")
                     .store(&numClusterWrite_)
-                    .storeIsSet(&writeNumCluster_)
+                    .storeIsSet(&useWriteNumCluster_)
                     .description(
                             "Write the structures for this number of clusters to numbered files")
                     .defaultValueIfSet(1));
     options->addOption(IntegerOption("nst")
                                .store(&writeOverThisCount_)
+                               .storeIsSet(&useWriteOverThisCount_)
                                .description("Only write all structures if more than this number of "
                                             "structures per cluster")
-                               .defaultValue(1));
+                               .defaultValueIfSet(1));
     options->addOption(
             RealOption("rmsmin")
                     .store(&minimumRmsDistance_)
@@ -473,7 +718,7 @@ void Cluster::initOptions(IOptionsContainer* options, TrajectoryAnalysisSettings
     options->addOption(
             IntegerOption("M")
                     .store(&numJarvisPatrickNearestNeighbors_)
-                    .storeIsSet(&useNearestNeghbors_)
+                    .storeIsSet(&useNearestNeighbors_)
                     .defaultValueIfSet(10)
                     .description(
                             "Number of nearest neighbors considered for Jarvis-Patrick algorithm"));
@@ -508,6 +753,7 @@ void Cluster::initOptions(IOptionsContainer* options, TrajectoryAnalysisSettings
                                .filetype(OptionFileType::Trajectory)
                                .outputFile()
                                .store(&clusterBaseName_)
+                               .storeIsSet(&useWriteOutputFile_)
                                .defaultBasename("clusters")
                                .description("Clustered structures"));
 
@@ -602,11 +848,81 @@ void Cluster::optionsFinished(TrajectoryAnalysisSettings* settings)
     frameFlags |= TRX_READ_F;
 
     settings->setFrameFlags(frameFlags);
+    settings->setFlag(TrajectoryAnalysisSettings::efRequireTop);
+    settings->setFlag(TrajectoryAnalysisSettings::efUseTopX);
+
+    const MDLogger& logger = loggerOwner_->logger();
+    if (method_ == ClusterMethods::JarvisPatrick)
+    {
+        std::string message;
+        const bool  useRmsdForJP = (!useNearestNeighbors_ || useRmsdCutoff_);
+        if (useNearestNeighbors_
+            && (numJarvisPatrickNearestNeighbors_ < 0 || numJarvisPatrickNearestNeighbors_ == 1))
+        {
+            auto errorMessage = formatString("M (%d) must be 0 or larger than 1",
+                                             numJarvisPatrickNearestNeighbors_);
+            GMX_THROW(InvalidInputError(errorMessage));
+        }
+        if (numJarvisPatrickNearestNeighbors_ < 2)
+        {
+            message = formatString(
+                    "Will use P=%d and RMSD cutoff (%g)", numNearestNeighborsForCluster_, rmsdCutoff_);
+            useRmsdCutoff_ = true;
+        }
+        else
+        {
+            if (numNearestNeighborsForCluster_ >= numJarvisPatrickNearestNeighbors_)
+            {
+                auto errorMessage = formatString(
+                        "Number of neighbors required (P = %d) must be less than M = %d",
+                        numNearestNeighborsForCluster_,
+                        numJarvisPatrickNearestNeighbors_);
+                GMX_THROW(InvalidInputError(errorMessage));
+            }
+            if (useRmsdForJP)
+            {
+                message        = formatString("Will use P=%d, M=%d and RMSD cutoff (%g)",
+                                       numNearestNeighborsForCluster_,
+                                       numJarvisPatrickNearestNeighbors_,
+                                       rmsdCutoff_);
+                useRmsdCutoff_ = true;
+            }
+            else
+            {
+                message = formatString("Will use P=%d, M=%d",
+                                       numNearestNeighborsForCluster_,
+                                       numJarvisPatrickNearestNeighbors_);
+            }
+        }
+        GMX_LOG(logger.info).asParagraph().appendTextFormatted("%s for determining the neighbors", message.c_str());
+    }
+    else
+    {
+        useRmsdCutoff_ = (useBinaryValues_ || method_ == ClusterMethods::Linkage
+                          || method_ == ClusterMethods::Gromos);
+    }
+    if (useRmsdCutoff_ && method_ != ClusterMethods::JarvisPatrick)
+    {
+        GMX_LOG(logger.info).asParagraph().appendTextFormatted("Using RMSD cutoff %g nm\n", rmsdCutoff_);
+    }
+    if (useRmsdCutoff_ && (minimumRmsDistance_ > rmsdCutoff_))
+    {
+        GMX_LOG(logger.warning)
+                .asParagraph()
+                .appendTextFormatted("WARNING: rmsd minimum %g is above rmsd cutoff %g",
+                                     minimumRmsDistance_,
+                                     rmsdCutoff_);
+    }
+    if (method_ == ClusterMethods::MonteCarlo)
+    {
+        GMX_LOG(logger.info).asParagraph().appendTextFormatted("Using %d iterations\n", maxMCIterations_);
+    }
 }
 
 
-void Cluster::initAnalysis(const TrajectoryAnalysisSettings& /*settings*/, const TopologyInformation& top)
+void Cluster::initAnalysis(const TrajectoryAnalysisSettings& settings, const TopologyInformation& top)
 {
+    plotSettings_ = settings.plotSettings();
     if (!sel_.isValid())
     {
         localIndices_.resize(top.mtop()->natoms);
@@ -619,17 +935,20 @@ void Cluster::initAnalysis(const TrajectoryAnalysisSettings& /*settings*/, const
         GMX_THROW(InvalidInputError("Need full topology with masses for clustering"));
     }
     masses_.resize(natoms);
+    referenceCoordinates_.resize(natoms);
     const auto* localAtoms = top.atoms();
     for (int i = 0; i < gmx::ssize(atomIndexRef); ++i)
     {
         masses_[i] = localAtoms->atom[atomIndexRef[i]].m;
+        copy_rvec(top.x()[atomIndexRef[i]], referenceCoordinates_[i]);
     }
+    top_ = &top;
 }
 
-void Cluster::analyzeFrame(int /* frnr */, const t_trxframe& fr, t_pbc* /* pbc */, TrajectoryAnalysisModuleData* /*pdata*/)
+void Cluster::analyzeFrame(int frnr, const t_trxframe& fr, t_pbc* /* pbc */, TrajectoryAnalysisModuleData* /*pdata*/)
 {
     ArrayRef<const int> atomIndexRef = sel_.isValid() ? sel_.atomIndices() : localIndices_;
-    addClusterFrame(&frameData_, fr, atomIndexRef, masses_, useLeastSquaresFitting_);
+    addClusterFrame(&frameData_, frnr, fr, atomIndexRef, masses_, useLeastSquaresFitting_);
 }
 
 void Cluster::finishAnalysis(int nframes)
@@ -645,52 +964,427 @@ void Cluster::finishAnalysis(int nframes)
             .asParagraph()
             .appendTextFormatted("Allocated %zu bytes for frames\n", (nframes * natoms * sizeof(RVec)));
     GMX_LOG(logger.info).asParagraph().appendTextFormatted("Read %d frames from trajectory\n", nframes);
-    t_mat* matrix = generateClusterMatrix(nframes,
-                                          natoms,
-                                          method_ == ClusterMethods::Diagonalization,
-                                          useRmsdDistances_,
-                                          useLeastSquaresFitting_,
-                                          frameData_.frames,
-                                          masses_,
-                                          logger);
+    const bool runAnalysis = (method_ == ClusterMethods::Linkage || method_ == ClusterMethods::JarvisPatrick
+                              || method_ == ClusterMethods::Gromos);
+
+    clusterMatrixHandle_ = generateClusterMatrix(nframes,
+                                                 natoms,
+                                                 rmsdCutoff_,
+                                                 minimumRmsDistance_,
+                                                 runAnalysis,
+                                                 method_ == ClusterMethods::Diagonalization,
+                                                 useRmsdCutoff_,
+                                                 useRmsdDistances_,
+                                                 useLeastSquaresFitting_,
+                                                 frameData_.frames,
+                                                 masses_,
+                                                 logger);
+
+    if (writeRmsdDistribution_)
+    {
+        const real scalingFactor = 100 / clusterMatrixHandle_->maxrms;
+        histogramSettings_ = AnalysisHistogramSettings(gmx::histogramFromBins(0, 101, 1 / scalingFactor));
+        AnalysisDataSimpleHistogramModulePointer rmsdHistogramModule(
+                new AnalysisDataSimpleHistogramModule(histogramSettings_));
+
+        clusterRmsd_.addModule(rmsdHistogramModule);
+        registerBasicDataset(&rmsdHistogramModule->averager(), "histogram");
+
+        AnalysisDataPlotModulePointer plotm(new AnalysisDataPlotModule(plotSettings_));
+        plotm->setFileName(rmsdDistributionOutputFileName_);
+        plotm->setTitle("RMS Distribution Histogram");
+        plotm->setXLabel("RMS (nm)");
+        plotm->setYLabel("counts");
+        rmsdHistogramModule->averager().addModule(plotm);
+        clusterRmsd_.setDataSetCount(1);
+        clusterRmsd_.setColumnCount(0, 1);
+
+        AnalysisDataHandle dh  = clusterRmsd_.startData({});
+        int                pos = 0;
+        for (int i = 0; i < nframes; ++i)
+        {
+            for (int j = i + 1; j < nframes; ++j)
+            {
+                int xPos = gmx::roundToInt(scalingFactor * clusterMatrixHandle_->mat[i][j]);
+                dh.startFrame(pos, xPos);
+                dh.setPoint(0, clusterMatrixHandle_->mat[i][j]);
+                dh.finishFrame();
+                pos++;
+            }
+        }
+        dh.finishData();
+        rmsdHistogramModule->averager().normalizeProbability();
+        rmsdHistogramModule->averager().done();
+    }
 
     if (useBinaryValues_)
     {
-        convertToBinary(matrix, nframes, rmsdCutoff_);
+        convertToBinary(clusterMatrixHandle_, nframes, rmsdCutoff_);
     }
-    std::unique_ptr<ICluster> clusterMethod;
     switch (method_)
     {
         case ClusterMethods::Linkage:
-            clusterMethod = std::make_unique<ClusterLinkage>(matrix, rmsdCutoff_, logger);
+            clusterMethod_ = std::make_unique<ClusterLinkage>(
+                    clusterMatrixHandle_, rmsdCutoff_, nframes, logger);
             break;
         case ClusterMethods::Diagonalization:
-            clusterMethod = std::make_unique<ClusterDiagonalize>(matrix, rmsdCutoff_, nframes, logger);
+            clusterMethod_ = std::make_unique<ClusterDiagonalize>(
+                    clusterMatrixHandle_, rmsdCutoff_, nframes, logger);
             break;
         case ClusterMethods::MonteCarlo:
-            clusterMethod = std::make_unique<ClusterMonteCarlo>(matrix,
-                                                                rmsdCutoff_,
-                                                                kT_,
-                                                                nframes,
-                                                                randomNumberSeed_,
-                                                                maxMCIterations_,
-                                                                numRandomMCSteps_,
-                                                                logger,
-                                                                frameData_.times);
+            clusterMethod_ = std::make_unique<ClusterMonteCarlo>(clusterMatrixHandle_,
+                                                                 rmsdCutoff_,
+                                                                 kT_,
+                                                                 nframes,
+                                                                 randomNumberSeed_,
+                                                                 maxMCIterations_,
+                                                                 numRandomMCSteps_,
+                                                                 logger,
+                                                                 frameData_.times);
             break;
         case ClusterMethods::JarvisPatrick:
-            clusterMethod = std::make_unique<ClusterJarvisPatrick>(
-                    matrix, rmsdCutoff_, numJarvisPatrickNearestNeighbors_, numNearestNeighborsForCluster_, logger);
+            clusterMethod_ = std::make_unique<ClusterJarvisPatrick>(clusterMatrixHandle_,
+                                                                    rmsdCutoff_,
+                                                                    numJarvisPatrickNearestNeighbors_,
+                                                                    numNearestNeighborsForCluster_,
+                                                                    logger);
             break;
         case ClusterMethods::Gromos:
-            clusterMethod = std::make_unique<ClusterGromos>(matrix, rmsdCutoff_, nframes, logger);
+            clusterMethod_ =
+                    std::make_unique<ClusterGromos>(clusterMatrixHandle_, rmsdCutoff_, nframes, logger);
             break;
         default: GMX_THROW(InvalidInputError("No such clustering method"));
     }
 }
 
 
-void Cluster::writeOutput() {}
+void Cluster::writeOutput()
+{
+    const MDLogger&     logger       = loggerOwner_->logger();
+    ArrayRef<const int> atomIndexRef = sel_.isValid() ? sel_.atomIndices() : localIndices_;
+    const int           natoms       = atomIndexRef.size();
+    const int           numFrames    = frameData_.size();
+    ArrayRef<const int> clusters;
+    if (method_ != ClusterMethods::Diagonalization)
+    {
+        clusters = clusterMethod_->clusterList();
+    }
+    const bool runAnalysis = (method_ == ClusterMethods::Linkage || method_ == ClusterMethods::JarvisPatrick
+                              || method_ == ClusterMethods::Gromos);
+
+    if (runAnalysis)
+    {
+        std::vector<RVec> averageCoordinates(natoms);
+
+        if (minStructuresForColouring_ > 1)
+        {
+            colorClustersWithMinimumPopulation(
+                    clusterMatrixHandle_, clusters, minStructuresForColouring_, logger);
+        }
+        else
+        {
+            markClusterWithValue(clusterMatrixHandle_, clusters);
+        }
+        const bool writeOutputStructures = (writeAverageStructure_ || useWriteNumCluster_ || useWriteOverThisCount_
+                                            || useRmsdCutoff_ || useWriteOutputFile_);
+        std::string outputBaseName;
+        if (writeOutputStructures)
+        {
+            outputBaseName = clusterBaseName_;
+            if (useWriteNumCluster_)
+            {
+                numClusterWrite_    = std::max(numClusterWrite_, static_cast<int>(clusters.size()));
+                const int numDigits = static_cast<int>(
+                        (std::log(static_cast<real>(numClusterWrite_)) / std::log(10.0)) + 1);
+                outputBaseName = Path::concatenateBeforeExtension(
+                        outputBaseName, formatString("%%0%dd", numDigits));
+            }
+            GMX_LOG(logger.info)
+                    .asParagraph()
+                    .appendTextFormatted("Writing %s structure for each cluster to %s",
+                                         writeAverageStructure_ ? "average" : "middle",
+                                         outputBaseName.c_str());
+            if (useWriteNumCluster_)
+            {
+                GMX_LOG(logger.info)
+                        .asParagraph()
+                        .appendTextFormatted(
+                                "Writing %s for %sclusters%s to %s",
+                                useRmsdCutoff_
+                                        ? formatString("structures with rmsd > %g", rmsdCutoff_).c_str()
+                                        : "all structures",
+                                numClusterWrite_ == clusters.ssize()
+                                        ? "all "
+                                        : formatString("the first %d ", numClusterWrite_).c_str(),
+                                useWriteOverThisCount_
+                                        ? formatString(" with more than %d structures", writeOverThisCount_)
+                                                  .c_str()
+                                        : "",
+                                outputBaseName.c_str());
+            }
+            if (useLeastSquaresFitting_)
+            {
+                reset_x(atomIndexRef.size(),
+                        atomIndexRef.data(),
+                        atomIndexRef.size(),
+                        nullptr,
+                        as_rvec_array(referenceCoordinates_.data()),
+                        masses_.data());
+            }
+        }
+        if (writeClusterTransitions_ || writeNumClusterTransitions_)
+        {
+            registerAnalysisDataset(&clusterTransitionData_, "Cluster transitions");
+            if (writeNumClusterTransitions_)
+            {
+                AnalysisDataPlotModulePointer plotm(new AnalysisDataPlotModule(plotSettings_));
+                plotm->setFileName(numClusterTransitionsFileName_);
+                plotm->setTitle("Cluster transitions");
+                plotm->setXLabel("Cluster #");
+                plotm->setYLabel("# transitions");
+                clusterTransitionData_.addModule(plotm);
+                clusterTransitionData_.setDataSetCount(1);
+                clusterTransitionData_.setColumnCount(0, 1);
+            }
+
+            AnalysisDataHandle dh = clusterTransitionData_.startData({});
+            calculateClusterTransitions(clusters,
+                                        writeClusterTransitions_,
+                                        writeNumClusterTransitions_,
+                                        clusterTransitionsFileName_,
+                                        &dh,
+                                        logger);
+        }
+        if (writeClusterIDs_)
+        {
+            registerAnalysisDataset(&clusterIdData_, "Cluster IDs");
+            AnalysisDataPlotModulePointer plotm(new AnalysisDataPlotModule(plotSettings_));
+            plotm->setFileName(clusterIDFileName_);
+            plotm->setTitle("Clusters");
+            plotm->setXAxisIsTime();
+            plotm->setYLabel("Cluster #");
+            clusterIdData_.addModule(plotm);
+            clusterIdData_.setDataSetCount(1);
+            clusterIdData_.setColumnCount(0, 1);
+            AnalysisDataHandle dh = clusterIdData_.startData({});
+            for (int i = 0; i < clusters.ssize(); ++i)
+            {
+                dh.startFrame(i, frameData_.times[i]);
+                dh.setPoint(0, clusters[i]);
+                dh.finishFrame();
+            }
+            dh.finishData();
+        }
+        AnalysisDataHandle clusterSizeDataHandle;
+        if (writeClusterSize_)
+        {
+            registerAnalysisDataset(&clusterSizeData_, "Cluster Size");
+            AnalysisDataPlotModulePointer plotm(new AnalysisDataPlotModule(plotSettings_));
+            plotm->setFileName(clusterSizeFileName_);
+            plotm->setTitle("Cluster sizes");
+            plotm->setXLabel("Cluster #");
+            plotm->setYLabel("# Structures");
+            clusterSizeData_.addModule(plotm);
+            clusterSizeData_.setDataSetCount(1);
+            clusterSizeData_.setColumnCount(0, 1);
+            clusterSizeDataHandle = clusterSizeData_.startData({});
+        }
+        FILE* clusterMappingFile = nullptr;
+        if (writeClusterMappingFile_)
+        {
+            clusterMappingFile = gmx_ffopen(clusterMappingFileName_, "w");
+        }
+        std::vector<int> structure(clusters.size());
+        for (int i = 1; i <= clusters.ssize(); ++i)
+        {
+            if (writeOutputStructures)
+            {
+                for (auto x : averageCoordinates)
+                {
+                    clear_rvec(x);
+                }
+                int nstr = 0;
+                for (int i1 = 0; i1 < clusters.ssize(); ++i1)
+                {
+                    if (clusters[i1] == i)
+                    {
+                        structure[nstr] = i1;
+                        nstr++;
+                        ArrayRef<const RVec> referenceCoords;
+                        if (writeOutputStructures && (writeAverageStructure_ || useWriteNumCluster_))
+                        {
+                            if (useLeastSquaresFitting_)
+                            {
+                                reset_x(atomIndexRef.size(),
+                                        atomIndexRef.data(),
+                                        natoms,
+                                        nullptr,
+                                        as_rvec_array(frameData_.frames[i1].data()),
+                                        masses_.data());
+                            }
+                            if (nstr == 1)
+                            {
+                                referenceCoords = frameData_.frames[i1];
+                            }
+                            else
+                            {
+                                do_fit(natoms,
+                                       masses_.data(),
+                                       as_rvec_array(referenceCoords.data()),
+                                       as_rvec_array(frameData_.frames[i1].data()));
+                            }
+                            if (writeAverageStructure_)
+                            {
+                                for (int coord = 0; coord < natoms; ++coord)
+                                {
+                                    rvec_inc(averageCoordinates[coord], frameData_.frames[i1][coord]);
+                                }
+                            }
+                        }
+                    }
+                }
+                if (writeClusterSize_)
+                {
+                    clusterSizeDataHandle.startFrame(i, i);
+                    clusterSizeDataHandle.setPoint(0, nstr);
+                    clusterSizeDataHandle.finishFrame();
+                }
+                if (writeClusterMappingFile_)
+                {
+                    fprintf(clusterMappingFile, "[Cluster_%04d]\n", i);
+                }
+                real   clusterRmsd      = 0;
+                int    midStructure     = 0;
+                real   midStructureRmsd = 10000;
+                t_mat* matrix           = clusterMatrixHandle_;
+                for (int i1 = 0; i1 < nstr; ++i1)
+                {
+                    real r = 0;
+                    if (nstr > 1)
+                    {
+                        for (int str = 0; str < nstr; ++str)
+                        {
+                            if (str < nstr)
+                            {
+                                r += matrix->mat[structure[str]][structure[i1]];
+                            }
+                            else
+                            {
+                                r += matrix->mat[structure[i1]][structure[str]];
+                            }
+                        }
+                        r /= (nstr - 1);
+                    }
+                    if (r < midStructureRmsd)
+                    {
+                        midStructure     = structure[i1];
+                        midStructureRmsd = r;
+                    }
+                    clusterRmsd += r;
+                }
+                clusterRmsd /= nstr;
+                if (writeClusterMappingFile_)
+                {
+                    for (int str = 0; str < nstr; ++str)
+                    {
+                        if ((str % 7 == 0) && str)
+                        {
+                            fprintf(clusterMappingFile, "\n");
+                        }
+                        int i1 = structure[str];
+                        fprintf(clusterMappingFile, " %6d", frameData_.frameIndex[i1] + 1);
+                    }
+                    fprintf(clusterMappingFile, "\n");
+                }
+                std::vector<bool> doWriteStructures(clusters.size(), true);
+                if (writeOutputStructures)
+                {
+                    if (useWriteNumCluster_)
+                    {
+                        for (int str = 0; str < nstr; ++str)
+                        {
+                            doWriteStructures[str] = false;
+                        }
+                    }
+                    if ((i < (numClusterWrite_ + 1)) && (nstr < writeOverThisCount_))
+                    {
+                        auto fileName = formatString(outputBaseName.c_str(), i);
+                        auto outputFile =
+                                openClusterOutputFile(fileName, requirementsBuilder_, *top_, sel_);
+                        for (int str = 0; str < nstr; ++str)
+                        {
+                            doWriteStructures[str] = true;
+                            if (useRmsdCutoff_)
+                            {
+                                for (int i1 = 0; i1 < str && doWriteStructures[str]; ++i1)
+                                {
+                                    if (doWriteStructures[i1])
+                                    {
+                                        doWriteStructures[i] =
+                                                (matrix->mat[structure[i1]][structure[str]] > rmsdCutoff_);
+                                    }
+                                }
+                            }
+                            if (doWriteStructures[str])
+                            {
+                                const int index = structure[str];
+                                addCoordsToFile(str,
+                                                outputFile.get(),
+                                                frameData_.frames[index],
+                                                atomIndexRef,
+                                                frameData_.times[index],
+                                                frameData_.boxes[index]);
+                            }
+                        }
+                    }
+                    if (writeAverageStructure_)
+                    {
+                        for (auto coord : averageCoordinates)
+                        {
+                            svmul(1.0 / nstr, coord, coord);
+                        }
+                    }
+                    else
+                    {
+                        for (int atom = 0; atom < natoms; ++atom)
+                        {
+                            copy_rvec(frameData_.frames[midStructure][atom], averageCoordinates[atom]);
+                        }
+                        if (useLeastSquaresFitting_)
+                        {
+                            reset_x(atomIndexRef.size(),
+                                    atomIndexRef.data(),
+                                    natoms,
+                                    nullptr,
+                                    as_rvec_array(averageCoordinates.data()),
+                                    masses_.data());
+                        }
+                    }
+                    if (useLeastSquaresFitting_)
+                    {
+                        do_fit(natoms,
+                               masses_.data(),
+                               as_rvec_array(referenceCoordinates_.data()),
+                               as_rvec_array(averageCoordinates.data()));
+                    }
+                    auto averageStructure =
+                            openClusterOutputFile(clusterBaseName_, requirementsBuilder_, *top_, sel_);
+                    addCoordsToFile(0,
+                                    averageStructure.get(),
+                                    averageCoordinates,
+                                    atomIndexRef,
+                                    frameData_.times[midStructure],
+                                    frameData_.boxes[midStructure]);
+                }
+            }
+        }
+        clusterSizeDataHandle.finishData();
+    }
+    if (useBinaryValues_ && !runAnalysis)
+    {
+        convertBinaryToMaxRms(clusterMatrixHandle_, numFrames);
+    }
+}
 
 } // namespace
 

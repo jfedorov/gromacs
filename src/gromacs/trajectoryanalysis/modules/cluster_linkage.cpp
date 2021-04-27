@@ -161,7 +161,6 @@ void ClusterLinkage::makeClusters()
                     clusters[k].cluster);
         }
     }
-    clusters_.resize(cid);
     for (int k = 0; k < n1; k++)
     {
         clusters_[clusters[k].configuration] = clusters[k].cluster;
