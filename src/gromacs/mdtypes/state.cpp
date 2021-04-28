@@ -432,7 +432,7 @@ gmx::ArrayRef<gmx::RVec>& t_state::addRVecVector(const std::string& name)
     // Rebuild all the ArrayRefs, as the order might have changed
     rebuildRVecVectorArrayRefs();
 
-    // Return a reference to an object in a unique pointer so the reference remains valid
+    // Return a reference to an ArrayRef so the view remains valid after reallocation
     return it->second.second;
 }
 
