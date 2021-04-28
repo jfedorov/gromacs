@@ -3,29 +3,29 @@
 <ReferenceData>
   <FunctionType Name="G96ANGLES">
     <FEP Name="No">
-      <Real Name="Epot ">503614.15820294252</Real>
+      <Real Name="Epot ">221.78167724609375</Real>
       <Real Name="dVdlambda ">0</Real>
       <Sequence Name="Forces">
         <Int Name="Length">4</Int>
         <Vector>
-          <Real Name="X">10184.071777974661</Real>
-          <Real Name="Y">-28312.324569100543</Real>
-          <Real Name="Z">5545.7781193687024</Real>
+          <Real Name="X">213.74989318847656</Real>
+          <Real Name="Y">-594.23724365234375</Real>
+          <Real Name="Z">116.39862060546875</Real>
         </Vector>
         <Vector>
-          <Real Name="X">-55667.901908388834</Real>
-          <Real Name="Y">43305.589268243166</Real>
-          <Real Name="Z">32579.585988349259</Real>
+          <Real Name="X">-1168.237548828125</Real>
+          <Real Name="Y">908.8751220703125</Real>
+          <Real Name="Z">683.6722412109375</Real>
         </Vector>
         <Vector>
-          <Real Name="X">55813.225064922604</Real>
-          <Real Name="Y">-43238.857959217843</Real>
-          <Real Name="Z">-32408.901792064011</Real>
+          <Real Name="X">1171.2177734375</Real>
+          <Real Name="Y">-907.28192138671875</Real>
+          <Real Name="Z">-680.1290283203125</Real>
         </Vector>
         <Vector>
-          <Real Name="X">-10329.394934508422</Real>
-          <Real Name="Y">28245.593260075217</Real>
-          <Real Name="Z">-5716.4623156539474</Real>
+          <Real Name="X">-216.73007202148438</Real>
+          <Real Name="Y">592.64404296875</Real>
+          <Real Name="Z">-119.94184875488281</Real>
         </Vector>
       </Sequence>
       <Shift-Forces Name="Shift-forces">
