@@ -183,7 +183,7 @@ void t_state::rebuildRVecVectorArrayRefs()
     rvecVectorArrayRefs_.resize(rvecVectors_.size());
 
     gmx::index i = 0;
-    for (auto it : rvecVectors_)
+    for (const auto& it : rvecVectors_)
     {
         rvecVectorArrayRefs_[i] = it.second.second;
         i++;

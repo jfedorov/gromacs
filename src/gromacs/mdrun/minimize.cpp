@@ -1274,7 +1274,7 @@ static const std::string c_cgpString = "CGp";
 //! Struct that holds em_state_p and the CG "p" vector
 struct CGState
 {
-    CGState() : emState(), p(emState.s.addRVecVector(c_cgpString)) {}
+    CGState() : p(emState.s.addRVecVector(c_cgpString)) {}
 
     //! The general part of the EM state
     em_state_t emState;
