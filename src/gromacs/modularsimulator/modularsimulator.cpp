@@ -98,7 +98,8 @@ void ModularSimulator::run()
     ModularSimulatorAlgorithmBuilder algorithmBuilder(compat::make_not_null(legacySimulatorData_),
                                                       std::move(checkpointDataHolder_));
     addIntegrationElements(&algorithmBuilder);
-    auto algorithm = algorithmBuilder.build();
+    observablesReducer_ = legacySimulatorData_->observablesReducerBuilder->build();
+    auto algorithm      = algorithmBuilder.build();
 
     while (const auto* task = algorithm.getNextTask())
     {

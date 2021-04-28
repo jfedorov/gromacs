@@ -146,7 +146,8 @@ ISimulatorElement* AndersenTemperatureCoupling::getElementPointerImpl(
         StatePropagatorData*                    statePropagatorData,
         EnergyData*                             energyData,
         FreeEnergyPerturbationData*             freeEnergyPerturbationData,
-        GlobalCommunicationHelper gmx_unused* globalCommunicationHelper)
+        GlobalCommunicationHelper gmx_unused* globalCommunicationHelper,
+        ObservablesReducer* /*observablesReducer*/)
 {
     GMX_RELEASE_ASSERT(legacySimulatorData->inputrec->etc == TemperatureCoupling::Andersen
                                || legacySimulatorData->inputrec->etc == TemperatureCoupling::AndersenMassive,

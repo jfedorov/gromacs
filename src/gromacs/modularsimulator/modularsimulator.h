@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -50,7 +50,10 @@
 #ifndef GROMACS_MODULARSIMULATOR_MODULARSIMULATOR_H
 #define GROMACS_MODULARSIMULATOR_MODULARSIMULATOR_H
 
+#include <optional>
+
 #include "gromacs/mdrun/isimulator.h"
+#include "gromacs/mdtypes/observablesreducer.h"
 
 struct CheckpointHeaderContents;
 struct t_fcdata;
@@ -111,6 +114,8 @@ private:
     std::unique_ptr<LegacySimulatorData> legacySimulatorData_;
     //! Input checkpoint data
     std::unique_ptr<ReadCheckpointDataHolder> checkpointDataHolder_;
+    //! Coordinator of reduction for observables
+    std::optional<ObservablesReducer> observablesReducer_;
 };
 
 /*!

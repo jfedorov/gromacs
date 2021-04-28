@@ -47,6 +47,7 @@ class energyhistory_t;
 class gmx_ekindata_t;
 struct gmx_enerdata_t;
 struct gmx_enfrot;
+struct gmx_localtop_t;
 struct gmx_mtop_t;
 struct gmx_membed_t;
 struct gmx_multisim_t;
@@ -75,6 +76,7 @@ struct MDModulesNotifiers;
 class ImdSession;
 class MDLogger;
 class MDAtoms;
+class ObservablesReducerBuilder;
 class StopHandlerBuilder;
 struct MdrunOptions;
 class VirtualSitesHandler;
@@ -129,13 +131,16 @@ public:
                         pull_t*                             pull_work,
                         t_swap*                             swap,
                         const gmx_mtop_t&                   top_global,
+                        gmx_localtop_t*                     top,
                         t_state*                            state_global,
+                        t_state*                            state,
                         ObservablesHistory*                 observablesHistory,
                         MDAtoms*                            mdAtoms,
                         t_nrnb*                             nrnb,
                         gmx_wallcycle*                      wcycle,
                         t_forcerec*                         fr,
                         gmx_enerdata_t*                     enerd,
+                        ObservablesReducerBuilder*          observablesReducerBuilder,
                         gmx_ekindata_t*                     ekind,
                         MdrunScheduleWorkload*              runScheduleWork,
                         const ReplicaExchangeParameters&    replExParams,
@@ -163,13 +168,16 @@ public:
         pull_work(pull_work),
         swap(swap),
         top_global(top_global),
+        top(top),
         state_global(state_global),
+        state(state),
         observablesHistory(observablesHistory),
         mdAtoms(mdAtoms),
         nrnb(nrnb),
         wcycle(wcycle),
         fr(fr),
         enerd(enerd),
+        observablesReducerBuilder(observablesReducerBuilder),
         ekind(ekind),
         runScheduleWork(runScheduleWork),
         replExParams(replExParams),
@@ -220,8 +228,12 @@ public:
     t_swap* swap;
     //! Full system topology.
     const gmx_mtop_t& top_global;
+    //! Local system topology used with DD
+    gmx_localtop_t* top;
     //! Full simulation state (only non-nullptr on master rank).
     t_state* state_global;
+    //! Local simulation state (equals state_global when not using DD)
+    t_state* state;
     //! History of simulation observables.
     ObservablesHistory* observablesHistory;
     //! Atom parameters for this domain.
@@ -234,6 +246,8 @@ public:
     t_forcerec* fr;
     //! Data for energy output.
     gmx_enerdata_t* enerd;
+    //! Builder for coordinator of reduction for observables
+    ObservablesReducerBuilder* observablesReducerBuilder;
     //! Kinetic energy data.
     gmx_ekindata_t* ekind;
     //! Schedule of work for each MD step for this task.

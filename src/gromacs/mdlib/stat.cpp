@@ -59,6 +59,7 @@
 #include "gromacs/mdtypes/group.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/md_enums.h"
+#include "gromacs/mdtypes/observablesreducer.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/futil.h"
 #include "gromacs/utility/smalloc.h"
@@ -141,18 +142,20 @@ static int filter_enerdterm(const real* afrom, gmx_bool bToBuffer, real* ato, gm
     return to;
 }
 
-void global_stat(const gmx_global_stat& gs,
-                 const t_commrec*       cr,
-                 gmx_enerdata_t*        enerd,
-                 tensor                 fvir,
-                 tensor                 svir,
-                 const t_inputrec&      inputrec,
-                 gmx_ekindata_t*        ekind,
-                 gmx::ArrayRef<real>    constraintsRmsdData,
-                 t_vcm*                 vcm,
-                 gmx::ArrayRef<real>    sig,
-                 bool                   bSumEkinhOld,
-                 int                    flags)
+void global_stat(const gmx_global_stat&   gs,
+                 const t_commrec*         cr,
+                 gmx_enerdata_t*          enerd,
+                 tensor                   fvir,
+                 tensor                   svir,
+                 const t_inputrec&        inputrec,
+                 gmx_ekindata_t*          ekind,
+                 gmx::ArrayRef<real>      constraintsRmsdData,
+                 t_vcm*                   vcm,
+                 gmx::ArrayRef<real>      sig,
+                 bool                     bSumEkinhOld,
+                 int                      flags,
+                 int64_t                  step,
+                 gmx::ObservablesReducer* observablesReducer)
 /* instead of current system, gmx_booleans for summing virial, kinetic energy, and other terms */
 {
     int ie = 0, ifv = 0, isv = 0, irmsd = 0;
@@ -284,6 +287,13 @@ void global_stat(const gmx_global_stat& gs,
         isig = add_binr(rb, sig);
     }
 
+    gmx::ArrayRef<double> observablesReducerBuffer = observablesReducer->communicationBuffer();
+    int                   ior                      = 0;
+    if (!observablesReducerBuffer.empty())
+    {
+        ior = add_bind(rb, observablesReducerBuffer.ssize(), observablesReducerBuffer.data());
+    }
+
     sum_bin(rb, cr);
 
     /* Extract all the data locally */
@@ -380,5 +390,11 @@ void global_stat(const gmx_global_stat& gs,
     if (!sig.empty())
     {
         extract_binr(rb, isig, sig);
+    }
+
+    if (!observablesReducerBuffer.empty())
+    {
+        extract_bind(rb, ior, observablesReducerBuffer.ssize(), observablesReducerBuffer.data());
+        observablesReducer->reductionComplete(step);
     }
 }

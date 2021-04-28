@@ -525,17 +525,18 @@ MttkElement::getElementPointerImpl(LegacySimulatorData*                    legac
                                    EnergyData*                     energyData,
                                    FreeEnergyPerturbationData gmx_unused* freeEnergyPerturbationData,
                                    GlobalCommunicationHelper gmx_unused* globalCommunicationHelper,
-                                   Offset                                offset,
-                                   ScheduleOnInitStep                    scheduleOnInitStep,
-                                   const PropagatorTag&                  propagatorTagPrePosition,
-                                   const PropagatorTag&                  propagatorTagPostPosition,
-                                   Offset                                positionOffset,
-                                   const PropagatorTag&                  propagatorTagPreVelocity1,
-                                   const PropagatorTag&                  propagatorTagPostVelocity1,
-                                   Offset                                velocityOffset1,
-                                   const PropagatorTag&                  propagatorTagPreVelocity2,
-                                   const PropagatorTag&                  propagatorTagPostVelocity2,
-                                   Offset                                velocityOffset2)
+                                   ObservablesReducer* /* observablesReducer */,
+                                   Offset               offset,
+                                   ScheduleOnInitStep   scheduleOnInitStep,
+                                   const PropagatorTag& propagatorTagPrePosition,
+                                   const PropagatorTag& propagatorTagPostPosition,
+                                   Offset               positionOffset,
+                                   const PropagatorTag& propagatorTagPreVelocity1,
+                                   const PropagatorTag& propagatorTagPostVelocity1,
+                                   Offset               velocityOffset1,
+                                   const PropagatorTag& propagatorTagPreVelocity2,
+                                   const PropagatorTag& propagatorTagPostVelocity2,
+                                   Offset               velocityOffset2)
 {
     // Data is now owned by the caller of this method, who will handle lifetime (see ModularSimulatorAlgorithm)
     if (!builderHelper->simulationData<MttkData>(MttkData::dataID()))
@@ -620,7 +621,8 @@ MttkBoxScaling::getElementPointerImpl(LegacySimulatorData*                    le
                                       StatePropagatorData*                    statePropagatorData,
                                       EnergyData*                             energyData,
                                       FreeEnergyPerturbationData gmx_unused* freeEnergyPerturbationData,
-                                      GlobalCommunicationHelper gmx_unused* globalCommunicationHelper)
+                                      GlobalCommunicationHelper gmx_unused* globalCommunicationHelper,
+                                      ObservablesReducer* /*observablesReducer*/)
 {
     // Data is now owned by the caller of this method, who will handle lifetime (see ModularSimulatorAlgorithm)
     if (!builderHelper->simulationData<MttkData>(MttkData::dataID()))

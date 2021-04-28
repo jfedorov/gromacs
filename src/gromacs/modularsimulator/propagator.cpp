@@ -976,8 +976,9 @@ ISimulatorElement* Propagator<integrationStage>::getElementPointerImpl(
         EnergyData gmx_unused*     energyData,
         FreeEnergyPerturbationData gmx_unused* freeEnergyPerturbationData,
         GlobalCommunicationHelper gmx_unused* globalCommunicationHelper,
-        const PropagatorTag&                  propagatorTag,
-        TimeStep                              timestep)
+        ObservablesReducer* /* observablesReducer */,
+        const PropagatorTag& propagatorTag,
+        TimeStep             timestep)
 {
     GMX_RELEASE_ASSERT(!(integrationStage == IntegrationStage::ScaleVelocities
                          || integrationStage == IntegrationStage::ScalePositions)
@@ -998,6 +999,7 @@ ISimulatorElement* Propagator<integrationStage>::getElementPointerImpl(
         EnergyData*                             energyData,
         FreeEnergyPerturbationData*             freeEnergyPerturbationData,
         GlobalCommunicationHelper*              globalCommunicationHelper,
+        ObservablesReducer*                     observablesReducer,
         const PropagatorTag&                    propagatorTag)
 {
     GMX_RELEASE_ASSERT(
@@ -1010,6 +1012,7 @@ ISimulatorElement* Propagator<integrationStage>::getElementPointerImpl(
                                  energyData,
                                  freeEnergyPerturbationData,
                                  globalCommunicationHelper,
+                                 observablesReducer,
                                  propagatorTag,
                                  TimeStep(0.0));
 }

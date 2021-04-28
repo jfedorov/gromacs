@@ -126,6 +126,7 @@
 #include "gromacs/mdtypes/mdrunoptions.h"
 #include "gromacs/mdtypes/multipletimestepping.h"
 #include "gromacs/mdtypes/observableshistory.h"
+#include "gromacs/mdtypes/observablesreducer.h"
 #include "gromacs/mdtypes/pullhistory.h"
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/mdtypes/state.h"
@@ -357,21 +358,17 @@ void gmx::LegacySimulator::do_md()
         }
     }
 
-    // Local state only becomes valid now.
-    std::unique_ptr<t_state> stateInstance;
-    t_state*                 state;
+    ObservablesReducer observablesReducer = observablesReducerBuilder->build();
 
-    gmx_localtop_t top(top_global.ffparams);
-
-    ForceBuffers     f(simulationWork.useMts,
+    ForceBuffers f(simulationWork.useMts,
                    ((useGpuForNonbonded && useGpuForBufferOps) || useGpuForUpdate)
-                               ? PinningPolicy::PinnedIfSupported
-                               : PinningPolicy::CannotBePinned);
+                           ? PinningPolicy::PinnedIfSupported
+                           : PinningPolicy::CannotBePinned);
+
     const t_mdatoms* md = mdAtoms->mdatoms();
     if (DOMAINDECOMP(cr))
     {
-        stateInstance = std::make_unique<t_state>();
-        state         = stateInstance.get();
+        // Local state only becomes valid now.
         dd_init_local_state(*cr->dd, state_global, state);
 
         /* Distribute the charge groups over the nodes from the master node */
@@ -389,7 +386,7 @@ void gmx::LegacySimulator::do_md()
                             state,
                             &f,
                             mdAtoms,
-                            &top,
+                            top,
                             fr,
                             vsite,
                             constr,
@@ -405,11 +402,9 @@ void gmx::LegacySimulator::do_md()
     else
     {
         state_change_natoms(state_global, state_global->natoms);
-        /* Copy the pointer to the global state */
-        state = state_global;
 
         /* Generate and initialize new topology */
-        mdAlgorithmsSetupAtomData(cr, *ir, top_global, &top, fr, &f, mdAtoms, constr, vsite, shellfc);
+        mdAlgorithmsSetupAtomData(cr, *ir, top_global, top, fr, &f, mdAtoms, constr, vsite, shellfc);
 
         upd.updateAfterPartition(state->natoms,
                                  md->cFREEZE ? gmx::arrayRefFromArray(md->cFREEZE, md->nr)
@@ -632,6 +627,9 @@ void gmx::LegacySimulator::do_md()
     t_vcm vcm(top_global.groups, *ir);
     reportComRemovalInfo(fplog, vcm);
 
+    step     = ir->init_step;
+    step_rel = 0;
+
     /* To minimize communication, compute_globals computes the COM velocity
      * and the kinetic energy for the velocities without COM motion removed.
      * Thus to get the kinetic energy without the COM contribution, we need
@@ -671,7 +669,9 @@ void gmx::LegacySimulator::do_md()
                         &nullSignaller,
                         state->box,
                         &bSumEkinhOld,
-                        cglo_flags_iteration);
+                        cglo_flags_iteration,
+                        step,
+                        &observablesReducer);
         if (cglo_flags_iteration & CGLO_STOPCM)
         {
             /* At initialization, do not pass x with acceleration-correction mode
@@ -687,7 +687,7 @@ void gmx::LegacySimulator::do_md()
     if (DOMAINDECOMP(cr))
     {
         dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
-                &top, makeConstArrayRef(state->x), state->box);
+                top, makeConstArrayRef(state->x), state->box);
     }
     if (ir->eI == IntegrationAlgorithm::VVAK)
     {
@@ -718,7 +718,9 @@ void gmx::LegacySimulator::do_md()
                         &nullSignaller,
                         state->box,
                         &bSumEkinhOld,
-                        cglo_flags & ~CGLO_PRESSURE);
+                        cglo_flags & ~CGLO_PRESSURE,
+                        step,
+                        &observablesReducer);
     }
 
     /* Calculate the initial half step temperature, and save the ekinh_old */
@@ -800,9 +802,6 @@ void gmx::LegacySimulator::do_md()
     bSumEkinhOld     = FALSE;
     bExchanged       = FALSE;
     bNeedRepartition = FALSE;
-
-    step     = ir->init_step;
-    step_rel = 0;
 
     auto stopHandler = stopHandlerBuilder->getStopHandlerMD(
             compat::not_null<SimulationSignal*>(&signals[eglsSTOPCOND]),
@@ -1000,7 +999,7 @@ void gmx::LegacySimulator::do_md()
                                     state,
                                     &f,
                                     mdAtoms,
-                                    &top,
+                                    top,
                                     fr,
                                     vsite,
                                     constr,
@@ -1066,11 +1065,13 @@ void gmx::LegacySimulator::do_md()
                             &nullSignaller,
                             state->box,
                             &bSumEkinhOld,
-                            cglo_flags);
+                            cglo_flags,
+                            step,
+                            &observablesReducer);
             if (DOMAINDECOMP(cr))
             {
                 dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
-                        &top, makeConstArrayRef(state->x), state->box);
+                        top, makeConstArrayRef(state->x), state->box);
             }
         }
         clear_mat(force_vir);
@@ -1130,7 +1131,7 @@ void gmx::LegacySimulator::do_md()
                                 pull_work,
                                 bNS,
                                 force_flags,
-                                &top,
+                                top,
                                 constr,
                                 enerd,
                                 state->natoms,
@@ -1183,7 +1184,7 @@ void gmx::LegacySimulator::do_md()
                      step,
                      nrnb,
                      wcycle,
-                     &top,
+                     top,
                      state->box,
                      state->x.arrayRefWithPadding(),
                      &state->hist,
@@ -1221,8 +1222,9 @@ void gmx::LegacySimulator::do_md()
                                  fcdata,
                                  &MassQ,
                                  &vcm,
-                                 top,
+                                 *top,
                                  enerd,
+                                 &observablesReducer,
                                  ekind,
                                  gstat,
                                  &last_ekin,
@@ -1471,6 +1473,7 @@ void gmx::LegacySimulator::do_md()
                                   &vcm,
                                   pull_work,
                                   enerd,
+                                  &observablesReducer,
                                   ekind,
                                   gstat,
                                   &dvdl_constr,
@@ -1503,7 +1506,7 @@ void gmx::LegacySimulator::do_md()
                     integrator->set(stateGpu->getCoordinates(),
                                     stateGpu->getVelocities(),
                                     stateGpu->getForces(),
-                                    top.idef,
+                                    top->idef,
                                     *md);
 
                     // Copy data to the GPU after buffers might have being reinitialized
@@ -1702,11 +1705,13 @@ void gmx::LegacySimulator::do_md()
                                 | (!EI_VV(ir->eI) ? CGLO_PRESSURE : 0) | CGLO_CONSTRAINT
                                 | (DOMAINDECOMP(cr) && dd_localTopologyChecker(*cr->dd).shouldCheckNumberOfBondedInteractions()
                                            ? CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS
-                                           : 0));
+                                           : 0),
+                        step,
+                        &observablesReducer);
                 if (DOMAINDECOMP(cr))
                 {
                     dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
-                            &top, makeConstArrayRef(state->x), state->box);
+                            top, makeConstArrayRef(state->x), state->box);
                 }
                 if (!EI_VV(ir->eI) && bStopCM)
                 {
@@ -1963,7 +1968,7 @@ void gmx::LegacySimulator::do_md()
                                 state,
                                 &f,
                                 mdAtoms,
-                                &top,
+                                top,
                                 fr,
                                 vsite,
                                 constr,

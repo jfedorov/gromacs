@@ -516,6 +516,7 @@ ModularSimulatorAlgorithm ModularSimulatorAlgorithmBuilder::build()
 
     // Build topology holder
     algorithm.topologyHolder_ = topologyHolderBuilder_.build(legacySimulatorData_->top_global,
+                                                             legacySimulatorData_->top,
                                                              legacySimulatorData_->cr,
                                                              legacySimulatorData_->inputrec,
                                                              legacySimulatorData_->fr,

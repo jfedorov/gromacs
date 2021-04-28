@@ -128,6 +128,7 @@
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/mdrunoptions.h"
 #include "gromacs/mdtypes/observableshistory.h"
+#include "gromacs/mdtypes/observablesreducer.h"
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/mdtypes/state_propagator_data_gpu.h"
@@ -870,6 +871,7 @@ int Mdrunner::mdrunner()
     // Objects may or may not be allocated later.
     std::unique_ptr<t_inputrec> inputrec;
     std::unique_ptr<t_state>    globalState;
+    std::unique_ptr<t_state>    localState;
 
     auto partialDeserializedTpr = std::make_unique<PartialDeserializedTprFile>();
 
@@ -1040,6 +1042,8 @@ int Mdrunner::mdrunner()
                                                               nullptr,
                                                               doEssentialDynamics,
                                                               membedHolder.doMembed());
+
+    ObservablesReducerBuilder observablesReducerBuilder;
 
     // Build restraints.
     // TODO: hide restraint implementation details from Mdrunner.
@@ -1381,6 +1385,10 @@ int Mdrunner::mdrunner()
         useTiming = (getenv("GMX_DISABLE_GPU_TIMING") == nullptr);
     }
 
+    // Points to the global state, unless we have DD active
+    t_state* state = globalState.get();
+    // Local topology used when not using DD
+    gmx_localtop_t top(mtop.ffparams);
     // TODO Currently this is always built, yet DD partition code
     // checks if it is built before using it. Probably it should
     // become an MDModule that is made only when another module
@@ -1389,6 +1397,8 @@ int Mdrunner::mdrunner()
     LocalAtomSetManager atomSets;
     if (ddBuilder)
     {
+        localState = std::make_unique<t_state>();
+        state      = localState.get();
         // TODO Pass the GPU streams to ddBuilder to use in buffer
         // transfers (e.g. halo exchange)
         cr->dd = ddBuilder->build(&atomSets);
@@ -1986,13 +1996,14 @@ int Mdrunner::mdrunner()
         GMX_ASSERT(stopHandlerBuilder_, "Runner must provide StopHandlerBuilder to simulator.");
         SimulatorBuilder simulatorBuilder;
 
-        simulatorBuilder.add(SimulatorStateData(globalState.get(), &observablesHistory, &enerd, &ekind));
+        simulatorBuilder.add(
+                SimulatorStateData(globalState.get(), state, &observablesHistory, &enerd, &ekind));
         simulatorBuilder.add(std::move(membedHolder));
         simulatorBuilder.add(std::move(stopHandlerBuilder_));
         simulatorBuilder.add(SimulatorConfig(mdrunOptions, startingBehavior, &runScheduleWork));
 
 
-        simulatorBuilder.add(SimulatorEnv(fplog, cr, ms, mdlog, oenv));
+        simulatorBuilder.add(SimulatorEnv(fplog, cr, ms, mdlog, oenv, &observablesReducerBuilder));
         simulatorBuilder.add(Profiling(&nrnb, walltime_accounting, wcycle.get()));
         simulatorBuilder.add(ConstraintsParam(
                 constr.get(), enforcedRotation ? enforcedRotation->getLegacyEnfrot() : nullptr, vsite.get()));
@@ -2005,7 +2016,7 @@ int Mdrunner::mdrunner()
         simulatorBuilder.add(CenterOfMassPulling(pull_work));
         // Todo move to an MDModule
         simulatorBuilder.add(IonSwapping(swap));
-        simulatorBuilder.add(TopologyData(mtop, mdAtoms.get()));
+        simulatorBuilder.add(TopologyData(mtop, &top, mdAtoms.get()));
         simulatorBuilder.add(BoxDeformationHandle(deform.get()));
         simulatorBuilder.add(std::move(modularSimulatorCheckpointData));
 

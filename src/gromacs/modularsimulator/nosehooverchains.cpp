@@ -660,6 +660,7 @@ ISimulatorElement* NoseHooverChainsElement::getElementPointerImpl(
         EnergyData*                     energyData,
         FreeEnergyPerturbationData gmx_unused* freeEnergyPerturbationData,
         GlobalCommunicationHelper gmx_unused* globalCommunicationHelper,
+        ObservablesReducer*                   observablesReducer,
         NhcUsage                              nhcUsage,
         Offset                                offset,
         UseFullStepKE                         useFullStepKE,
@@ -672,6 +673,7 @@ ISimulatorElement* NoseHooverChainsElement::getElementPointerImpl(
                                  energyData,
                                  freeEnergyPerturbationData,
                                  globalCommunicationHelper,
+                                 observablesReducer,
                                  nhcUsage,
                                  offset,
                                  useFullStepKE,
@@ -686,11 +688,12 @@ ISimulatorElement* NoseHooverChainsElement::getElementPointerImpl(
         EnergyData*                     energyData,
         FreeEnergyPerturbationData gmx_unused* freeEnergyPerturbationData,
         GlobalCommunicationHelper gmx_unused* globalCommunicationHelper,
-        NhcUsage                              nhcUsage,
-        Offset                                offset,
-        UseFullStepKE                         useFullStepKE,
-        ScheduleOnInitStep                    scheduleOnInitStep,
-        const PropagatorTag&                  propagatorTag)
+        ObservablesReducer* /*observablesReducer*/,
+        NhcUsage             nhcUsage,
+        Offset               offset,
+        UseFullStepKE        useFullStepKE,
+        ScheduleOnInitStep   scheduleOnInitStep,
+        const PropagatorTag& propagatorTag)
 {
     if (!builderHelper->simulationData<NoseHooverChainsData>(NoseHooverChainsData::dataID(nhcUsage)))
     {

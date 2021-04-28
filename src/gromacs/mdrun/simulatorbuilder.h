@@ -48,6 +48,7 @@ class energyhistory_t;
 class gmx_ekindata_t;
 struct gmx_enerdata_t;
 struct gmx_enfrot;
+struct gmx_localtop_t;
 struct gmx_mtop_t;
 struct gmx_multisim_t;
 struct gmx_output_env_t;
@@ -77,6 +78,7 @@ class MDAtoms;
 class MDLogger;
 struct MDModulesNotifiers;
 struct MdrunOptions;
+class ObservablesReducerBuilder;
 class ReadCheckpointDataHolder;
 enum class StartingBehavior;
 class StopHandlerBuilder;
@@ -116,10 +118,12 @@ struct SimulatorStateData
 {
     //! Build collection of current state data.
     SimulatorStateData(t_state*            globalState,
+                       t_state*            localState,
                        ObservablesHistory* observablesHistory,
                        gmx_enerdata_t*     enerdata,
                        gmx_ekindata_t*     ekindata) :
         globalState_p(globalState),
+        localState_p(localState),
         observablesHistory_p(observablesHistory),
         enerdata_p(enerdata),
         ekindata_p(ekindata)
@@ -131,6 +135,8 @@ struct SimulatorStateData
 
     //! Handle to global state of the simulation.
     t_state* globalState_p;
+    //! Handle to local state of the simulation.
+    t_state* localState_p;
     //! Handle to current simulation history.
     ObservablesHistory* observablesHistory_p;
     //! Handle to collected data for energy groups.
@@ -148,12 +154,13 @@ class SimulatorEnv
 {
 public:
     //! Build from current simulation environment.
-    SimulatorEnv(FILE*             fplog,
-                 t_commrec*        commRec,
-                 gmx_multisim_t*   multisimCommRec,
-                 const MDLogger&   logger,
-                 gmx_output_env_t* outputEnv) :
-        fplog_{ fplog }, commRec_{ commRec }, multisimCommRec_{ multisimCommRec }, logger_{ logger }, outputEnv_{ outputEnv }
+    SimulatorEnv(FILE*                      fplog,
+                 t_commrec*                 commRec,
+                 gmx_multisim_t*            multisimCommRec,
+                 const MDLogger&            logger,
+                 gmx_output_env_t*          outputEnv,
+                 ObservablesReducerBuilder* observablesReducerBuilder) :
+        fplog_{ fplog }, commRec_{ commRec }, multisimCommRec_{ multisimCommRec }, logger_{ logger }, outputEnv_{ outputEnv }, observablesReducerBuilder_{ observablesReducerBuilder }
     {
     }
 
@@ -167,6 +174,8 @@ public:
     const MDLogger& logger_;
     //! Handle to file output handling.
     const gmx_output_env_t* outputEnv_;
+    //! Builder for coordinator of reduction for observables
+    ObservablesReducerBuilder* observablesReducerBuilder_;
 };
 
 /*! \brief
@@ -291,13 +300,16 @@ class TopologyData
 {
 public:
     //! Build collection from simulation data.
-    TopologyData(const gmx_mtop_t& globalTopology, MDAtoms* mdAtoms) :
-        top_global(globalTopology), mdAtoms(mdAtoms)
+    TopologyData(const gmx_mtop_t& globalTopology, gmx_localtop_t* localTopology, MDAtoms* mdAtoms) :
+        top_global(globalTopology), top(localTopology), mdAtoms(mdAtoms)
     {
     }
 
     //! Handle to global simulation topology.
     const gmx_mtop_t& top_global;
+    //! Handle to local simulation topology.
+    gmx_localtop_t* top;
+
     //! Handle to information about MDAtoms.
     MDAtoms* mdAtoms;
 };
