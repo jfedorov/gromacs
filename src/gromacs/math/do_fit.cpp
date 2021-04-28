@@ -47,10 +47,13 @@
 #include "gromacs/math/units.h"
 #include "gromacs/math/utilities.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/math/vectypes.h"
+#include "gromacs/utility/any.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/smalloc.h"
 
-real calc_similar_ind(gmx_bool bRho, int nind, const int* index, const real mass[], rvec x[], rvec xp[])
+real calc_similar_ind(bool bRho, int nind, const int* index, const real mass[], const rvec x[], const rvec xp[])
 {
     int  i, j, d;
     real m, tm, xs, xd, rs, rd;
@@ -91,24 +94,64 @@ real calc_similar_ind(gmx_bool bRho, int nind, const int* index, const real mass
     }
 }
 
-real rmsdev_ind(int nind, int index[], real mass[], rvec x[], rvec xp[])
+real calc_similar_ind(bool                           bRho,
+                      gmx::ArrayRef<const int>       index,
+                      gmx::ArrayRef<const real>      mass,
+                      gmx::ArrayRef<const gmx::RVec> x,
+                      gmx::ArrayRef<const gmx::RVec> xp)
 {
-    return calc_similar_ind(FALSE, nind, index, mass, x, xp);
+    return calc_similar_ind(bRho,
+                            index.empty() ? x.size() : index.size(),
+                            index.data(),
+                            mass.data(),
+                            as_rvec_array(x.data()),
+                            as_rvec_array(xp.data()));
 }
 
-real rmsdev(int natoms, real mass[], rvec x[], rvec xp[])
+real rmsdev_ind(int nind, const int index[], const real mass[], const rvec x[], const rvec xp[])
 {
-    return calc_similar_ind(FALSE, natoms, nullptr, mass, x, xp);
+    return calc_similar_ind(false, nind, index, mass, x, xp);
 }
 
-real rhodev_ind(int nind, int index[], real mass[], rvec x[], rvec xp[])
+real rmsdev_ind(gmx::ArrayRef<const int>       index,
+                gmx::ArrayRef<const real>      mass,
+                gmx::ArrayRef<const gmx::RVec> x,
+                gmx::ArrayRef<const gmx::RVec> xp)
 {
-    return calc_similar_ind(TRUE, nind, index, mass, x, xp);
+    return calc_similar_ind(false, index, mass, x, xp);
 }
 
-real rhodev(int natoms, real mass[], rvec x[], rvec xp[])
+real rmsdev(int natoms, const real mass[], const rvec x[], const rvec xp[])
 {
-    return calc_similar_ind(TRUE, natoms, nullptr, mass, x, xp);
+    return calc_similar_ind(false, natoms, nullptr, mass, x, xp);
+}
+
+real rmsdev(gmx::ArrayRef<const real> mass, gmx::ArrayRef<const gmx::RVec> x, gmx::ArrayRef<const gmx::RVec> xp)
+{
+    return calc_similar_ind(false, {}, mass, x, xp);
+}
+
+real rhodev_ind(int nind, const int index[], const real mass[], const rvec x[], const rvec xp[])
+{
+    return calc_similar_ind(true, nind, index, mass, x, xp);
+}
+
+real rhodev_ind(gmx::ArrayRef<const int>       index,
+                gmx::ArrayRef<const real>      mass,
+                gmx::ArrayRef<const gmx::RVec> x,
+                gmx::ArrayRef<const gmx::RVec> xp)
+{
+    return calc_similar_ind(true, index, mass, x, xp);
+}
+
+real rhodev(int natoms, const real mass[], const rvec x[], const rvec xp[])
+{
+    return calc_similar_ind(true, natoms, nullptr, mass, x, xp);
+}
+
+real rhodev(gmx::ArrayRef<const real> mass, gmx::ArrayRef<const gmx::RVec> x, gmx::ArrayRef<const gmx::RVec> xp)
+{
+    return calc_similar_ind(true, {}, mass, x, xp);
 }
 
 void calc_fit_R(int ndim, int natoms, const real* w_rls, const rvec* xp, rvec* x, matrix R)
@@ -260,7 +303,16 @@ void calc_fit_R(int ndim, int natoms, const real* w_rls, const rvec* xp, rvec* x
     sfree(om);
 }
 
-void do_fit_ndim(int ndim, int natoms, real* w_rls, const rvec* xp, rvec* x)
+void calc_fit_R(int                            ndim,
+                gmx::ArrayRef<const real>      w_rls,
+                gmx::ArrayRef<const gmx::RVec> xp,
+                gmx::ArrayRef<gmx::RVec>       x,
+                matrix                         R)
+{
+    calc_fit_R(ndim, x.size(), w_rls.data(), as_rvec_array(xp.data()), as_rvec_array(x.data()), R);
+}
+
+void do_fit_ndim(int ndim, int natoms, const real* w_rls, const rvec* xp, rvec* x)
 {
     int    j, m, r, c;
     matrix R;
@@ -287,9 +339,22 @@ void do_fit_ndim(int ndim, int natoms, real* w_rls, const rvec* xp, rvec* x)
     }
 }
 
-void do_fit(int natoms, real* w_rls, const rvec* xp, rvec* x)
+void do_fit_ndim(int                            ndim,
+                 gmx::ArrayRef<const real>      w_rls,
+                 gmx::ArrayRef<const gmx::RVec> xp,
+                 gmx::ArrayRef<gmx::RVec>       x)
+{
+    do_fit_ndim(ndim, x.size(), w_rls.data(), as_rvec_array(xp.data()), as_rvec_array(x.data()));
+}
+
+void do_fit(int natoms, const real* w_rls, const rvec* xp, rvec* x)
 {
     do_fit_ndim(3, natoms, w_rls, xp, x);
+}
+
+void do_fit(gmx::ArrayRef<const real> w_rls, gmx::ArrayRef<const gmx::RVec> xp, gmx::ArrayRef<gmx::RVec> x)
+{
+    do_fit_ndim(3, w_rls, xp, x);
 }
 
 void reset_x_ndim(int ndim, int ncm, const int* ind_cm, int nreset, const int* ind_reset, rvec x[], const real mass[])
@@ -350,7 +415,30 @@ void reset_x_ndim(int ndim, int ncm, const int* ind_cm, int nreset, const int* i
     }
 }
 
+void reset_x_ndim(int                       ndim,
+                  gmx::ArrayRef<const int>  ind_cm,
+                  gmx::ArrayRef<const int>  ind_reset,
+                  gmx::ArrayRef<gmx::RVec>  x,
+                  gmx::ArrayRef<const real> mass)
+{
+    reset_x_ndim(ndim,
+                 ind_cm.empty() ? x.size() : ind_cm.size(),
+                 ind_cm.data(),
+                 ind_reset.empty() ? x.size() : ind_reset.size(),
+                 ind_reset.data(),
+                 as_rvec_array(x.data()),
+                 mass.data());
+}
+
 void reset_x(int ncm, const int* ind_cm, int nreset, const int* ind_reset, rvec x[], const real mass[])
 {
     reset_x_ndim(3, ncm, ind_cm, nreset, ind_reset, x, mass);
+}
+
+void reset_x(gmx::ArrayRef<const int>  ind_cm,
+             gmx::ArrayRef<const int>  ind_reset,
+             gmx::ArrayRef<gmx::RVec>  x,
+             gmx::ArrayRef<const real> mass)
+{
+    reset_x_ndim(3, ind_cm, ind_reset, x, mass);
 }
