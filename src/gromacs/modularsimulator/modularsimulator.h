@@ -41,6 +41,7 @@
 #ifndef GROMACS_MODULARSIMULATOR_MODULARSIMULATOR_H
 #define GROMACS_MODULARSIMULATOR_MODULARSIMULATOR_H
 
+#include <limits>
 #include <queue>
 
 #include "gromacs/mdlib/md_support.h"

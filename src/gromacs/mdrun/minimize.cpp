@@ -51,6 +51,7 @@
 #include <ctime>
 
 #include <algorithm>
+#include <limits>
 #include <vector>
 
 #include "gromacs/commandline/filenm.h"
