@@ -1,8 +1,8 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2012,2013,2014,2015,2016 by the GROMACS development team.
- * Copyright (c) 2017,2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2012,2013,2014,2015,2016, by the GROMACS development team.
+ * Copyright (c) 2017,2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -87,7 +87,7 @@ struct ArrayRefIter :
     constexpr auto operator-(ArrayRefIter other) const noexcept { return it_ - other.it_; }
 
 private:
-    T* it_;
+    T* it_ = nullptr;
 };
 
 /*! \brief STL-like interface to a C array of T (or part
@@ -190,7 +190,9 @@ public:
      *
      * Passed pointers must remain valid for the lifetime of this object.
      */
-    ArrayRef(pointer begin, pointer end) : begin_(begin), end_(end)
+    ArrayRef(pointer begin, pointer end) :
+        begin_(begin == end ? nullptr : begin),
+        end_(begin == end ? nullptr : end)
     {
         assert((end >= begin && "Invalid range"));
     }
@@ -202,7 +204,9 @@ public:
      *
      * Passed iterators must remain valid for the lifetime of this object.
      */
-    ArrayRef(iterator begin, iterator end) : begin_(begin), end_(end)
+    ArrayRef(iterator begin, iterator end) :
+        begin_(begin == end ? ArrayRefIter<T>{} : begin),
+        end_(begin == end ? ArrayRefIter<T>{} : end)
     {
         assert((end >= begin && "Invalid range"));
     }
@@ -225,7 +229,9 @@ public:
      * a C array to a function that takes an ArrayRef parameter.
      */
     template<size_t count>
-    ArrayRef(value_type (&array)[count]) : begin_(array), end_(array + count)
+    ArrayRef(value_type (&array)[count]) :
+        begin_(count == 0 ? nullptr : array),
+        end_(count == 0 ? nullptr : array + count)
     {
     }
     //! \endcond

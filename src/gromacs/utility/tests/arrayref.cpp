@@ -1,7 +1,8 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2015,2016,2017,2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2015,2016,2017,2018,2019, The GROMACS development team.
+ * Copyright (c) 2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -54,22 +55,6 @@ namespace gmx
 
 namespace
 {
-
-TEST(EmptyArrayRefTest, IsEmpty)
-{
-    ArrayRef<real> empty;
-
-    EXPECT_EQ(0U, empty.size());
-    EXPECT_TRUE(empty.empty());
-}
-
-TEST(EmptyConstArrayRefTest, IsEmpty)
-{
-    ArrayRef<const real> empty;
-
-    EXPECT_EQ(0U, empty.size());
-    EXPECT_TRUE(empty.empty());
-}
 
 #ifdef GTEST_HAS_TYPED_TEST
 
@@ -133,7 +118,6 @@ public:
 };
 
 TYPED_TEST_CASE(ArrayRefTest, ArrayRefTypes);
-
 
 TYPED_TEST(ArrayRefTest, MakeWithAssignmentWorks)
 {
@@ -206,7 +190,6 @@ public:
  * been a problem (for a compiler that we no longer support),
  * so we test it.
  */
-
 TYPED_TEST(ArrayRefTest, ConstructFromStructFieldWithTemplateConstructorWorks)
 {
     Helper<typename TestFixture::NonConstValueType> h;
@@ -219,7 +202,76 @@ TYPED_TEST(ArrayRefTest, ConstructFromStructFieldWithTemplateConstructorWorks)
     this->runTests(h.a, arrayRef);
 }
 
+/*! \brief Permit all the tests to run on all kinds of empty ArrayRefs
+ */
+template<typename TypeParam>
+class ArrayRefEmptyTest : public ::testing::Test
+{
+public:
+    typedef TypeParam                         ArrayRefType;
+    typedef typename ArrayRefType::value_type ValueType;
+    typedef std::remove_const_t<ValueType>    NonConstValueType;
+
+    /*! \brief Run the same tests all the time
+     *
+     * Note that test cases must call this->runTests(), because
+     * that's how the derived-class templates that implement
+     * type-parameterized tests actually work. */
+    void runTests(ArrayRefType& arrayRef)
+    {
+        ASSERT_EQ(0, arrayRef.size());
+        ASSERT_TRUE(arrayRef.empty());
+        EXPECT_EQ(nullptr, arrayRef.data());
+    }
+};
+
+TYPED_TEST_CASE(ArrayRefEmptyTest, ArrayRefTypes);
+
+//! Test that we always get a nullptr from an empty ArrayRef
+TYPED_TEST(ArrayRefEmptyTest, DefaultCtorIsAlwaysNullptr)
+{
+    typename TestFixture::ArrayRefType arrayRef{};
+    this->runTests(arrayRef);
+}
+
+//! Test if pointer begin == end is nullptr
+TYPED_TEST(ArrayRefEmptyTest, BeginEndEqualPointerIsNullptr)
+{
+    makeConstIf_t<std::is_const_v<typename TestFixture::ValueType>, std::vector<typename TestFixture::NonConstValueType>> v{
+        1, 2, 3
+    };
+    typename TestFixture::ArrayRefType arrayRef(&v[1], &v[1]);
+    this->runTests(arrayRef);
+}
+
+//! Test that ArrayRef from sub Array also gives nullptr.
+TYPED_TEST(ArrayRefEmptyTest, SubArrayIsNullptr)
+{
+    makeConstIf_t<std::is_const_v<typename TestFixture::ValueType>, std::vector<typename TestFixture::NonConstValueType>> v{
+        1, 2, 3
+    };
+    typename TestFixture::ArrayRefType arrayRef(v);
+    typename TestFixture::ArrayRefType subArray(arrayRef.subArray(0, 0));
+    this->runTests(subArray);
+}
+
 #else // GTEST_HAS_TYPED_TEST
+
+TEST(EmptyArrayRefTest, IsEmpty)
+{
+    ArrayRef<real> empty;
+
+    EXPECT_EQ(0U, empty.size());
+    EXPECT_TRUE(empty.empty());
+}
+
+TEST(EmptyConstArrayRefTest, IsEmpty)
+{
+    ArrayRef<const real> empty;
+
+    EXPECT_EQ(0U, empty.size());
+    EXPECT_TRUE(empty.empty());
+}
 
 /* A dummy test that at least signals that something is missing if one runs the
  * unit test executable itself.
