@@ -42,7 +42,6 @@
 #include <climits>
 #include <cmath>
 
-#include "gromacs/gmxlib/network.h"
 #include "gromacs/linearalgebra/nrjac.h"
 #include "gromacs/math/do_fit.h"
 #include "gromacs/math/functions.h"
@@ -51,7 +50,6 @@
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/fcdata.h"
 #include "gromacs/mdtypes/inputrec.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/pbcutil/pbc.h"
@@ -383,41 +381,32 @@ void print_orires_log(FILE* log, t_oriresdata* od)
     }
 }
 
-real calc_orires_dev(const gmx_multisim_t* ms,
-                     int                   nfa,
-                     const t_iatom         forceatoms[],
-                     const t_iparams       ip[],
-                     const t_mdatoms*      md,
-                     ArrayRef<const RVec>  xWholeMolecules,
-                     const rvec            x[],
-                     const t_pbc*          pbc,
-                     t_oriresdata*         od,
-                     const history_t*      hist)
+real calc_orires_dev(const gmx_multisim_t*               ms,
+                     int                                 nfa,
+                     gmx::ArrayRef<const int>            forceatoms,
+                     gmx::ArrayRef<const t_iparams>      ip,
+                     const int                           numAtoms,
+                     gmx::ArrayRef<const real>           massT,
+                     gmx::ArrayRef<const unsigned short> cORF,
+                     gmx::ArrayRef<const gmx::RVec>      xWholeMolecules,
+                     gmx::ArrayRef<const gmx::RVec>      x,
+                     const t_pbc*                        pbc,
+                     t_oriresdata*                       od,
+                     const history_t*                    hist)
 {
-    int          nref;
-    real         edt, edt_1, invn, pfac, r2, invr, corrfac, wsv2, sw, dev;
-    OriresMatEq* matEq;
-    real*        mref;
-    double       mtot;
-    rvec *       xref, *xtmp, com, r_unrot, r;
-    gmx_bool     bTAV;
-    const real   two_thr = 2.0 / 3.0;
+    real       invn, pfac, r2, invr, corrfac, wsv2, sw, dev;
+    double     mtot;
+    rvec       com, r_unrot, r;
+    const real two_thr = 2.0 / 3.0;
 
-    if (od->nr == 0)
-    {
-        /* This means that this is not the master node */
-        gmx_fatal(FARGS,
-                  "Orientation restraints are only supported on the master rank, use fewer ranks");
-    }
-
-    bTAV  = (od->edt != 0);
-    edt   = od->edt;
-    edt_1 = od->edt_1;
-    matEq = od->tmpEq;
-    nref  = od->nref;
-    mref  = od->mref;
-    xref  = od->xref;
-    xtmp  = od->xtmp;
+    const bool   bTAV  = (od->edt != 0);
+    const real   edt   = od->edt;
+    const real   edt_1 = od->edt_1;
+    OriresMatEq* matEq = od->tmpEq;
+    const int    nref  = od->nr;
+    real*        mref  = od->mref;
+    const rvec*  xref  = od->xref;
+    rvec*        xtmp  = od->xtmp;
 
     if (bTAV)
     {
@@ -443,11 +432,9 @@ real calc_orires_dev(const gmx_multisim_t* ms,
     }
 
     clear_rvec(com);
-    mtot        = 0;
-    int   j     = 0;
-    auto* massT = md->massT;
-    auto* cORF  = md->cORF;
-    for (int i = 0; i < md->nr; i++)
+    mtot  = 0;
+    int j = 0;
+    for (int i = 0; i < numAtoms; i++)
     {
         if (cORF[i] == 0)
         {
