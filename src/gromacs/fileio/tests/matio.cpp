@@ -70,12 +70,12 @@ std::string generateStdReferenceFile(gmx::ArrayRef<const t_mapping> refMaps)
 
     const std::string format       = "%c%c  %20s  %10g  %10g  %10g\n";
     std::string       fileContents = formatString("%ld\n", refMaps.ssize());
-    for (auto map : refMaps)
+    for (const auto& map : refMaps)
     {
         fileContents.append(formatString(format.c_str(),
                                          map.code.c1 ? map.code.c1 : ' ',
                                          map.code.c2 ? map.code.c2 : ' ',
-                                         map.desc,
+                                         map.desc.c_str(),
                                          map.rgb.r,
                                          map.rgb.g,
                                          map.rgb.b));
@@ -146,7 +146,7 @@ TEST_F(ColorMapTest, CanReadFromFile)
             EXPECT_EQ(mappingData[i].code.c1, referenceMap()[i].code.c2);
         }
         EXPECT_EQ(mappingData[i].code.c2, 0); // for some reason this is always 0 -.-
-        EXPECT_STREQ(mappingData[i].desc, referenceMap()[i].desc);
+        EXPECT_EQ(mappingData[i].desc, referenceMap()[i].desc);
         EXPECT_FLOAT_EQ(mappingData[i].rgb.r, referenceMap()[i].rgb.r);
         EXPECT_FLOAT_EQ(mappingData[i].rgb.g, referenceMap()[i].rgb.g);
         EXPECT_FLOAT_EQ(mappingData[i].rgb.b, referenceMap()[i].rgb.b);
@@ -181,7 +181,7 @@ TEST_F(ColorMapTest, RoundTrip)
             EXPECT_EQ(mappingData[i].code.c1, referenceMap()[i].code.c2);
         }
         EXPECT_EQ(mappingData[i].code.c2, 0); // for some reason this is always 0 -.-
-        EXPECT_STREQ(mappingData[i].desc, referenceMap()[i].desc);
+        EXPECT_EQ(mappingData[i].desc, referenceMap()[i].desc);
         EXPECT_FLOAT_EQ(mappingData[i].rgb.r, referenceMap()[i].rgb.r);
         EXPECT_FLOAT_EQ(mappingData[i].rgb.g, referenceMap()[i].rgb.g);
         EXPECT_FLOAT_EQ(mappingData[i].rgb.b, referenceMap()[i].rgb.b);
@@ -325,7 +325,7 @@ TEST_F(MatioTest, CanReadSingleMatrixAfterWriting)
         for (int j = 0; j < gmx::ssize(reading[i].map); ++j)
         {
             EXPECT_EQ(reading[i].map[j].code, reference.map[j].code);
-            EXPECT_STREQ(reading[i].map[j].desc, reference.map[j].desc);
+            EXPECT_EQ(reading[i].map[j].desc, reference.map[j].desc);
             EXPECT_FLOAT_EQ_TOL(reading[i].map[j].rgb.r,
                                 reference.map[j].rgb.r,
                                 relativeToleranceAsFloatingPoint(reading[i].map[j].rgb.r, 10e-3));

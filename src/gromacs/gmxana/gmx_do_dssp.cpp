@@ -420,7 +420,7 @@ static void analyse_ss(const char* outfile, t_matrix* mat, const char* ss_string
         {
             if (ss_string[s] == m.code.c1)
             {
-                fprintf(fp, "%s", m.desc);
+                fprintf(fp, "%s", m.desc.c_str());
             }
         }
     }

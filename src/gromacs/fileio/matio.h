@@ -72,7 +72,7 @@ struct t_mapping
     //! XPM element code
     t_xpmelmt code;
     //! Description
-    const char* desc = nullptr;
+    std::string desc;
     //! RGB color
     t_rgb rgb;
 };
