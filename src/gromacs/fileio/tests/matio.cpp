@@ -65,13 +65,12 @@ namespace test
 namespace
 {
 
-std::string generateStdReferenceFile(gmx::ArrayRef<const t_mapping> refMap)
+std::string generateStdReferenceFile(gmx::ArrayRef<const t_mapping> refMaps)
 {
 
     const std::string format       = "%c%c  %20s  %10g  %10g  %10g\n";
-    std::string       fileContents = formatString("%d
-", refMap.ssize());
-    for (auto map : refMap)
+    std::string       fileContents = formatString("%ld", refMaps.ssize());
+    for (auto map : refMaps)
     {
         fileContents.append(formatString(format.c_str(),
                                          map.code.c1 ? map.code.c1 : ' ',
@@ -264,7 +263,7 @@ TEST_F(MatioTest, CanWriteToFile)
 {
     auto  reference = generateReferenceMatrix4x3();
     FILE* out       = fopen(referenceFilename().c_str(), "w");
-    ASSERT_NO_THROW(write_xpm_m(out, reference));
+    EXPECT_NO_THROW(write_xpm_m(out, reference));
     fclose(out);
 }
 
