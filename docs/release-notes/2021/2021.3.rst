@@ -40,3 +40,10 @@ repartitioning could incur large performance overheads due to a sub-optimally
 sized hash table. This has now been fixed.
 
 :issue:`4054`
+
+Fix file mode for temporary files
+"""""""""""""""""""""""""""""""""
+
+Those got created using the wrong umask before.
+
+:issue:`4040`
