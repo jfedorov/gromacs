@@ -149,7 +149,16 @@ void do_fit(gmx::ArrayRef<const real> w_rls, gmx::ArrayRef<const gmx::RVec> xp, 
  */
 void reset_x_ndim(int ndim, int ncm, const int* ind_cm, int nreset, const int* ind_reset, rvec x[], const real mass[]);
 
-//! \copydoc reset_x_ndim
+/*! \brief
+ * Put the center of mass of atoms in the origin for dimensions 0 to \c ndim.
+ *
+ * The center of mass is computed from the index \c ind_cm.
+ * When \c !ind_cm.empty() the COM is determined using \c ind_cm.
+ * When \c ind_cm.empty() the COM is determined using all atoms in \c x.
+ * When \c !ind_reset.empty() the coordinates indexed by \c ind_reset are reset.
+ * When \c ind_reset.empty() all the coordinates in \c x are reset.
+ */
+
 void reset_x_ndim(int                       ndim,
                   gmx::ArrayRef<const int>  ind_cm,
                   gmx::ArrayRef<const int>  ind_reset,
