@@ -1208,9 +1208,11 @@ int Mdrunner::mdrunner()
                 globalState.get(),
                 replExParams.exchangeInterval > 0);
 
-    t_oriresdata* oriresdata;
-    snew(oriresdata, 1);
-    init_orires(fplog, mtop, inputrec.get(), cr, ms, globalState.get(), oriresdata);
+    std::unique_ptr<t_oriresdata> oriresData;
+    if (gmx_mtop_ftype_count(mtop, F_ORIRES) > 0)
+    {
+        oriresData = std::make_unique<t_oriresdata>(fplog, mtop, *inputrec, cr, ms, globalState.get());
+    }
 
     auto deform = prepareBoxDeformation(globalState != nullptr ? globalState->box : box,
                                         MASTER(cr) ? DDRole::Master : DDRole::Agent,
@@ -1661,7 +1663,7 @@ int Mdrunner::mdrunner()
                       pforce);
         // Dirty hack, for fixing disres and orires should be made mdmodules
         fr->fcdata->disres = disresdata;
-        fr->fcdata->orires = oriresdata;
+        fr->fcdata->orires.swap(oriresData);
 
         // Save a handle to device stream manager to use elsewhere in the code
         // TODO: Forcerec is not a correct place to store it.
@@ -1753,6 +1755,11 @@ int Mdrunner::mdrunner()
                  */
                 constructVirtualSitesGlobal(mtop, globalState->x);
             }
+        }
+        // Make the DD reverse topology, now that any vsites that are present are available
+        if (DOMAINDECOMP(cr))
+        {
+            dd_make_reverse_top(fplog, cr->dd, mtop, vsite.get(), *inputrec, domdecOptions.ddBondedChecking);
         }
 
         if (EEL_PME(fr->ic->eeltype) || EVDW_PME(fr->ic->vdwtype))
@@ -1971,11 +1978,10 @@ int Mdrunner::mdrunner()
         if (DOMAINDECOMP(cr))
         {
             GMX_RELEASE_ASSERT(fr, "fr was NULL while cr->duty was DUTY_PP");
-            /* This call is not included in init_domain_decomposition mainly
+            /* This call is not included in init_domain_decomposition
              * because fr->cginfo_mb is set later.
              */
-            dd_init_bondeds(
-                    fplog, cr->dd, mtop, vsite.get(), *inputrec, domdecOptions.ddBondedChecking, fr->cginfo_mb);
+            makeBondedLinks(cr->dd, mtop, fr->cginfo_mb);
         }
 
         if (runScheduleWork.simulationWork.useGpuBufferOps)
@@ -2100,7 +2106,6 @@ int Mdrunner::mdrunner()
     fr.reset(nullptr); // destruct forcerec before gpu
     // TODO convert to C++ so we can get rid of these frees
     sfree(disresdata);
-    sfree(oriresdata);
 
     if (!hwinfo_->deviceInfoList.empty())
     {

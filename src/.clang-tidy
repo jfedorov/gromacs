@@ -33,6 +33,8 @@
 # We need to use underscores for readability for our legacy types
 # and command-line parameter names
 #
+#         -misc-no-recursion
+# We have way too many functions and methods relying on recursion
 Checks:  clang-diagnostic-*,-clang-analyzer-*,-clang-analyzer-security.insecureAPI.strcpy,
          bugprone-*,misc-*,readability-*,performance-*,mpi-*,
          -readability-inconsistent-declaration-parameter-name,
@@ -56,7 +58,9 @@ Checks:  clang-diagnostic-*,-clang-analyzer-*,-clang-analyzer-security.insecureA
          -cppcoreguidelines-macro-usage,
          -cppcoreguidelines-narrowing-conversions,
          -bugprone-narrowing-conversions,
-         -google-readability-avoid-underscore-in-googletest-name
+         -google-readability-avoid-underscore-in-googletest-name,
+         -cppcoreguidelines-init-variables,
+         -misc-no-recursion
 HeaderFilterRegex: .*
 CheckOptions:
   - key:           cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor

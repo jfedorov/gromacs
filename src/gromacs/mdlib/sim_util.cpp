@@ -444,7 +444,16 @@ static void do_nb_verlet(t_forcerec*                fr,
         }
     }
 
-    nbv->dispatchNonbondedKernel(ilocality, *ic, stepWork, clearF, *fr, enerd, nrnb);
+    nbv->dispatchNonbondedKernel(
+            ilocality,
+            *ic,
+            stepWork,
+            clearF,
+            fr->shift_vec,
+            enerd->grpp.energyGroupPairTerms[fr->haveBuckingham ? NonBondedEnergyTerms::BuckinghamSR
+                                                                : NonBondedEnergyTerms::LJSR],
+            enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::CoulombSR],
+            nrnb);
 }
 
 static inline void clearRVecs(ArrayRef<RVec> v, const bool useOpenmpThreading)
@@ -1832,11 +1841,15 @@ void do_force(FILE*                               fplog,
         real dvdl_walls = do_walls(inputrec,
                                    *fr,
                                    box,
-                                   *mdatoms,
+                                   gmx::arrayRefFromArray(mdatoms->typeA, mdatoms->nr),
+                                   gmx::arrayRefFromArray(mdatoms->typeB, mdatoms->nr),
+                                   gmx::arrayRefFromArray(mdatoms->cENER, mdatoms->nr),
+                                   mdatoms->homenr,
+                                   mdatoms->nPerturbed,
                                    x.unpaddedConstArrayRef(),
                                    &forceOutMtsLevel0.forceWithVirial(),
                                    lambda[static_cast<int>(FreeEnergyPerturbationCouplingType::Vdw)],
-                                   enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::LJSR].data(),
+                                   enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::LJSR],
                                    nrnb);
         enerd->dvdl_lin[FreeEnergyPerturbationCouplingType::Vdw] += dvdl_walls;
     }
