@@ -145,10 +145,12 @@ t_oriresdata::t_oriresdata(FILE*                 fplog,
         }
     }
     /* With domain decomposition we use the type index for indexing in global arrays */
-    GMX_RELEASE_ASSERT(
-            typeMax - typeMin + 1 == numRestraints,
-            "All orientation restraint parameter entries in the topology should be consecutive");
-
+    if (typeMax - typeMin + 1 != numRestraints)
+    {
+        std::string msg =
+                "All orientation restraint parameter entries in the topology should be consecutive";
+        GMX_THROW(gmx::InvalidInputError(msg));
+    }
     snew(orderTensors, numExperiments);
     /* When not doing time averaging, the instaneous and time averaged data
      * are indentical and the pointers can point to the same memory.

@@ -35,6 +35,7 @@
 gmx_add_unit_test(ListedForcesTest listed_forces-test
     CPP_SOURCE_FILES
         bonded.cpp
+        orires.cpp
         pairs.cpp
         position_restraints.cpp
         )
