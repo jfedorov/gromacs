@@ -76,6 +76,7 @@
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/topology/idef.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/strconvert.h"
 #include "gromacs/utility/stringstream.h"
@@ -380,10 +381,14 @@ protected:
                      &pbc_,
                      lambdas.data(),
                      output.dvdLambda.data(),
-                     gmx::arrayRefFromArray(mdatoms.chargeA, mdatoms.nr),
-                     gmx::arrayRefFromArray(mdatoms.chargeB, mdatoms.nr),
-                     gmx::arrayRefFromArray(mdatoms.bPerturbed, mdatoms.nr),
-                     gmx::arrayRefFromArray(mdatoms.cENER, mdatoms.nr),
+                     mdatoms.chargeA ? gmx::arrayRefFromArray(mdatoms.chargeA, mdatoms.nr)
+                                     : gmx::ArrayRef<real>{},
+                     mdatoms.chargeB ? gmx::arrayRefFromArray(mdatoms.chargeB, mdatoms.nr)
+                                     : gmx::ArrayRef<real>{},
+                     mdatoms.bPerturbed ? gmx::arrayRefFromArray(mdatoms.bPerturbed, mdatoms.nr)
+                                        : gmx::ArrayRef<bool>{},
+                     mdatoms.cENER ? gmx::arrayRefFromArray(mdatoms.cENER, mdatoms.nr)
+                                   : gmx::ArrayRef<unsigned short>{},
                      mdatoms.nPerturbed,
                      fr,
                      havePerturbedInteractions,
