@@ -327,6 +327,25 @@ void StatePropagatorDataGpu::Impl::copyCoordinatesToGpu(const gmx::ArrayRef<cons
     // TODO: remove this by adding an event-mark free flavor of this function
     if (GMX_GPU_CUDA || GMX_GPU_SYCL)
     {
+        if (GMX_GPU_SYCL && atomLocality == AtomLocality::Local)
+        {
+            /* TODO: Refactor the logic to get rid of this reset.
+             * With GPU update, we can copy coordinates twice on the same step:
+             * 1. do_force (sim_util.cpp:1334), called from do_md (md.cpp:1179),
+             * 2. do_md (md.cpp:1491).
+             * Sometimes, there is no waiting on the event inbetween.
+             * This behavior is bad and should be dealt with by properly balancing event marking
+             * and consumption.
+             * For now, we deal with the SYCL implementation failing the
+             * "Do not call markEvent more than once!" assertion by resetting the event here.
+             * Unlike OpenCL, this does not cause any leaks.
+             *
+             * Also see the same hack in copyVelocitiesToGpu
+             *
+             * Issue #3988, https://gitlab.com/gromacs/gromacs/-/issues/3988#note_531727030
+             * */
+            xReadyOnDevice_[atomLocality].reset();
+        }
         xReadyOnDevice_[atomLocality].markEvent(*deviceStream);
     }
 
@@ -417,6 +436,14 @@ void StatePropagatorDataGpu::Impl::copyVelocitiesToGpu(const gmx::ArrayRef<const
     wallcycle_sub_start(wcycle_, WallCycleSubCounter::LaunchStatePropagatorData);
 
     copyToDevice(d_v_, h_v, d_vSize_, atomLocality, *deviceStream);
+    if (GMX_GPU_SYCL && atomLocality == AtomLocality::Local)
+    {
+        /* TODO: Rework the logic to avoid this reset, similar to copyCoordinates to GPU
+         *
+         * Issue #3988, https://gitlab.com/gromacs/gromacs/-/issues/3988#note_531727030
+         */
+        vReadyOnDevice_[atomLocality].reset();
+    }
     vReadyOnDevice_[atomLocality].markEvent(*deviceStream);
 
     wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LaunchStatePropagatorData);
@@ -471,6 +498,11 @@ void StatePropagatorDataGpu::Impl::copyForcesToGpu(const gmx::ArrayRef<const gmx
     wallcycle_sub_start(wcycle_, WallCycleSubCounter::LaunchStatePropagatorData);
 
     copyToDevice(d_f_, h_f, d_fSize_, atomLocality, *deviceStream);
+    if (GMX_GPU_SYCL)
+    {
+        // TODO: Remove this workaround, #3988
+        fReadyOnDevice_[atomLocality].reset();
+    }
     fReadyOnDevice_[atomLocality].markEvent(*deviceStream);
 
     wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LaunchStatePropagatorData);
