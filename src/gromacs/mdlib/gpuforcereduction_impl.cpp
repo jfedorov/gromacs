@@ -156,6 +156,7 @@ void GpuForceReduction::Impl::execute()
     // Mark that kernel has been launched
     if (completionMarker_ != nullptr)
     {
+        completionMarker_->reset(); // TODO: fix #3988
         completionMarker_->markEvent(deviceStream_);
     }
 
