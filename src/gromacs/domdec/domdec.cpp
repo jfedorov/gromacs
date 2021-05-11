@@ -285,7 +285,7 @@ void dd_move_x(gmx_domdec_t* dd, const matrix box, gmx::ArrayRef<gmx::RVec> x, g
         for (const gmx_domdec_ind_t& ind : cd->ind)
         {
             DDBufferAccess<gmx::RVec> sendBufferAccess(comm->rvecBuffer, ind.nsend[nzone + 1]);
-            gmx::ArrayRef<gmx::RVec>& sendBuffer = sendBufferAccess.buffer;
+            gmx::ArrayRef<gmx::RVec>  sendBuffer = sendBufferAccess.buffer;
             int                       n          = 0;
             if (!bPBC)
             {
