@@ -336,10 +336,9 @@ public:
     //! Returns atom indices of all atoms in the selection.
     ArrayRef<const int> atomIndices() const
     {
-        return (sel_->rawPositions_.m.mapb.a != nullptr)
-                       ? constArrayRefFromArray(sel_->rawPositions_.m.mapb.a,
-                                                sel_->rawPositions_.m.mapb.nra)
-                       : ArrayRef<const int>{};
+        return (sel_->rawPositions_.m.mapb.a != nullptr) ? constArrayRefFromArray(
+                       sel_->rawPositions_.m.mapb.a, sel_->rawPositions_.m.mapb.nra)
+                                                         : ArrayRef<const int>{};
     }
     //! Number of positions in the selection.
     int posCount() const { return data().posCount(); }
