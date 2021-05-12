@@ -240,6 +240,13 @@ static inline void gpu_accumulate_timings(gmx_wallclock_gpu_nbnxn_t* timings,
     }
 }
 
+inline bool haveGpuShortRangeWork(const NbnxmGpu* nb, const gmx::InteractionLocality interactionLocality)
+{
+    GMX_ASSERT(nb, "Need a valid nbnxn_gpu object");
+
+    return nb->haveWork[interactionLocality];
+}
+
 /*! \brief Attempts to complete nonbonded GPU task.
  *
  * See documentation in nbnxm_gpu.h for details.

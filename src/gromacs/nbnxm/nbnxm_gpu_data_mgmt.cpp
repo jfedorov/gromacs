@@ -757,13 +757,6 @@ void setupGpuShortRangeWork(NbnxmGpu* nb, const gmx::GpuBonded* gpuBonded, const
                                || (gpuBonded != nullptr && gpuBonded->haveInteractions()));
 }
 
-bool haveGpuShortRangeWork(const NbnxmGpu* nb, const gmx::InteractionLocality interactionLocality)
-{
-    GMX_ASSERT(nb, "Need a valid nbnxn_gpu object");
-
-    return nb->haveWork[interactionLocality];
-}
-
 /*! \brief
  * Launch asynchronously the download of nonbonded forces from the GPU
  * (and energies/shift forces if required).
