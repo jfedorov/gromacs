@@ -74,7 +74,7 @@ enum class GpuApiCallBehavior : int
 const char* enumValueToString(GpuApiCallBehavior enumValue);
 
 //! Types of actions associated to waiting or checking the completion of GPU tasks
-enum class GpuTaskCompletion
+enum class GpuTaskCompletion : int
 {
     Wait, /*<< Issue a blocking wait for the task */
     Check /*<< Only check whether the task has completed */

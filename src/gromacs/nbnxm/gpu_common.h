@@ -68,7 +68,6 @@
 #include "gromacs/timing/wallcycle.h"
 #include "gromacs/utility/stringutil.h"
 
-#include "gpu_common_utils.h"
 #include "nbnxm_gpu.h"
 
 namespace gmx
@@ -92,7 +91,7 @@ namespace Nbnxm
  * \param[inout] timings  GPU task timing data
  * \param[in] iloc        interaction locality
  */
-static void countPruneKernelTime(Nbnxm::GpuTimers*          timers,
+static void countPruneKernelTime(GpuTimers*                 timers,
                                  gmx_wallclock_gpu_nbnxn_t* timings,
                                  const InteractionLocality  iloc)
 {
@@ -183,9 +182,9 @@ static inline void gpu_reduce_staged_outputs(const NBStagingData&      nbst,
  */
 template<typename GpuPairlist>
 static inline void gpu_accumulate_timings(gmx_wallclock_gpu_nbnxn_t* timings,
-                                          Nbnxm::GpuTimers*          timers,
+                                          GpuTimers*                 timers,
                                           const GpuPairlist*         plist,
-                                          AtomLocality               atomLocality,
+                                          gmx::AtomLocality          atomLocality,
                                           const gmx::StepWorkload&   stepWork,
                                           bool                       doTiming)
 {

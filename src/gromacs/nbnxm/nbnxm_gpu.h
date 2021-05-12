@@ -48,16 +48,17 @@
 #include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/locality.h"
 #include "gromacs/nbnxm/atomdata.h"
+#include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/real.h"
-
-#include "nbnxm.h"
 
 struct interaction_const_t;
 struct nbnxn_atomdata_t;
 struct gmx_wallcycle;
-enum class GpuTaskCompletion;
-
+struct gmx_wallclock_gpu_nbnxn_t;
+enum class GpuTaskCompletion : int;
+struct NbnxnPairlistGpu;
+struct PairlistParams;
 namespace gmx
 {
 class GpuBonded;
@@ -69,17 +70,33 @@ namespace Nbnxm
 
 class Grid;
 
-/*! \brief Returns true if LJ combination rules are used in the non-bonded kernels.
- *
- *  \param[in] vdwType  The VdW interaction/implementation type as defined by VdwType
- *                      enumeration.
- *
- * \returns Whether combination rules are used by the run.
+/** Initializes atom-data on the GPU, called at every pair search step. */
+GPU_FUNC_QUALIFIER
+void gpu_init_atomdata(NbnxmGpu gmx_unused* nb, const nbnxn_atomdata_t gmx_unused* nbat) GPU_FUNC_TERM;
+
+/*! \brief Re-generate the GPU Ewald force table, resets rlist, and update the
+ *  electrostatic type switching to twin cut-off (or back) if needed.
  */
-static inline bool useLjCombRule(const enum VdwType vdwType)
-{
-    return (vdwType == VdwType::CutCombGeom || vdwType == VdwType::CutCombLB);
-}
+GPU_FUNC_QUALIFIER
+void gpu_pme_loadbal_update_param(const struct nonbonded_verlet_t gmx_unused* nbv,
+                                  const interaction_const_t gmx_unused& ic) GPU_FUNC_TERM;
+
+/** Uploads shift vector to the GPU if the box is dynamic (otherwise just returns). */
+GPU_FUNC_QUALIFIER
+void gpu_upload_shiftvec(NbnxmGpu gmx_unused* nb, const nbnxn_atomdata_t gmx_unused* nbatom) GPU_FUNC_TERM;
+
+/** Clears GPU outputs: nonbonded force, shift force and energy. */
+GPU_FUNC_QUALIFIER
+void gpu_clear_outputs(NbnxmGpu gmx_unused* nb, bool gmx_unused computeVirial) GPU_FUNC_TERM;
+
+/** Returns the GPU timings structure or NULL if GPU is not used or timing is off. */
+GPU_FUNC_QUALIFIER
+gmx_wallclock_gpu_nbnxn_t* gpu_get_timings(NbnxmGpu gmx_unused* nb) GPU_FUNC_TERM_WITH_RETURN(nullptr);
+
+/** Resets nonbonded GPU timings. */
+GPU_FUNC_QUALIFIER
+void gpu_reset_timings(struct nonbonded_verlet_t gmx_unused* nbv) GPU_FUNC_TERM;
+
 
 /*! \brief
  * Launch asynchronously the xq buffer host to device copy.
@@ -260,19 +277,6 @@ void nbnxn_gpu_x_to_nbat_x(const Nbnxm::Grid gmx_unused& grid,
                            int gmx_unused                   numColumnsMax,
                            bool gmx_unused mustInsertNonLocalDependency) GPU_FUNC_TERM;
 
-/*! \brief Sync the nonlocal stream with dependent tasks in the local queue.
- *
- *  As the point where the local stream tasks can be considered complete happens
- *  at the same call point where the nonlocal stream should be synced with the
- *  the local, this function records the event if called with the local stream as
- *  argument and inserts in the GPU stream a wait on the event on the nonlocal.
- *
- * \param[in] nb                   The nonbonded data GPU structure
- * \param[in] interactionLocality  Local or NonLocal sync point
- */
-GPU_FUNC_QUALIFIER
-void nbnxnInsertNonlocalGpuDependency(NbnxmGpu gmx_unused*                nb,
-                                      gmx::InteractionLocality gmx_unused interactionLocality) GPU_FUNC_TERM;
 
 /*! \brief Set up internal flags that indicate what type of short-range work there is.
  *
@@ -290,6 +294,60 @@ GPU_FUNC_QUALIFIER
 void setupGpuShortRangeWork(NbnxmGpu gmx_unused* nb,
                             const gmx::GpuBonded gmx_unused*    gpuBonded,
                             gmx::InteractionLocality gmx_unused iLocality) GPU_FUNC_TERM;
+
+/** Returns an opaque pointer to the GPU coordinate+charge array
+ *  Note: CUDA only.
+ */
+CUDA_FUNC_QUALIFIER
+void* gpu_get_xq(NbnxmGpu gmx_unused* nb) CUDA_FUNC_TERM_WITH_RETURN(nullptr);
+
+/** Returns an opaque pointer to the GPU force array
+ *  Note: CUDA only.
+ */
+CUDA_FUNC_QUALIFIER
+DeviceBuffer<gmx::RVec> gpu_get_f(NbnxmGpu gmx_unused* nb)
+        CUDA_FUNC_TERM_WITH_RETURN(DeviceBuffer<gmx::RVec>{});
+
+/** Returns an opaque pointer to the GPU shift force array
+ *  Note: CUDA only.
+ */
+CUDA_FUNC_QUALIFIER
+DeviceBuffer<gmx::RVec> gpu_get_fshift(NbnxmGpu gmx_unused* nb)
+        CUDA_FUNC_TERM_WITH_RETURN(DeviceBuffer<gmx::RVec>{});
+
+
+/* Functions below this line are only called from inside NBNXM */
+
+
+/** Initializes the data structures related to GPU nonbonded calculations. */
+GPU_FUNC_QUALIFIER
+NbnxmGpu* gpu_init(const gmx::DeviceStreamManager gmx_unused& deviceStreamManager,
+                   const interaction_const_t gmx_unused* ic,
+                   const PairlistParams gmx_unused& listParams,
+                   const nbnxn_atomdata_t gmx_unused* nbat,
+                   /* true if both local and non-local are done on GPU */
+                   bool gmx_unused bLocalAndNonlocal) GPU_FUNC_TERM_WITH_RETURN(nullptr);
+
+/** Initializes pair-list data for GPU, called at every pair search step. */
+GPU_FUNC_QUALIFIER
+void gpu_init_pairlist(NbnxmGpu gmx_unused*          nb,
+                       const struct NbnxnPairlistGpu gmx_unused* h_nblist,
+                       gmx::InteractionLocality gmx_unused       iloc) GPU_FUNC_TERM;
+
+
+/** Frees all GPU resources used for the nonbonded calculations. */
+GPU_FUNC_QUALIFIER
+void gpu_free(NbnxmGpu gmx_unused* nb) GPU_FUNC_TERM;
+
+
+/** Calculates the minimum size of proximity lists to improve SM load balance
+ *  with GPU non-bonded kernels. */
+GPU_FUNC_QUALIFIER
+int gpu_min_ci_balanced(NbnxmGpu gmx_unused* nb) GPU_FUNC_TERM_WITH_RETURN(-1);
+
+/** Returns if analytical Ewald GPU kernels are used. */
+GPU_FUNC_QUALIFIER
+bool gpu_is_kernel_ewald_analytical(const NbnxmGpu gmx_unused* nb) GPU_FUNC_TERM_WITH_RETURN(FALSE);
 
 /*! \brief Returns true if there is GPU short-range work for the given interaction locality.
  *

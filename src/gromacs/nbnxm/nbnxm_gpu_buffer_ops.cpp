@@ -51,7 +51,7 @@
 #endif
 #include "gromacs/mdtypes/locality.h"
 #include "gromacs/nbnxm/gridset.h"
-#include "gromacs/nbnxm/nbnxm_gpu.h"
+#include "gromacs/nbnxm/nbnxm_gpu_internal.h"
 #include "gromacs/nbnxm/nbnxm_gpu_buffer_ops_internal.h"
 #if GMX_GPU_CUDA
 #    include "gromacs/nbnxm/cuda/nbnxm_cuda_types.h"
