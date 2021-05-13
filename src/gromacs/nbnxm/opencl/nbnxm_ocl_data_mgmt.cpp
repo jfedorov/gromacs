@@ -231,4 +231,10 @@ int gpu_min_ci_balanced(NbnxmGpu* nb)
     return nb != nullptr ? gpu_min_ci_balanced_factor * nb->deviceContext_->deviceInfo().compute_units : 0;
 }
 
+DeviceBuffer<gmx::RVec> gpu_get_f(NbnxmGpu* nb)
+{
+    GMX_RELEASE_ASSERT(false, "gpu_get_f not implemented for OpenCL");
+    return DeviceBuffer<gmx::RVec>{};
+}
+
 } // namespace Nbnxm

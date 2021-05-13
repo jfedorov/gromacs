@@ -50,6 +50,7 @@
 #include "gromacs/nbnxm/nbnxm_gpu_data_mgmt.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/utility/exceptions.h"
+#include "gromacs/utility/gmxassert.h"
 
 #include "nbnxm_sycl_types.h"
 
@@ -77,6 +78,12 @@ int gpu_min_ci_balanced(NbnxmGpu* nb)
     const cl::sycl::device device = nb->deviceContext_->deviceInfo().syclDevice;
     const int numComputeUnits     = device.get_info<cl::sycl::info::device::max_compute_units>();
     return balancedFactor * numComputeUnits;
+}
+
+DeviceBuffer<gmx::RVec> gpu_get_f(NbnxmGpu* nb)
+{
+    GMX_ASSERT(nb != nullptr, "NbnxmGpu pointer can not be null");
+    return nb->atdat->f;
 }
 
 } // namespace Nbnxm
