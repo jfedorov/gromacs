@@ -3212,6 +3212,12 @@ void communicateGpuHaloForces(const t_commrec& cr, bool accumulateForces)
     }
 }
 
+void copyLocalForcesToGpuInHaloStream(const t_commrec& cr, gmx::ArrayRef<const gmx::RVec> h_f)
+{
+    int d = cr.dd->ndim - 1;
+    cr.dd->gpuHaloExchange[d][cr.dd->comm->cd[d].numPulses() - 1]->copyLocalForcesToGpuInHaloStream(h_f);
+}
+
 const gmx::LocalTopologyChecker& dd_localTopologyChecker(const gmx_domdec_t& dd)
 {
     return *dd.localTopologyChecker;

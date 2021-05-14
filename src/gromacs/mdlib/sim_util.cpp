@@ -2011,7 +2011,12 @@ void do_force(FILE*                               fplog,
     if (havePPDomainDecomposition(cr) && stepWork.computeForces && stepWork.useGpuFHalo
         && domainWork.haveCpuLocalForceWork)
     {
-        stateGpu->copyForcesToGpu(forceOutMtsLevel0.forceWithShiftForces().force(), AtomLocality::Local);
+        // Local part of CPU force buffer must be copied to GPU in
+        // advance of GPU force halo exhange, where remote non-local
+        // forces will be reduced into this. We do this in halo stream
+        // rather than local non-bonded stream to allow overlap of
+        // this transfer with GPU local non-bonded force computations.
+        copyLocalForcesToGpuInHaloStream(*cr, forceOutMtsLevel0.forceWithShiftForces().force());
     }
 
     GMX_ASSERT(!(nonbondedAtMtsLevel1 && stepWork.useGpuFBufferOps),

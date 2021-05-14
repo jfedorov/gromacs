@@ -46,6 +46,7 @@
 
 #include "gromacs/gpu_utils/devicebuffer_datatype.h"
 #include "gromacs/math/vectypes.h"
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/gmxmpi.h"
 
@@ -130,6 +131,11 @@ public:
      *  \returns  The event to synchronize the stream that consumes forces on device.
      */
     GpuEventSynchronizer* getForcesReadyOnDeviceEvent();
+
+    /*! \brief  Copy local part of force array from CPU to GPU in halo exchange stream
+     * \param[in] h_f   Force buffer on CPU
+     */
+    void copyLocalForcesToGpuInHaloStream(gmx::ArrayRef<const gmx::RVec> h_f);
 
 private:
     class Impl;

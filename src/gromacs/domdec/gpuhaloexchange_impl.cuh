@@ -110,6 +110,11 @@ public:
      */
     void communicateHaloForces(bool accumulateForces);
 
+    /*! \brief  Copy local part of force array from CPU to GPU in halo exchange stream
+     * \param[in] h_f   Force buffer on CPU
+     */
+    void copyLocalForcesToGpuInHaloStream(gmx::ArrayRef<const gmx::RVec> h_f);
+
     /*! \brief Get the event synchronizer for the forces ready on device.
      *  \returns  The event to synchronize the stream that consumes forces on device.
      */
@@ -215,6 +220,8 @@ private:
     const DeviceStream& localStream_;
     //! CUDA stream for non-local non-bonded calculations
     const DeviceStream& nonLocalStream_;
+    //! CUDA stream for this halo exchange
+    std::unique_ptr<DeviceStream> haloStream_;
     //! full coordinates buffer in GPU memory
     float3* d_x_ = nullptr;
     //! full forces buffer in GPU memory

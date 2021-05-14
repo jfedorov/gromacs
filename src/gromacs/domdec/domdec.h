@@ -291,4 +291,10 @@ void communicateGpuHaloCoordinates(const t_commrec&      cr,
  */
 void communicateGpuHaloForces(const t_commrec& cr, bool accumulateForces);
 
+/*! \brief  Copy local part of force array from CPU to GPU in halo exchange stream
+ * \param [in] cr   The commrec object
+ * \param[in] h_f   Force buffer on CPU
+ */
+void copyLocalForcesToGpuInHaloStream(const t_commrec& cr, gmx::ArrayRef<const gmx::RVec> h_f);
+
 #endif
