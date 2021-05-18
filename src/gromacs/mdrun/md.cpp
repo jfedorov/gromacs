@@ -437,9 +437,6 @@ void gmx::LegacySimulator::do_md()
         GMX_RELEASE_ASSERT(ir->eI == IntegrationAlgorithm::MD,
                            "Only the md integrator is supported with the GPU update.\n");
         GMX_RELEASE_ASSERT(
-                ir->etc != TemperatureCoupling::NoseHoover,
-                "Nose-Hoover temperature coupling is not supported with the GPU update.\n");
-        GMX_RELEASE_ASSERT(
                 ir->epc == PressureCoupling::No || ir->epc == PressureCoupling::ParrinelloRahman
                         || ir->epc == PressureCoupling::Berendsen || ir->epc == PressureCoupling::CRescale,
                 "Only Parrinello-Rahman, Berendsen, and C-rescale pressure coupling are supported "
@@ -1534,6 +1531,13 @@ void gmx::LegacySimulator::do_md()
                         stateGpu->copyCoordinatesToGpu(state->x, AtomLocality::Local);
                     }
                 }
+            }
+            bool doNoseHoover = ir->etc == TemperatureCoupling::NoseHoover
+                                && ir->etc != TemperatureCoupling::No
+                                && do_per_step(step + ir->nsttcouple - 1, ir->nsttcouple);
+            bool useGpuForUpdateThisStep = useGpuForUpdate && !doNoseHoover && !bDoReplEx;
+            if (useGpuForUpdateThisStep)
+            {
 
                 if (simulationWork.useGpuPme && !runScheduleWork->simulationWork.useGpuPmePpCommunication
                     && !thisRankHasDuty(cr, DUTY_PME))
@@ -1577,6 +1581,23 @@ void gmx::LegacySimulator::do_md()
             }
             else
             {
+
+                if (useGpuForUpdate) // GPU update is active but not on this step, so back-offload data to CPU
+                {
+                    if (!bNS)
+                    {
+                        stateGpu->copyCoordinatesFromGpu(state->x, AtomLocality::Local);
+                        stateGpu->waitCoordinatesReadyOnHost(AtomLocality::Local);
+                    }
+                    stateGpu->copyVelocitiesFromGpu(state->v, AtomLocality::Local);
+                    stateGpu->waitVelocitiesReadyOnHost(AtomLocality::Local);
+                    if (runScheduleWork->stepWork.useGpuFBufferOps)
+                    {
+                        stateGpu->copyForcesFromGpu(f.view().force(), AtomLocality::Local);
+                        stateGpu->waitForcesReadyOnHost(AtomLocality::Local);
+                    }
+                }
+
                 /* With multiple time stepping we need to do an additional normal
                  * update step to obtain the virial, as the actual MTS integration
                  * using an acceleration where the slow forces are multiplied by mtsFactor.
@@ -1652,6 +1673,12 @@ void gmx::LegacySimulator::do_md()
                                           do_ene);
                 upd.finish_update(
                         *ir, md->havePartiallyFrozenAtoms, md->homenr, state, wcycle, constr != nullptr);
+
+                if (useGpuForUpdate) // GPU update is active but not on this step, so return data to GPU
+                {
+                    stateGpu->copyCoordinatesToGpu(state->x, AtomLocality::Local);
+                    stateGpu->copyVelocitiesToGpu(state->v, AtomLocality::Local);
+                }
             }
 
             if (ir->bPull && ir->pull->bSetPbcRefToPrevStepCOM)

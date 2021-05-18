@@ -543,7 +543,6 @@ bool decideWhetherToUseGpuForUpdate(const bool                     isDomainDecom
                                     const gmx_mtop_t&              mtop,
                                     const bool                     useEssentialDynamics,
                                     const bool                     doOrientationRestraints,
-                                    const bool                     useReplicaExchange,
                                     const bool                     haveFrozenAtoms,
                                     const bool                     doRerun,
                                     const DevelopmentFeatureFlags& devFlags,
@@ -614,10 +613,6 @@ bool decideWhetherToUseGpuForUpdate(const bool                     isDomainDecom
     {
         errorMessage += "Only the md integrator is supported.\n";
     }
-    if (inputrec.etc == TemperatureCoupling::NoseHoover)
-    {
-        errorMessage += "Nose-Hoover temperature coupling is not supported.\n";
-    }
     if (!(inputrec.epc == PressureCoupling::No || inputrec.epc == PressureCoupling::ParrinelloRahman
           || inputrec.epc == PressureCoupling::Berendsen || inputrec.epc == PressureCoupling::CRescale))
     {
@@ -656,10 +651,6 @@ bool decideWhetherToUseGpuForUpdate(const bool                     isDomainDecom
     if (particleTypes[ParticleType::Shell] > 0)
     {
         errorMessage += "Shells are not supported.\n";
-    }
-    if (useReplicaExchange)
-    {
-        errorMessage += "Replica exchange simulations are not supported.\n";
     }
     if (inputrec.eSwapCoords != SwapType::No)
     {
