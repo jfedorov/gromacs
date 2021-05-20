@@ -94,10 +94,18 @@ bool DeviceEvent::timingSupported() const
 uint64_t DeviceEvent::getExecutionTime()
 {
     GMX_ASSERT(isValid(), "Event must be valid in order to call .getExecutionTime()");
+#ifdef GMX_SYCL_HIPSYCL
+    // No sycl::event::get_profiling_info until https://github.com/illuhad/hipSYCL/pull/428 is merged
+    GMX_RELEASE_ASSERT(false,
+                       "Event timing not supported with hipSYCL, you should have checked "
+                       "DeviceEvent::timingSupported");
+    return 0;
+#else
     using namespace cl::sycl::info;
     uint64_t timeStartNanoseconds = event_->get_profiling_info<event_profiling::command_start>();
     uint64_t timeEndNanoseconds   = event_->get_profiling_info<event_profiling::command_end>();
     return timeEndNanoseconds - timeStartNanoseconds;
+#endif
 }
 
 const DeviceEvent::NativeType& DeviceEvent::event() const
