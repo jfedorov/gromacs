@@ -835,7 +835,7 @@ gmx_pme_t* gmx_pme_init(const t_commrec*     cr,
     make_gridindex_to_localindex(
             pme->nkz, pme->pmegrid_start_iz, pme->pmegrid_nz_base, &pme->nnz, &pme->fshz);
 
-    pme->spline_work = make_pme_spline_work(pme->pme_order);
+    pme->spline_work = std::make_unique<pme_spline_work>(pme->pme_order);
 
     ndata[0] = pme->nkx;
     ndata[1] = pme->nky;
@@ -1763,8 +1763,6 @@ void gmx_pme_destroy(gmx_pme_t* pme)
 
     sfree(pme->sum_qgrid_tmp);
     sfree(pme->sum_qgrid_dd_tmp);
-
-    destroy_pme_spline_work(pme->spline_work);
 
     if (pme->gpu != nullptr)
     {

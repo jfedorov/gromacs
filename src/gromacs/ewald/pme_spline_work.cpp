@@ -4,7 +4,7 @@
  * Copyright (c) 1991-2000, University of Groningen, The Netherlands.
  * Copyright (c) 2001-2004, The GROMACS development team.
  * Copyright (c) 2013,2014,2015,2017,2018 by the GROMACS development team.
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -50,9 +50,8 @@
 
 using namespace gmx; // TODO: Remove when this file is moved into gmx namespace
 
-pme_spline_work* make_pme_spline_work(int gmx_unused order)
+pme_spline_work::pme_spline_work(int gmx_unused order)
 {
-    pme_spline_work* work;
 
 #ifdef PME_SIMD4_SPREAD_GATHER
     alignas(GMX_SIMD_ALIGNMENT) real tmp[GMX_SIMD4_WIDTH * 2];
@@ -60,8 +59,8 @@ pme_spline_work* make_pme_spline_work(int gmx_unused order)
     Simd4Real                        real_mask_S0, real_mask_S1;
     int                              of, i;
 
-    work = new (gmx::AlignedAllocationPolicy::malloc(sizeof(pme_spline_work))) pme_spline_work;
-
+    gmx::AlignedAllocationPolicy::malloc(sizeof(mask_S0));
+    gmx::AlignedAllocationPolicy::malloc(sizeof(mask_S1));
     zero_S = setZero();
 
     /* Generate bit masks to mask out the unused grid entries,
@@ -74,22 +73,14 @@ pme_spline_work* make_pme_spline_work(int gmx_unused order)
         {
             tmp[i] = (i >= of && i < of + order ? -1.0 : 1.0);
         }
-        real_mask_S0      = load4(tmp);
-        real_mask_S1      = load4(tmp + GMX_SIMD4_WIDTH);
-        work->mask_S0[of] = (real_mask_S0 < zero_S);
-        work->mask_S1[of] = (real_mask_S1 < zero_S);
+        real_mask_S0 = load4(tmp);
+        real_mask_S1 = load4(tmp + GMX_SIMD4_WIDTH);
+        mask_S0[of]  = (real_mask_S0 < zero_S);
+        mask_S1[of]  = (real_mask_S1 < zero_S);
     }
 #else
     work = nullptr;
 #endif
-
-    return work;
 }
 
-void destroy_pme_spline_work(pme_spline_work* work)
-{
-    if (work != nullptr)
-    {
-        gmx::AlignedAllocationPolicy::free(work);
-    }
-}
+pme_spline_work::~pme_spline_work() = default;

@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2014,2015,2018,2019, by the GROMACS development team, led by
+ * Copyright (c) 2014,2015,2018,2019,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -41,16 +41,14 @@
 
 struct pme_spline_work
 {
+    pme_spline_work(int order);
+    ~pme_spline_work();
+
 #ifdef PME_SIMD4_SPREAD_GATHER
     /* Masks for 4-wide SIMD aligned spreading and gathering */
-    gmx::Simd4Bool mask_S0[6], mask_S1[6];
-#else
-    int dummy; /* C89 requires that struct has at least one member */
+    std::array<gmx::Simd4Bool, 6> mask_S0;
+    std::array<gmx::Simd4Bool, 6> mask_S1;
 #endif
 };
-
-pme_spline_work* make_pme_spline_work(int order);
-
-void destroy_pme_spline_work(pme_spline_work* work);
 
 #endif
