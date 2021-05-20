@@ -75,6 +75,10 @@ bool DeviceEvent::timingSupported() const
 {
     GMX_ASSERT(isValid(), "Event must be valid in order to call .timingSupported()");
     using namespace cl::sycl::info;
+#ifdef GMX_SYCL_HIPSYCL
+    // No sycl::event::get_profiling_info until https://github.com/illuhad/hipSYCL/pull/428 is merged
+    return false;
+#else
     try
     {
         event_->get_profiling_info<event_profiling::command_submit>();
@@ -84,6 +88,7 @@ bool DeviceEvent::timingSupported() const
         return false;
     }
     return true;
+#endif
 }
 
 uint64_t DeviceEvent::getExecutionTime()
