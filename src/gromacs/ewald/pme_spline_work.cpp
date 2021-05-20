@@ -78,8 +78,6 @@ pme_spline_work::pme_spline_work(int gmx_unused order)
         mask_S0[of]  = (real_mask_S0 < zero_S);
         mask_S1[of]  = (real_mask_S1 < zero_S);
     }
-#else
-    work = nullptr;
 #endif
 }
 
