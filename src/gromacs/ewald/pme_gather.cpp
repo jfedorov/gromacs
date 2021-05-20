@@ -231,7 +231,7 @@ struct do_fspline
         const real* const gmx_restrict dthy = spline->dtheta.coefficients[YY] + norder;
         const real* const gmx_restrict dthz = spline->dtheta.coefficients[ZZ] + norder;
 
-        pme_spline_work* const work = pme->spline_work.get();
+        const pme_spline_work* work = pme->spline_work.get();
 
         const int offset = idxZ & 3;
 

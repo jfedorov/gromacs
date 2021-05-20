@@ -80,5 +80,3 @@ pme_spline_work::pme_spline_work(int gmx_unused order)
     }
 #endif
 }
-
-pme_spline_work::~pme_spline_work() = default;

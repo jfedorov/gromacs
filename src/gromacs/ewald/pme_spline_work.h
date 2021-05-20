@@ -42,7 +42,6 @@
 struct pme_spline_work
 {
     pme_spline_work(int order);
-    ~pme_spline_work();
 
 #ifdef PME_SIMD4_SPREAD_GATHER
     /* Masks for 4-wide SIMD aligned spreading and gathering */
