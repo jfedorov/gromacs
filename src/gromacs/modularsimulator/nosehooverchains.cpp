@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2020,2021, by the GROMACS development team, led by
+ * Copyright (c) 2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -91,21 +91,21 @@ struct NhcCoordinateView
     ~NhcCoordinateView() noexcept = default;
 };
 
-NoseHooverChainsData::NoseHooverChainsData(int         numTemperatureGroups,
-                                           real        couplingTimeStep,
-                                           int         chainLength,
-                                           const real* referenceTemperature,
-                                           const real* couplingTime,
-                                           const real* numDegreesOfFreedom,
-                                           EnergyData* energyData,
-                                           NhcUsage    nhcUsage) :
+NoseHooverChainsData::NoseHooverChainsData(int                  numTemperatureGroups,
+                                           real                 couplingTimeStep,
+                                           int                  chainLength,
+                                           ArrayRef<const real> referenceTemperature,
+                                           ArrayRef<const real> couplingTime,
+                                           ArrayRef<const real> numDegreesOfFreedom,
+                                           EnergyData*          energyData,
+                                           NhcUsage             nhcUsage) :
     identifier_(formatString("NoseHooverChainsData-%s", nhcUsageNames[nhcUsage])),
     couplingTimeStep_(couplingTimeStep),
     chainLength_(chainLength),
     numTemperatureGroups_(numTemperatureGroups),
-    referenceTemperature_(referenceTemperature, referenceTemperature + numTemperatureGroups),
-    couplingTime_(couplingTime, couplingTime + numTemperatureGroups),
-    numDegreesOfFreedom_(numDegreesOfFreedom, numDegreesOfFreedom + numTemperatureGroups)
+    referenceTemperature_(referenceTemperature),
+    couplingTime_(couplingTime),
+    numDegreesOfFreedom_(numDegreesOfFreedom)
 {
     xi_.resize(numTemperatureGroups);
     xiVelocities_.resize(numTemperatureGroups);
@@ -122,11 +122,12 @@ NoseHooverChainsData::NoseHooverChainsData(int         numTemperatureGroups,
         invXiMass_[temperatureGroup].resize(chainLength, 0.0);
 
         if (referenceTemperature_[temperatureGroup] > 0 && couplingTime_[temperatureGroup] > 0
-            && numDegreesOfFreedom_[temperatureGroup] > 0)
+            && this->numDegreesOfFreedom(temperatureGroup) > 0)
         {
             for (auto chainPosition = 0; chainPosition < chainLength; ++chainPosition)
             {
-                const real numDof = ((chainPosition == 0) ? numDegreesOfFreedom_[temperatureGroup] : 1);
+                const real numDof =
+                        ((chainPosition == 0) ? this->numDegreesOfFreedom(temperatureGroup) : 1);
                 invXiMass_[temperatureGroup][chainPosition] =
                         1.0
                         / (gmx::square(couplingTime_[temperatureGroup] / M_2PI)
@@ -157,25 +158,27 @@ void NoseHooverChainsData::build(NhcUsage                                nhcUsag
                         legacySimulatorData->inputrec->opts.ngtc,
                         legacySimulatorData->inputrec->delta_t * legacySimulatorData->inputrec->nsttcouple,
                         legacySimulatorData->inputrec->opts.nhchainlength,
-                        legacySimulatorData->inputrec->opts.ref_t,
-                        legacySimulatorData->inputrec->opts.tau_t,
-                        legacySimulatorData->inputrec->opts.nrdf,
+                        constArrayRefFromArray(legacySimulatorData->inputrec->opts.ref_t,
+                                               legacySimulatorData->inputrec->opts.ngtc),
+                        constArrayRefFromArray(legacySimulatorData->inputrec->opts.tau_t,
+                                               legacySimulatorData->inputrec->opts.ngtc),
+                        constArrayRefFromArray(legacySimulatorData->inputrec->opts.nrdf,
+                                               legacySimulatorData->inputrec->opts.ngtc),
                         energyData,
                         nhcUsage));
     }
     else
     {
-        const int  numTemperatureGroups = 1;
-        const real ndof                 = 1;
+        const int numTemperatureGroups = 1;
         builderHelper->storeSimulationData(
                 NoseHooverChainsData::dataID(nhcUsage),
                 std::make_unique<NoseHooverChainsData>(
                         numTemperatureGroups,
                         legacySimulatorData->inputrec->delta_t * legacySimulatorData->inputrec->nstpcouple,
                         legacySimulatorData->inputrec->opts.nhchainlength,
-                        legacySimulatorData->inputrec->opts.ref_t,
-                        legacySimulatorData->inputrec->opts.tau_t,
-                        &ndof,
+                        constArrayRefFromArray(legacySimulatorData->inputrec->opts.ref_t, 1),
+                        constArrayRefFromArray(legacySimulatorData->inputrec->opts.tau_t, 1),
+                        ArrayRef<real>(),
                         energyData,
                         nhcUsage));
     }
@@ -214,6 +217,11 @@ inline real NoseHooverChainsData::referenceTemperature(int temperatureGroup) con
 inline real NoseHooverChainsData::numDegreesOfFreedom(int temperatureGroup) const
 {
     GMX_ASSERT(temperatureGroup < numTemperatureGroups_, "Invalid temperature group");
+    if (numDegreesOfFreedom_.empty() && temperatureGroup == 0)
+    {
+        // Barostat has a single degree of freedom
+        return 1;
+    }
     return numDegreesOfFreedom_[temperatureGroup];
 }
 
@@ -236,12 +244,12 @@ void NoseHooverChainsData::calculateIntegral(int temperatureGroup)
     for (auto chainPosition = 0; chainPosition < chainLength_; ++chainPosition)
     {
         // Chain thermostats have only one degree of freedom
-        const real numDegreesOfFreedom =
-                (chainPosition == 0) ? numDegreesOfFreedom_[temperatureGroup] : 1;
+        const real numDegreesOfFreedomThisPosition =
+                (chainPosition == 0) ? numDegreesOfFreedom(temperatureGroup) : 1;
         integral += 0.5 * gmx::square(xiVelocities_[temperatureGroup][chainPosition])
                             / invXiMass_[temperatureGroup][chainPosition]
-                    + numDegreesOfFreedom * xi_[temperatureGroup][chainPosition] * c_boltz
-                              * referenceTemperature_[temperatureGroup];
+                    + numDegreesOfFreedomThisPosition * xi_[temperatureGroup][chainPosition]
+                              * c_boltz * referenceTemperature_[temperatureGroup];
     }
     temperatureCouplingIntegral_[temperatureGroup] = integral;
     integralTime_[temperatureGroup]                = coordinateTime_[temperatureGroup];

@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2020,2021, by the GROMACS development team, led by
+ * Copyright (c) 2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -97,14 +97,14 @@ class NoseHooverChainsData final : public ICheckpointHelperClient
 {
 public:
     //! Constructor
-    NoseHooverChainsData(int         numTemperatureGroups,
-                         real        couplingTimeStep,
-                         int         chainLength,
-                         const real* referenceTemperature,
-                         const real* couplingTime,
-                         const real* numDegreesOfFreedom,
-                         EnergyData* energyData,
-                         NhcUsage    nhcUsage);
+    NoseHooverChainsData(int                  numTemperatureGroups,
+                         real                 couplingTimeStep,
+                         int                  chainLength,
+                         ArrayRef<const real> referenceTemperature,
+                         ArrayRef<const real> couplingTime,
+                         ArrayRef<const real> numDegreesOfFreedom,
+                         EnergyData*          energyData,
+                         NhcUsage             nhcUsage);
 
     /*! \brief Get view on the NHC coordinates
      *
@@ -184,11 +184,11 @@ private:
     //! The number of temperature groups
     const int numTemperatureGroups_;
     //! Coupling temperature per group
-    const std::vector<real> referenceTemperature_;
+    ArrayRef<const real> referenceTemperature_;
     //! Coupling time per group
-    const std::vector<real> couplingTime_;
+    ArrayRef<const real> couplingTime_;
     //! Number of degrees of freedom per group
-    const std::vector<real> numDegreesOfFreedom_;
+    ArrayRef<const real> numDegreesOfFreedom_;
 };
 
 /*! \internal
