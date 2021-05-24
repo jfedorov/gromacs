@@ -327,7 +327,7 @@ void StatePropagatorDataGpu::Impl::copyCoordinatesToGpu(const gmx::ArrayRef<cons
     // TODO: remove this by adding an event-mark free flavor of this function
     if (GMX_GPU_CUDA || GMX_GPU_SYCL)
     {
-        if (GMX_GPU_SYCL && atomLocality == AtomLocality::Local)
+        if (atomLocality == AtomLocality::Local)
         {
             /* TODO: Refactor the logic to get rid of this reset.
              * With GPU update, we can copy coordinates twice on the same step:
@@ -436,7 +436,7 @@ void StatePropagatorDataGpu::Impl::copyVelocitiesToGpu(const gmx::ArrayRef<const
     wallcycle_sub_start(wcycle_, WallCycleSubCounter::LaunchStatePropagatorData);
 
     copyToDevice(d_v_, h_v, d_vSize_, atomLocality, *deviceStream);
-    if (GMX_GPU_SYCL && atomLocality == AtomLocality::Local)
+    if (atomLocality == AtomLocality::Local)
     {
         /* TODO: Rework the logic to avoid this reset, similar to copyCoordinates to GPU
          *
@@ -498,11 +498,8 @@ void StatePropagatorDataGpu::Impl::copyForcesToGpu(const gmx::ArrayRef<const gmx
     wallcycle_sub_start(wcycle_, WallCycleSubCounter::LaunchStatePropagatorData);
 
     copyToDevice(d_f_, h_f, d_fSize_, atomLocality, *deviceStream);
-    if (GMX_GPU_SYCL)
-    {
-        // TODO: Remove this workaround, #3988
-        fReadyOnDevice_[atomLocality].reset();
-    }
+
+    fReadyOnDevice_[atomLocality].reset(); // TODO: Remove this workaround, #3988
     fReadyOnDevice_[atomLocality].markEvent(*deviceStream);
 
     wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LaunchStatePropagatorData);

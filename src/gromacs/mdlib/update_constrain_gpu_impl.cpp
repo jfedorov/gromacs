@@ -121,10 +121,7 @@ void UpdateConstrainGpu::Impl::integrate(GpuEventSynchronizer*             fRead
         }
     }
 
-    if (GMX_GPU_SYCL)
-    {
-        coordinatesReady_->reset(); // Workaround for #3988.
-    }
+    coordinatesReady_->reset(); // Workaround for #3988.
     coordinatesReady_->markEvent(deviceStream_);
 
     wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LaunchGpuUpdateConstrain);
