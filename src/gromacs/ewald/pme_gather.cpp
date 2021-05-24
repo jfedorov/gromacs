@@ -231,9 +231,9 @@ struct do_fspline
         const real* const gmx_restrict dthy = spline->dtheta.coefficients[YY] + norder;
         const real* const gmx_restrict dthz = spline->dtheta.coefficients[ZZ] + norder;
 
-        const pme_spline_work* work = pme->spline_work.get();
-
-        const int offset = idxZ & 3;
+        const int   offset  = idxZ & 3;
+        const auto& mask_S0 = pme->spline_work->mask_S0(offset);
+        const auto& mask_S1 = pme->spline_work->mask_S1(offset);
 
         Simd4Real fx_S = setZero();
         Simd4Real fy_S = setZero();
@@ -243,10 +243,10 @@ struct do_fspline
         loadOrderU(thz, order, offset, &tz_S0, &tz_S1);
         loadOrderU(dthz, order, offset, &dz_S0, &dz_S1);
 
-        tz_S0 = selectByMask(tz_S0, work->mask_S0[offset]);
-        dz_S0 = selectByMask(dz_S0, work->mask_S0[offset]);
-        tz_S1 = selectByMask(tz_S1, work->mask_S1[offset]);
-        dz_S1 = selectByMask(dz_S1, work->mask_S1[offset]);
+        tz_S0 = selectByMask(tz_S0, mask_S0);
+        dz_S0 = selectByMask(dz_S0, mask_S0);
+        tz_S1 = selectByMask(tz_S1, mask_S1);
+        dz_S1 = selectByMask(dz_S1, mask_S1);
 
         for (int ithx = 0; (ithx < order); ithx++)
         {

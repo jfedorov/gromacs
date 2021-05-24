@@ -59,8 +59,8 @@ pme_spline_work::pme_spline_work(int gmx_unused order)
     Simd4Real                        real_mask_S0, real_mask_S1;
     int                              of, i;
 
-    gmx::AlignedAllocationPolicy::malloc(sizeof(mask_S0));
-    gmx::AlignedAllocationPolicy::malloc(sizeof(mask_S1));
+    masks_.resize(2 * GMX_SIMD4_WIDTH);
+
     zero_S = setZero();
 
     /* Generate bit masks to mask out the unused grid entries,
@@ -75,8 +75,8 @@ pme_spline_work::pme_spline_work(int gmx_unused order)
         }
         real_mask_S0 = load4(tmp);
         real_mask_S1 = load4(tmp + GMX_SIMD4_WIDTH);
-        mask_S0[of]  = (real_mask_S0 < zero_S);
-        mask_S1[of]  = (real_mask_S1 < zero_S);
+        mask_S0(of)  = (real_mask_S0 < zero_S);
+        mask_S1(of)  = (real_mask_S1 < zero_S);
     }
 #endif
 }

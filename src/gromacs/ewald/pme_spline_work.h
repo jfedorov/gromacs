@@ -36,17 +36,25 @@
 #define GMX_EWALD_PME_SPLINE_WORK_H
 
 #include "gromacs/simd/simd.h"
+#include "gromacs/utility/alignedallocator.h"
 
 #include "pme_simd.h"
 
-struct pme_spline_work
+//! Masks for filtering <=5 points from (aligned) loads of grid data of 8 elements
+class pme_spline_work
 {
+public:
     pme_spline_work(int order);
 
 #ifdef PME_SIMD4_SPREAD_GATHER
-    /* Masks for 4-wide SIMD aligned spreading and gathering */
-    std::array<gmx::Simd4Bool, 6> mask_S0;
-    std::array<gmx::Simd4Bool, 6> mask_S1;
+    //! Returns the SIMD mask for the first half of 8 entries for the given offset
+    gmx::Simd4Bool& mask_S0(int offset) { return masks_[2 * offset]; }
+    //! Returns the SIMD mask for the second half of 8 entries for the given offset
+    gmx::Simd4Bool& mask_S1(int offset) { return masks_[2 * offset + 1]; }
+
+private:
+    //! The aligned storage for the masks
+    std::vector<gmx::Simd4Bool, gmx::AlignedAllocator<gmx::Simd4Bool>> masks_;
 #endif
 };
 
