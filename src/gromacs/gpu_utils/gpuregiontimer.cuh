@@ -109,7 +109,7 @@ public:
      * for passing into individual GPU API calls.
      * This is just a dummy in CUDA.
      */
-    static inline CommandEvent* fetchNextEvent() { return nullptr; }
+    static inline DeviceEvent* fetchNextEvent() { return nullptr; }
 };
 
 //! Short-hand for external use
