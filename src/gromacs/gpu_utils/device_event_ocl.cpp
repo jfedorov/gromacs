@@ -73,18 +73,6 @@ bool DeviceEvent::isValid() const
 }
 
 template<typename T>
-static T getEventInfo(cl_event event, cl_event_info param_name)
-{
-    T      result;
-    cl_int clError = clGetEventInfo(event, param_name, sizeof(T), &result, nullptr);
-    if (clError != CL_SUCCESS)
-    {
-        GMX_THROW(gmx::InternalError("Failed to retrieve event info: " + ocl_get_error_string(clError)));
-    }
-    return result;
-}
-
-template<typename T>
 static T getEventProfilingInfo(cl_event event, cl_profiling_info param_name)
 {
     T      result;
@@ -99,7 +87,13 @@ static T getEventProfilingInfo(cl_event event, cl_profiling_info param_name)
 bool DeviceEvent::isReady() const
 {
     GMX_ASSERT(isValid(), "Event must be valid in order to call .isReady()");
-    auto result = getEventInfo<cl_int>(event_, CL_EVENT_COMMAND_EXECUTION_STATUS);
+    cl_int result;
+    cl_int clError =
+            clGetEventInfo(event_, CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(cl_int), &result, nullptr);
+    if (clError != CL_SUCCESS)
+    {
+        GMX_THROW(gmx::InternalError("Failed to retrieve event info: " + ocl_get_error_string(clError)));
+    }
     return (result == CL_COMPLETE);
 }
 
@@ -114,6 +108,7 @@ void DeviceEvent::wait()
     }
     GMX_ASSERT(isReady(), "Event somehow not ready after clWaitForEvents");
 }
+
 bool DeviceEvent::timingSupported() const
 {
     GMX_ASSERT(isValid(), "Event must be valid in order to call .timingSupported()");
