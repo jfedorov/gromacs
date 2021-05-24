@@ -40,7 +40,12 @@
 
 #include "pme_simd.h"
 
-//! Masks for filtering <=5 points from (aligned) loads of grid data of 8 elements
+/*! \brief Masks for filtering <=5 points from (aligned) loads of grid data of 8 elements
+ *
+ * When unaligned load&stores are not supported, we load aligned 4-wide packs of grid
+ * elements. To spread and gather we then need to mask so we only operate on the
+ * 3, 4 or 5 elements of the stencil.
+ */
 class pme_spline_work
 {
 public:
