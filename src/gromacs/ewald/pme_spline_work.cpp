@@ -59,6 +59,8 @@ pme_spline_work::pme_spline_work(int gmx_unused order)
     Simd4Real                        real_mask_S0, real_mask_S1;
     int                              of, i;
 
+    // We need GMX_SIMD4_WIDTH pairs of masks, one for each of the possible alignments
+    // with a charge grid index with the SIMD4 alignment
     masks_.resize(2 * GMX_SIMD4_WIDTH);
 
     zero_S = setZero();
@@ -73,10 +75,10 @@ pme_spline_work::pme_spline_work(int gmx_unused order)
         {
             tmp[i] = (i >= of && i < of + order ? -1.0 : 1.0);
         }
-        real_mask_S0 = load4(tmp);
-        real_mask_S1 = load4(tmp + GMX_SIMD4_WIDTH);
-        mask_S0(of)  = (real_mask_S0 < zero_S);
-        mask_S1(of)  = (real_mask_S1 < zero_S);
+        real_mask_S0       = load4(tmp);
+        real_mask_S1       = load4(tmp + GMX_SIMD4_WIDTH);
+        masks_[of * 2 + 0] = (real_mask_S0 < zero_S);
+        masks_[of * 2 + 1] = (real_mask_S1 < zero_S);
     }
 #endif
 }

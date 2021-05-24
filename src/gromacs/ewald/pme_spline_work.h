@@ -48,9 +48,9 @@ public:
 
 #ifdef PME_SIMD4_SPREAD_GATHER
     //! Returns the SIMD mask for the first half of 8 entries for the given offset
-    gmx::Simd4Bool& mask_S0(int offset) { return masks_[2 * offset]; }
+    const gmx::Simd4Bool& mask_S0(int offset) const { return masks_[2 * offset]; }
     //! Returns the SIMD mask for the second half of 8 entries for the given offset
-    gmx::Simd4Bool& mask_S1(int offset) { return masks_[2 * offset + 1]; }
+    const gmx::Simd4Bool& mask_S1(int offset) const { return masks_[2 * offset + 1]; }
 
 private:
     //! The aligned storage for the masks
