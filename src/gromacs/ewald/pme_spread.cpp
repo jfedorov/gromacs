@@ -322,10 +322,10 @@ static void make_bsplines(splinevec  theta,
     }
 
 
-static void spread_coefficients_bsplines_thread(const pmegrid_t*       pmegrid,
-                                                const PmeAtomComm*     atc,
-                                                splinedata_t*          spline,
-                                                struct pme_spline_work gmx_unused* work)
+static void spread_coefficients_bsplines_thread(const pmegrid_t*   pmegrid,
+                                                const PmeAtomComm* atc,
+                                                splinedata_t*      spline,
+                                                pme_spline_work gmx_unused* work)
 {
 
     /* spread coefficients from home atoms to local grid */

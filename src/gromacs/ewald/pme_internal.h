@@ -86,8 +86,8 @@ enum class LongRangeVdW : int;
 
 //@{
 /*! \brief Flags that indicate the number of PME grids in use */
-#define DO_Q 2 /* Electrostatic grids have index q<2 */
-#define DO_Q_AND_LJ 4 /* non-LB LJ grids have index 2 <= q < 4 */
+#define DO_Q 2           /* Electrostatic grids have index q<2 */
+#define DO_Q_AND_LJ 4    /* non-LB LJ grids have index 2 <= q < 4 */
 #define DO_Q_AND_LJ_LB 9 /* With LB rules we need a total of 2+7 grids */
 //@}
 
@@ -299,7 +299,7 @@ struct pmegrids_t
 };
 
 /*! \brief Data structure for spline-interpolation working buffers */
-struct pme_spline_work;
+class pme_spline_work;
 
 /*! \brief Data structure for working buffers */
 struct pme_solve_work_t;
