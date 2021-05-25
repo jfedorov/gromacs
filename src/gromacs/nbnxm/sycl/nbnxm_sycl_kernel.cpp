@@ -623,6 +623,16 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
                 return nullptr;
             }
         }();
+        const cl::sycl::global_ptr<Float2> gm_nbfp = [&]() {
+            if constexpr (!props.vdwComb)
+            {
+                return a_nbfp.get_pointer();
+            }
+            else
+            {
+                return nullptr;
+            }
+        }();
         cl::sycl::local_ptr<Float4> sm_xq              = a_sm_xq.get_pointer();
         cl::sycl::local_ptr<float>  sm_reductionBuffer = a_sm_reductionBuffer.get_pointer();
         /* thread/block/warp id-s */
@@ -710,8 +720,8 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
                     if constexpr (props.vdwEwald)
                     {
                         energyVdw +=
-                                a_nbfp[gm_atomTypes[(sci * c_nbnxnGpuNumClusterPerSupercluster + i) * c_clSize + tidxi]
-                                       * (numTypes + 1)][0];
+                                gm_nbfp[gm_atomTypes[(sci * c_nbnxnGpuNumClusterPerSupercluster + i) * c_clSize + tidxi]
+                                        * (numTypes + 1)][0];
                     }
                 }
                 /* divide the self term(s) equally over the j-threads, then multiply with the coefficients. */
@@ -822,7 +832,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
                             {
                                 /* LJ 6*C6 and 12*C12 */
                                 atomTypeI = sm_atomTypeI[i * c_clSize + tidxi];
-                                c6c12     = a_nbfp[numTypes * atomTypeI + atomTypeJ];
+                                c6c12     = gm_nbfp[numTypes * atomTypeI + atomTypeJ];
                             }
                             else
                             {
