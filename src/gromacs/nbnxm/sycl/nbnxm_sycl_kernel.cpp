@@ -550,8 +550,8 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
     }
 
     // shmem buffer for i x+q pre-loading
-    cl::sycl::accessor<Float4, 2, mode::read_write, target::local> sm_xq(
-            cl::sycl::range<2>(c_nbnxnGpuNumClusterPerSupercluster, c_clSize), cgh);
+    cl::sycl::accessor<Float4, 1, mode::read_write, target::local> sm_xq(
+            cl::sycl::range<1>(c_nbnxnGpuNumClusterPerSupercluster * c_clSize), cgh);
 
     // shmem buffer for force reduction
     // SYCL-TODO: Make into 3D; section 4.7.6.11 of SYCL2020 specs
@@ -561,8 +561,8 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
     auto sm_atomTypeI = [&]() {
         if constexpr (!props.vdwComb)
         {
-            return cl::sycl::accessor<int, 2, mode::read_write, target::local>(
-                    cl::sycl::range<2>(c_nbnxnGpuNumClusterPerSupercluster, c_clSize), cgh);
+            return cl::sycl::accessor<int, 1, mode::read_write, target::local>(
+                    cl::sycl::range<1>(c_nbnxnGpuNumClusterPerSupercluster * c_clSize), cgh);
         }
         else
         {
@@ -573,8 +573,8 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
     auto sm_ljCombI = [&]() {
         if constexpr (props.vdwComb)
         {
-            return cl::sycl::accessor<Float2, 2, mode::read_write, target::local>(
-                    cl::sycl::range<2>(c_nbnxnGpuNumClusterPerSupercluster, c_clSize), cgh);
+            return cl::sycl::accessor<Float2, 1, mode::read_write, target::local>(
+                    cl::sycl::range<1>(c_nbnxnGpuNumClusterPerSupercluster * c_clSize), cgh);
         }
         else
         {
@@ -634,9 +634,9 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
         for (int i = 0; i < c_nbnxnGpuNumClusterPerSupercluster; i += c_clSize)
         {
             /* Pre-load i-atom x and q into shared memory */
-            const int             ci       = sci * c_nbnxnGpuNumClusterPerSupercluster + tidxj + i;
-            const int             ai       = ci * c_clSize + tidxi;
-            const cl::sycl::id<2> cacheIdx = cl::sycl::id<2>(tidxj + i, tidxi);
+            const int    ci       = sci * c_nbnxnGpuNumClusterPerSupercluster + tidxj + i;
+            const int    ai       = ci * c_clSize + tidxi;
+            const size_t cacheIdx = (tidxj + i) * c_clSize + tidxi;
 
             const Float3 shift = a_shiftVec[nbSci.shift];
             Float4       xqi   = a_xq[ai];
@@ -680,7 +680,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
                     // TODO: Are there other options?
                     if constexpr (props.elecEwald || props.elecRF || props.elecCutoff)
                     {
-                        const float qi = sm_xq[i][tidxi][3];
+                        const float qi = sm_xq[i * c_clSize + tidxi][3];
                         energyElec += qi * qi;
                     }
                     if constexpr (props.vdwEwald)
@@ -762,7 +762,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
                         // i cluster index
                         const int ci = sci * c_nbnxnGpuNumClusterPerSupercluster + i;
                         // all threads load an atom from i cluster ci into shmem!
-                        const Float4 xqi = sm_xq[i][tidxi];
+                        const Float4 xqi = sm_xq[i * c_clSize + tidxi];
                         const Float3 xi(xqi[0], xqi[1], xqi[2]);
 
                         // distance between i and j atoms
@@ -797,12 +797,12 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
                             if constexpr (!props.vdwComb)
                             {
                                 /* LJ 6*C6 and 12*C12 */
-                                atomTypeI = sm_atomTypeI[i][tidxi];
+                                atomTypeI = sm_atomTypeI[i * c_clSize + tidxi];
                                 c6c12     = a_nbfp[numTypes * atomTypeI + atomTypeJ];
                             }
                             else
                             {
-                                const Float2 ljCombI = sm_ljCombI[i][tidxi];
+                                const Float2 ljCombI = sm_ljCombI[i * c_clSize + tidxi];
                                 if constexpr (props.vdwCombGeom)
                                 {
                                     c6c12 = Float2(ljCombI[0] * ljCombJ[0], ljCombI[1] * ljCombJ[1]);
