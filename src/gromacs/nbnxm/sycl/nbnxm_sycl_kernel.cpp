@@ -406,7 +406,7 @@ static inline void reduceForceJ(cl::sycl::accessor<float, 1, mode::read_write, t
  *
  * This implementation works only with power of two array sizes.
  */
-static inline void reduceForceIAndFShift(cl::sycl::accessor<float, 1, mode::read_write, target::local> sm_buf,
+static inline void reduceForceIAndFShift(cl::sycl::local_ptr<float> sm_buf,
                                          const Float3 fCiBuf[c_nbnxnGpuNumClusterPerSupercluster],
                                          const bool   calcFShift,
                                          const cl::sycl::nd_item<1>         itemIdx,
@@ -550,12 +550,12 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
     }
 
     // shmem buffer for i x+q pre-loading
-    cl::sycl::accessor<Float4, 1, mode::read_write, target::local> sm_xq(
+    cl::sycl::accessor<Float4, 1, mode::read_write, target::local> a_sm_xq(
             cl::sycl::range<1>(c_nbnxnGpuNumClusterPerSupercluster * c_clSize), cgh);
 
     // shmem buffer for force reduction
     // SYCL-TODO: Make into 3D; section 4.7.6.11 of SYCL2020 specs
-    cl::sycl::accessor<float, 1, mode::read_write, target::local> sm_reductionBuffer(
+    cl::sycl::accessor<float, 1, mode::read_write, target::local> a_sm_reductionBuffer(
             cl::sycl::range<1>(c_clSize * c_clSize * DIM), cgh);
 
     auto sm_atomTypeI = [&]() {
@@ -601,8 +601,10 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
 
     return [=](cl::sycl::nd_item<1> itemIdx) [[intel::reqd_sub_group_size(subGroupSize)]]
     {
-        const cl::sycl::global_ptr<Float4> gm_xq       = a_xq.get_pointer();
-        cl::sycl::global_ptr<nbnxn_cj4_t>  gm_plistCJ4 = a_plistCJ4.get_pointer();
+        const cl::sycl::global_ptr<Float4> gm_xq              = a_xq.get_pointer();
+        cl::sycl::global_ptr<nbnxn_cj4_t>  gm_plistCJ4        = a_plistCJ4.get_pointer();
+        cl::sycl::local_ptr<Float4>        sm_xq              = a_sm_xq.get_pointer();
+        cl::sycl::local_ptr<float>         sm_reductionBuffer = a_sm_reductionBuffer.get_pointer();
         /* thread/block/warp id-s */
         const cl::sycl::id<3> localId = unflattenId<c_clSize, c_clSize>(itemIdx.get_local_id());
         const unsigned        tidxi   = localId[0];
