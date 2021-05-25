@@ -601,9 +601,11 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
 
     return [=](cl::sycl::nd_item<1> itemIdx) [[intel::reqd_sub_group_size(subGroupSize)]]
     {
-        const cl::sycl::global_ptr<Float4> gm_xq       = a_xq.get_pointer();
-        cl::sycl::global_ptr<nbnxn_cj4_t>  gm_plistCJ4 = a_plistCJ4.get_pointer();
-        const cl::sycl::global_ptr<Float2> gm_ljComb   = [&]() {
+        const cl::sycl::global_ptr<Float4>       gm_xq        = a_xq.get_pointer();
+        cl::sycl::global_ptr<nbnxn_cj4_t>        gm_plistCJ4  = a_plistCJ4.get_pointer();
+        const cl::sycl::global_ptr<nbnxn_sci_t>  gm_plistSci  = a_plistSci.get_pointer();
+        const cl::sycl::global_ptr<nbnxn_excl_t> gm_plistExcl = a_plistExcl.get_pointer();
+        const cl::sycl::global_ptr<Float2>       gm_ljComb    = [&]() {
             if constexpr (props.vdwComb)
             {
                 return a_ljComb.get_pointer();
@@ -666,7 +668,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
             fCiBuf[i] = Float3(0.0F, 0.0F, 0.0F);
         }
 
-        const nbnxn_sci_t nbSci     = a_plistSci[bidx];
+        const nbnxn_sci_t nbSci     = gm_plistSci[bidx];
         const int         sci       = nbSci.sci;
         const int         cij4Start = nbSci.cj4_ind_start;
         const int         cij4End   = nbSci.cj4_ind_end;
@@ -768,7 +770,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
             }
             const int wexclIdx = gm_plistCJ4[j4].imei[imeiIdx].excl_ind;
             static_assert(gmx::isPowerOfTwo(prunedClusterPairSize));
-            const unsigned wexcl = a_plistExcl[wexclIdx].pair[tidx & (prunedClusterPairSize - 1)];
+            const unsigned wexcl = gm_plistExcl[wexclIdx].pair[tidx & (prunedClusterPairSize - 1)];
             for (int jm = 0; jm < c_nbnxnGpuJgroupSize; jm++)
             {
                 const bool maskSet =
@@ -1015,7 +1017,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
             {
                 /* Update the imask with the new one which does not contain the
                  * out of range clusters anymore. */
-                a_plistCJ4[j4].imei[imeiIdx].imask = imask;
+                gm_plistCJ4[j4].imei[imeiIdx].imask = imask;
             }
         } // for (int j4 = cij4Start; j4 < cij4End; j4 += 1)
 
