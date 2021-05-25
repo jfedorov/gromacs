@@ -146,9 +146,9 @@ static inline void ljForceSwitch(const shift_consts_t         dispersionShift,
 
 //! \brief Fetch C6 grid contribution coefficients and return the product of these.
 template<enum VdwType vdwType>
-static inline float calculateLJEwaldC6Grid(const DeviceAccessor<Float2, mode::read> a_nbfpComb,
-                                           const int                                typeI,
-                                           const int                                typeJ)
+static inline float calculateLJEwaldC6Grid(const cl::sycl::global_ptr<Float2> a_nbfpComb,
+                                           const int                          typeI,
+                                           const int                          typeJ)
 {
     if constexpr (vdwType == VdwType::EwaldGeom)
     {
@@ -171,17 +171,17 @@ static inline float calculateLJEwaldC6Grid(const DeviceAccessor<Float2, mode::re
 
 //! Calculate LJ-PME grid force contribution with geometric or LB combination rule.
 template<bool doCalcEnergies, enum VdwType vdwType>
-static inline void ljEwaldComb(const DeviceAccessor<Float2, mode::read> a_nbfpComb,
-                               const float                              sh_lj_ewald,
-                               const int                                typeI,
-                               const int                                typeJ,
-                               const float                              r2,
-                               const float                              r2Inv,
-                               const float                              lje_coeff2,
-                               const float                              lje_coeff6_6,
-                               const float                              int_bit,
-                               cl::sycl::private_ptr<float>             fInvR,
-                               cl::sycl::private_ptr<float>             eLJ)
+static inline void ljEwaldComb(const cl::sycl::global_ptr<Float2> a_nbfpComb,
+                               const float                        sh_lj_ewald,
+                               const int                          typeI,
+                               const int                          typeJ,
+                               const float                        r2,
+                               const float                        r2Inv,
+                               const float                        lje_coeff2,
+                               const float                        lje_coeff6_6,
+                               const float                        int_bit,
+                               cl::sycl::private_ptr<float>       fInvR,
+                               cl::sycl::private_ptr<float>       eLJ)
 {
     const float c6grid = calculateLJEwaldC6Grid<vdwType>(a_nbfpComb, typeI, typeJ);
 
@@ -633,6 +633,16 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
                 return nullptr;
             }
         }();
+        const cl::sycl::global_ptr<Float2> gm_nbfpComb = [&]() {
+            if constexpr (props.vdwEwald)
+            {
+                return a_nbfpComb.get_pointer();
+            }
+            else
+            {
+                return nullptr;
+            }
+        }();
         cl::sycl::local_ptr<Float4> sm_xq              = a_sm_xq.get_pointer();
         cl::sycl::local_ptr<float>  sm_reductionBuffer = a_sm_reductionBuffer.get_pointer();
         /* thread/block/warp id-s */
@@ -905,7 +915,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
                             }
                             if constexpr (props.vdwEwald)
                             {
-                                ljEwaldComb<doCalcEnergies, vdwType>(a_nbfpComb,
+                                ljEwaldComb<doCalcEnergies, vdwType>(gm_nbfpComb,
                                                                      ljEwaldShift,
                                                                      atomTypeI,
                                                                      atomTypeJ,
