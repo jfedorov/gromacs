@@ -601,6 +601,8 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
 
     return [=](cl::sycl::nd_item<1> itemIdx) [[intel::reqd_sub_group_size(subGroupSize)]]
     {
+        const cl::sycl::global_ptr<Float4> gm_xq       = a_xq.get_pointer();
+        cl::sycl::global_ptr<nbnxn_cj4_t>  gm_plistCJ4 = a_plistCJ4.get_pointer();
         /* thread/block/warp id-s */
         const cl::sycl::id<3> localId = unflattenId<c_clSize, c_clSize>(itemIdx.get_local_id());
         const unsigned        tidxi   = localId[0];
@@ -639,7 +641,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
             const size_t cacheIdx = (tidxj + i) * c_clSize + tidxi;
 
             const Float3 shift = a_shiftVec[nbSci.shift];
-            Float4       xqi   = a_xq[ai];
+            Float4       xqi   = gm_xq[ai];
             xqi += Float4(shift[0], shift[1], shift[2], 0.0F);
             xqi[3] *= epsFac;
             sm_xq[cacheIdx] = xqi;
@@ -672,7 +674,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
         if constexpr (doCalcEnergies && doExclusionForces)
         {
             if (nbSci.shift == gmx::c_centralShiftIndex
-                && a_plistCJ4[cij4Start].cj[0] == sci * c_nbnxnGpuNumClusterPerSupercluster)
+                && gm_plistCJ4[cij4Start].cj[0] == sci * c_nbnxnGpuNumClusterPerSupercluster)
             {
                 // we have the diagonal: add the charge and LJ self interaction energy term
                 for (int i = 0; i < c_nbnxnGpuNumClusterPerSupercluster; i++)
@@ -708,7 +710,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
                     energyElec /= epsFac * c_clSize;
                     energyElec *= -ewaldBeta * c_OneOverSqrtPi; /* last factor 1/sqrt(pi) */
                 }
-            } // (nbSci.shift == gmx::c_centralShiftIndex && a_plistCJ4[cij4Start].cj[0] == sci * c_nbnxnGpuNumClusterPerSupercluster)
+            } // (nbSci.shift == gmx::c_centralShiftIndex && gm_plistCJ4[cij4Start].cj[0] == sci * c_nbnxnGpuNumClusterPerSupercluster)
         }     // (doCalcEnergies && doExclusionForces)
 
         // Only needed if (doExclusionForces)
@@ -717,12 +719,12 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
         // loop over the j clusters = seen by any of the atoms in the current super-cluster
         for (int j4 = cij4Start + tidxz; j4 < cij4End; j4 += 1)
         {
-            unsigned imask = a_plistCJ4[j4].imei[imeiIdx].imask;
+            unsigned imask = gm_plistCJ4[j4].imei[imeiIdx].imask;
             if (!doPruneNBL && !imask)
             {
                 continue;
             }
-            const int wexclIdx = a_plistCJ4[j4].imei[imeiIdx].excl_ind;
+            const int wexclIdx = gm_plistCJ4[j4].imei[imeiIdx].excl_ind;
             static_assert(gmx::isPowerOfTwo(prunedClusterPairSize));
             const unsigned wexcl = a_plistExcl[wexclIdx].pair[tidx & (prunedClusterPairSize - 1)];
             for (int jm = 0; jm < c_nbnxnGpuJgroupSize; jm++)
@@ -734,11 +736,11 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
                     continue;
                 }
                 unsigned  maskJI = (1U << (jm * c_nbnxnGpuNumClusterPerSupercluster));
-                const int cj     = a_plistCJ4[j4].cj[jm];
+                const int cj     = gm_plistCJ4[j4].cj[jm];
                 const int aj     = cj * c_clSize + tidxj;
 
                 // load j atom data
-                const Float4 xqj = a_xq[aj];
+                const Float4 xqj = gm_xq[aj];
 
                 const Float3 xj(xqj[0], xqj[1], xqj[2]);
                 const float  qj = xqj[3];
