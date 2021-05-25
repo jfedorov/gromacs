@@ -601,10 +601,30 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
 
     return [=](cl::sycl::nd_item<1> itemIdx) [[intel::reqd_sub_group_size(subGroupSize)]]
     {
-        const cl::sycl::global_ptr<Float4> gm_xq              = a_xq.get_pointer();
-        cl::sycl::global_ptr<nbnxn_cj4_t>  gm_plistCJ4        = a_plistCJ4.get_pointer();
-        cl::sycl::local_ptr<Float4>        sm_xq              = a_sm_xq.get_pointer();
-        cl::sycl::local_ptr<float>         sm_reductionBuffer = a_sm_reductionBuffer.get_pointer();
+        const cl::sycl::global_ptr<Float4> gm_xq       = a_xq.get_pointer();
+        cl::sycl::global_ptr<nbnxn_cj4_t>  gm_plistCJ4 = a_plistCJ4.get_pointer();
+        const cl::sycl::global_ptr<Float2> gm_ljComb   = [&]() {
+            if constexpr (props.vdwComb)
+            {
+                return a_ljComb.get_pointer();
+            }
+            else
+            {
+                return nullptr;
+            }
+        }();
+        const cl::sycl::global_ptr<int> gm_atomTypes = [&]() {
+            if constexpr (!props.vdwComb)
+            {
+                return a_atomTypes.get_pointer();
+            }
+            else
+            {
+                return nullptr;
+            }
+        }();
+        cl::sycl::local_ptr<Float4> sm_xq              = a_sm_xq.get_pointer();
+        cl::sycl::local_ptr<float>  sm_reductionBuffer = a_sm_reductionBuffer.get_pointer();
         /* thread/block/warp id-s */
         const cl::sycl::id<3> localId = unflattenId<c_clSize, c_clSize>(itemIdx.get_local_id());
         const unsigned        tidxi   = localId[0];
@@ -651,12 +671,12 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
             if constexpr (!props.vdwComb)
             {
                 // Pre-load the i-atom types into shared memory
-                sm_atomTypeI[cacheIdx] = a_atomTypes[ai];
+                sm_atomTypeI[cacheIdx] = gm_atomTypes[ai];
             }
             else
             {
                 // Pre-load the LJ combination parameters into shared memory
-                sm_ljCombI[cacheIdx] = a_ljComb[ai];
+                sm_ljCombI[cacheIdx] = gm_ljComb[ai];
             }
         }
         itemIdx.barrier(fence_space::local_space);
@@ -690,7 +710,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
                     if constexpr (props.vdwEwald)
                     {
                         energyVdw +=
-                                a_nbfp[a_atomTypes[(sci * c_nbnxnGpuNumClusterPerSupercluster + i) * c_clSize + tidxi]
+                                a_nbfp[gm_atomTypes[(sci * c_nbnxnGpuNumClusterPerSupercluster + i) * c_clSize + tidxi]
                                        * (numTypes + 1)][0];
                     }
                 }
@@ -750,11 +770,11 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
                 Float2       ljCombJ;   // Only needed if (props.vdwComb)
                 if constexpr (props.vdwComb)
                 {
-                    ljCombJ = a_ljComb[aj];
+                    ljCombJ = gm_ljComb[aj];
                 }
                 else
                 {
-                    atomTypeJ = a_atomTypes[aj];
+                    atomTypeJ = gm_atomTypes[aj];
                 }
 
                 Float3 fCjBuf(0.0F, 0.0F, 0.0F);
