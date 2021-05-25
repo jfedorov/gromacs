@@ -68,7 +68,6 @@
 #include "gromacs/mdlib/leapfrog_gpu.h"
 #include "gromacs/mdlib/update_constrain_gpu.h"
 #include "gromacs/mdlib/update_constrain_gpu_internal.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/timing/wallcycle.h"
 #include "gromacs/topology/mtop_util.h"
 
@@ -177,12 +176,12 @@ UpdateConstrainGpu::Impl::Impl(const t_inputrec&     ir,
 
 UpdateConstrainGpu::Impl::~Impl() {}
 
-void UpdateConstrainGpu::Impl::set(DeviceBuffer<Float3>          d_x,
-                                   DeviceBuffer<Float3>          d_v,
-                                   const DeviceBuffer<Float3>    d_f,
-                                   const InteractionDefinitions& idef,
-                                   int numAtoms,
-                                   ArrayRef<const real> invMass,
+void UpdateConstrainGpu::Impl::set(DeviceBuffer<Float3>           d_x,
+                                   DeviceBuffer<Float3>           d_v,
+                                   const DeviceBuffer<Float3>     d_f,
+                                   const InteractionDefinitions&  idef,
+                                   int                            numAtoms,
+                                   ArrayRef<const real>           invMass,
                                    ArrayRef<const unsigned short> cTC)
 {
     wallcycle_start_nocount(wcycle_, WallCycleCounter::LaunchGpu);
@@ -277,12 +276,12 @@ void UpdateConstrainGpu::scaleVelocities(const matrix scalingMatrix)
     impl_->scaleVelocities(scalingMatrix);
 }
 
-void UpdateConstrainGpu::set(DeviceBuffer<RVec> d_x,
-                             DeviceBuffer<RVec> d_v,
-                             const DeviceBuffer<RVec> d_f,
-                             const InteractionDefinitions& idef,
-                             int numAtoms,
-                             ArrayRef<const real> invMass,
+void UpdateConstrainGpu::set(DeviceBuffer<RVec>             d_x,
+                             DeviceBuffer<RVec>             d_v,
+                             const DeviceBuffer<RVec>       d_f,
+                             const InteractionDefinitions&  idef,
+                             int                            numAtoms,
+                             ArrayRef<const real>           invMass,
                              ArrayRef<const unsigned short> cTC)
 {
     impl_->set(d_x, d_v, d_f, idef, numAtoms, invMass, cTC);

@@ -47,7 +47,6 @@
 
 #include <gtest/gtest.h>
 
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/utility/arrayref.h"
 
 namespace gmx
@@ -59,7 +58,6 @@ protected:
     int               numberOfAtoms_ = 3;
     std::vector<real> masses_        = { 2, 3, 4 };
     std::vector<real> charges_       = { 20, 30, 40 };
-    t_mdatoms         atoms_         = {};
     std::vector<int>  lookupIndices_ = { 1, 2 };
 };
 

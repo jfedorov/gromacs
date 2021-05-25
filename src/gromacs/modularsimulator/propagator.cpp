@@ -50,7 +50,6 @@
 #include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/update.h"
 #include "gromacs/mdtypes/inputrec.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/timing/wallcycle.h"
 #include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/fatalerror.h"
@@ -274,7 +273,7 @@ void Propagator<IntegrationStage::VelocitiesOnly>::run()
 
     auto*       v = as_rvec_array(statePropagatorData_->velocitiesView().paddedArrayRef().data());
     const auto* f = as_rvec_array(statePropagatorData_->constForcesView().force().data());
-    auto  invMassPerDim = mdAtoms_.invMassPerDim();
+    auto        invMassPerDim = mdAtoms_.invMassPerDim();
 
     const real lambdaStart = (numStartVelocityScalingValues == NumVelocityScalingValues::Single)
                                      ? startVelocityScaling_[0]
@@ -358,7 +357,7 @@ void Propagator<IntegrationStage::LeapFrog>::run()
     const auto* x = as_rvec_array(statePropagatorData_->constPositionsView().paddedArrayRef().data());
     auto*       v = as_rvec_array(statePropagatorData_->velocitiesView().paddedArrayRef().data());
     const auto* f = as_rvec_array(statePropagatorData_->constForcesView().force().data());
-    auto invMassPerDim = mdAtoms_.invMassPerDim();
+    auto        invMassPerDim = mdAtoms_.invMassPerDim();
 
     const real lambdaStart = (numStartVelocityScalingValues == NumVelocityScalingValues::Single)
                                      ? startVelocityScaling_[0]
@@ -444,7 +443,7 @@ void Propagator<IntegrationStage::VelocityVerletPositionsAndVelocities>::run()
     const auto* x = as_rvec_array(statePropagatorData_->constPositionsView().paddedArrayRef().data());
     auto*       v = as_rvec_array(statePropagatorData_->velocitiesView().paddedArrayRef().data());
     const auto* f = as_rvec_array(statePropagatorData_->constForcesView().force().data());
-    auto invMassPerDim = mdAtoms_.invMassPerDim();
+    auto        invMassPerDim = mdAtoms_.invMassPerDim();
 
     const real lambdaStart = (numStartVelocityScalingValues == NumVelocityScalingValues::Single)
                                      ? startVelocityScaling_[0]

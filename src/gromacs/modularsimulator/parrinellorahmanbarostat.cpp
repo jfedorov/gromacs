@@ -167,7 +167,7 @@ void ParrinelloRahmanBarostat::scaleBoxAndPositions()
     // Scale the coordinates
     const int start  = 0;
     const int homenr = mdAtoms_.homenr();
-    auto      x      = as_rvec_array(statePropagatorData_->positionsView().paddedArrayRef().data());
+    auto*     x      = as_rvec_array(statePropagatorData_->positionsView().paddedArrayRef().data());
     for (int n = start; n < start + homenr; n++)
     {
         tmvmul_ur0(mu_, x[n], x[n]);

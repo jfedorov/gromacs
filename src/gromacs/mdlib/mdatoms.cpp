@@ -51,7 +51,6 @@
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/md_enums.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/topology/mtop_lookup.h"
 #include "gromacs/topology/mtop_util.h"
 #include "gromacs/topology/topology.h"
@@ -68,6 +67,10 @@ namespace gmx
 class MDAtoms::Impl
 {
 public:
+    //! Memory for chargeA that can be set up for efficient GPU transfer.
+    PaddedHostVector<real> chargeA;
+    //! Memory for chargeB that can be set up for efficient GPU transfer.
+    PaddedHostVector<real> chargeB;
     //! Size of current allocation.
     size_t size() const;
     //! Total mass in state A
@@ -103,13 +106,9 @@ public:
     //! Atomic mass in present state
     std::vector<real> massT;
     //! Inverse atomic mass per atom, 0 for vsites and shells
-    gmx::PaddedVector<real, gmx::Allocator<real, gmx::AlignedAllocationPolicy>> invmass;
+    PaddedVector<real, Allocator<real, AlignedAllocationPolicy>> invmass;
     //! Inverse atomic mass per atom and dimension, 0 for vsites, shells and frozen dimensions
     std::vector<RVec> invMassPerDim;
-    //! Atomic charge in A state
-    gmx::ArrayRef<real> chargeA;
-    //! Atomic charge in B state
-    gmx::ArrayRef<real> chargeB;
     //! Dispersion constant C6 in A state
     std::vector<real> sqrt_c6A;
     //! Dispersion constant C6 in A state
@@ -146,7 +145,7 @@ public:
     std::vector<unsigned short> cU2;
     //! Group index for orientation restraints
     std::vector<unsigned short> cORF;
-    //! Number of atoms on this processor. TODO is this still used?
+    //! Number of atoms on this processor.
     int homenr = 0;
     //! The lambda value used to create the contents of the struct
     real lambda = 0.0;
@@ -154,39 +153,26 @@ public:
 
 size_t MDAtoms::Impl::size() const
 {
-    if (nMassPerturbed != 0)
-    {
-        GMX_ASSERT(massA.size() == massB.size(), "Size of allocations must match");
-        GMX_ASSERT(massA.size() == massT.size(), "Size of allocations must match");
-    }
-    return massT.size();
+    return nr;
 }
 
-MDAtoms::MDAtoms() : impl_(new Impl) {}
+MDAtoms::MDAtoms() : impl_(std::make_unique<MDAtoms::Impl>()) {}
 
 MDAtoms::~MDAtoms() {}
 
 void MDAtoms::resizeChargeA(int newSize)
 {
-    chargeA_.resizeWithPadding(newSize);
-    impl_->chargeA = chargeA_;
+    impl_->chargeA.resizeWithPadding(newSize);
 }
 
 void MDAtoms::resizeChargeB(const int newSize)
 {
-    chargeB_.resizeWithPadding(newSize);
-    impl_->chargeB = chargeB_;
+    impl_->chargeB.resizeWithPadding(newSize);
 }
 
-void MDAtoms::reserveChargeA(const int newCapacity)
+int MDAtoms::size() const
 {
-    chargeA_.reserveWithPadding(newCapacity);
-    impl_->chargeA = chargeA_;
-}
-
-int MDAtoms::nr() const
-{
-    return impl_->nr;
+    return impl_->size();
 }
 
 int MDAtoms::homenr() const
@@ -254,67 +240,67 @@ bool MDAtoms::havePartiallyFrozenAtoms() const
     return impl_->havePartiallyFrozenAtoms;
 }
 
-gmx::ArrayRef<const real> MDAtoms::massA() const
+ArrayRef<const real> MDAtoms::massA() const
 {
     return impl_->massA;
 }
 
-gmx::ArrayRef<const real> MDAtoms::massB() const
+ArrayRef<const real> MDAtoms::massB() const
 {
     return impl_->massB;
 }
 
-gmx::ArrayRef<const real> MDAtoms::massT() const
+ArrayRef<const real> MDAtoms::massT() const
 {
     return impl_->massT;
 }
 
-gmx::ArrayRefWithPadding<const real> MDAtoms::invmass() const
+ArrayRefWithPadding<const real> MDAtoms::invmass() const
 {
     return impl_->invmass;
 }
 
-gmx::ArrayRef<const RVec> MDAtoms::invMassPerDim() const
+ArrayRef<const RVec> MDAtoms::invMassPerDim() const
 {
     return impl_->invMassPerDim;
 }
 
-gmx::ArrayRef<const real> MDAtoms::chargeA() const
+ArrayRef<const real> MDAtoms::chargeA() const
 {
-    return impl_->chargeA;
+    return impl_->chargeA.constArrayRefWithPadding().paddedConstArrayRef();
 }
 
-gmx::ArrayRef<const real> MDAtoms::chargeB() const
+ArrayRef<const real> MDAtoms::chargeB() const
 {
-    return impl_->chargeB;
+    return impl_->chargeB.constArrayRefWithPadding().paddedConstArrayRef();
 }
 
-gmx::ArrayRef<const real> MDAtoms::sqrt_c6A() const
+ArrayRef<const real> MDAtoms::sqrt_c6A() const
 {
     return impl_->sqrt_c6A;
 }
 
-gmx::ArrayRef<const real> MDAtoms::sqrt_c6B() const
+ArrayRef<const real> MDAtoms::sqrt_c6B() const
 {
     return impl_->sqrt_c6B;
 }
 
-gmx::ArrayRef<const real> MDAtoms::sigmaA() const
+ArrayRef<const real> MDAtoms::sigmaA() const
 {
     return impl_->sigmaA;
 }
 
-gmx::ArrayRef<const real> MDAtoms::sigmaB() const
+ArrayRef<const real> MDAtoms::sigmaB() const
 {
     return impl_->sigmaB;
 }
 
-gmx::ArrayRef<const real> MDAtoms::sigma3A() const
+ArrayRef<const real> MDAtoms::sigma3A() const
 {
     return impl_->sigma3A;
 }
 
-gmx::ArrayRef<const real> MDAtoms::sigma3B() const
+ArrayRef<const real> MDAtoms::sigma3B() const
 {
 
     return impl_->sigma3B;
@@ -325,57 +311,57 @@ const std::vector<bool>& MDAtoms::bPerturbed() const
     return impl_->bPerturbed;
 }
 
-gmx::ArrayRef<const int> MDAtoms::typeA() const
+ArrayRef<const int> MDAtoms::typeA() const
 {
     return impl_->typeA;
 }
 
-gmx::ArrayRef<const int> MDAtoms::typeB() const
+ArrayRef<const int> MDAtoms::typeB() const
 {
     return impl_->typeB;
 }
 
-gmx::ArrayRef<const ParticleType> MDAtoms::ptype() const
+ArrayRef<const ParticleType> MDAtoms::ptype() const
 {
     return impl_->ptype;
 }
 
-gmx::ArrayRef<const unsigned short> MDAtoms::cTC() const
+ArrayRef<const unsigned short> MDAtoms::cTC() const
 {
     return impl_->cTC;
 }
 
-gmx::ArrayRef<const unsigned short> MDAtoms::cENER() const
+ArrayRef<const unsigned short> MDAtoms::cENER() const
 {
     return impl_->cENER;
 }
 
-gmx::ArrayRef<const unsigned short> MDAtoms::cACC() const
+ArrayRef<const unsigned short> MDAtoms::cACC() const
 {
     return impl_->cACC;
 }
 
-gmx::ArrayRef<const unsigned short> MDAtoms::cFREEZE() const
+ArrayRef<const unsigned short> MDAtoms::cFREEZE() const
 {
     return impl_->cFREEZE;
 }
 
-gmx::ArrayRef<const unsigned short> MDAtoms::cVCM() const
+ArrayRef<const unsigned short> MDAtoms::cVCM() const
 {
     return impl_->cVCM;
 }
 
-gmx::ArrayRef<const unsigned short> MDAtoms::cU1() const
+ArrayRef<const unsigned short> MDAtoms::cU1() const
 {
     return impl_->cU1;
 }
 
-gmx::ArrayRef<const unsigned short> MDAtoms::cU2() const
+ArrayRef<const unsigned short> MDAtoms::cU2() const
 {
     return impl_->cU2;
 }
 
-gmx::ArrayRef<const unsigned short> MDAtoms::cORF() const
+ArrayRef<const unsigned short> MDAtoms::cORF() const
 {
     return impl_->cORF;
 }
@@ -388,8 +374,8 @@ std::unique_ptr<MDAtoms> makeMDAtoms(FILE* fp, const gmx_mtop_t& mtop, const t_i
     // GPU transfers may want to use a suitable pinning mode.
     if (rankHasPmeGpuTask)
     {
-        changePinningPolicy(&mdAtoms->chargeA_, pme_get_pinning_policy());
-        changePinningPolicy(&mdAtoms->chargeB_, pme_get_pinning_policy());
+        changePinningPolicy(&mdAtoms->impl_->chargeA, pme_get_pinning_policy());
+        changePinningPolicy(&mdAtoms->impl_->chargeB, pme_get_pinning_policy());
     }
     mdAtoms->impl_->nenergrp = mtop.groups.groups[SimulationAtomGroupType::EnergyOutput].size();
     for (int i = 0; i < mtop.natoms && !mdAtoms->impl_->bVCMgrps; i++)
@@ -457,11 +443,11 @@ std::unique_ptr<MDAtoms> makeMDAtoms(FILE* fp, const gmx_mtop_t& mtop, const t_i
     return mdAtoms;
 }
 
-void MDAtoms::reinitialize(const gmx_mtop_t&        mtop,
-                           const t_inputrec&        inputrec,
-                           int                      nindex,
-                           gmx::ArrayRef<const int> index,
-                           int                      homenr)
+void MDAtoms::reinitialize(const gmx_mtop_t&   mtop,
+                           const t_inputrec&   inputrec,
+                           int                 nindex,
+                           ArrayRef<const int> index,
+                           int                 homenr)
 {
     int nthreads gmx_unused;
 
@@ -496,11 +482,6 @@ void MDAtoms::reinitialize(const gmx_mtop_t&        mtop,
          */
         impl_->invmass.resizeWithPadding(newAllocationSize);
         impl_->invMassPerDim.resize(newAllocationSize);
-        // TODO eventually we will have vectors and just resize
-        // everything, but for now the semantics of md->nalloc being
-        // the capacity are preserved by keeping vectors within
-        // mdAtoms having the same properties as the other arrays.
-        reserveChargeA(newAllocationSize);
         resizeChargeA(newAllocationSize);
         impl_->typeA.resize(newAllocationSize);
         if (havePerturbed())

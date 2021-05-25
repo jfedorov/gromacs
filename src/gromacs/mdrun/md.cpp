@@ -363,8 +363,8 @@ void gmx::LegacySimulator::do_md()
 
     ForceBuffers f(fr->useMts,
                    ((useGpuForNonbonded && useGpuForBufferOps) || useGpuForUpdate)
-                               ? PinningPolicy::PinnedIfSupported
-                               : PinningPolicy::CannotBePinned);
+                           ? PinningPolicy::PinnedIfSupported
+                           : PinningPolicy::CannotBePinned);
     if (DOMAINDECOMP(cr))
     {
         stateInstance = std::make_unique<t_state>();
@@ -572,7 +572,7 @@ void gmx::LegacySimulator::do_md()
             do_constrain_first(fplog,
                                constr,
                                ir,
-                               mdAtoms->nr(),
+                               mdAtoms->size(),
                                mdAtoms->homenr(),
                                state->x.arrayRefWithPadding(),
                                state->v.arrayRefWithPadding(),

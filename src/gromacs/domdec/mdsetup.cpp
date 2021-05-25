@@ -117,7 +117,7 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
 
     if (vsite)
     {
-        vsite->setVirtualSites(top->idef.il, mdAtoms->nr(), mdAtoms->homenr(), mdAtoms->ptype());
+        vsite->setVirtualSites(top->idef.il, mdAtoms->size(), mdAtoms->homenr(), mdAtoms->ptype());
     }
 
     /* Note that with DD only flexible constraints, not shells, are supported
@@ -148,7 +148,7 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
     if (constr)
     {
         constr->setConstraints(top,
-                               mdAtoms->nr(),
+                               mdAtoms->size(),
                                mdAtoms->homenr(),
                                mdAtoms->massT(),
                                mdAtoms->invmass().paddedConstArrayRef(),

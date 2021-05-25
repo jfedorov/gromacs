@@ -93,7 +93,6 @@
 #include "gromacs/mdtypes/iforceprovider.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/md_enums.h"
-#include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/multipletimestepping.h"
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/mdtypes/state.h"
@@ -1752,49 +1751,47 @@ void do_force(FILE*                               fplog,
         /* Calculate the local and non-local free energy interactions here.
          * Happens here on the CPU both with and without GPU.
          */
-        nbv->dispatchFreeEnergyKernel(
-                InteractionLocality::Local,
-                x.unpaddedArrayRef(),
-                &forceOutNonbonded->forceWithShiftForces(),
-                fr->use_simd_kernels,
-                fr->ntype,
-                fr->rlist,
-                *fr->ic,
-                fr->shift_vec,
-                fr->nbfp,
-                fr->ljpme_c6grid,
-                mdatoms.chargeA(),
-                mdatoms.chargeB(),
-                mdatoms.typeA(),
-                mdatoms.typeB(),
-                inputrec.fepvals.get(),
-                lambda,
-                enerd,
-                stepWork,
-                nrnb);
+        nbv->dispatchFreeEnergyKernel(InteractionLocality::Local,
+                                      x.unpaddedArrayRef(),
+                                      &forceOutNonbonded->forceWithShiftForces(),
+                                      fr->use_simd_kernels,
+                                      fr->ntype,
+                                      fr->rlist,
+                                      *fr->ic,
+                                      fr->shift_vec,
+                                      fr->nbfp,
+                                      fr->ljpme_c6grid,
+                                      mdatoms.chargeA(),
+                                      mdatoms.chargeB(),
+                                      mdatoms.typeA(),
+                                      mdatoms.typeB(),
+                                      inputrec.fepvals.get(),
+                                      lambda,
+                                      enerd,
+                                      stepWork,
+                                      nrnb);
 
         if (havePPDomainDecomposition(cr))
         {
-            nbv->dispatchFreeEnergyKernel(
-                    InteractionLocality::NonLocal,
-                    x.unpaddedArrayRef(),
-                    &forceOutNonbonded->forceWithShiftForces(),
-                    fr->use_simd_kernels,
-                    fr->ntype,
-                    fr->rlist,
-                    *fr->ic,
-                    fr->shift_vec,
-                    fr->nbfp,
-                    fr->ljpme_c6grid,
-                    mdatoms.chargeA(),
-                    mdatoms.chargeB(),
-                    mdatoms.typeA(),
-                    mdatoms.typeB(),
-                    inputrec.fepvals.get(),
-                    lambda,
-                    enerd,
-                    stepWork,
-                    nrnb);
+            nbv->dispatchFreeEnergyKernel(InteractionLocality::NonLocal,
+                                          x.unpaddedArrayRef(),
+                                          &forceOutNonbonded->forceWithShiftForces(),
+                                          fr->use_simd_kernels,
+                                          fr->ntype,
+                                          fr->rlist,
+                                          *fr->ic,
+                                          fr->shift_vec,
+                                          fr->nbfp,
+                                          fr->ljpme_c6grid,
+                                          mdatoms.chargeA(),
+                                          mdatoms.chargeB(),
+                                          mdatoms.typeA(),
+                                          mdatoms.typeB(),
+                                          inputrec.fepvals.get(),
+                                          lambda,
+                                          enerd,
+                                          stepWork,
+                                          nrnb);
         }
     }
 

@@ -67,10 +67,6 @@ private:
     class Impl;
     //! Implementation detail of the datastructure.
     std::unique_ptr<Impl> impl_;
-    //! Memory for chargeA that can be set up for efficient GPU transfer.
-    gmx::PaddedHostVector<real> chargeA_;
-    //! Memory for chargeB that can be set up for efficient GPU transfer.
-    gmx::PaddedHostVector<real> chargeB_;
 
     MDAtoms();
 
@@ -86,18 +82,11 @@ public:
      * \throws std::bad_alloc  If out of memory.
      */
     void resizeChargeB(int newSize);
-    /*! \brief Resizes memory for charges of FEP state B.
-     *
-     * \throws std::bad_alloc  If out of memory.
-     */
-    void reserveChargeA(int newCapacity);
     /*! \brief
-     * Reinitializes internal data during domain decomposition.
+     * Reinitializes domain-local data after domain decomposition.
      *
      * For the masses the A-state (lambda=0) mass is used.
      * Sets md->lambda = 0.
-     * In free-energy runs, update_mdatoms() should be called after atoms2md()
-     * to set the masses corresponding to the value of lambda at each step.
      *
      * \param[in] mtop Topology data that holds legacy t_atoms.
      * \param[in] ir   Interaction definitions.
@@ -105,11 +94,7 @@ public:
      * \param[in] index  If not empty, store those atoms only.
      * \param[in] homenr Number of atoms in this domain.
      */
-    void reinitialize(const gmx_mtop_t&        mtop,
-                      const t_inputrec&        ir,
-                      int                      nindex,
-                      gmx::ArrayRef<const int> index,
-                      int                      homenr);
+    void reinitialize(const gmx_mtop_t& mtop, const t_inputrec& ir, int nindex, ArrayRef<const int> index, int homenr);
 
     /*! \brief
      * Sets values for correct lambda state.
@@ -121,8 +106,8 @@ public:
      */
     void adjustToLambda(real lambda);
 
-    //! Getter for number.
-    int nr() const;
+    //! Getter for size of members.
+    int size() const;
     //! Getter for homenr.
     int homenr() const;
     //! Getter for number of energy groups.
@@ -150,55 +135,55 @@ public:
     //! Do we have partially frozen atoms?
     bool havePartiallyFrozenAtoms() const;
     //! Getter for atomic mass in A state.
-    gmx::ArrayRef<const real> massA() const;
+    ArrayRef<const real> massA() const;
     //! Getter for atomic mass in B state.
-    gmx::ArrayRef<const real> massB() const;
+    ArrayRef<const real> massB() const;
     //! Getter for atomic mass in present state.
-    gmx::ArrayRef<const real> massT() const;
+    ArrayRef<const real> massT() const;
     //! Getter for inverse atomic mass per atom, 0 for vsites and shells
-    gmx::ArrayRefWithPadding<const real> invmass() const;
+    ArrayRefWithPadding<const real> invmass() const;
     //! Getter for inverse atomic mass per atom and dimension.
-    gmx::ArrayRef<const RVec> invMassPerDim() const;
+    ArrayRef<const RVec> invMassPerDim() const;
     //! Getter for atomic charge in A state.
-    gmx::ArrayRef<const real> chargeA() const;
+    ArrayRef<const real> chargeA() const;
     //! Getter for atomic charge in B state
-    gmx::ArrayRef<const real> chargeB() const;
+    ArrayRef<const real> chargeB() const;
     //! Getter for dispersion constant C6 in A state.
-    gmx::ArrayRef<const real> sqrt_c6A() const;
+    ArrayRef<const real> sqrt_c6A() const;
     //! Getter for dispersion constant C6 in A state.
-    gmx::ArrayRef<const real> sqrt_c6B() const;
+    ArrayRef<const real> sqrt_c6B() const;
     //! Getter for van der Waals radius sigma in the A state.
-    gmx::ArrayRef<const real> sigmaA() const;
+    ArrayRef<const real> sigmaA() const;
     //! Getter for van der Waals radius sigma in the B state.
-    gmx::ArrayRef<const real> sigmaB() const;
+    ArrayRef<const real> sigmaB() const;
     //! Getter for van der Waals radius sigma^3 in the A state.
-    gmx::ArrayRef<const real> sigma3A() const;
+    ArrayRef<const real> sigma3A() const;
     //! Getter for van der Waals radius sigma^3 in the B state.
-    gmx::ArrayRef<const real> sigma3B() const;
+    ArrayRef<const real> sigma3B() const;
     //! Getter to check if this is atom perturbed.
     const std::vector<bool>& bPerturbed() const;
     //! Getter for type of atom in the A state.
-    gmx::ArrayRef<const int> typeA() const;
+    ArrayRef<const int> typeA() const;
     //! Getter for type of atom in the B state.
-    gmx::ArrayRef<const int> typeB() const;
+    ArrayRef<const int> typeB() const;
     //! Getter for particle type.
-    gmx::ArrayRef<const ParticleType> ptype() const;
+    ArrayRef<const ParticleType> ptype() const;
     //! Getter for group index for temperature coupling.
-    gmx::ArrayRef<const unsigned short> cTC() const;
+    ArrayRef<const unsigned short> cTC() const;
     //! Getter for group index for energy matrix.
-    gmx::ArrayRef<const unsigned short> cENER() const;
+    ArrayRef<const unsigned short> cENER() const;
     //! Getter for group index for acceleration.
-    gmx::ArrayRef<const unsigned short> cACC() const;
+    ArrayRef<const unsigned short> cACC() const;
     //! Getter for group index for freezing.
-    gmx::ArrayRef<const unsigned short> cFREEZE() const;
+    ArrayRef<const unsigned short> cFREEZE() const;
     //! Getter for group index for center of mass motion removal
-    gmx::ArrayRef<const unsigned short> cVCM() const;
+    ArrayRef<const unsigned short> cVCM() const;
     //! Getter for group index for user 1.
-    gmx::ArrayRef<const unsigned short> cU1() const;
+    ArrayRef<const unsigned short> cU1() const;
     //! Getter for group index for user 2.
-    gmx::ArrayRef<const unsigned short> cU2() const;
+    ArrayRef<const unsigned short> cU2() const;
     //! Getter for group index for orientation restraints.
-    gmx::ArrayRef<const unsigned short> cORF() const;
+    ArrayRef<const unsigned short> cORF() const;
 
     //! Builder function.
     friend std::unique_ptr<MDAtoms>

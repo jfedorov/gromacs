@@ -429,7 +429,7 @@ real calc_orires_dev(const gmx_multisim_t* ms,
     int  j     = 0;
     auto massT = md->massT();
     auto cORF  = md->cORF();
-    for (int i = 0; i < md->nr(); i++)
+    for (int i = 0; i < md->size(); i++)
     {
         if (cORF[i] == 0)
         {

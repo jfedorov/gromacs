@@ -554,7 +554,7 @@ void LegacySimulator::do_tpi()
     bNotLastFrame = read_first_frame(oenv, &status, opt2fn("-rerun", nfile, fnm), &rerun_fr, TRX_NEED_X);
     frame         = 0;
 
-    if (rerun_fr.natoms - (bCavity ? nat_cavity : 0) != mdAtoms->nr() - (a_tp1 - a_tp0))
+    if (rerun_fr.natoms - (bCavity ? nat_cavity : 0) != mdAtoms->size() - (a_tp1 - a_tp0))
     {
         gmx_fatal(FARGS,
                   "Number of atoms in trajectory (%d)%s "
@@ -562,7 +562,7 @@ void LegacySimulator::do_tpi()
                   "minus the number of atoms to insert (%d)\n",
                   rerun_fr.natoms,
                   bCavity ? " minus one" : "",
-                  mdAtoms->nr(),
+                  mdAtoms->size(),
                   a_tp1 - a_tp0);
     }
 
