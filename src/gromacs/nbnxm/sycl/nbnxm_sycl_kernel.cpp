@@ -605,6 +605,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
         cl::sycl::global_ptr<nbnxn_cj4_t>        gm_plistCJ4  = a_plistCJ4.get_pointer();
         const cl::sycl::global_ptr<nbnxn_sci_t>  gm_plistSci  = a_plistSci.get_pointer();
         const cl::sycl::global_ptr<nbnxn_excl_t> gm_plistExcl = a_plistExcl.get_pointer();
+        const cl::sycl::global_ptr<Float3>       gm_shiftVec  = a_shiftVec.get_pointer();
         const cl::sycl::global_ptr<Float2>       gm_ljComb    = [&]() {
             if constexpr (props.vdwComb)
             {
@@ -684,7 +685,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
             const int    ai       = ci * c_clSize + tidxi;
             const size_t cacheIdx = (tidxj + i) * c_clSize + tidxi;
 
-            const Float3 shift = a_shiftVec[nbSci.shift];
+            const Float3 shift = gm_shiftVec[nbSci.shift];
             Float4       xqi   = gm_xq[ai];
             xqi += Float4(shift[0], shift[1], shift[2], 0.0F);
             xqi[3] *= epsFac;
