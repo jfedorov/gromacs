@@ -98,6 +98,11 @@ auto nbnxmKernelPruneOnly(cl::sycl::handler&                            cgh,
      * to change). */
     return [=](cl::sycl::nd_item<1> itemIdx) [[intel::reqd_sub_group_size(requiredSubGroupSize)]]
     {
+        const cl::sycl::global_ptr<Float4>       gm_xq        = a_xq.get_pointer();
+        cl::sycl::global_ptr<nbnxn_cj4_t>        gm_plistCJ4  = a_plistCJ4.get_pointer();
+        const cl::sycl::global_ptr<nbnxn_sci_t>  gm_plistSci  = a_plistSci.get_pointer();
+        const cl::sycl::global_ptr<Float3>       gm_shiftVec  = a_shiftVec.get_pointer();
+
         const cl::sycl::id<3> localId = unflattenId<c_clSize, c_clSize>(itemIdx.get_local_id());
         // thread/block/warp id-s
         const unsigned tidxi = localId[0];
@@ -110,7 +115,7 @@ auto nbnxmKernelPruneOnly(cl::sycl::handler&                            cgh,
         const unsigned             widx = tidx / warpSize;
 
         // my i super-cluster's index = sciOffset + current bidx * numParts + part
-        const nbnxn_sci_t nbSci     = a_plistSci[bidx * numParts + part];
+        const nbnxn_sci_t nbSci     = gm_plistSci[bidx * numParts + part];
         const int         sci       = nbSci.sci;           /* super-cluster */
         const int         cij4Start = nbSci.cj4_ind_start; /* first ...*/
         const int         cij4End   = nbSci.cj4_ind_end;   /* and last index of j clusters */
@@ -125,8 +130,8 @@ auto nbnxmKernelPruneOnly(cl::sycl::handler&                            cgh,
 
                 /* We don't need q, but using float4 in shmem avoids bank conflicts.
                    (but it also wastes L2 bandwidth). */
-                const Float4 xq    = a_xq[ai];
-                const Float3 shift = a_shiftVec[nbSci.shift];
+                const Float4 xq    = gm_xq[ai];
+                const Float3 shift = gm_shiftVec[nbSci.shift];
                 const Float4 xi(xq[0] + shift[0], xq[1] + shift[1], xq[2] + shift[2], xq[3]);
                 sm_xq[tidxj + i][tidxi] = xi;
             }
@@ -143,7 +148,7 @@ auto nbnxmKernelPruneOnly(cl::sycl::handler&                            cgh,
             if constexpr (haveFreshList)
             {
                 /* Read the mask from the list transferred from the CPU */
-                imaskFull = a_plistCJ4[j4].imei[widx].imask;
+                imaskFull = gm_plistCJ4[j4].imei[widx].imask;
                 /* We attempt to prune all pairs present in the original list */
                 imaskCheck = imaskFull;
                 imaskNew   = 0;
@@ -153,7 +158,7 @@ auto nbnxmKernelPruneOnly(cl::sycl::handler&                            cgh,
                 /* Read the mask from the "warp-pruned" by rlistOuter mask array */
                 imaskFull = a_plistIMask[j4 * c_nbnxnGpuClusterpairSplit + widx];
                 /* Read the old rolling pruned mask, use as a base for new */
-                imaskNew = a_plistCJ4[j4].imei[widx].imask;
+                imaskNew = gm_plistCJ4[j4].imei[widx].imask;
                 /* We only need to check pairs with different mask */
                 imaskCheck = (imaskNew ^ imaskFull);
             }
@@ -166,11 +171,11 @@ auto nbnxmKernelPruneOnly(cl::sycl::handler&                            cgh,
                     {
                         unsigned mask_ji = (1U << (jm * c_nbnxnGpuNumClusterPerSupercluster));
                         // SYCL-TODO: Reevaluate prefetching methods
-                        const int cj = a_plistCJ4[j4].cj[jm];
+                        const int cj = gm_plistCJ4[j4].cj[jm];
                         const int aj = cj * c_clSize + tidxj;
 
                         /* load j atom data */
-                        const Float4 tmp = a_xq[aj];
+                        const Float4 tmp = gm_xq[aj];
                         const Float3 xj(tmp[0], tmp[1], tmp[2]);
 
                         for (int i = 0; i < c_nbnxnGpuNumClusterPerSupercluster; i++)
@@ -210,7 +215,7 @@ auto nbnxmKernelPruneOnly(cl::sycl::handler&                            cgh,
                     a_plistIMask[j4 * c_nbnxnGpuClusterpairSplit + widx] = imaskFull;
                 }
                 /* update the imask with only the pairs up to rlistInner */
-                a_plistCJ4[j4].imei[widx].imask = imaskNew;
+                gm_plistCJ4[j4].imei[widx].imask = imaskNew;
             } // (imaskCheck)
         } // for (int j4 = cij4_start + tidxz; j4 < cij4_end; j4 += c_syclPruneKernelJ4Concurrency)
     };
