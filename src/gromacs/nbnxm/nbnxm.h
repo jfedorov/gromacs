@@ -138,6 +138,7 @@ struct t_lambda;
 struct t_nrnb;
 struct t_forcerec;
 struct t_inputrec;
+struct gmx_grppairener_t;
 
 class GpuEventSynchronizer;
 
@@ -369,9 +370,15 @@ public:
 
     //! Executes the non-bonded free-energy kernel, always runs on the CPU
     void dispatchFreeEnergyKernel(gmx::InteractionLocality       iLocality,
-                                  const t_forcerec&              fr,
                                   gmx::ArrayRef<const gmx::RVec> coords,
                                   gmx::ForceWithShiftForces*     forceWithShiftForces,
+                                  bool                           useSimd,
+                                  int                            ntype,
+                                  real                           rlist,
+                                  const interaction_const_t&     ic,
+                                  gmx::ArrayRef<const gmx::RVec> shiftvec,
+                                  gmx::ArrayRef<const real>      nbfp,
+                                  gmx::ArrayRef<const real>      nbfp_grid,
                                   gmx::ArrayRef<const real>      chargeA,
                                   gmx::ArrayRef<const real>      chargeB,
                                   gmx::ArrayRef<const int>       typeA,
@@ -423,6 +430,8 @@ private:
     Nbnxm::KernelSetup kernelSetup_;
     //! \brief Pointer to wallcycle structure.
     gmx_wallcycle* wcycle_;
+    //! Temporary array for storing foreign lambda group pair energies
+    std::unique_ptr<gmx_grppairener_t> foreignEnergyGroups_;
 
 public:
     //! GPU Nbnxm data, only used with a physical GPU (TODO: use unique_ptr)

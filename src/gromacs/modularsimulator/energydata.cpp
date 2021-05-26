@@ -266,8 +266,6 @@ void EnergyData::doStep(Step step, Time time, bool isEnergyCalculationStep, bool
                                {},
                                {} }),
             freeEnergyPerturbationData_ ? freeEnergyPerturbationData_->currentFEPState() : 0,
-            shakeVirial_,
-            forceVirial_,
             totalVirial_,
             pressure_,
             ekind_,
@@ -364,6 +362,11 @@ real* EnergyData::muTot()
 }
 
 gmx_enerdata_t* EnergyData::enerdata()
+{
+    return enerd_;
+}
+
+const gmx_enerdata_t* EnergyData::enerdata() const
 {
     return enerd_;
 }

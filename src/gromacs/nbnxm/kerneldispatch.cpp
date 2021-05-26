@@ -493,18 +493,24 @@ void nonbonded_verlet_t::dispatchNonbondedKernel(gmx::InteractionLocality       
 }
 
 void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality       iLocality,
-                                                  const t_forcerec&              fr,
                                                   gmx::ArrayRef<const gmx::RVec> coords,
                                                   gmx::ForceWithShiftForces* forceWithShiftForces,
-                                                  gmx::ArrayRef<const real>  chargeA,
-                                                  gmx::ArrayRef<const real>  chargeB,
-                                                  gmx::ArrayRef<const int>   typeA,
-                                                  gmx::ArrayRef<const int>   typeB,
-                                                  t_lambda*                  fepvals,
-                                                  gmx::ArrayRef<const real>  lambda,
-                                                  gmx_enerdata_t*            enerd,
-                                                  const gmx::StepWorkload&   stepWork,
-                                                  t_nrnb*                    nrnb)
+                                                  bool                       useSimd,
+                                                  int                        ntype,
+                                                  real                       rlist,
+                                                  const interaction_const_t& ic,
+                                                  gmx::ArrayRef<const gmx::RVec> shiftvec,
+                                                  gmx::ArrayRef<const real>      nbfp,
+                                                  gmx::ArrayRef<const real>      nbfp_grid,
+                                                  gmx::ArrayRef<const real>      chargeA,
+                                                  gmx::ArrayRef<const real>      chargeB,
+                                                  gmx::ArrayRef<const int>       typeA,
+                                                  gmx::ArrayRef<const int>       typeB,
+                                                  t_lambda*                      fepvals,
+                                                  gmx::ArrayRef<const real>      lambda,
+                                                  gmx_enerdata_t*                enerd,
+                                                  const gmx::StepWorkload&       stepWork,
+                                                  t_nrnb*                        nrnb)
 {
     const auto nbl_fep = pairlistSets().pairlistSet(iLocality).fepLists();
 
@@ -551,13 +557,13 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
             gmx_nb_free_energy_kernel(*nbl_fep[th],
                                       coords,
                                       forceWithShiftForces,
-                                      fr.use_simd_kernels,
-                                      fr.ntype,
-                                      fr.rlist,
-                                      *fr.ic,
-                                      fr.shift_vec,
-                                      fr.nbfp,
-                                      fr.ljpme_c6grid,
+                                      useSimd,
+                                      ntype,
+                                      rlist,
+                                      ic,
+                                      shiftvec,
+                                      nbfp,
+                                      nbfp_grid,
                                       chargeA,
                                       chargeB,
                                       typeA,
@@ -598,9 +604,9 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
         kernelLambda = lam_i;
         kernelDvdl   = dvdl_nb;
         gmx::ArrayRef<real> energygrp_elec =
-                enerd->foreign_grpp.energyGroupPairTerms[NonBondedEnergyTerms::CoulombSR];
+                foreignEnergyGroups_->energyGroupPairTerms[NonBondedEnergyTerms::CoulombSR];
         gmx::ArrayRef<real> energygrp_vdw =
-                enerd->foreign_grpp.energyGroupPairTerms[NonBondedEnergyTerms::LJSR];
+                foreignEnergyGroups_->energyGroupPairTerms[NonBondedEnergyTerms::LJSR];
 
         for (gmx::index i = 0; i < 1 + enerd->foreignLambdaTerms.numLambdas(); i++)
         {
@@ -609,7 +615,7 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
             {
                 lam_i[j] = (i == 0 ? lambda[j] : fepvals->all_lambda[j][i - 1]);
             }
-            reset_foreign_enerdata(enerd);
+            foreignEnergyGroups_->clear();
 #pragma omp parallel for schedule(static) num_threads(nbl_fep.ssize())
             for (gmx::index th = 0; th < nbl_fep.ssize(); th++)
             {
@@ -618,13 +624,13 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
                     gmx_nb_free_energy_kernel(*nbl_fep[th],
                                               coords,
                                               forceWithShiftForces,
-                                              fr.use_simd_kernels,
-                                              fr.ntype,
-                                              fr.rlist,
-                                              *fr.ic,
-                                              fr.shift_vec,
-                                              fr.nbfp,
-                                              fr.ljpme_c6grid,
+                                              useSimd,
+                                              ntype,
+                                              rlist,
+                                              ic,
+                                              shiftvec,
+                                              nbfp,
+                                              nbfp_grid,
                                               chargeA,
                                               chargeB,
                                               typeA,
@@ -638,11 +644,11 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
                 }
                 GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR
             }
-
-            sum_epot(enerd->foreign_grpp, enerd->foreign_term.data());
+            std::array<real, F_NRE> foreign_term = { 0 };
+            sum_epot(*foreignEnergyGroups_, foreign_term.data());
             enerd->foreignLambdaTerms.accumulate(
                     i,
-                    enerd->foreign_term[F_EPOT],
+                    foreign_term[F_EPOT],
                     dvdl_nb[FreeEnergyPerturbationCouplingType::Vdw]
                             + dvdl_nb[FreeEnergyPerturbationCouplingType::Coul]);
         }
