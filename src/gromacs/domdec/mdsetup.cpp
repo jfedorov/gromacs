@@ -120,11 +120,6 @@ void mdAlgorithmsPrepareAtomData(const t_commrec*  cr,
     }
 }
 
-/* TODO: Add a routine that collects the initial setup of the algorithms.
- *
- * The final solution should be an MD algorithm base class with methods
- * for initialization and atom-data setup.
- */
 void mdAlgorithmsDistributeAtomData(const t_commrec*     cr,
                                     gmx_localtop_t*      top,
                                     t_forcerec*          fr,
