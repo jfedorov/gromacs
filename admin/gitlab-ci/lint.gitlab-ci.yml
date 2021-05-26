@@ -125,7 +125,7 @@ clang-tidy:test-cuda:
   needs:
     - job: clang-tidy:configure-push-cuda
   variables:
-    COMPILER_MAJOR_VERSION: 8
+    COMPILER_MAJOR_VERSION: 111111111111
     BUILD_DIR: build-clang-tidy
     EXTRA_INSTALLS: clang-tidy-$COMPILER_MAJOR_VERSION
     KUBERNETES_CPU_LIMIT: 4
