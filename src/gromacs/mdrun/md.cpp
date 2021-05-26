@@ -1020,6 +1020,8 @@ void gmx::LegacySimulator::do_md()
                                     nrnb,
                                     wcycle,
                                     do_verbose && !bPMETunePrinting);
+                mdAlgorithmsDistributeAtomData(
+                        cr, &top, fr, mdAtoms, constr, vsite, shellfc, numHomeAtoms(cr, top_global));
                 upd.updateAfterPartition(state->natoms,
                                          md->cFREEZE ? gmx::arrayRefFromArray(md->cFREEZE, md->nr)
                                                      : gmx::ArrayRef<const unsigned short>(),
@@ -1985,6 +1987,8 @@ void gmx::LegacySimulator::do_md()
                                 nrnb,
                                 wcycle,
                                 FALSE);
+            mdAlgorithmsDistributeAtomData(
+                    cr, &top, fr, mdAtoms, constr, vsite, shellfc, numHomeAtoms(cr, top_global));
             upd.updateAfterPartition(state->natoms,
                                      md->cFREEZE ? gmx::arrayRefFromArray(md->cFREEZE, md->nr)
                                                  : gmx::ArrayRef<const unsigned short>(),
