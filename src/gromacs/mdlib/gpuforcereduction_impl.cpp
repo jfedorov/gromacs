@@ -132,12 +132,6 @@ void GpuForceReduction::Impl::execute()
     // Enqueue wait on all dependencies passed
     for (auto* synchronizer : dependencyList_)
     {
-#if GMX_GPU_SYCL
-        if (!synchronizer->isMarked()) // Workaround for #3988, #4032
-        {
-            continue;
-        }
-#endif
         synchronizer->enqueueWaitEvent(deviceStream_);
     }
 
