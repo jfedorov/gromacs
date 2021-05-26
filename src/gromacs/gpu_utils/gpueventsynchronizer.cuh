@@ -100,7 +100,7 @@ public:
                    ("cudaEventSynchronize failed. " + gmx::getDeviceErrorString(stat)).c_str());
     }
     /*! \brief Checks the completion of the underlying event and resets the object if it was. */
-    inline bool isReady()
+    inline bool isDone()
     {
         cudaError_t gmx_used_in_debug stat = cudaEventQuery(event_);
         GMX_ASSERT((stat == cudaSuccess) || (stat == cudaErrorNotReady),

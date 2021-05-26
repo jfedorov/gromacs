@@ -120,7 +120,7 @@ public:
         event_.reset();
     }
     /*! \brief Checks the completion of the underlying event and resets the object if it was. */
-    inline bool isReady()
+    inline bool isDone()
     {
         auto info         = event_->get_info<cl::sycl::info::event::command_execution_status>();
         bool hasTriggered = (info == cl::sycl::info::event_command_status::complete);

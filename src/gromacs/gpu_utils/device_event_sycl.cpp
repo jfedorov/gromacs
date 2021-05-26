@@ -58,10 +58,10 @@ bool DeviceEvent::isValid() const
     return event_.has_value();
 }
 
-bool DeviceEvent::isReady() const
+bool DeviceEvent::isDone() const
 {
     using namespace cl::sycl::info;
-    GMX_ASSERT(isValid(), "Event must be valid in order to call .isReady()");
+    GMX_ASSERT(isValid(), "Event must be valid in order to call .isDone()");
     return event_->get_info<event::command_execution_status>() == event_command_status::complete;
 }
 
@@ -69,7 +69,7 @@ void DeviceEvent::wait()
 {
     GMX_ASSERT(isValid(), "Event must be valid in order to call .wait()");
     event_->wait_and_throw();
-    GMX_ASSERT(isReady(), "Event somehow not ready after sycl::event::wait_and_throw");
+    GMX_ASSERT(isDone(), "Event somehow not done after sycl::event::wait_and_throw");
 }
 bool DeviceEvent::timingSupported() const
 {

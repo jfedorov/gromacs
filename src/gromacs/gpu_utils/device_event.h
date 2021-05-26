@@ -116,13 +116,13 @@ public:
 
     /*! Return true if the enqueued event is ready/complete.
      *
-     * In CUDA, that means that the marked event has been reached.
-     * In OpenCL and SYCL, that means that the associated operation has completed.
-     * Undefined behavior if the event is not valid.
+     * In CUDA, that means that the marked event has been reached and all the preceeding work in the
+     * stream is completed. In OpenCL and SYCL, that means that the associated operation has
+     * completed. Undefined behavior if the event is not valid.
      */
-    [[nodiscard]] bool isReady() const;
+    [[nodiscard]] bool isDone() const;
 
-    /*! Wait (block the current host thread) until the even is ready.
+    /*! Wait (block the current host thread) until the event is done.
      *
      * Undefined behavior if the event is not valid.
      */

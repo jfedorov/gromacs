@@ -109,7 +109,7 @@ public:
         reset();
     }
     /*! \brief Checks the completion of the underlying event and resets the object if it was. */
-    inline bool isReady()
+    inline bool isDone()
     {
         cl_int result;
         cl_int clError = clGetEventInfo(

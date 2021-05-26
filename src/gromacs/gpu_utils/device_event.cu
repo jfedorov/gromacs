@@ -81,7 +81,7 @@ bool DeviceEvent::isValid() const
     return true;
 }
 
-bool DeviceEvent::isReady() const
+bool DeviceEvent::isDone() const
 {
     cudaError_t stat = cudaEventQuery(event_);
     GMX_ASSERT((stat == cudaSuccess) || (stat == cudaErrorNotReady),

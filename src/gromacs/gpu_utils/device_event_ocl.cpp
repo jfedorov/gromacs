@@ -84,9 +84,9 @@ static T getEventProfilingInfo(cl_event event, cl_profiling_info param_name)
     return result;
 }
 
-bool DeviceEvent::isReady() const
+bool DeviceEvent::isDone() const
 {
-    GMX_ASSERT(isValid(), "Event must be valid in order to call .isReady()");
+    GMX_ASSERT(isValid(), "Event must be valid in order to call .isDone()");
     cl_int result;
     cl_int clError =
             clGetEventInfo(event_, CL_EVENT_COMMAND_EXECUTION_STATUS, sizeof(cl_int), &result, nullptr);
@@ -106,7 +106,7 @@ void DeviceEvent::wait()
         GMX_THROW(gmx::InternalError("Failed to synchronize on the GPU event: "
                                      + ocl_get_error_string(clError)));
     }
-    GMX_ASSERT(isReady(), "Event somehow not ready after clWaitForEvents");
+    GMX_ASSERT(isDone(), "Event somehow not done after clWaitForEvents");
 }
 
 bool DeviceEvent::timingSupported() const
