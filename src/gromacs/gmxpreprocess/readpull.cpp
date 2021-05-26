@@ -570,7 +570,7 @@ pull_t* set_pull_init(t_inputrec*                    ir,
     gmx::LocalAtomSetManager atomSets;
     pull_work    = init_pull(nullptr, pull, ir, mtop, nullptr, &atomSets, lambda);
     auto mdAtoms = gmx::makeMDAtoms(nullptr, mtop, *ir, false);
-    mdAtoms->reinitialize(mtop, *ir, -1, {}, mtop.natoms);
+    mdAtoms->reinitialize(mtop, *ir, {}, mtop.natoms);
     if (ir->efep != FreeEnergyPerturbationType::No)
     {
         mdAtoms->adjustToLambda(lambda);

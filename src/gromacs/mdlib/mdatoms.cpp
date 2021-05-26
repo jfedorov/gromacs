@@ -71,8 +71,6 @@ public:
     PaddedHostVector<real> chargeA;
     //! Memory for chargeB that can be set up for efficient GPU transfer.
     PaddedHostVector<real> chargeB;
-    //! Size of current allocation.
-    size_t size() const;
     //! Total mass in state A
     double tmassA = 0.0;
     //! Total mass in state B
@@ -151,11 +149,6 @@ public:
     real lambda = 0.0;
 };
 
-size_t MDAtoms::Impl::size() const
-{
-    return nr;
-}
-
 MDAtoms::MDAtoms() : impl_(std::make_unique<MDAtoms::Impl>()) {}
 
 MDAtoms::~MDAtoms() {}
@@ -172,7 +165,7 @@ void MDAtoms::resizeChargeB(const int newSize)
 
 int MDAtoms::size() const
 {
-    return impl_->size();
+    return impl_->nr;
 }
 
 int MDAtoms::homenr() const
@@ -369,7 +362,6 @@ ArrayRef<const unsigned short> MDAtoms::cORF() const
 
 std::unique_ptr<MDAtoms> makeMDAtoms(FILE* fp, const gmx_mtop_t& mtop, const t_inputrec& ir, const bool rankHasPmeGpuTask)
 {
-    // Needed because the private constructor gets confused otherwise by the make_unique function.
     std::unique_ptr<MDAtoms> mdAtoms(new MDAtoms);
     // GPU transfers may want to use a suitable pinning mode.
     if (rankHasPmeGpuTask)
@@ -443,11 +435,7 @@ std::unique_ptr<MDAtoms> makeMDAtoms(FILE* fp, const gmx_mtop_t& mtop, const t_i
     return mdAtoms;
 }
 
-void MDAtoms::reinitialize(const gmx_mtop_t&   mtop,
-                           const t_inputrec&   inputrec,
-                           int                 nindex,
-                           ArrayRef<const int> index,
-                           int                 homenr)
+void MDAtoms::reinitialize(const gmx_mtop_t& mtop, const t_inputrec& inputrec, ArrayRef<const int> index, int homenr)
 {
     int nthreads gmx_unused;
 
@@ -457,21 +445,14 @@ void MDAtoms::reinitialize(const gmx_mtop_t&   mtop,
 
     const SimulationGroups& groups = mtop.groups;
 
-    /* nindex>=0 indicates DD where we use an index */
-    if (nindex >= 0)
-    {
-        impl_->nr = nindex;
-    }
-    else
-    {
-        impl_->nr = mtop.natoms;
-    }
+    const int newSize = index.empty() ? mtop.natoms : index.size();
 
-    if (impl_->nr > static_cast<int>(impl_->size()))
+    if (newSize > static_cast<int>(size()))
     {
-        const int newAllocationSize = over_alloc_dd(impl_->nr);
+        const int newAllocationSize = over_alloc_dd(newSize);
+        impl_->nr                   = newSize;
 
-        if (impl_->nMassPerturbed != 0)
+        if (havePerturbedMasses())
         {
             impl_->massA.resize(newAllocationSize);
             impl_->massB.resize(newAllocationSize);
@@ -548,17 +529,9 @@ void MDAtoms::reinitialize(const gmx_mtop_t&   mtop,
     {
         try
         {
-            int  ag;
             real mA, mB, fac;
 
-            if (index.empty())
-            {
-                ag = i;
-            }
-            else
-            {
-                ag = index[i];
-            }
+            const int     ag   = index.empty() ? i : index[i];
             const t_atom& atom = mtopGetAtomParameters(mtop, ag, &molb);
 
             if (!impl_->cFREEZE.empty())
@@ -602,7 +575,7 @@ void MDAtoms::reinitialize(const gmx_mtop_t&   mtop,
                 mA = atom.m;
                 mB = atom.mB;
             }
-            if (impl_->nMassPerturbed != 0)
+            if (havePerturbedMasses())
             {
                 impl_->massA[i] = mA;
                 impl_->massB[i] = mB;
@@ -717,12 +690,12 @@ void MDAtoms::reinitialize(const gmx_mtop_t&   mtop,
         GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR
     }
 
-    if (impl_->nr > 0)
+    if (size() > 0)
     {
         /* Pad invmass with 0 so a SIMD MD update does not change v and x */
-        for (int i = impl_->nr; i < impl_->nr + GMX_REAL_MAX_SIMD_WIDTH; i++)
+        for (auto invmass = impl_->invmass.begin() + size(); invmass != impl_->invmass.end(); ++invmass)
         {
-            impl_->invmass[i] = 0;
+            *invmass = 0;
         }
     }
 
@@ -743,7 +716,7 @@ void MDAtoms::adjustToLambda(real lambda)
         /* Update masses of perturbed atoms for the change in lambda */
         int gmx_unused nthreads = gmx_omp_nthreads_get(ModuleMultiThread::Default);
 #pragma omp parallel for num_threads(nthreads) schedule(static)
-        for (int i = 0; i < impl_->nr; i++)
+        for (int i = 0; i < size(); i++)
         {
             if (impl_->bPerturbed[i])
             {

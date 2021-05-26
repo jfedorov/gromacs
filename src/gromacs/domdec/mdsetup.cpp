@@ -32,6 +32,7 @@
  * To help us fund GROMACS development, we humbly ask that you cite
  * the research papers on the package. Check out http://www.gromacs.org.
  */
+#include <vector>
 #include "gmxpre.h"
 
 #include "mdsetup.h"
@@ -76,23 +77,26 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
 {
     bool usingDomDec = DOMAINDECOMP(cr);
 
-    int                      numAtomIndex;
-    gmx::ArrayRef<const int> atomIndex;
-    int                      numHomeAtoms;
-    int                      numTotalAtoms;
+    int numHomeAtoms;
+    int numTotalAtoms;
 
     if (usingDomDec)
     {
-        numAtomIndex  = dd_natoms_mdatoms(*cr->dd);
-        atomIndex     = cr->dd->globalAtomIndices;
         numHomeAtoms  = dd_numHomeAtoms(*cr->dd);
         numTotalAtoms = dd_natoms_mdatoms(*cr->dd);
     }
     else
     {
-        numAtomIndex  = -1;
         numHomeAtoms  = top_global.natoms;
         numTotalAtoms = top_global.natoms;
+    }
+
+    // This local copy and the workaround are needed because dd->globalAtomIndices is for
+    // some reason not the same size as dd_natoms_mdatoms
+    std::vector<int> atomIndices = usingDomDec ? cr->dd->globalAtomIndices : std::vector<int>{};
+    if (usingDomDec)
+    {
+        atomIndices.resize(dd_natoms_mdatoms(*cr->dd));
     }
 
     if (force != nullptr)
@@ -100,11 +104,7 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
         force->resize(numTotalAtoms);
     }
 
-    mdAtoms->reinitialize(top_global,
-                          inputrec,
-                          numAtomIndex,
-                          usingDomDec ? cr->dd->globalAtomIndices : std::vector<int>(),
-                          numHomeAtoms);
+    mdAtoms->reinitialize(top_global, inputrec, atomIndices, numHomeAtoms);
 
     if (usingDomDec)
     {

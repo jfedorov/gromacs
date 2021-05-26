@@ -90,11 +90,10 @@ public:
      *
      * \param[in] mtop Topology data that holds legacy t_atoms.
      * \param[in] ir   Interaction definitions.
-     * \param[in] nindex Number of atoms to use.
      * \param[in] index  If not empty, store those atoms only.
      * \param[in] homenr Number of atoms in this domain.
      */
-    void reinitialize(const gmx_mtop_t& mtop, const t_inputrec& ir, int nindex, ArrayRef<const int> index, int homenr);
+    void reinitialize(const gmx_mtop_t& mtop, const t_inputrec& ir, ArrayRef<const int> index, int homenr);
 
     /*! \brief
      * Sets values for correct lambda state.

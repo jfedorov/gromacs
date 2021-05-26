@@ -873,7 +873,7 @@ int gmx_disre(int argc, char* argv[])
     }
 
     auto mdAtoms = gmx::makeMDAtoms(fplog, *topInfo.mtop(), *ir, false);
-    mdAtoms->reinitialize(*topInfo.mtop(), *ir, -1, {}, ntopatoms);
+    mdAtoms->reinitialize(*topInfo.mtop(), *ir, {}, ntopatoms);
     mdAtoms->adjustToLambda(ir->fepvals->init_lambda);
     if (ir->pbcType != PbcType::No)
     {

@@ -105,7 +105,6 @@
 #include "gromacs/timing/wallcycle.h"
 #include "gromacs/timing/walltime_accounting.h"
 #include "gromacs/topology/topology.h"
-#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/exceptions.h"
@@ -1124,7 +1123,6 @@ int gmx_pme_do(struct gmx_pme_t*              pme,
         fftgrid    = pme->fftgrid[grid_index];
         cfftgrid   = pme->cfftgrid[grid_index];
         pfft_setup = pme->pfft_setup[grid_index];
-        gmx::ArrayRef<const real> coefficient;
         switch (grid_index)
         {
             case 0: coefficient = chargeA; break;

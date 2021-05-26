@@ -298,7 +298,7 @@ void LegacySimulator::do_tpi()
         sscanf(dump_pdb, "%20lf", &dump_ener);
     }
 
-    mdAtoms->reinitialize(top_global, *inputrec, -1, {}, top_global.natoms);
+    mdAtoms->reinitialize(top_global, *inputrec, {}, top_global.natoms);
     mdAtoms->adjustToLambda(inputrec->fepvals->init_lambda);
 
     f.resize(top_global.natoms);
