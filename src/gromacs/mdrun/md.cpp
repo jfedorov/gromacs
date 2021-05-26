@@ -396,11 +396,6 @@ void gmx::LegacySimulator::do_md()
                             nrnb,
                             nullptr,
                             FALSE);
-        upd.updateAfterPartition(state->natoms,
-                                 md->cFREEZE ? gmx::arrayRefFromArray(md->cFREEZE, md->nr)
-                                             : gmx::ArrayRef<const unsigned short>(),
-                                 md->cTC ? gmx::arrayRefFromArray(md->cTC, md->nr)
-                                         : gmx::ArrayRef<const unsigned short>());
     }
     else
     {
@@ -409,14 +404,16 @@ void gmx::LegacySimulator::do_md()
         state = state_global;
 
         /* Generate and initialize new topology */
-        mdAlgorithmsSetupAtomData(cr, *ir, top_global, &top, fr, &f, mdAtoms, constr, vsite, shellfc);
-
-        upd.updateAfterPartition(state->natoms,
-                                 md->cFREEZE ? gmx::arrayRefFromArray(md->cFREEZE, md->nr)
-                                             : gmx::ArrayRef<const unsigned short>(),
-                                 md->cTC ? gmx::arrayRefFromArray(md->cTC, md->nr)
-                                         : gmx::ArrayRef<const unsigned short>());
+        mdAlgorithmsPrepareAtomData(cr, *ir, top_global, &top, &f, mdAtoms);
     }
+    mdAlgorithmsDistributeAtomData(
+            cr, &top, fr, mdAtoms, constr, vsite, shellfc, numHomeAtoms(cr, top_global));
+
+    upd.updateAfterPartition(state->natoms,
+                             md->cFREEZE ? gmx::arrayRefFromArray(md->cFREEZE, md->nr)
+                                         : gmx::ArrayRef<const unsigned short>(),
+                             md->cTC ? gmx::arrayRefFromArray(md->cTC, md->nr)
+                                     : gmx::ArrayRef<const unsigned short>());
 
     std::unique_ptr<UpdateConstrainGpu> integrator;
 

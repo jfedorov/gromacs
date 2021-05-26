@@ -430,7 +430,6 @@ static void init_em(FILE*                fplog,
             *shellfc = nullptr;
         }
     }
-
     if (DOMAINDECOMP(cr))
     {
         dd_init_local_state(*cr->dd, state_global, &ems->s);
@@ -466,10 +465,10 @@ static void init_em(FILE*                fplog,
         ems->s = *state_global;
         state_change_natoms(&ems->s, ems->s.natoms);
 
-        mdAlgorithmsSetupAtomData(
-                cr, *ir, top_global, top, fr, &ems->f, mdAtoms, constr, vsite, shellfc ? *shellfc : nullptr);
+        mdAlgorithmsPrepareAtomData(cr, *ir, top_global, top, &ems->f, mdAtoms);
     }
-
+    mdAlgorithmsDistributeAtomData(
+            cr, top, fr, mdAtoms, constr, vsite, shellfc ? *shellfc : nullptr, gmx::numHomeAtoms(cr, top_global));
     update_mdatoms(mdAtoms->mdatoms(), ems->s.lambda[FreeEnergyPerturbationCouplingType::Mass]);
 
     if (constr)
@@ -826,6 +825,8 @@ static void em_dd_partition_system(FILE*                fplog,
                         wcycle,
                         FALSE);
     dd_store_state(*cr->dd, &ems->s);
+    mdAlgorithmsDistributeAtomData(
+            cr, top, fr, mdAtoms, constr, vsite, nullptr, gmx::numHomeAtoms(cr, top_global));
 }
 
 namespace

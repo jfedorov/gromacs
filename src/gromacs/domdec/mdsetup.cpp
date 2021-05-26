@@ -59,38 +59,42 @@
 namespace gmx
 {
 
-/* TODO: Add a routine that collects the initial setup of the algorithms.
- *
- * The final solution should be an MD algorithm base class with methods
- * for initialization and atom-data setup.
- */
-void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
-                               const t_inputrec&    inputrec,
-                               const gmx_mtop_t&    top_global,
-                               gmx_localtop_t*      top,
-                               t_forcerec*          fr,
-                               ForceBuffers*        force,
-                               MDAtoms*             mdAtoms,
-                               Constraints*         constr,
-                               VirtualSitesHandler* vsite,
-                               gmx_shellfc_t*       shellfc)
+int numHomeAtoms(const t_commrec* cr, const gmx_mtop_t& top_global)
+{
+    bool usingDomDec = DOMAINDECOMP(cr);
+    int  numHomeAtoms;
+
+    if (usingDomDec)
+    {
+        numHomeAtoms = dd_numHomeAtoms(*cr->dd);
+    }
+    else
+    {
+        numHomeAtoms = top_global.natoms;
+    }
+    return numHomeAtoms;
+}
+
+void mdAlgorithmsPrepareAtomData(const t_commrec*  cr,
+                                 const t_inputrec& inputrec,
+                                 const gmx_mtop_t& top_global,
+                                 gmx_localtop_t*   top,
+                                 ForceBuffers*     force,
+                                 MDAtoms*          mdAtoms)
 {
     bool usingDomDec = DOMAINDECOMP(cr);
 
     int numAtomIndex;
-    int numHomeAtoms;
     int numTotalAtoms;
 
     if (usingDomDec)
     {
         numAtomIndex  = dd_natoms_mdatoms(*cr->dd);
-        numHomeAtoms  = dd_numHomeAtoms(*cr->dd);
         numTotalAtoms = dd_natoms_mdatoms(*cr->dd);
     }
     else
     {
         numAtomIndex  = -1;
-        numHomeAtoms  = top_global.natoms;
         numTotalAtoms = top_global.natoms;
     }
 
@@ -103,18 +107,35 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
              inputrec,
              numAtomIndex,
              usingDomDec ? cr->dd->globalAtomIndices : std::vector<int>(),
-             numHomeAtoms,
+             numHomeAtoms(cr, top_global),
              mdAtoms);
 
-    t_mdatoms* mdatoms = mdAtoms->mdatoms();
     if (usingDomDec)
     {
-        dd_sort_local_top(*cr->dd, mdatoms, top);
+        dd_sort_local_top(*cr->dd, mdAtoms->mdatoms(), top);
     }
     else
     {
         gmx_mtop_generate_local_top(top_global, top, inputrec.efep != FreeEnergyPerturbationType::No);
     }
+}
+
+/* TODO: Add a routine that collects the initial setup of the algorithms.
+ *
+ * The final solution should be an MD algorithm base class with methods
+ * for initialization and atom-data setup.
+ */
+void mdAlgorithmsDistributeAtomData(const t_commrec*     cr,
+                                    gmx_localtop_t*      top,
+                                    t_forcerec*          fr,
+                                    const MDAtoms*       mdAtoms,
+                                    Constraints*         constr,
+                                    VirtualSitesHandler* vsite,
+                                    gmx_shellfc_t*       shellfc,
+                                    const int            numHomeAtoms)
+{
+    bool             usingDomDec = DOMAINDECOMP(cr);
+    const t_mdatoms* mdatoms     = mdAtoms->mdatoms();
 
     if (vsite)
     {

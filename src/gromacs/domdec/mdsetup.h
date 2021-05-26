@@ -69,34 +69,56 @@ class VirtualSitesHandler;
  */
 void make_local_shells(const t_commrec* cr, const t_mdatoms& md, gmx_shellfc_t* shfc);
 
-/*! \brief Sets atom data for several MD algorithms
+/*! \brief Distributes atom data for several MD algorithms
  *
  * Most MD algorithms require two different setup calls:
  * one for initialization and parameter setting and one for atom data setup.
- * This routine sets the atom data for the (locally available) atoms.
+ * This is called at the start of serial runs and after partitioning.
+ *
+ * \param[in]     cr           Communication record
+ * \param[in,out] top          The local topology
+ * \param[in,out] fr           The force calculation parameter/data record
+ * \param[in]    mdAtoms      The MD atom data
+ * \param[in,out] constr       The constraints handler, can be NULL
+ * \param[in,out] vsite        The virtual site data, can be NULL
+ * \param[in,out] shellfc      The shell/flexible-constraint data, can be NULL
+ * \param[in]     numHomeAtoms The number of home atoms
+ */
+void mdAlgorithmsDistributeAtomData(const t_commrec*     cr,
+                                    gmx_localtop_t*      top,
+                                    t_forcerec*          fr,
+                                    const MDAtoms*       mdAtoms,
+                                    Constraints*         constr,
+                                    VirtualSitesHandler* vsite,
+                                    gmx_shellfc_t*       shellfc,
+                                    int                  numHomeAtoms);
+
+/*! \brief Prepares atom data for several MD algorithms
+ *
+ * Most MD algorithms require two different setup calls:
+ * one for initialization and parameter setting and one for atom data setup.
  * This is called at the start of serial runs and during domain decomposition.
  *
  * \param[in]     cr         Communication record
  * \param[in]     inputrec   Input parameter record
  * \param[in]     top_global The global topology
  * \param[in,out] top        The local topology
- * \param[in,out] fr         The force calculation parameter/data record
  * \param[out]    force      The force buffer
- * \param[out]    mdAtoms    The MD atom data
- * \param[in,out] constr     The constraints handler, can be NULL
- * \param[in,out] vsite      The virtual site data, can be NULL
- * \param[in,out] shellfc    The shell/flexible-constraint data, can be NULL
+ * \param[in,out] mdAtoms    The MD atom data
  */
-void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
-                               const t_inputrec&    inputrec,
-                               const gmx_mtop_t&    top_global,
-                               gmx_localtop_t*      top,
-                               t_forcerec*          fr,
-                               ForceBuffers*        force,
-                               MDAtoms*             mdAtoms,
-                               Constraints*         constr,
-                               VirtualSitesHandler* vsite,
-                               gmx_shellfc_t*       shellfc);
+void mdAlgorithmsPrepareAtomData(const t_commrec*  cr,
+                                 const t_inputrec& inputrec,
+                                 const gmx_mtop_t& top_global,
+                                 gmx_localtop_t*   top,
+                                 ForceBuffers*     force,
+                                 MDAtoms*          mdAtoms);
+
+/*! \brief Gets the number of home atoms
+ *
+ * \param[in]     cr         Communication record
+ * \param[in]     top_global The global topology
+ */
+int numHomeAtoms(const t_commrec* cr, const gmx_mtop_t& top_global);
 
 } // namespace gmx
 

@@ -368,9 +368,10 @@ void gmx::LegacySimulator::do_rerun()
         /* Copy the pointer to the global state */
         state = state_global;
 
-        mdAlgorithmsSetupAtomData(cr, *ir, top_global, &top, fr, &f, mdAtoms, constr, vsite, shellfc);
+        mdAlgorithmsPrepareAtomData(cr, *inputrec, top_global, &top, &f, mdAtoms);
     }
-
+    mdAlgorithmsDistributeAtomData(
+            cr, &top, fr, mdAtoms, constr, vsite, shellfc, numHomeAtoms(cr, top_global));
     auto* mdatoms = mdAtoms->mdatoms();
 
     // NOTE: The global state is no longer used at this point.
