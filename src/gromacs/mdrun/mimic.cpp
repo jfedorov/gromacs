@@ -500,6 +500,8 @@ void gmx::LegacySimulator::do_mimic()
                                 nrnb,
                                 wcycle,
                                 mdrunOptions.verbose);
+            mdAlgorithmsDistributeAtomData(
+                    cr, &top, fr, mdAtoms, constr, vsite, shellfc, numHomeAtoms(cr, top_global));
         }
 
         if (MASTER(cr))
