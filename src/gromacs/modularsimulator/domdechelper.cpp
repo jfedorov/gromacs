@@ -44,6 +44,7 @@
 #include "domdechelper.h"
 
 #include "gromacs/domdec/collect.h"
+#include "gromacs/domdec/mdsetup.h"
 #include "gromacs/domdec/partition.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/inputrec.h"
@@ -178,6 +179,14 @@ void DomDecHelper::partitionSystem(bool                     verbose,
                         wcycle,
                         verbose);
     statePropagatorData_->setLocalState(std::move(localState));
+    mdAlgorithmsDistributeAtomData(cr_,
+                                   topologyHolder_->localTopology_.get(),
+                                   fr_,
+                                   mdAtoms_,
+                                   constr_,
+                                   vsite_,
+                                   nullptr,
+                                   numHomeAtoms(cr_, topologyHolder_->globalTopology_));
     for (const auto& callback : domdecCallbacks_)
     {
         callback();
