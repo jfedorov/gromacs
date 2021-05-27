@@ -1535,7 +1535,7 @@ void gmx::LegacySimulator::do_md()
             bool doNoseHoover = ir->etc == TemperatureCoupling::NoseHoover
                                 && ir->etc != TemperatureCoupling::No
                                 && do_per_step(step + ir->nsttcouple - 1, ir->nsttcouple);
-            bool useGpuForUpdateThisStep = useGpuForUpdate && !doNoseHoover && !bDoReplEx;
+            bool useGpuForUpdateThisStep = useGpuForUpdate && !doNoseHoover;
             if (useGpuForUpdateThisStep)
             {
 
