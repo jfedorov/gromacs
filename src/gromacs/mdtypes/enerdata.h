@@ -73,6 +73,8 @@ struct gmx_grppairener_t
 
     void clear();
 
+    ~gmx_grppairener_t() = default;
+
     int nener; /* The number of energy group pairs */
     gmx::EnumerationArray<NonBondedEnergyTerms, std::vector<real>> energyGroupPairTerms; /* Energy terms for each pair of groups */
 };
