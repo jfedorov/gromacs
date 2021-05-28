@@ -333,7 +333,7 @@ int computeChunkSize(const int numThreads, const int numBonds)
 
 
 //! Thread-local variable accumulator. Aligned to typical cache-width to avoid false sharing.
-struct alignas(64) PosResOutputAccumulator
+struct alignas(128) PosResOutputAccumulator
 {
     real dvdl   = 0;
     real vtot   = 0;
@@ -435,18 +435,14 @@ real posres(const int             numThreads,
             {
                 kk = L1 * pr->posres.fcA[m] + lambda * pr->posres.fcB[m];
                 fm = -kk * dx[m];
-                // #pragma omp atomic
                 localVTot += 0.5 * kk * dx[m] * dx[m];
-                // #pragma omp atomic
                 localDvDLambda +=
                         0.5 * (pr->posres.fcB[m] - pr->posres.fcA[m]) * dx[m] * dx[m] + fm * dpdl[m];
 
                 /* Here we correct for the pbc_dx which included rdist */
                 if (computeForce)
                 {
-                    // #pragma omp atomic
                     f[ai][m] += fm;
-                    // #pragma omp atomic
                     localVirial[m] -= 0.5 * (dx[m] + rdist[m]) * fm;
                 }
             }
