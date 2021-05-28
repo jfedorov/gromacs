@@ -36,7 +36,7 @@ add_library(listed_forces INTERFACE)
 gmx_add_libgromacs_sources(
     bonded.cpp
     disre.cpp
-    listed_forces_gpu_impl.cpp
+    listed_forces_gpu_impl_stubs.cpp
     listed_forces.cpp
     listed_internal.cpp
     manage_threading.cpp
@@ -48,8 +48,11 @@ gmx_add_libgromacs_sources(
 
 if(GMX_GPU_CUDA)
     gmx_add_libgromacs_sources(
-       listed_forces_gpu_impl.cu
+       listed_forces_gpu_impl.cpp
        listed_forces_gpu_internal.cu
+       )
+    _gmx_add_files_to_property(CUDA_SOURCES
+       listed_forces_gpu_impl.cpp
        )
 endif()
 

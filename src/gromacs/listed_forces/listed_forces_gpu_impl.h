@@ -67,7 +67,7 @@ struct HostInteractionList
     int size() const { return iatoms.size(); }
 
     //! List of interactions, see \c HostInteractionLists
-    HostVector<int> iatoms = { {}, gmx::HostAllocationPolicy(gmx::PinningPolicy::PinnedIfSupported) };
+    HostVector<int> iatoms = { {}, HostAllocationPolicy(PinningPolicy::PinnedIfSupported) };
 };
 
 /* \brief Bonded parameters and GPU pointers
@@ -76,7 +76,7 @@ struct HostInteractionList
  * to the GPU as a single structure.
  *
  */
-struct BondedCudaKernelParameters
+struct ListedForcesGpuKernelParameters
 {
     //! Periodic boundary data
     PbcAiuc pbcAiuc;
@@ -96,17 +96,17 @@ struct BondedCudaKernelParameters
     //! Force parameters (on GPU)
     t_iparams* d_forceParams;
     //! Coordinates before the timestep (on GPU)
-    const float4* d_xq;
+    const Float4* d_xq;
     //! Forces on atoms (on GPU)
-    float3* d_f;
+    Float3* d_f;
     //! Force shifts on atoms (on GPU)
-    float3* d_fShift;
+    Float3* d_fShift;
     //! Total Energy (on GPU)
     float* d_vTot;
     //! Interaction list atoms (on GPU)
     t_iatom* d_iatoms[numFTypesOnGpu];
 
-    BondedCudaKernelParameters()
+    ListedForcesGpuKernelParameters()
     {
         matrix boxDummy = { { 0, 0, 0 }, { 0, 0, 0 }, { 0, 0, 0 } };
 
@@ -184,13 +184,13 @@ private:
     //! Bonded parameters for device-side use.
     t_iparams* d_forceParams_ = nullptr;
     //! Position-charge vector on the device.
-    const float4* d_xq_ = nullptr;
+    const Float4* d_xq_ = nullptr;
     //! Force vector on the device.
-    float3* d_f_ = nullptr;
+    Float3* d_f_ = nullptr;
     //! Shift force vector on the device.
-    float3* d_fShift_ = nullptr;
+    Float3* d_fShift_ = nullptr;
     //! \brief Host-side virial buffer
-    HostVector<float> vTot_ = { {}, gmx::HostAllocationPolicy(gmx::PinningPolicy::PinnedIfSupported) };
+    HostVector<float> vTot_ = { {}, HostAllocationPolicy(PinningPolicy::PinnedIfSupported) };
     //! \brief Device-side total virial
     float* d_vTot_ = nullptr;
 
@@ -200,7 +200,7 @@ private:
     const DeviceStream& deviceStream_;
 
     //! Parameters and pointers, passed to the CUDA kernel
-    BondedCudaKernelParameters kernelParams_;
+    ListedForcesGpuKernelParameters kernelParams_;
 
     //! GPU kernel launch configuration
     KernelLaunchConfig kernelLaunchConfig_;

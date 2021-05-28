@@ -727,7 +727,7 @@ namespace gmx
 {
 
 template<bool calcVir, bool calcEner>
-__global__ void exec_kernel_gpu(BondedCudaKernelParameters kernelParams)
+__global__ void exec_kernel_gpu(ListedForcesGpuKernelParameters kernelParams)
 {
     assert(blockDim.y == 1 && blockDim.z == 1);
     const int tid          = blockIdx.x * blockDim.x + threadIdx.x;
@@ -765,6 +765,8 @@ __global__ void exec_kernel_gpu(BondedCudaKernelParameters kernelParams)
                 threadComputedPotential = true;
             }
 
+            float3* d_f = asFloat3(kernelParams.d_f);
+
             switch (fType)
             {
                 case F_BONDS:
@@ -774,7 +776,7 @@ __global__ void exec_kernel_gpu(BondedCudaKernelParameters kernelParams)
                                                  iatoms,
                                                  kernelParams.d_forceParams,
                                                  kernelParams.d_xq,
-                                                 kernelParams.d_f,
+                                                 d_f,
                                                  sm_fShiftLoc,
                                                  kernelParams.pbcAiuc);
                     break;
@@ -785,7 +787,7 @@ __global__ void exec_kernel_gpu(BondedCudaKernelParameters kernelParams)
                                                   iatoms,
                                                   kernelParams.d_forceParams,
                                                   kernelParams.d_xq,
-                                                  kernelParams.d_f,
+                                                  d_f,
                                                   sm_fShiftLoc,
                                                   kernelParams.pbcAiuc);
                     break;
@@ -796,7 +798,7 @@ __global__ void exec_kernel_gpu(BondedCudaKernelParameters kernelParams)
                                                         iatoms,
                                                         kernelParams.d_forceParams,
                                                         kernelParams.d_xq,
-                                                        kernelParams.d_f,
+                                                        d_f,
                                                         sm_fShiftLoc,
                                                         kernelParams.pbcAiuc);
                     break;
@@ -808,7 +810,7 @@ __global__ void exec_kernel_gpu(BondedCudaKernelParameters kernelParams)
                                                  iatoms,
                                                  kernelParams.d_forceParams,
                                                  kernelParams.d_xq,
-                                                 kernelParams.d_f,
+                                                 d_f,
                                                  sm_fShiftLoc,
                                                  kernelParams.pbcAiuc);
                     break;
@@ -819,7 +821,7 @@ __global__ void exec_kernel_gpu(BondedCudaKernelParameters kernelParams)
                                                   iatoms,
                                                   kernelParams.d_forceParams,
                                                   kernelParams.d_xq,
-                                                  kernelParams.d_f,
+                                                  d_f,
                                                   sm_fShiftLoc,
                                                   kernelParams.pbcAiuc);
                     break;
@@ -830,7 +832,7 @@ __global__ void exec_kernel_gpu(BondedCudaKernelParameters kernelParams)
                                                  iatoms,
                                                  kernelParams.d_forceParams,
                                                  kernelParams.d_xq,
-                                                 kernelParams.d_f,
+                                                 d_f,
                                                  sm_fShiftLoc,
                                                  kernelParams.pbcAiuc);
                     break;
@@ -840,7 +842,7 @@ __global__ void exec_kernel_gpu(BondedCudaKernelParameters kernelParams)
                                                  iatoms,
                                                  kernelParams.d_forceParams,
                                                  kernelParams.d_xq,
-                                                 kernelParams.d_f,
+                                                 d_f,
                                                  sm_fShiftLoc,
                                                  kernelParams.pbcAiuc,
                                                  kernelParams.electrostaticsScaleFactor,
@@ -899,7 +901,8 @@ __global__ void exec_kernel_gpu(BondedCudaKernelParameters kernelParams)
         __syncthreads();
         if (threadIdx.x < c_numShiftVectors)
         {
-            atomicAdd(kernelParams.d_fShift[threadIdx.x], sm_fShiftLoc[threadIdx.x]);
+            float3* d_fShift = asFloat3(kernelParams.d_fShift);
+            atomicAdd(d_fShift[threadIdx.x], sm_fShiftLoc[threadIdx.x]);
         }
     }
 }
@@ -939,7 +942,7 @@ void ListedForcesGpu::Impl::launchKernel()
     wallcycle_stop(wcycle_, WallCycleCounter::LaunchGpu);
 }
 
-void ListedForcesGpu::launchKernel(const gmx::StepWorkload& stepWork)
+void ListedForcesGpu::launchKernel(const StepWorkload& stepWork)
 {
     if (stepWork.computeEnergy)
     {
