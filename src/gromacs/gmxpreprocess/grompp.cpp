@@ -1000,10 +1000,11 @@ static void read_posres(gmx_mtop_t*                              mtop,
                               natoms);
                 }
                 if (auto [unused, inserted] = positionRestraintIndices.insert(ai); !inserted) {
-                    GMX_THROW(gmx::InvalidInputError(gmx::formatString("Atom index (%d) in moltype '%s' has multiple position restraints. "
-                                                                                           "Overlapping position restraint potentials should be combined.",
-                                                                                           ai +1,
-                                                                                           *molinfo[molb.type].name)));
+                    GMX_THROW(gmx::InvalidInputError(gmx::formatString(
+                                            "Atom index (%d) in moltype '%s' has multiple position restraints. "
+                                            "Overlapping position restraint potentials should be combined.",
+                                            ai + 1,
+                                            *molinfo[molb.type].name)));
 
                 }
                 hadAtom[ai] = TRUE;

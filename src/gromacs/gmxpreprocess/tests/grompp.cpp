@@ -63,9 +63,18 @@ namespace
 class GromppTest : public CommandLineTestBase
 {
 public:
-    void setTopology(std::string_view top) { caller_.addOption("-p", top.data()); }
-    void setInputCoordinates(std::string_view coords) { caller_.addOption("-c", coords.data()); }
-    void setRestraintCoordinates(std::string_view coords) { caller_.addOption("-r", coords.data()); }
+    void setTopology(std::string_view top)
+    {
+        caller_.addOption("-p", top.data());
+    }
+    void setInputCoordinates(std::string_view coords)
+    {
+        caller_.addOption("-c", coords.data());
+    }
+    void setRestraintCoordinates(std::string_view coords)
+    {
+        caller_.addOption("-r", coords.data());
+    }
 
     void writeAndSetSimpleMdp()
     {
