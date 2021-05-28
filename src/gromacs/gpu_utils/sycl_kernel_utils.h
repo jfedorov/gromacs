@@ -105,6 +105,30 @@ static inline void subGroupBarrier(const cl::sycl::nd_item<1> itemIdx)
 #endif
 }
 
+#if GMX_SYCL_HIPSYCL
+template<class IndexType>
+__device__ __host__ static inline void atomicFetchAdd(cl::sycl::global_ptr<float> targetPtr, const IndexType idx, const float val)
+{
+#    ifdef SYCL_DEVICE_ONLY
+     atomicAdd(targetPtr + idx, val);
+#    else
+    GMX_ASSERT(false, "hipSYCL host codepath not supported");
+    GMX_UNUSED_VALUE(val);
+    GMX_UNUSED_VALUE(targetPtr);
+    GMX_UNUSED_VALUE(idx);
+#    endif
+
+}
+#elif GMX_SYCL_DPCPP
+template<class IndexType>
+static inline void atomicFetchAdd(cl::sycl::global_ptr<float> targetPtr, const IndexType idx, const float val)
+{
+    sycl_2020::atomic_ref<float, sycl_2020::memory_order::relaxed, sycl_2020::memory_scope::device, cl::sycl::access::address_space::global_space>
+            fout_atomic(targetPtr[idx]);
+    fout_atomic.fetch_add(val);
+}
+#endif
+
 namespace sycl_2020
 {
 #if GMX_SYCL_HIPSYCL

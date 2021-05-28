@@ -298,16 +298,16 @@ static inline float interpolateCoulombForceR(cl::sycl::global_ptr<float> gm_coul
     return lerp(left, right, fraction); // TODO: cl::sycl::mix
 }
 
-/*! \brief Reduce c_clSize j-force components using shifts and atomically accumulate into a_f.
+/*! \brief Reduce c_clSize j-force components using shifts and atomically accumulate into gm_f.
  *
  * c_clSize consecutive threads hold the force components of a j-atom which we
- * reduced in log2(cl_Size) steps using shift and atomically accumulate them into \p a_f.
+ * reduced in log2(cl_Size) steps using shift and atomically accumulate them into \p gm_f.
  */
 static inline void reduceForceJShuffle(Float3                             f,
                                        const cl::sycl::nd_item<1>         itemIdx,
                                        const int                          tidxi,
                                        const int                          aidx,
-                                       DeviceAccessor<float, mode_atomic> a_f)
+                                       cl::sycl::global_ptr<float>        gm_f)
 {
     static_assert(c_clSize == 8 || c_clSize == 4);
     sycl_2020::sub_group sg = itemIdx.get_sub_group();
@@ -334,14 +334,14 @@ static inline void reduceForceJShuffle(Float3                             f,
 
     if (tidxi < 3)
     {
-        atomicFetchAdd(a_f, 3 * aidx + tidxi, f[0]);
+        atomicFetchAdd(gm_f, 3 * aidx + tidxi, f[0]);
     }
 }
 
-/*! \brief Reduce c_clSize j-force components using local memory and atomically accumulate into a_f.
+/*! \brief Reduce c_clSize j-force components using local memory and atomically accumulate into gm_f.
  *
  * c_clSize consecutive threads hold the force components of a j-atom which we
- * reduced in cl_Size steps using shift and atomically accumulate them into \p a_f.
+ * reduced in cl_Size steps using shift and atomically accumulate them into \p gm_f.
  *
  * TODO: implement binary reduction flavor for the case where cl_Size is power of two.
  */
@@ -351,7 +351,7 @@ static inline void reduceForceJGeneric(cl::sycl::local_ptr<float>         sm_buf
                                        const int                          tidxi,
                                        const int                          tidxj,
                                        const int                          aidx,
-                                       DeviceAccessor<float, mode_atomic> a_f)
+                                       cl::sycl::global_ptr<float>        gm_f)
 {
     static constexpr int sc_fBufferStride = c_clSizeSq;
     int                  tidx             = tidxi + tidxj * c_clSize;
@@ -372,12 +372,12 @@ static inline void reduceForceJGeneric(cl::sycl::local_ptr<float>         sm_buf
             fSum += sm_buf[sc_fBufferStride * tidxi + j];
         }
 
-        atomicFetchAdd(a_f, 3 * aidx + tidxi, fSum);
+        atomicFetchAdd(gm_f, 3 * aidx + tidxi, fSum);
     }
 }
 
 
-/*! \brief Reduce c_clSize j-force components using either shifts or local memory and atomically accumulate into a_f.
+/*! \brief Reduce c_clSize j-force components using either shifts or local memory and atomically accumulate into gm_f.
  */
 static inline void reduceForceJ(cl::sycl::local_ptr<float>         sm_buf,
                                 Float3                             f,
@@ -385,15 +385,15 @@ static inline void reduceForceJ(cl::sycl::local_ptr<float>         sm_buf,
                                 const int                          tidxi,
                                 const int                          tidxj,
                                 const int                          aidx,
-                                DeviceAccessor<float, mode_atomic> a_f)
+                                cl::sycl::global_ptr<float>        gm_f)
 {
     if constexpr (!gmx::isPowerOfTwo(c_nbnxnGpuNumClusterPerSupercluster))
     {
-        reduceForceJGeneric(sm_buf, f, itemIdx, tidxi, tidxj, aidx, a_f);
+        reduceForceJGeneric(sm_buf, f, itemIdx, tidxi, tidxj, aidx, gm_f);
     }
     else
     {
-        reduceForceJShuffle(f, itemIdx, tidxi, aidx, a_f);
+        reduceForceJShuffle(f, itemIdx, tidxi, aidx, gm_f);
     }
 }
 
@@ -401,8 +401,8 @@ static inline void reduceForceJ(cl::sycl::local_ptr<float>         sm_buf,
 /*! \brief Final i-force reduction.
  *
  * Reduce c_nbnxnGpuNumClusterPerSupercluster i-force componets stored in \p fCiBuf[]
- * accumulating atomically into \p a_f.
- * If \p calcFShift is true, further reduce shift forces and atomically accumulate into \p a_fShift.
+ * accumulating atomically into \p gm_f.
+ * If \p calcFShift is true, further reduce shift forces and atomically accumulate into \p gm_fShift.
  *
  * This implementation works only with power of two array sizes.
  */
@@ -414,8 +414,8 @@ static inline void reduceForceIAndFShift(cl::sycl::local_ptr<float> sm_buf,
                                          const int                          tidxj,
                                          const int                          sci,
                                          const int                          shift,
-                                         DeviceAccessor<float, mode_atomic> a_f,
-                                         DeviceAccessor<float, mode_atomic> a_fShift)
+                                         cl::sycl::global_ptr<float>        gm_f,
+                                         cl::sycl::global_ptr<float>        gm_fShift)
 {
     // must have power of two elements in fCiBuf
     static_assert(gmx::isPowerOfTwo(c_nbnxnGpuNumClusterPerSupercluster));
@@ -459,7 +459,7 @@ static inline void reduceForceIAndFShift(cl::sycl::local_ptr<float> sm_buf,
         {
             const float f =
                     sm_buf[tidxj * bufStride + tidxi] + sm_buf[tidxj * bufStride + c_clSize + tidxi];
-            atomicFetchAdd(a_f, 3 * aidx + tidxj, f);
+            atomicFetchAdd(gm_f, 3 * aidx + tidxj, f);
             if (calcFShift)
             {
                 fShiftBuf += f;
@@ -475,7 +475,7 @@ static inline void reduceForceIAndFShift(cl::sycl::local_ptr<float> sm_buf,
            storing the reduction result above. */
         if (tidxj < 3)
         {
-            atomicFetchAdd(a_fShift, 3 * shift + tidxj, fShiftBuf);
+            atomicFetchAdd(gm_fShift, 3 * shift + tidxj, fShiftBuf);
         }
     }
 }
@@ -603,6 +603,28 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
     {
         const cl::sycl::global_ptr<Float4>       gm_xq        = a_xq.get_pointer();
         cl::sycl::global_ptr<nbnxn_cj4_t>        gm_plistCJ4  = a_plistCJ4.get_pointer();
+        cl::sycl::global_ptr<float>              gm_f         = a_f.get_pointer();
+        cl::sycl::global_ptr<float>              gm_fShift    = a_fShift.get_pointer();
+        cl::sycl::global_ptr<float> gm_energyElec = [&]() {
+            if  constexpr (doCalcEnergies)
+            {
+                return a_energyElec.get_pointer();
+            }
+            else
+            {
+                return nullptr;
+            }
+        }();
+        cl::sycl::global_ptr<float>   gm_energyVdw    = [&]() {
+            if  constexpr (doCalcEnergies)
+            {
+                return a_energyVdw.get_pointer();
+            }
+            else
+            {
+                return nullptr;
+            }
+        }();
         const cl::sycl::global_ptr<nbnxn_sci_t>  gm_plistSci  = a_plistSci.get_pointer();
         const cl::sycl::global_ptr<nbnxn_excl_t> gm_plistExcl = a_plistExcl.get_pointer();
         const cl::sycl::global_ptr<Float3>       gm_shiftVec  = a_shiftVec.get_pointer();
@@ -1022,7 +1044,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
                     maskJI += maskJI;
                 } // for (int i = 0; i < c_nbnxnGpuNumClusterPerSupercluster; i++)
                 /* reduce j forces */
-                reduceForceJ(sm_reductionBuffer, fCjBuf, itemIdx, tidxi, tidxj, aj, a_f);
+                reduceForceJ(sm_reductionBuffer, fCjBuf, itemIdx, tidxi, tidxj, aj, gm_f);
             } // for (int jm = 0; jm < c_nbnxnGpuJgroupSize; jm++)
             if constexpr (doPruneNBL)
             {
@@ -1036,7 +1058,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
         const bool doCalcShift = (calcShift && !(nbSci.shift == gmx::c_centralShiftIndex));
 
         reduceForceIAndFShift(
-                sm_reductionBuffer, fCiBuf, doCalcShift, itemIdx, tidxi, tidxj, sci, nbSci.shift, a_f, a_fShift);
+                sm_reductionBuffer, fCiBuf, doCalcShift, itemIdx, tidxi, tidxj, sci, nbSci.shift, gm_f, gm_fShift);
 
         if constexpr (doCalcEnergies)
         {
@@ -1047,8 +1069,8 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
 
             if (tidx == 0)
             {
-                atomicFetchAdd(a_energyVdw, 0, energyVdwGroup);
-                atomicFetchAdd(a_energyElec, 0, energyElecGroup);
+                atomicFetchAdd(gm_energyVdw, 0, energyVdwGroup);
+                atomicFetchAdd(gm_energyElec, 0, energyElecGroup);
             }
         }
     };
