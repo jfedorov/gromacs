@@ -47,6 +47,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <unordered_set>
 #include <vector>
 
 #include <sys/types.h>
@@ -972,6 +973,8 @@ static void read_posres(gmx_mtop_t*                              mtop,
     totmass = 0;
     a       = 0;
     snew(hadAtom, natoms);
+
+
     for (gmx_molblock_t& molb : mtop->molblock)
     {
         nat_molb                       = molb.nmol * mtop->moltype[molb.type].atoms.nr;
@@ -980,6 +983,8 @@ static void read_posres(gmx_mtop_t*                              mtop,
         if (pr->size() > 0 || prfb->size() > 0)
         {
             atom = mtop->moltype[molb.type].atoms.atom;
+            std::unordered_set<int> positionRestraintIndices;
+
             for (const auto& restraint : pr->interactionTypes)
             {
                 int ai = restraint.ai();
@@ -992,6 +997,14 @@ static void read_posres(gmx_mtop_t*                              mtop,
                               *molinfo[molb.type].name,
                               fn,
                               natoms);
+                }
+                if (auto [unused, inserted] = positionRestraintIndices.insert(ai); !inserted) {
+                    gmx_fatal(FARGS,
+                              "Atom index (%d) in moltype '%s' has multiple position restraints. "
+                              "Overlapping position restraint potentials should be combined.",
+                              ai +1,
+                              *molinfo[molb.type].name
+                            );
                 }
                 hadAtom[ai] = TRUE;
                 if (rc_scaling == RefCoordScaling::Com)
