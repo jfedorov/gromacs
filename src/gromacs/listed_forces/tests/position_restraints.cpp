@@ -79,9 +79,8 @@ namespace
 
 //! Tolerance for float evaluation
 constexpr float c_precisionTolerance = 1e-6;
-constexpr int   c_numOmpThreads      = 2;
 
-class PositionRestraintsTest : public ::testing::TestWithParam<std::tuple<RefCoordScaling, PbcType>>
+class PositionRestraintsTest : public ::testing::TestWithParam<std::tuple<RefCoordScaling, PbcType, int>>
 {
 protected:
     std::vector<RVec> x_;
@@ -91,6 +90,7 @@ protected:
     t_pbc   pbc_;
     PbcType pbcType_;
 
+    int                              numThreads_;
     t_nrnb                           nrnb_;
     t_forcerec                       fr_;
     InteractionDefinitions           idef_;
@@ -105,6 +105,7 @@ protected:
     {
         refCoordScaling_ = std::get<0>(GetParam());
         pbcType_         = std::get<1>(GetParam());
+        numThreads_      = std::get<2>(GetParam());
 
         clear_mat(box_);
         box_[0][0] = 0.9;
@@ -157,7 +158,7 @@ TEST_P(PositionRestraintsTest, BasicPosResNoFreeEnergy)
     const std::vector<RVec> referencePositions = { { 0.0, 0.0, 0.0 }, { 0.5, 0.6, 0.0 } };
     const std::vector<RVec> forceConstants     = { { 1000, 500, 250 }, { 0, 200, 400 } };
     setValues(positions, referencePositions, forceConstants);
-    posres_wrapper(c_numOmpThreads,
+    posres_wrapper(numThreads_,
                    &nrnb_,
                    idef_,
                    &pbc_,
@@ -173,16 +174,18 @@ TEST_P(PositionRestraintsTest, BasicPosResNoFreeEnergy)
 }
 
 //! PBC values for testing
-std::vector<PbcType> c_pbcForTests = { PbcType::No, PbcType::XY, PbcType::Xyz };
+std::array<PbcType, 3> c_pbcForTests = { PbcType::No, PbcType::XY, PbcType::Xyz };
 //! Reference Coordinate Scaling values for testing
-std::vector<RefCoordScaling> c_refCoordScalingForTests = { RefCoordScaling::No,
+std::array<RefCoordScaling, 3> c_refCoordScalingForTests = { RefCoordScaling::No,
                                                            RefCoordScaling::Com,
                                                            RefCoordScaling::All };
+std::array<int, 3> c_threadCounts = {1, 2, 3};
 
 INSTANTIATE_TEST_CASE_P(PosResBasicTest,
                         PositionRestraintsTest,
                         ::testing::Combine(::testing::ValuesIn(c_refCoordScalingForTests),
-                                           ::testing::ValuesIn(c_pbcForTests)));
+                                           ::testing::ValuesIn(c_pbcForTests),
+                                           ::testing::ValuesIn(c_threadCounts)));
 
 } // namespace
 
