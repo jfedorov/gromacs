@@ -5,12 +5,12 @@
     <Int Name="Length">2</Int>
     <Vector>
       <Real Name="X">0</Real>
-      <Real Name="Y">-250</Real>
+      <Real Name="Y">0</Real>
       <Real Name="Z">0</Real>
     </Vector>
     <Vector>
       <Real Name="X">0</Real>
-      <Real Name="Y">-80</Real>
+      <Real Name="Y">20</Real>
       <Real Name="Z">-240</Real>
     </Vector>
   </Sequence>
@@ -23,7 +23,7 @@
     </Vector>
     <Vector>
       <Real Name="X">0</Real>
-      <Real Name="Y">102.5</Real>
+      <Real Name="Y">-5</Real>
       <Real Name="Z">0</Real>
     </Vector>
     <Vector>
@@ -32,5 +32,5 @@
       <Real Name="Z">72</Real>
     </Vector>
   </Sequence>
-  <Real Name="Potential energy">150.5</Real>
+  <Real Name="Potential energy">73</Real>
 </ReferenceData>

@@ -11,7 +11,7 @@
     <Vector>
       <Real Name="X">0</Real>
       <Real Name="Y">20</Real>
-      <Real Name="Z">-240</Real>
+      <Real Name="Z">200</Real>
     </Vector>
   </Sequence>
   <Sequence Name="Virial contribution">
@@ -23,14 +23,14 @@
     </Vector>
     <Vector>
       <Real Name="X">0</Real>
-      <Real Name="Y">1</Real>
+      <Real Name="Y">-5</Real>
       <Real Name="Z">0</Real>
     </Vector>
     <Vector>
       <Real Name="X">0</Real>
       <Real Name="Y">0</Real>
-      <Real Name="Z">72</Real>
+      <Real Name="Z">50</Real>
     </Vector>
   </Sequence>
-  <Real Name="Potential energy">73</Real>
+  <Real Name="Potential energy">51</Real>
 </ReferenceData>
