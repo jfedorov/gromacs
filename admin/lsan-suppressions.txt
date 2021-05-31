@@ -18,6 +18,7 @@ leak:get_zone_pulse_groups
 leak:gmx::DomainDecompositionBuilder::Impl::build
 leak:gmx::DomainDecompositionBuilder::Impl::Impl
 leak:gmx_check
+leak:gmx_grompp
 leak:gmx_make_edi
 leak:gmx_pme_receive_f
 leak:init_dfhist_state
