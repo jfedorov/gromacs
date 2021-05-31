@@ -1000,6 +1000,9 @@ static void read_posres(gmx_mtop_t*                              mtop,
                               natoms);
                 }
                 if (auto inserted = positionRestraintIndices.insert(ai); !inserted.second) {
+                    // Failure to clean up the global inputrec structure leads to failures in
+                    // successive gmx_grompp() calls after this throws.
+                    done_inputrec_strings();
                     GMX_THROW(gmx::InvalidInputError(gmx::formatString(
                                             "Atom index (%d) in moltype '%s' has multiple position restraints. "
                                             "Overlapping position restraint potentials should be combined.",
