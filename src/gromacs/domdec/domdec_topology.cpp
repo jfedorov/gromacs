@@ -850,14 +850,17 @@ void dd_make_reverse_top(FILE*                           fplog,
     }
 }
 
-/*! \brief Store a vsite interaction at the end of \p il
+/*! \brief Store a vsite at the end of \p il, returns an array with parameter and atom indices
  *
  * This routine is very similar to add_ifunc, but vsites interactions
  * have more work to do than other kinds of interactions, and the
  * complex way nral (and thus vector contents) depends on ftype
  * confuses static analysis tools unless we fuse the vsite
  * atom-indexing organization code with the ifunc-adding code, so that
- * they can see that nral is the same value. */
+ * they can see that nral is the same value.
+ *
+ * \returns an array with the parameter index and the NRAL atom indices
+ */
 static inline ArrayRef<const int> add_ifunc_for_vsites(const gmx_ga2la_t&  ga2la,
                                                        const int           nral,
                                                        const bool          isLocalVsite,
