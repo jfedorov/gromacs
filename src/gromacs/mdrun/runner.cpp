@@ -63,6 +63,7 @@
 #include "gromacs/domdec/gpuhaloexchange.h"
 #include "gromacs/domdec/localatomsetmanager.h"
 #include "gromacs/domdec/partition.h"
+#include "gromacs/domdec/reversetopology.h"
 #include "gromacs/ewald/ewald_utils.h"
 #include "gromacs/ewald/pme.h"
 #include "gromacs/ewald/pme_gpu_program.h"
@@ -82,7 +83,7 @@
 #include "gromacs/hardware/printhardware.h"
 #include "gromacs/imd/imd.h"
 #include "gromacs/listed_forces/disre.h"
-#include "gromacs/listed_forces/gpubonded.h"
+#include "gromacs/listed_forces/listed_forces_gpu.h"
 #include "gromacs/listed_forces/listed_forces.h"
 #include "gromacs/listed_forces/orires.h"
 #include "gromacs/math/functions.h"
@@ -1599,7 +1600,7 @@ int Mdrunner::mdrunner()
     const bool               thisRankHasPmeGpuTask = gpuTaskAssignments.thisRankHasPmeGpuTask();
     std::unique_ptr<MDAtoms> mdAtoms;
     std::unique_ptr<VirtualSitesHandler> vsite;
-    std::unique_ptr<GpuBonded>           gpuBonded;
+    std::unique_ptr<ListedForcesGpu>     listedForcesGpu;
 
     t_nrnb nrnb;
     if (thisRankHasDuty(cr, DUTY_PP))
@@ -1664,13 +1665,13 @@ int Mdrunner::mdrunner()
             GMX_RELEASE_ASSERT(deviceStreamManager != nullptr,
                                "GPU device stream manager should be valid in order to use GPU "
                                "version of bonded forces.");
-            gpuBonded = std::make_unique<GpuBonded>(
+            listedForcesGpu = std::make_unique<ListedForcesGpu>(
                     mtop.ffparams,
                     fr->ic->epsfac * fr->fudgeQQ,
                     deviceStreamManager->context(),
                     deviceStreamManager->bondedStream(havePPDomainDecomposition(cr)),
                     wcycle.get());
-            fr->gpuBonded = gpuBonded.get();
+            fr->listedForcesGpu = listedForcesGpu.get();
         }
 
         /* Initialize the mdAtoms structure.
@@ -1937,9 +1938,9 @@ int Mdrunner::mdrunner()
         {
             GMX_RELEASE_ASSERT(fr, "fr was NULL while cr->duty was DUTY_PP");
             /* This call is not included in init_domain_decomposition
-             * because fr->cginfo_mb is set later.
+             * because fr->atomInfoForEachMoleculeBlock is set later.
              */
-            makeBondedLinks(cr->dd, mtop, fr->cginfo_mb);
+            makeBondedLinks(cr->dd, mtop, fr->atomInfoForEachMoleculeBlock);
         }
 
         if (runScheduleWork.simulationWork.useGpuBufferOps)
@@ -2060,7 +2061,7 @@ int Mdrunner::mdrunner()
     mdAtoms.reset(nullptr);
     globalState.reset(nullptr);
     mdModules_.reset(nullptr); // destruct force providers here as they might also use the GPU
-    gpuBonded.reset(nullptr);
+    listedForcesGpu.reset(nullptr);
     fr.reset(nullptr); // destruct forcerec before gpu
     // TODO convert to C++ so we can get rid of these frees
     sfree(disresdata);

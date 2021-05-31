@@ -66,7 +66,7 @@
 #include "gromacs/math/vectypes.h"
 #include "gromacs/utility/real.h"
 
-struct cginfo_mb_t;
+struct AtomInfoWithinMoleculeBlock;
 struct gmx_domdec_t;
 struct gmx_ddbox_t;
 struct gmx_domdec_zones_t;
@@ -241,81 +241,16 @@ gmx::ArrayRef<const int> dd_constraints_nlocalatoms(const gmx_domdec_t* dd);
 
 /* In domdec_top.c */
 
-/*! \brief Print error output when interactions are missing */
-[[noreturn]] void dd_print_missing_interactions(const gmx::MDLogger&           mdlog,
-                                                t_commrec*                     cr,
-                                                int                            local_count,
-                                                const gmx_mtop_t&              top_global,
-                                                const gmx_localtop_t*          top_local,
-                                                gmx::ArrayRef<const gmx::RVec> x,
-                                                const matrix                   box);
-
-/*! \brief Generate and store the reverse topology */
-void dd_make_reverse_top(FILE*                           fplog,
-                         gmx_domdec_t*                   dd,
-                         const gmx_mtop_t&               mtop,
-                         const gmx::VirtualSitesHandler* vsite,
-                         const t_inputrec&               inputrec,
-                         gmx::DDBondedChecking           ddBondedChecking);
-
-/*! \brief Set that the number of bonded interactions in the local
- * topology should be checked via observables reduction. */
-void scheduleCheckOfLocalTopology(gmx_domdec_t* dd, int numBondedInteractionsToReduce);
-
-/*! \brief Return whether the total bonded interaction count across
- * domains should be checked this step. */
-bool shouldCheckNumberOfBondedInteractions(const gmx_domdec_t& dd);
-
-//! Return the number of bonded interactions in this domain.
-int numBondedInteractions(const gmx_domdec_t& dd);
-
-/*! \brief Set total bonded interaction count across domains. */
-void setNumberOfBondedInteractionsOverAllDomains(const gmx_domdec_t& dd, int newValue);
-
-/*! \brief Check whether bonded interactions are missing from the reverse topology
- * produced by domain decomposition.
- *
- * Must only be called when DD is active.
- *
- * \param[in]    mdlog                                  Logger
- * \param[in]    cr                                     Communication object
- * \param[in]    top_global                             Global topology for the error message
- * \param[in]    top_local                              Local topology for the error message
- * \param[in]    x                                      Position vector for the error message
- * \param[in]    box                                    Box matrix for the error message
- */
-void checkNumberOfBondedInteractions(const gmx::MDLogger&           mdlog,
-                                     t_commrec*                     cr,
-                                     const gmx_mtop_t&              top_global,
-                                     const gmx_localtop_t*          top_local,
-                                     gmx::ArrayRef<const gmx::RVec> x,
-                                     const matrix                   box);
-
-/*! \brief Generate the local topology and virtual site data
- *
- * \returns Total count of bonded interactions in the local topology on this domain */
-int dd_make_local_top(struct gmx_domdec_t*           dd,
-                      struct gmx_domdec_zones_t*     zones,
-                      int                            npbcdim,
-                      matrix                         box,
-                      rvec                           cellsize_min,
-                      const ivec                     npulse,
-                      t_forcerec*                    fr,
-                      gmx::ArrayRef<const gmx::RVec> coordinates,
-                      const gmx_mtop_t&              top,
-                      gmx_localtop_t*                ltop);
-
-/*! \brief Sort ltop->ilist when we are doing free energy. */
-void dd_sort_local_top(const gmx_domdec_t& dd, const t_mdatoms* mdatoms, gmx_localtop_t* ltop);
-
 /*! \brief Construct local state */
 void dd_init_local_state(const gmx_domdec_t& dd, const t_state* state_global, t_state* local_state);
 
 /*! \brief Generate a list of links between atoms that are linked by bonded interactions
  *
- * Also stores whether atoms are linked in \p cginfo_mb.
+ * Also stores whether atoms are linked in \p atomInfoForEachMoleculeBlock.
  */
-void makeBondedLinks(gmx_domdec_t* dd, const gmx_mtop_t& mtop, gmx::ArrayRef<cginfo_mb_t> cginfo_mb);
+void makeBondedLinks(gmx_domdec_t*                              dd,
+                     const gmx_mtop_t&                          mtop,
+                     gmx::ArrayRef<AtomInfoWithinMoleculeBlock> atomInfoForEachMoleculeBlock);
 
 /*! \brief Calculate the maximum distance involved in 2-body and multi-body bonded interactions */
 void dd_bonded_cg_distance(const gmx::MDLogger&           mdlog,

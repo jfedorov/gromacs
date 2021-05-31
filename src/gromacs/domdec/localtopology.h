@@ -1,9 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2005,2006,2007,2008,2009 by the GROMACS development team.
- * Copyright (c) 2010,2012,2013,2014,2015 by the GROMACS development team.
- * Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
+ * Copyright (c) 2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -34,42 +32,48 @@
  * To help us fund GROMACS development, we humbly ask that you cite
  * the research papers on the package. Check out http://www.gromacs.org.
  */
-/*! \internal \file
+/*! \libinternal \file
  *
- * \brief This file declares functions for domdec to use
- * while managing inter-atomic constraints.
+ * \brief This file makes declarations used for building
+ * the local topology
  *
- * \author Berk Hess <hess@kth.se>
+ * \inlibraryapi
  * \ingroup module_domdec
  */
 
-#ifndef GMX_DOMDEC_DOMDEC_CONSTRAINTS_H
-#define GMX_DOMDEC_DOMDEC_CONSTRAINTS_H
+#ifndef GMX_DOMDEC_LOCALTOPOLOGY_H
+#define GMX_DOMDEC_LOCALTOPOLOGY_H
 
-#include "gromacs/utility/arrayref.h"
+#include "gromacs/math/vectypes.h"
+
+struct gmx_domdec_t;
+struct gmx_domdec_zones_t;
+struct gmx_localtop_t;
+struct gmx_mtop_t;
+struct t_forcerec;
+struct t_mdatoms;
 
 namespace gmx
 {
-class Constraints;
+template<typename>
+class ArrayRef;
 }
 
-struct gmx_domdec_t;
-struct gmx_mtop_t;
-struct InteractionList;
+/*! \brief Generate the local topology and virtual site data
+ *
+ * \returns Total count of bonded interactions in the local topology on this domain */
+int dd_make_local_top(struct gmx_domdec_t*           dd,
+                      struct gmx_domdec_zones_t*     zones,
+                      int                            npbcdim,
+                      matrix                         box,
+                      rvec                           cellsize_min,
+                      const ivec                     npulse,
+                      t_forcerec*                    fr,
+                      gmx::ArrayRef<const gmx::RVec> coordinates,
+                      const gmx_mtop_t&              top,
+                      gmx_localtop_t*                ltop);
 
-/*! \brief Clears the local indices for the constraint communication setup */
-void dd_clear_local_constraint_indices(gmx_domdec_t* dd);
-
-/*! \brief Sets up communication and atom indices for all local+connected constraints */
-int dd_make_local_constraints(struct gmx_domdec_t*           dd,
-                              int                            at_start,
-                              const struct gmx_mtop_t&       mtop,
-                              const int*                     atomInfo,
-                              gmx::Constraints*              constr,
-                              int                            nrec,
-                              gmx::ArrayRef<InteractionList> il_local);
-
-/*! \brief Initializes the data structures for constraint communication */
-void init_domdec_constraints(gmx_domdec_t* dd, const gmx_mtop_t& mtop);
+/*! \brief Sort ltop->ilist when we are doing free energy. */
+void dd_sort_local_top(const gmx_domdec_t& dd, const t_mdatoms* mdatoms, gmx_localtop_t* ltop);
 
 #endif
