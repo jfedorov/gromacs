@@ -71,9 +71,9 @@ TopologyHolder::TopologyHolder(std::vector<ITopologyHolderClient*> clients,
         //       TopologyHolder has no access to the forces, so we are passing a nullptr
         //       TODO: Find a unique approach to resizing the forces in modular simulator (#3461)
         mdAlgorithmsPrepareAtomData(cr, *inputrec, globalTopology_, localTopology_.get(), nullptr, mdAtoms);
+        mdAlgorithmsDistributeAtomData(
+                cr, localTopology_.get(), fr, mdAtoms, constr, vsite, nullptr, numHomeAtoms(cr, globalTopology_));
     }
-    mdAlgorithmsDistributeAtomData(
-            cr, localTopology_.get(), fr, mdAtoms, constr, vsite, nullptr, numHomeAtoms(cr, globalTopology_));
     // Send copy of initial topology to clients
     updateLocalTopology();
 }
