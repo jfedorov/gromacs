@@ -58,6 +58,8 @@
 #include "gromacs/mdtypes/pull_params.h"
 #include "gromacs/utility/gmxmpi.h"
 
+#include "pullcoordexpressionparser.h"
+
 /*! \brief Determines up to what local atom count a pull group gets processed single-threaded.
  *
  * We set this limit to 1 with debug to catch bugs.
@@ -72,6 +74,8 @@ static const int c_pullMaxNumLocalAtomsSingleThreaded = 1;
 
 class PullHistory;
 enum class PbcType : int;
+
+class t_state;
 
 enum
 {
@@ -148,13 +152,17 @@ struct PullCoordSpatialData
 //! \brief Struct with parameters and force evaluation local data for a pull coordinate
 struct pull_coord_work_t
 {
-    //! Constructor
-    pull_coord_work_t(const t_pull_coord& params) :
+    //! Constructor, \p coordIndex should match the index in the list of coordinates
+    pull_coord_work_t(const t_pull_coord& params, const int coordIndex) :
         params(params),
         value_ref(0),
         spatialData(),
         scalarForce(0),
-        bExternalPotentialProviderHasBeenRegistered(false)
+        bExternalPotentialProviderHasBeenRegistered(false),
+        expressionParser(params.eGeom == PullGroupGeometry::Transformation ? params.expression : "",
+                         coordIndex),
+        coordIndex(coordIndex),
+        transformationVariables(params.eGeom == PullGroupGeometry::Transformation ? coordIndex : 0)
     {
     }
 
@@ -174,6 +182,13 @@ struct pull_coord_work_t
 
     //! For external-potential coordinates only, for checking if a provider has been registered
     bool bExternalPotentialProviderHasBeenRegistered;
+
+    //! The expression parser for a transformation coordinate
+    gmx::PullCoordExpressionParser expressionParser;
+    //! The index of this coordinate int the list of coordinates
+    const int coordIndex;
+    //! Variables from other pull coordinates for a transformation coordinate
+    std::vector<double> transformationVariables;
 };
 
 /* Struct for storing vectorial forces for a pull coordinate */
