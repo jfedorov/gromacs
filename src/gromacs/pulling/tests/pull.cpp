@@ -43,6 +43,8 @@
 
 #include "gromacs/pulling/pull.h"
 
+#include "config.h"
+
 #include <cmath>
 
 #include <algorithm>
@@ -52,6 +54,7 @@
 #include "gromacs/math/vec.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/pulling/pull_internal.h"
+#include "gromacs/pulling/transformationcoordinate.h"
 #include "gromacs/utility/smalloc.h"
 
 #include "testutils/refdata.h"
@@ -194,6 +197,56 @@ TEST_F(PullTest, MaxPullDistanceXySkewedBox)
 
     test(PbcType::XY, box);
 }
+
+#if HAVE_MUPARSER
+TEST_F(PullTest, TransformationCoord)
+{
+    t_pbc pbc;
+
+    // PBC stuff
+    matrix box = { { 10, 0, 0 }, { 0, 10, 0 }, { 0, 0, 10 } };
+    set_pbc(&pbc, PbcType::Xyz, box);
+
+    pull_t pull;
+
+    // Create standard pull coordinate
+    t_pull_coord params;
+    params.eGeom      = PullGroupGeometry::Distance;
+    params.coordIndex = 0;
+    pull.coord.emplace_back(params);
+
+    // Create transformation pull coordinate
+    params.eGeom           = PullGroupGeometry::Transformation;
+    std::string expression = "x1^2 + 3";
+    params.expression      = expression;
+    params.coordIndex      = 1;
+    pull.coord.emplace_back(params);
+
+    for (double v = 0; v < 10; v += 1)
+    {
+        // transformation pull coord value
+        pull.coord[0].spatialData.value = v;
+        pull.coord[1].spatialData.value = getTransformationPullCoordinateValue(
+                &pull.coord[1], constArrayRefFromArray(pull.coord.data(), 1));
+        // Since we perform numerical differentiation and floating point operations
+        // we only expect the results below to be approximately equal
+        double expected = v * v + 3;
+        EXPECT_REAL_EQ_TOL(pull.coord[1].spatialData.value, expected, defaultRealTolerance());
+
+        // force and derivative
+        double transformationForce = v + 0.5;
+        pull.coord[1].scalarForce  = transformationForce;
+        double variableForce       = computeForceFromTransformationPullCoord(&pull.coord[1], 0);
+        expected                   = 2 * v * transformationForce;
+        double finiteDiffInputSize = square(v + c_pullTransformationCoordinateDifferentationEpsilon) + 3;
+        EXPECT_REAL_EQ_TOL(variableForce,
+                           expected,
+                           test::relativeToleranceAsFloatingPoint(
+                                   finiteDiffInputSize,
+                                   1e-15 / c_pullTransformationCoordinateDifferentationEpsilon));
+    }
+}
+#endif // HAVE_MUPARSER
 
 } // namespace
 

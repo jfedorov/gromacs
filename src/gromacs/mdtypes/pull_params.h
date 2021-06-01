@@ -80,6 +80,8 @@ struct t_pull_coord
     std::string externalPotentialProvider;
     //! The pull geometry
     PullGroupGeometry eGeom = PullGroupGeometry::Distance;
+    //! Mathematical expression evaluated by the pull code for transformation coordinates.
+    std::string expression;
     //! The number of groups, depends on eGeom
     int ngroup = 0;
     /*! \brief The pull groups:
