@@ -65,7 +65,8 @@ namespace gmx
  * The final solution should be an MD algorithm base class with methods
  * for initialization and atom-data setup.
  */
-void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
+void mdAlgorithmsSetupAtomData(const int            numTotalAtoms,
+                               const t_commrec*     cr,
                                const t_inputrec&    inputrec,
                                const gmx_mtop_t&    top_global,
                                gmx_localtop_t*      top,
@@ -78,44 +79,18 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
 {
     bool usingDomDec = DOMAINDECOMP(cr);
 
-    int numAtomIndex;
-    int numHomeAtoms;
-    int numTotalAtoms;
-
-    if (usingDomDec)
-    {
-        numAtomIndex  = dd_natoms_mdatoms(*cr->dd);
-        numHomeAtoms  = dd_numHomeAtoms(*cr->dd);
-        numTotalAtoms = dd_natoms_mdatoms(*cr->dd);
-    }
-    else
-    {
-        numAtomIndex  = -1;
-        numHomeAtoms  = top_global.natoms;
-        numTotalAtoms = top_global.natoms;
-    }
-
     if (force != nullptr)
     {
         force->resize(numTotalAtoms);
     }
 
-    atoms2md(top_global,
-             inputrec,
-             numAtomIndex,
-             usingDomDec ? cr->dd->globalAtomIndices : std::vector<int>(),
-             numHomeAtoms,
-             mdAtoms);
-
-    t_mdatoms* mdatoms = mdAtoms->mdatoms();
-    if (usingDomDec)
+    if (!usingDomDec)
     {
-        dd_sort_local_top(*cr->dd, mdatoms, top);
-    }
-    else
-    {
+        atoms2md(top_global, inputrec, -1, std::vector<int>(), top_global.natoms, mdAtoms);
         gmx_mtop_generate_local_top(top_global, top, inputrec.efep != FreeEnergyPerturbationType::No);
     }
+
+    t_mdatoms* mdatoms = mdAtoms->mdatoms();
 
     if (vsite)
     {
@@ -146,7 +121,7 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
         /* This handles the PP+PME rank case where fr->pmedata is valid.
          * For PME-only ranks, gmx_pmeonly() has its own call to gmx_pme_reinit_atoms().
          */
-        const int numPmeAtoms = numHomeAtoms - fr->n_tpi;
+        const int numPmeAtoms = top_global.natoms - fr->n_tpi;
         gmx_pme_reinit_atoms(fr->pmedata,
                              numPmeAtoms,
                              mdatoms->chargeA ? gmx::arrayRefFromArray(mdatoms->chargeA, mdatoms->nr)

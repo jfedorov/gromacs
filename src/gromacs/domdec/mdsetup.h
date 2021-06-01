@@ -76,6 +76,7 @@ void make_local_shells(const t_commrec* cr, const t_mdatoms& md, gmx_shellfc_t* 
  * This routine sets the atom data for the (locally available) atoms.
  * This is called at the start of serial runs and during domain decomposition.
  *
+ * \param[in] numTotalAtoms  Number of atoms used for resizing force buffer
  * \param[in]     cr         Communication record
  * \param[in]     inputrec   Input parameter record
  * \param[in]     top_global The global topology
@@ -87,7 +88,8 @@ void make_local_shells(const t_commrec* cr, const t_mdatoms& md, gmx_shellfc_t* 
  * \param[in,out] vsite      The virtual site data, can be NULL
  * \param[in,out] shellfc    The shell/flexible-constraint data, can be NULL
  */
-void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
+void mdAlgorithmsSetupAtomData(int                  numTotalAtoms,
+                               const t_commrec*     cr,
                                const t_inputrec&    inputrec,
                                const gmx_mtop_t&    top_global,
                                gmx_localtop_t*      top,

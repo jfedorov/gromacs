@@ -409,7 +409,8 @@ void gmx::LegacySimulator::do_md()
         state = state_global;
 
         /* Generate and initialize new topology */
-        mdAlgorithmsSetupAtomData(cr, *ir, top_global, &top, fr, &f, mdAtoms, constr, vsite, shellfc);
+        mdAlgorithmsSetupAtomData(
+                top_global.natoms, cr, *ir, top_global, &top, fr, &f, mdAtoms, constr, vsite, shellfc);
 
         upd.updateAfterPartition(state->natoms,
                                  md->cFREEZE ? gmx::arrayRefFromArray(md->cFREEZE, md->nr)

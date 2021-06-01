@@ -131,7 +131,11 @@ static gmx_bool ip_pert(int ftype, const t_iparams* ip)
     return bPert;
 }
 
-static gmx_bool ip_q_pert(int ftype, const t_iatom* ia, const t_iparams* ip, const real* qA, const real* qB)
+static bool ip_q_pert(int                       ftype,
+                      gmx::ArrayRef<const int>  ia,
+                      const t_iparams*          ip,
+                      gmx::ArrayRef<const real> qA,
+                      gmx::ArrayRef<const real> qB)
 {
     /* 1-4 interactions do not have the charges stored in the iparams list,
      * so we need a separate check for those.
@@ -176,9 +180,9 @@ gmx_bool gmx_mtop_bondeds_free_energy(const gmx_mtop_t* mtop)
     return bPert;
 }
 
-void gmx_sort_ilist_fe(InteractionDefinitions* idef, const real* qA, const real* qB)
+void gmx_sort_ilist_fe(InteractionDefinitions* idef, gmx::ArrayRef<const real> qA, gmx::ArrayRef<const real> qB)
 {
-    if (qB == nullptr)
+    if (qB.empty())
     {
         qB = qA;
     }
@@ -192,16 +196,16 @@ void gmx_sort_ilist_fe(InteractionDefinitions* idef, const real* qA, const real*
     {
         if (interaction_function[ftype].flags & IF_BOND)
         {
-            InteractionList* ilist  = &idef->il[ftype];
-            int*             iatoms = ilist->iatoms.data();
-            const int        nral   = NRAL(ftype);
-            int              ic     = 0;
-            int              ib     = 0;
-            int              i      = 0;
+            InteractionList*   ilist  = &idef->il[ftype];
+            gmx::ArrayRef<int> iatoms = ilist->iatoms;
+            const int          nral   = NRAL(ftype);
+            int                ic     = 0;
+            int                ib     = 0;
+            int                i      = 0;
             while (i < ilist->size())
             {
                 /* Check if this interaction is perturbed */
-                if (ip_q_pert(ftype, iatoms + i, idef->iparams.data(), qA, qB))
+                if (ip_q_pert(ftype, iatoms.subArray(i, iatoms.size()), idef->iparams.data(), qA, qB))
                 {
                     /* Copy to the perturbed buffer */
                     if (ib + 1 + nral > iabuf_nalloc)

@@ -3286,10 +3286,20 @@ void dd_partition_system(FILE*                     fplog,
                         comm->atomRanges.end(DDAtomRanges::Type::Constraints),
                         nat_f_novirsum);
 
-    /* Update atom data for mdatoms and several algorithms */
-    mdAlgorithmsSetupAtomData(cr, inputrec, top_global, top_local, fr, f, mdAtoms, constr, vsite, nullptr);
-
+    int numAtomIndex = dd_natoms_mdatoms(*cr->dd);
+    int numHomeAtoms = dd_numHomeAtoms(*cr->dd);
+    atoms2md(top_global, inputrec, numAtomIndex, cr->dd->globalAtomIndices, numHomeAtoms, mdAtoms);
     auto* mdatoms = mdAtoms->mdatoms();
+    dd_sort_local_top(*cr->dd,
+                      gmx::arrayRefFromArray(mdatoms->chargeA, mdatoms->nr),
+                      gmx::arrayRefFromArray(mdatoms->chargeB, mdatoms->nr),
+                      top_local);
+
+    /* Update atom data for mdatoms and several algorithms */
+    mdAlgorithmsSetupAtomData(
+            dd_natoms_mdatoms(*cr->dd), cr, inputrec, top_global, top_local, fr, f, mdAtoms, constr, vsite, nullptr);
+
+
     if (!thisRankHasDuty(cr, DUTY_PME))
     {
         /* Send the charges and/or c6/sigmas to our PME only node */
