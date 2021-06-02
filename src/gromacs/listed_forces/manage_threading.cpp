@@ -60,6 +60,7 @@
 #include "gromacs/listed_forces/listed_forces_gpu.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/topology/ifunc.h"
+#include "gromacs/topology/topology.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/gmxassert.h"
@@ -189,20 +190,25 @@ static void divide_bondeds_by_locality(bonded_threading_t* bt, int numType, cons
 }
 
 //! Return whether function type \p ftype in \p idef has perturbed interactions
-static bool ftypeHasPerturbedEntries(const InteractionDefinitions& idef, int ftype)
+static bool ftypeHasPerturbedEntries(const InteractionDefinitions&       idef,
+                                     const InteractionListFreeEnergySort ILFESort,
+                                     int                                 ftype)
 {
-    GMX_ASSERT(idef.ilsort == ilsortNO_FE || idef.ilsort == ilsortFE_SORTED,
+    GMX_ASSERT(ILFESort == InteractionListFreeEnergySort::No
+                       || ILFESort == InteractionListFreeEnergySort::Sorted,
                "Perturbed interations should be sorted here");
 
     const InteractionList& ilist = idef.il[ftype];
 
-    return (idef.ilsort != ilsortNO_FE && idef.numNonperturbedInteractions[ftype] != ilist.size());
+    return (ILFESort != InteractionListFreeEnergySort::No
+            && idef.numNonperturbedInteractions[ftype] != ilist.size());
 }
 
 //! Divides bonded interactions over threads and GPU
-static void divide_bondeds_over_threads(bonded_threading_t*           bt,
-                                        bool                          useGpuForBondeds,
-                                        const InteractionDefinitions& idef)
+static void divide_bondeds_over_threads(bonded_threading_t*                 bt,
+                                        bool                                useGpuForBondeds,
+                                        const InteractionDefinitions&       idef,
+                                        const InteractionListFreeEnergySort ILFESort)
 {
     ilist_data_t ild[F_NRE];
 
@@ -233,7 +239,7 @@ static void divide_bondeds_over_threads(bonded_threading_t*           bt,
              * But instead of doing all on the CPU, we could do only
              * the actually perturbed interactions on the CPU.
              */
-            if (!ftypeHasPerturbedEntries(idef, fType))
+            if (!ftypeHasPerturbedEntries(idef, ILFESort, fType))
             {
                 /* We will assign this interaction type to the GPU */
                 nrToAssignToCpuThreads = 0;
@@ -400,10 +406,11 @@ static void calc_bonded_reduction_mask(int                           natoms,
     }
 }
 
-void setup_bonded_threading(bonded_threading_t*           bt,
-                            int                           numAtomsForce,
-                            bool                          useGpuForBondeds,
-                            const InteractionDefinitions& idef)
+void setup_bonded_threading(bonded_threading_t*                 bt,
+                            int                                 numAtomsForce,
+                            bool                                useGpuForBondeds,
+                            const InteractionDefinitions&       idef,
+                            const InteractionListFreeEnergySort ILFESort)
 {
     int ctot = 0;
 
@@ -412,7 +419,7 @@ void setup_bonded_threading(bonded_threading_t*           bt,
     bt->numAtomsForce = numAtomsForce;
 
     /* Divide the bonded interaction over the threads */
-    divide_bondeds_over_threads(bt, useGpuForBondeds, idef);
+    divide_bondeds_over_threads(bt, useGpuForBondeds, idef, ILFESort);
 
     if (!bt->haveBondeds)
     {

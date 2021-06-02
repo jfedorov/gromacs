@@ -95,6 +95,7 @@ struct t_nrnb;
 class t_state;
 struct t_disresdata;
 struct t_oriresdata;
+enum class InteractionListFreeEnergySort : int;
 
 namespace gmx
 {
@@ -180,7 +181,10 @@ public:
      * \param[in] numAtomsForce  Force are, potentially, computed for atoms 0 to \p numAtomsForce
      * \param[in] useGpu         Whether a GPU is used to compute (part of) the listed interactions
      */
-    void setup(const InteractionDefinitions& domainIdef, int numAtomsForce, bool useGpu);
+    void setup(const InteractionDefinitions& domainIdef,
+               InteractionListFreeEnergySort ILFESort,
+               int                           numAtomsForce,
+               bool                          useGpu);
 
     /*! \brief Do all aspects of energy and force calculations for mdrun
      * on the set of listed interactions
@@ -225,6 +229,8 @@ private:
     InteractionDefinitions const* idef_ = nullptr;
     //! Interaction defintions used for storing selections
     InteractionDefinitions idefSelection_;
+    //! Sorting state of IL for free energy
+    InteractionListFreeEnergySort ILFESort_;
     //! Thread parallelization setup, unique_ptr to avoid declaring bonded_threading_t
     std::unique_ptr<bonded_threading_t> threading_;
     //! Tells which interactions to select for computation

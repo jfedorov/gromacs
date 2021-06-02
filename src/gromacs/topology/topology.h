@@ -220,6 +220,15 @@ private:
     int maxResNumberNotRenumbered_ = -1;
 };
 
+enum class InteractionListFreeEnergySort : int
+{
+    Unknown,
+    No,
+    Unsorted,
+    Sorted,
+    Count
+};
+
 /*! \brief
  * The fully written out topology for a domain over its lifetime
  *
@@ -234,6 +243,8 @@ struct gmx_localtop_t
     InteractionDefinitions idef;
     //! The exclusions
     gmx::ListOfLists<int> excls;
+    //! The sorting state of interaction in the IL
+    InteractionListFreeEnergySort ILFESort;
 };
 
 /* The old topology struct, completely written out, used in analysis tools */

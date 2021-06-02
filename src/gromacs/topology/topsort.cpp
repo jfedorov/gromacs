@@ -176,7 +176,7 @@ gmx_bool gmx_mtop_bondeds_free_energy(const gmx_mtop_t* mtop)
     return bPert;
 }
 
-void gmx_sort_ilist_fe(InteractionDefinitions* idef, const real* qA, const real* qB)
+InteractionListFreeEnergySort gmx_sort_ilist_fe(InteractionDefinitions* idef, const real* qA, const real* qB)
 {
     if (qB == nullptr)
     {
@@ -248,5 +248,12 @@ void gmx_sort_ilist_fe(InteractionDefinitions* idef, const real* qA, const real*
 
     sfree(iabuf);
 
-    idef->ilsort = (havePerturbedInteractions ? ilsortFE_SORTED : ilsortNO_FE);
+    if (havePerturbedInteractions)
+    {
+        return InteractionListFreeEnergySort::Sorted;
+    }
+    else
+    {
+        return InteractionListFreeEnergySort::No;
+    }
 }

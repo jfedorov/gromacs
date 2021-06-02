@@ -138,7 +138,7 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
 
     for (auto& listedForces : fr->listedForces)
     {
-        listedForces.setup(top->idef, fr->natoms_force, fr->listedForcesGpu != nullptr);
+        listedForces.setup(top->idef, top->ILFESort, fr->natoms_force, fr->listedForcesGpu != nullptr);
     }
 
     if (EEL_PME(fr->ic->eeltype) && (cr->duty & DUTY_PME))

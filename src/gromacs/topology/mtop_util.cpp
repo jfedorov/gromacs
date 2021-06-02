@@ -663,7 +663,7 @@ static void copyFFParametersFromMtop(const gmx_mtop_t& mtop, t_idef* idef)
  * \param[in] mergeConstr Decide if constraints will be merged.
  */
 template<typename IdefType>
-static void copyIListsFromMtop(const gmx_mtop_t& mtop, IdefType* idef, bool mergeConstr)
+static InteractionListFreeEnergySort copyIListsFromMtop(const gmx_mtop_t& mtop, IdefType* idef, bool mergeConstr)
 {
     int natoms = 0;
     for (const gmx_molblock_t& molb : mtop.molblock)
@@ -716,7 +716,7 @@ static void copyIListsFromMtop(const gmx_mtop_t& mtop, IdefType* idef, bool merg
     }
 
     // We have not (yet) sorted free-energy interactions to the end of the ilists
-    idef->ilsort = ilsortNO_FE;
+    return InteractionListFreeEnergySort::No;
 }
 
 /*! \brief Copy atomtypes from mtop
@@ -828,7 +828,8 @@ static void addMimicExclusions(gmx::ListOfLists<int>* excls, const gmx::ArrayRef
     gmx::mergeExclusions(excls, qmexcl2);
 }
 
-static void sortFreeEnergyInteractionsAtEnd(const gmx_mtop_t& mtop, InteractionDefinitions* idef)
+static InteractionListFreeEnergySort sortFreeEnergyInteractionsAtEnd(const gmx_mtop_t&       mtop,
+                                                                     InteractionDefinitions* idef)
 {
     std::vector<real> qA(mtop.natoms);
     std::vector<real> qB(mtop.natoms);
@@ -839,29 +840,21 @@ static void sortFreeEnergyInteractionsAtEnd(const gmx_mtop_t& mtop, InteractionD
         qA[index]           = local.q;
         qB[index]           = local.qB;
     }
-    gmx_sort_ilist_fe(idef, qA.data(), qB.data());
+    return gmx_sort_ilist_fe(idef, qA.data(), qB.data());
 }
 
-static void gen_local_top(const gmx_mtop_t& mtop,
-                          bool              freeEnergyInteractionsAtEnd,
-                          bool              bMergeConstr,
-                          gmx_localtop_t*   top)
+void gmx_mtop_generate_local_top(const gmx_mtop_t& mtop, gmx_localtop_t* top, bool freeEnergyInteractionsAtEnd)
 {
-    copyIListsFromMtop(mtop, &top->idef, bMergeConstr);
+    top->ILFESort = copyIListsFromMtop(mtop, &top->idef, true);
     if (freeEnergyInteractionsAtEnd)
     {
-        sortFreeEnergyInteractionsAtEnd(mtop, &top->idef);
+        top->ILFESort = sortFreeEnergyInteractionsAtEnd(mtop, &top->idef);
     }
     top->excls = globalExclusionLists(mtop);
     if (!mtop.intermolecularExclusionGroup.empty())
     {
         addMimicExclusions(&top->excls, mtop.intermolecularExclusionGroup);
     }
-}
-
-void gmx_mtop_generate_local_top(const gmx_mtop_t& mtop, gmx_localtop_t* top, bool freeEnergyInteractionsAtEnd)
-{
-    gen_local_top(mtop, freeEnergyInteractionsAtEnd, true, top);
 }
 
 /*! \brief Fills an array with molecule begin/end atom indices
@@ -955,7 +948,7 @@ static void gen_t_topology(const gmx_mtop_t& mtop, bool bMergeConstr, t_topology
         top->idef.il[ftype].iatoms = nullptr;
     }
     copyFFParametersFromMtop(mtop, &top->idef);
-    copyIListsFromMtop(mtop, &top->idef, bMergeConstr);
+    top->idef.ilsort = static_cast<int>(copyIListsFromMtop(mtop, &top->idef, bMergeConstr));
 
     top->name                        = mtop.name;
     top->atoms                       = gmx_mtop_global_atoms(mtop);

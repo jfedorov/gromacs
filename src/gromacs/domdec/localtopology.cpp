@@ -1013,7 +1013,7 @@ int dd_make_local_top(gmx_domdec_t*        dd,
     /* The ilist is not sorted yet,
      * we can only do this when we have the charge arrays.
      */
-    ltop->idef.ilsort = ilsortUNKNOWN;
+    ltop->ILFESort = InteractionListFreeEnergySort::Unknown;
 
     return numBondedInteractionsToReduce;
 }
@@ -1022,10 +1022,10 @@ void dd_sort_local_top(const gmx_domdec_t& dd, const t_mdatoms* mdatoms, gmx_loc
 {
     if (dd.reverse_top->doSorting())
     {
-        gmx_sort_ilist_fe(&ltop->idef, mdatoms->chargeA, mdatoms->chargeB);
+        ltop->ILFESort = gmx_sort_ilist_fe(&ltop->idef, mdatoms->chargeA, mdatoms->chargeB);
     }
     else
     {
-        ltop->idef.ilsort = ilsortNO_FE;
+        ltop->ILFESort = InteractionListFreeEnergySort::No;
     }
 }

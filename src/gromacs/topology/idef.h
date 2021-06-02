@@ -393,8 +393,6 @@ public:
     std::array<InteractionList, F_NRE> il;
     /* The number of non-perturbed interactions at the start of each entry in il */
     std::array<int, F_NRE> numNonperturbedInteractions;
-    // The sorting state of interaction in il
-    int ilsort = ilsortUNKNOWN;
     // The dihedral correction maps
     gmx_cmap_t cmap_grid;
 };
