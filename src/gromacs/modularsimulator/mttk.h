@@ -305,7 +305,7 @@ private:
     //! The number of degrees of freedom in the first temperature group
     const real numDegreesOfFreedom_;
 
-    //! The frequency at which the thermostat is applied
+    //! The period at which the thermostat is applied
     const int nstcouple_;
     //! If != 0, offset the step at which the thermostat is applied
     const int offset_;

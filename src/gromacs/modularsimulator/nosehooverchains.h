@@ -91,7 +91,7 @@ enum class NhcUsage
  * related to the dof at the requested times, and writes the data needed
  * for restarts to checkpoint. As this is not implementing the
  * ISimulatorElement interface, it is not part of the simulator loop, but
- * relies on callbacks to perform it's duties.
+ * relies on callbacks to perform its duties.
  */
 class NoseHooverChainsData final : public ICheckpointHelperClient
 {
@@ -294,7 +294,7 @@ private:
     //! Callback to let propagator know that we will update lambda
     PropagatorCallback propagatorCallback_;
 
-    //! The frequency at which the thermostat is applied
+    //! The period at which the thermostat is applied
     const int nsttcouple_;
     //! If != 0, offset the step at which the thermostat is applied
     const int offset_;
