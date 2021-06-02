@@ -100,6 +100,16 @@ using cl::sycl::access::fence_space;
 using cl::sycl::access::mode;
 using cl::sycl::access::target;
 
+#if GMX_SYCL_HIPSYCL
+template<class T, mode mode>
+using RawAccessor =
+        cl::sycl::accessor<T, 1, mode, cl::sycl::access::target::device, cl::sycl::accessor_variant::raw>;
+#else
+template<class T, mode mode>
+using RawAccessor =
+        cl::sycl::accessor<T, 1, mode, cl::sycl::access::target::device, cl::sycl::placeholder::false_t>;
+#endif
+
 static inline Float2 convertSigmaEpsilonToC6C12(const float sigma, const float epsilon)
 {
     const float sigma2 = sigma * sigma;
@@ -485,7 +495,7 @@ static inline void reduceForceIAndFShift(cl::sycl::accessor<float, 1, mode::read
  */
 template<bool doPruneNBL, bool doCalcEnergies, enum ElecType elecType, enum VdwType vdwType>
 auto nbnxmKernel(cl::sycl::handler&                                   cgh,
-                 DeviceAccessor<Float4, mode::read>                   a_xq,
+                 cl::sycl::buffer<Float4, 1>                          b_xq,
                  DeviceAccessor<float, mode_atomic>                   a_f,
                  DeviceAccessor<Float3, mode::read>                   a_shiftVec,
                  DeviceAccessor<float, mode_atomic>                   a_fShift,
@@ -519,7 +529,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
 {
     static constexpr EnergyFunctionProperties<elecType, vdwType> props;
 
-    cgh.require(a_xq);
+    RawAccessor<Float4, mode::read> a_xq{ b_xq, cgh };
     cgh.require(a_f);
     cgh.require(a_shiftVec);
     cgh.require(a_fShift);
@@ -1066,7 +1076,7 @@ void launchNbnxmKernel(NbnxmGpu* nb, const gmx::StepWorkload& stepWork, const In
                                                    nbp->vdwType,
                                                    deviceStream,
                                                    plist->nsci,
-                                                   adat->xq,
+                                                   *adat->xq.buffer_,
                                                    fAsFloat,
                                                    adat->shiftVec,
                                                    fShiftAsFloat,

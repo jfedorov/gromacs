@@ -440,26 +440,23 @@ inline cl::sycl::event fillSyclBufferWithNull(cl::sycl::buffer<Float3, 1>& buffe
 #endif
 
 
-    if constexpr (usingHipSycl)
-    {
-        // hipSYCL does not support reinterpret but allows using Float3 directly.
-        using cl::sycl::access::mode;
-        const cl::sycl::range<1> range(numValues);
-        const cl::sycl::id<1>    offset(startingOffset);
-        const Float3             pattern{ 0, 0, 0 };
+#if GMX_SYCL_HIPSYCL
+    // hipSYCL does not support reinterpret but allows using Float3 directly.
+    using cl::sycl::access::mode;
+    const cl::sycl::range<1> range(numValues);
+    const cl::sycl::id<1>    offset(startingOffset);
+    const Float3             pattern{ 0, 0, 0 };
 
-        return queue.submit([&](cl::sycl::handler& cgh) {
-            auto d_bufferAccessor =
-                    cl::sycl::accessor<Float3, 1, mode::discard_write>{ buffer, cgh, range, offset };
-            cgh.fill(d_bufferAccessor, pattern);
-        });
-    }
-    else // When not using hipSYCL, reinterpret as a flat float array
-    {
-        cl::sycl::buffer<float, 1> bufferAsFloat = buffer.reinterpret<float, 1>(buffer.get_count() * DIM);
-        return fillSyclBufferWithNull<float>(
-                bufferAsFloat, startingOffset * DIM, numValues * DIM, std::move(queue));
-    }
+    return queue.submit([&](cl::sycl::handler& cgh) {
+        auto d_bufferAccessor =
+                cl::sycl::accessor<Float3, 1, mode::discard_write>{ buffer, cgh, range, offset };
+        cgh.fill(d_bufferAccessor, pattern);
+    });
+#else
+    cl::sycl::buffer<float, 1> bufferAsFloat = buffer.reinterpret<float, 1>(buffer.get_count() * DIM);
+    return fillSyclBufferWithNull<float>(
+            bufferAsFloat, startingOffset * DIM, numValues * DIM, std::move(queue));
+#endif
 }
 
 } // namespace gmx::internal
