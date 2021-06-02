@@ -376,7 +376,7 @@ gmx_reverse_top_t::Impl::Impl(const gmx_mtop_t&        mtop,
                 *mtop.intermolecular_ilist, &atoms_global, options, AtomLinkRule::FirstAtom, &ril_intermol);
     }
 
-    if (useFreeEnergy && gmx_mtop_bondeds_free_energy(&mtop))
+    if (useFreeEnergy && gmx_mtop_bondeds_free_energy(mtop.molblock, mtop.moltype, mtop.ffparams))
     {
         ilsort = ilsortFE_UNSORTED;
     }

@@ -2,7 +2,7 @@
  * This file is part of the GROMACS molecular simulation package.
  *
  * Copyright (c) 2008,2009,2010,2013,2014 by the GROMACS development team.
- * Copyright (c) 2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -36,18 +36,30 @@
 #ifndef GMX_TOPOLOGY_TOPSORT_H
 #define GMX_TOPOLOGY_TOPSORT_H
 
-#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/real.h"
 
 struct gmx_mtop_t;
 class InteractionDefinitions;
+struct gmx_molblock_t;
+struct gmx_moltype_t;
+struct gmx_ffparams_t;
+
+namespace gmx
+{
+template<typename>
+class ArrayRef;
+}
 
 /* Returns if there are perturbed bonded interactions */
-gmx_bool gmx_mtop_bondeds_free_energy(const struct gmx_mtop_t* mtop);
+bool gmx_mtop_bondeds_free_energy(gmx::ArrayRef<const gmx_molblock_t> molblocks,
+                                  gmx::ArrayRef<const gmx_moltype_t>  moltypes,
+                                  const gmx_ffparams_t&               ffparams);
 
 /* Sort all the bonded ilists in idef to have the perturbed ones at the end
  * and set nr_nr_nonperturbed in ilist.
  */
-void gmx_sort_ilist_fe(InteractionDefinitions* idef, const real* qA, const real* qB);
+void gmx_sort_ilist_fe(InteractionDefinitions*   idef,
+                       gmx::ArrayRef<const real> chargeA,
+                       gmx::ArrayRef<const real> chargeB);
 
 #endif
