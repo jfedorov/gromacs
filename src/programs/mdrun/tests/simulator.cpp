@@ -281,19 +281,21 @@ TEST_P(SimulatorComparisonTest, WithinTolerances)
 // These tests are very sensitive, so we only run them in double precision.
 // As we change call ordering, they might actually become too strict to be useful.
 #if !GMX_GPU_OPENCL && GMX_DOUBLE
-INSTANTIATE_TEST_CASE_P(
-        SimulatorsAreEquivalentDefaultModular,
-        SimulatorComparisonTest,
-        ::testing::Combine(::testing::Combine(::testing::Values("argon12", "tip3p5"),
-                                              ::testing::Values("md-vv"),
-                                              ::testing::Values("no",
-                                                                "v-rescale",
-                                                                "berendsen",
-                                                                "nose-hoover",
-                                                                "andersen-massive",
-                                                                "andersen"),
-                                              ::testing::Values("no", "berendsen", "c-rescale", "mttk")),
-                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR")));
+INSTANTIATE_TEST_CASE_P(SimulatorsAreEquivalentDefaultModular,
+                        SimulatorComparisonTest,
+                        ::testing::Combine(::testing::Combine(::testing::Values("argon12", "tip3p5"),
+                                                              ::testing::Values("md-vv"),
+                                                              ::testing::Values("no",
+                                                                                "v-rescale",
+                                                                                "berendsen",
+                                                                                "nose-hoover",
+                                                                                "andersen-massive",
+                                                                                "andersen"),
+                                                              ::testing::Values("no",
+                                                                                "berendsen",
+                                                                                "c-rescale",
+                                                                                "mttk")),
+                                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR")));
 INSTANTIATE_TEST_CASE_P(
         SimulatorsAreEquivalentDefaultLegacy,
         SimulatorComparisonTest,
@@ -305,19 +307,21 @@ INSTANTIATE_TEST_CASE_P(
                         ::testing::Values("no", "Parrinello-Rahman", "berendsen", "c-rescale")),
                 ::testing::Values("GMX_USE_MODULAR_SIMULATOR")));
 #else
-INSTANTIATE_TEST_CASE_P(
-        DISABLED_SimulatorsAreEquivalentDefaultModular,
-        SimulatorComparisonTest,
-        ::testing::Combine(::testing::Combine(::testing::Values("argon12", "tip3p5"),
-                                              ::testing::Values("md-vv"),
-                                              ::testing::Values("no",
-                                                                "v-rescale",
-                                                                "berendsen",
-                                                                "andersen-massive",
-                                                                "andersen",
-                                                                "nose-hoover"),
-                                              ::testing::Values("no", "berendsen", "c-rescale", "mttk")),
-                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR")));
+INSTANTIATE_TEST_CASE_P(DISABLED_SimulatorsAreEquivalentDefaultModular,
+                        SimulatorComparisonTest,
+                        ::testing::Combine(::testing::Combine(::testing::Values("argon12", "tip3p5"),
+                                                              ::testing::Values("md-vv"),
+                                                              ::testing::Values("no",
+                                                                                "v-rescale",
+                                                                                "berendsen",
+                                                                                "andersen-massive",
+                                                                                "andersen",
+                                                                                "nose-hoover"),
+                                                              ::testing::Values("no",
+                                                                                "berendsen",
+                                                                                "c-rescale",
+                                                                                "mttk")),
+                                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR")));
 INSTANTIATE_TEST_CASE_P(
         DISABLED_SimulatorsAreEquivalentDefaultLegacy,
         SimulatorComparisonTest,
