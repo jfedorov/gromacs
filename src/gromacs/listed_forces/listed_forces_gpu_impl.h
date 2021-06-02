@@ -141,11 +141,12 @@ public:
      * stage. Copies the bonded interactions assigned to the GPU
      * to device data structures, and updates device buffers that
      * may have been updated after search. */
-    void updateInteractionListsAndDeviceBuffers(ArrayRef<const int>           nbnxnAtomOrder,
-                                                const InteractionDefinitions& idef,
-                                                void*                         xqDevice,
-                                                DeviceBuffer<RVec>            forceDevice,
-                                                DeviceBuffer<RVec>            fshiftDevice);
+    void updateInteractionListsAndDeviceBuffers(ArrayRef<const int>                 nbnxnAtomOrder,
+                                                const InteractionDefinitions&       idef,
+                                                const InteractionListFreeEnergySort ILFESort,
+                                                void*                               xqDevice,
+                                                DeviceBuffer<RVec>                  forceDevice,
+                                                DeviceBuffer<RVec>                  fshiftDevice);
     /*! \brief
      * Update PBC data.
      *

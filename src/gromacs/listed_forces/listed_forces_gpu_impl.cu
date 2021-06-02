@@ -57,6 +57,7 @@
 #include "gromacs/mdtypes/enerdata.h"
 #include "gromacs/timing/wallcycle.h"
 #include "gromacs/topology/forcefieldparameters.h"
+#include "gromacs/topology/topology.h"
 
 struct t_forcerec;
 
@@ -140,14 +141,18 @@ ListedForcesGpu::Impl::~Impl()
 }
 
 //! Return whether function type \p fType in \p idef has perturbed interactions
-static bool fTypeHasPerturbedEntries(const InteractionDefinitions& idef, int fType)
+static bool fTypeHasPerturbedEntries(const InteractionDefinitions&       idef,
+                                     const InteractionListFreeEnergySort ILFESort,
+                                     int                                 fType)
 {
-    GMX_ASSERT(idef.ilsort == ilsortNO_FE || idef.ilsort == ilsortFE_SORTED,
+    GMX_ASSERT(ILFESort == InteractionListFreeEnergySort::No
+                       || ILFESort == InteractionListFreeEnergySort::Sorted,
                "Perturbed interations should be sorted here");
 
     const InteractionList& ilist = idef.il[fType];
 
-    return (idef.ilsort != ilsortNO_FE && idef.numNonperturbedInteractions[fType] != ilist.size());
+    return (ILFESort != InteractionListFreeEnergySort::No
+            && idef.numNonperturbedInteractions[fType] != ilist.size());
 }
 
 //! Converts \p src with atom indices in state order to \p dest in nbnxn order
@@ -202,6 +207,7 @@ static inline int roundUpToFactor(const int input, const int factor)
  */
 void ListedForcesGpu::Impl::updateInteractionListsAndDeviceBuffers(ArrayRef<const int> nbnxnAtomOrder,
                                                                    const InteractionDefinitions& idef,
+                                                                   const InteractionListFreeEnergySort ILFESort,
                                                                    void*              d_xqPtr,
                                                                    DeviceBuffer<RVec> d_fPtr,
                                                                    DeviceBuffer<RVec> d_fShiftPtr)
@@ -218,7 +224,7 @@ void ListedForcesGpu::Impl::updateInteractionListsAndDeviceBuffers(ArrayRef<cons
          * But instead of doing all interactions on the CPU, we can
          * still easily handle the types that have no perturbed
          * interactions on the GPU. */
-        if (!idef.il[fType].empty() && !fTypeHasPerturbedEntries(idef, fType))
+        if (!idef.il[fType].empty() && !fTypeHasPerturbedEntries(idef, ILFESort, fType))
         {
             haveInteractions_ = true;
 
@@ -367,11 +373,12 @@ ListedForcesGpu::~ListedForcesGpu() = default;
 
 void ListedForcesGpu::updateInteractionListsAndDeviceBuffers(ArrayRef<const int> nbnxnAtomOrder,
                                                              const InteractionDefinitions& idef,
-                                                             void*                         d_xq,
-                                                             DeviceBuffer<RVec>            d_f,
-                                                             DeviceBuffer<RVec>            d_fShift)
+                                                             const InteractionListFreeEnergySort ILFESort,
+                                                             void*              d_xq,
+                                                             DeviceBuffer<RVec> d_f,
+                                                             DeviceBuffer<RVec> d_fShift)
 {
-    impl_->updateInteractionListsAndDeviceBuffers(nbnxnAtomOrder, idef, d_xq, d_f, d_fShift);
+    impl_->updateInteractionListsAndDeviceBuffers(nbnxnAtomOrder, idef, ILFESort, d_xq, d_f, d_fShift);
 }
 
 void ListedForcesGpu::setPbc(PbcType pbcType, const matrix box, bool canMoleculeSpanPbc)

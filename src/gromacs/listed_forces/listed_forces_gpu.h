@@ -64,6 +64,7 @@ struct gmx_ffparams_t;
 struct gmx_mtop_t;
 struct t_inputrec;
 struct gmx_wallcycle;
+enum class InteractionListFreeEnergySort : int;
 
 
 namespace gmx
@@ -144,6 +145,7 @@ public:
      */
     void updateInteractionListsAndDeviceBuffers(ArrayRef<const int>           nbnxnAtomOrder,
                                                 const InteractionDefinitions& idef,
+                                                InteractionListFreeEnergySort ILFESort,
                                                 void*                         xqDevice,
                                                 DeviceBuffer<RVec>            forceDevice,
                                                 DeviceBuffer<RVec>            fshiftDevice);

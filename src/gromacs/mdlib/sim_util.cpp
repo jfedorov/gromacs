@@ -1435,6 +1435,7 @@ void do_force(FILE*                               fplog,
                 fr->listedForcesGpu->updateInteractionListsAndDeviceBuffers(
                         nbv->getGridIndices(),
                         top->idef,
+                        top->ILFESort,
                         Nbnxm::gpu_get_xq(nbv->gpu_nbv),
                         Nbnxm::gpu_get_f(nbv->gpu_nbv),
                         Nbnxm::gpu_get_fshift(nbv->gpu_nbv));
