@@ -758,7 +758,7 @@ static void get_pull_coord_distance(const pull_t& pull, pull_coord_work_t* pcrd,
         case PullGroupGeometry::Transformation:
             // Note that we would only need to pass the part of coord up to coord_ind
             spatialData.value = gmx::getTransformationPullCoordinateValue(
-                    pcrd, ArrayRef<const pull_coord_work_t>(pull.coord).subArray(0, pcrd->coordIndex));
+                    pcrd, ArrayRef<const pull_coord_work_t>(pull.coord).subArray(0, pcrd->params.coordIndex));
             break;
         default: gmx_incons("Unsupported pull type in get_pull_coord_distance");
     }
@@ -1592,7 +1592,7 @@ static void applyTransformationPullCoordForce(pull_coord_work_t*               p
     }
     GMX_ASSERT(pcrd->params.eGeom == PullGroupGeometry::Transformation,
                "We shouldn't end up here when not using a transformation pull coordinate.");
-    GMX_ASSERT(ssize(variableCoords) == pcrd->coordIndex,
+    GMX_ASSERT(ssize(variableCoords) == pcrd->params.coordIndex,
                "We should have as many variable coords as the coord index of the transformation "
                "coordinate");
 
@@ -1611,7 +1611,7 @@ static void applyTransformationPullCoordForce(pull_coord_work_t*               p
             return;
         }
         const double variablePcrdForce =
-                gmx::computeForceFromTransformationPullCoord(pcrd, variableCoord.coordIndex);
+                gmx::computeForceFromTransformationPullCoord(pcrd, variableCoord.params.coordIndex);
         /* Since we loop over all pull coordinates with smaller index, there can be ones
          * that are not referenced by the transformation coordinate. Avoid apply forces
          * on those by skipping application of zero force.
@@ -1619,7 +1619,7 @@ static void applyTransformationPullCoordForce(pull_coord_work_t*               p
         if (variablePcrdForce != 0)
         {
             applyTransformationPullCoordForce(&variableCoord,
-                                              variableCoords.subArray(0, variableCoord.coordIndex),
+                                              variableCoords.subArray(0, variableCoord.params.coordIndex),
                                               variablePcrdForce,
                                               masses,
                                               forceWithVirial);
@@ -1658,7 +1658,7 @@ void apply_external_pull_coord_force(struct pull_t*        pull,
         {
             applyTransformationPullCoordForce(
                     pcrd,
-                    gmx::ArrayRef<pull_coord_work_t>(pull->coord).subArray(0, pcrd->coordIndex),
+                    gmx::ArrayRef<pull_coord_work_t>(pull->coord).subArray(0, pcrd->params.coordIndex),
                     coord_force,
                     masses,
                     forceWithVirial);
@@ -1741,7 +1741,7 @@ real pull_potential(struct pull_t*        pull,
             {
                 applyTransformationPullCoordForce(
                         &pcrd,
-                        gmx::ArrayRef<pull_coord_work_t>(pull->coord).subArray(0, pcrd.coordIndex),
+                        gmx::ArrayRef<pull_coord_work_t>(pull->coord).subArray(0, pcrd.params.coordIndex),
                         pcrd.scalarForce,
                         masses,
                         force);
@@ -2140,7 +2140,7 @@ struct pull_t* init_pull(FILE*                     fplog,
                            "The stored index should match the position in the vector");
 
         /* Construct a pull coordinate, copying all coordinate parameters */
-        pull->coord.emplace_back(pull_params->coord[c], c);
+        pull->coord.emplace_back(pull_params->coord[c]);
 
         pull_coord_work_t* pcrd = &pull->coord.back();
 

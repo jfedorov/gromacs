@@ -54,7 +54,7 @@ namespace
 //! Calculates the value a for transformation pull coordinate
 double getTransformationPullCoordinateValue(pull_coord_work_t* coord)
 {
-    const int transformationPullCoordinateIndex = coord->coordIndex;
+    const int transformationPullCoordinateIndex = coord->params.coordIndex;
     GMX_ASSERT(ssize(coord->transformationVariables) == transformationPullCoordinateIndex,
                "We need as many variables as the transformation pull coordinate index");
     double result = 0;
@@ -87,7 +87,7 @@ double getTransformationPullCoordinateValue(pull_coord_work_t* coord)
 double getTransformationPullCoordinateValue(pull_coord_work_t*                coord,
                                             ArrayRef<const pull_coord_work_t> variableCoords)
 {
-    GMX_ASSERT(ssize(variableCoords) == coord->coordIndex,
+    GMX_ASSERT(ssize(variableCoords) == coord->params.coordIndex,
                "We need as many variables as the transformation pull coordinate index");
     int coordIndex = 0;
     for (const auto& variableCoord : variableCoords)
@@ -100,7 +100,7 @@ double getTransformationPullCoordinateValue(pull_coord_work_t*                co
 
 double computeForceFromTransformationPullCoord(pull_coord_work_t* coord, const int variablePcrdIndex)
 {
-    GMX_ASSERT(variablePcrdIndex >= 0 && variablePcrdIndex < coord->coordIndex,
+    GMX_ASSERT(variablePcrdIndex >= 0 && variablePcrdIndex < coord->params.coordIndex,
                "The variable index should be in range of the transformation coordinate");
 
     // epsilon for numerical differentiation.
@@ -121,7 +121,7 @@ double computeForceFromTransformationPullCoord(pull_coord_work_t* coord, const i
                 "force "
                 "%4.4f\n",
                 coord->scalarForce,
-                coord->coordIndex,
+                coord->params.coordIndex,
                 variablePcrdIndex,
                 result);
     }

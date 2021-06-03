@@ -101,7 +101,7 @@ protected:
             params.dim[YY]    = 1;
             params.dim[ZZ]    = 1;
             params.coordIndex = 0;
-            pull_coord_work_t pcrd(params, 0);
+            pull_coord_work_t pcrd(params);
             clear_dvec(pcrd.spatialData.vec);
 
             real minBoxSize2 = GMX_REAL_MAX;
@@ -120,7 +120,7 @@ protected:
             params.dim[YY]    = 0;
             params.dim[ZZ]    = 1;
             params.coordIndex = 0;
-            pull_coord_work_t pcrd(params, 0);
+            pull_coord_work_t pcrd(params);
             clear_dvec(pcrd.spatialData.vec);
             EXPECT_REAL_EQ_TOL(
                     0.25 * boxSizeZSquared, max_pull_distance2(pcrd, pbc), defaultRealTolerance());
@@ -134,7 +134,7 @@ protected:
             params.dim[YY]    = 1;
             params.dim[ZZ]    = 1;
             params.coordIndex = 0;
-            pull_coord_work_t pcrd(params, 0);
+            pull_coord_work_t pcrd(params);
             clear_dvec(pcrd.spatialData.vec);
             pcrd.spatialData.vec[ZZ] = 1;
             EXPECT_REAL_EQ_TOL(
@@ -149,7 +149,7 @@ protected:
             params.dim[YY]    = 1;
             params.dim[ZZ]    = 1;
             params.coordIndex = 0;
-            pull_coord_work_t pcrd(params, 0);
+            pull_coord_work_t pcrd(params);
             clear_dvec(pcrd.spatialData.vec);
             pcrd.spatialData.vec[XX] = 1;
 
@@ -211,14 +211,16 @@ TEST_F(PullTest, TransformationCoord)
 
     // Create standard pull coordinate
     t_pull_coord params;
-    params.eGeom = PullGroupGeometry::Distance;
-    pull.coord.emplace_back(params, 0);
+    params.eGeom      = PullGroupGeometry::Distance;
+    params.coordIndex = 0;
+    pull.coord.emplace_back(params);
 
     // Create transformation pull coordinate
     params.eGeom           = PullGroupGeometry::Transformation;
     std::string expression = "x1^2 + 3";
     params.expression      = expression;
-    pull.coord.emplace_back(params, 1);
+    params.coordIndex      = 1;
+    pull.coord.emplace_back(params);
 
     for (double v = 0; v < 10; v += 1)
     {

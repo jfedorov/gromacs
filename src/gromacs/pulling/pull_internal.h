@@ -152,17 +152,16 @@ struct PullCoordSpatialData
 //! \brief Struct with parameters and force evaluation local data for a pull coordinate
 struct pull_coord_work_t
 {
-    //! Constructor, \p coordIndex should match the index in the list of coordinates
-    pull_coord_work_t(const t_pull_coord& params, const int coordIndex) :
+    //! Constructor
+    pull_coord_work_t(const t_pull_coord& params) :
         params(params),
         value_ref(0),
         spatialData(),
         scalarForce(0),
         bExternalPotentialProviderHasBeenRegistered(false),
         expressionParser(params.eGeom == PullGroupGeometry::Transformation ? params.expression : "",
-                         coordIndex),
-        coordIndex(coordIndex),
-        transformationVariables(params.eGeom == PullGroupGeometry::Transformation ? coordIndex : 0)
+                         params.coordIndex),
+        transformationVariables(params.eGeom == PullGroupGeometry::Transformation ? params.coordIndex : 0)
     {
     }
 
@@ -185,8 +184,6 @@ struct pull_coord_work_t
 
     //! The expression parser for a transformation coordinate
     gmx::PullCoordExpressionParser expressionParser;
-    //! The index of this coordinate int the list of coordinates
-    const int coordIndex;
     //! Variables from other pull coordinates for a transformation coordinate
     std::vector<double> transformationVariables;
 };
