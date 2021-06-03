@@ -67,29 +67,93 @@ namespace gmx
 // Names of the NHC usage options
 static constexpr EnumerationArray<NhcUsage, const char*> nhcUsageNames = { "System", "Barostat" };
 
-//! View on the NHC degrees of freedom of a temperature group
-struct NhcCoordinateView
+//! The current state of the Nose-Hoover chain degree of freedom for a temperature group
+class NoseHooverGroup
 {
-    //! The positions
-    ArrayRef<real> positions;
-    //! The velocities
-    ArrayRef<real> velocities;
-    //! The inverse masses
-    ArrayRef<const real> invMass;
-    //! The temperature group
-    const int temperatureGroup;
+public:
+    //! Constructor
+    NoseHooverGroup(int      chainLength,
+                    real     referenceTemperature,
+                    real     numDegreesOfFreedom,
+                    real     couplingTime,
+                    real     couplingTimeStep,
+                    NhcUsage nhcUsage);
 
-    //! No copy construction
-    NhcCoordinateView(const NhcCoordinateView&) = delete;
-    //! No copy assignment
-    NhcCoordinateView& operator=(const NhcCoordinateView&) = delete;
-    //! Move constructor is allowed
-    NhcCoordinateView(NhcCoordinateView&&) noexcept = default;
-    //! Move assignment is implicitly deleted (const int)
-    NhcCoordinateView& operator=(NhcCoordinateView&&) noexcept = delete;
-    //! Complete rule of 5
-    ~NhcCoordinateView() noexcept = default;
+    //! Trotter operator for the NHC degrees of freedom
+    real applyNhc(real currentKineticEnergy, real couplingTimeStep);
+
+    //! Save to or restore from a CheckpointData object
+    template<CheckpointDataOperation operation>
+    void doCheckpoint(CheckpointData<operation>* checkpointData);
+    //! Broadcast values read from checkpoint over DD ranks
+    void broadcastCheckpointValues(const gmx_domdec_t* dd);
+
+    //! Whether the coordinate time is at a full coupling time step
+    bool isAtFullCouplingTimeStep() const;
+    //! Update the value of the NHC integral with the current coordinates
+    void calculateIntegral();
+    //! Return the current NHC integral for the group
+    double integral() const;
+    //! Return the current time of the NHC integral for the group
+    real integralTime() const;
+
+private:
+    //! Increment coordinate time and update integral if applicable
+    void finalizeUpdate(real couplingTimeStep);
+
+    //! The reference temperature of this group
+    const real referenceTemperature_;
+    //! The number of degrees of freedom in this group
+    const real numDegreesOfFreedom_;
+    //! The chain length of this group
+    const int chainLength_;
+    //! The coupling time step, indicates when the coordinates are at a full step
+    const real couplingTimeStep_;
+    //! The thermostat degree of freedom
+    std::vector<real> xi_;
+    //! Velocity of the thermostat dof
+    std::vector<real> xiVelocities_;
+    //! Work exerted by thermostat per group
+    double temperatureCouplingIntegral_;
+    //! Inverse mass of the thermostat dof
+    std::vector<real> invXiMass_;
+    //! The current time of xi and xiVelocities_
+    real coordinateTime_;
+    //! The current time of the temperature integral
+    real integralTime_;
 };
+
+NoseHooverGroup::NoseHooverGroup(int      chainLength,
+                                 real     referenceTemperature,
+                                 real     numDegreesOfFreedom,
+                                 real     couplingTime,
+                                 real     couplingTimeStep,
+                                 NhcUsage nhcUsage) :
+    referenceTemperature_(referenceTemperature),
+    numDegreesOfFreedom_(numDegreesOfFreedom),
+    chainLength_(chainLength),
+    couplingTimeStep_(couplingTimeStep),
+    xi_(chainLength, 0),
+    xiVelocities_(chainLength, 0),
+    temperatureCouplingIntegral_(0),
+    invXiMass_(chainLength, 0),
+    coordinateTime_(0),
+    integralTime_(0)
+{
+    if (referenceTemperature > 0 && couplingTime > 0 && numDegreesOfFreedom > 0)
+    {
+        for (auto chainPosition = 0; chainPosition < chainLength; ++chainPosition)
+        {
+            const real numDof = ((chainPosition == 0) ? numDegreesOfFreedom : 1);
+            invXiMass_[chainPosition] =
+                    1.0 / (gmx::square(couplingTime / M_2PI) * referenceTemperature * numDof * c_boltz);
+            if (nhcUsage == NhcUsage::Barostat && chainPosition == 0)
+            {
+                invXiMass_[chainPosition] /= DIM * DIM;
+            }
+        }
+    }
+}
 
 NoseHooverChainsData::NoseHooverChainsData(int                  numTemperatureGroups,
                                            real                 couplingTimeStep,
@@ -100,44 +164,28 @@ NoseHooverChainsData::NoseHooverChainsData(int                  numTemperatureGr
                                            EnergyData*          energyData,
                                            NhcUsage             nhcUsage) :
     identifier_(formatString("NoseHooverChainsData-%s", nhcUsageNames[nhcUsage])),
-    couplingTimeStep_(couplingTimeStep),
-    chainLength_(chainLength),
-    numTemperatureGroups_(numTemperatureGroups),
-    referenceTemperature_(referenceTemperature),
-    couplingTime_(couplingTime),
-    numDegreesOfFreedom_(numDegreesOfFreedom)
+    numTemperatureGroups_(numTemperatureGroups)
 {
-    xi_.resize(numTemperatureGroups);
-    xiVelocities_.resize(numTemperatureGroups);
-    temperatureCouplingIntegral_.resize(numTemperatureGroups, 0.0);
-    invXiMass_.resize(numTemperatureGroups);
-    coordinateViewInUse_.resize(numTemperatureGroups, false);
-    coordinateTime_.resize(numTemperatureGroups, 0.0);
-    integralTime_.resize(numTemperatureGroups, 0.0);
-
-    for (auto temperatureGroup = 0; temperatureGroup < numTemperatureGroups; ++temperatureGroup)
+    if (nhcUsage == NhcUsage::System)
     {
-        xi_[temperatureGroup].resize(chainLength, 0.0);
-        xiVelocities_[temperatureGroup].resize(chainLength, 0.0);
-        invXiMass_[temperatureGroup].resize(chainLength, 0.0);
-
-        if (referenceTemperature_[temperatureGroup] > 0 && couplingTime_[temperatureGroup] > 0
-            && this->numDegreesOfFreedom(temperatureGroup) > 0)
+        for (auto temperatureGroup = 0; temperatureGroup < numTemperatureGroups; ++temperatureGroup)
         {
-            for (auto chainPosition = 0; chainPosition < chainLength; ++chainPosition)
-            {
-                const real numDof =
-                        ((chainPosition == 0) ? this->numDegreesOfFreedom(temperatureGroup) : 1);
-                invXiMass_[temperatureGroup][chainPosition] =
-                        1.0
-                        / (gmx::square(couplingTime_[temperatureGroup] / M_2PI)
-                           * referenceTemperature_[temperatureGroup] * numDof * c_boltz);
-                if (nhcUsage == NhcUsage::Barostat && chainPosition == 0)
-                {
-                    invXiMass_[temperatureGroup][chainPosition] /= DIM * DIM;
-                }
-            }
+            noseHooverGroups_.emplace_back(NoseHooverGroup(chainLength,
+                                                           referenceTemperature[temperatureGroup],
+                                                           numDegreesOfFreedom[temperatureGroup],
+                                                           couplingTime[temperatureGroup],
+                                                           couplingTimeStep,
+                                                           nhcUsage));
         }
+    }
+    else if (nhcUsage == NhcUsage::Barostat)
+    {
+        GMX_RELEASE_ASSERT(numTemperatureGroups == 1,
+                           "There can only be one barostat for the system");
+        // Barostat has a single degree of freedom
+        const int degreesOfFreedom = 1;
+        noseHooverGroups_.emplace_back(NoseHooverGroup(
+                chainLength, referenceTemperature[0], degreesOfFreedom, couplingTime[0], couplingTimeStep, nhcUsage));
     }
 
     energyData->addConservedEnergyContribution(
@@ -149,7 +197,7 @@ void NoseHooverChainsData::build(NhcUsage                                nhcUsag
                                  ModularSimulatorAlgorithmBuilderHelper* builderHelper,
                                  EnergyData*                             energyData)
 {
-    // Data is now owned by the caller of this method, who will handle lifetime (see ModularSimulatorAlgorithm)
+    // The caller of this method now owns the data and will handle its lifetime (see ModularSimulatorAlgorithm)
     if (nhcUsage == NhcUsage::System)
     {
         builderHelper->storeSimulationData(
@@ -184,22 +232,12 @@ void NoseHooverChainsData::build(NhcUsage                                nhcUsag
     }
 }
 
-NhcCoordinateView NoseHooverChainsData::coordinateView(int temperatureGroup)
+void NoseHooverGroup::finalizeUpdate(real couplingTimeStep)
 {
-    GMX_ASSERT(!coordinateViewInUse_[temperatureGroup],
-               "xi view was already requested and not returned.");
-    coordinateViewInUse_[temperatureGroup] = true;
-    return { xi_[temperatureGroup], xiVelocities_[temperatureGroup], invXiMass_[temperatureGroup], temperatureGroup };
-}
-
-void NoseHooverChainsData::returnCoordinateView(NhcCoordinateView nhcCoordinateView, real timeIncrement)
-{
-    const int temperatureGroup             = nhcCoordinateView.temperatureGroup;
-    coordinateViewInUse_[temperatureGroup] = false;
-    coordinateTime_[temperatureGroup] += timeIncrement;
-    if (isAtFullCouplingTimeStep(temperatureGroup))
+    coordinateTime_ += couplingTimeStep;
+    if (isAtFullCouplingTimeStep())
     {
-        calculateIntegral(temperatureGroup);
+        calculateIntegral();
     }
 }
 
@@ -208,51 +246,36 @@ inline int NoseHooverChainsData::numTemperatureGroups() const
     return numTemperatureGroups_;
 }
 
-inline real NoseHooverChainsData::referenceTemperature(int temperatureGroup) const
-{
-    GMX_ASSERT(temperatureGroup < numTemperatureGroups_, "Invalid temperature group");
-    return referenceTemperature_[temperatureGroup];
-}
-
-inline real NoseHooverChainsData::numDegreesOfFreedom(int temperatureGroup) const
-{
-    GMX_ASSERT(temperatureGroup < numTemperatureGroups_, "Invalid temperature group");
-    if (numDegreesOfFreedom_.empty() && temperatureGroup == 0)
-    {
-        // Barostat has a single degree of freedom
-        return 1;
-    }
-    return numDegreesOfFreedom_[temperatureGroup];
-}
-
 inline bool NoseHooverChainsData::isAtFullCouplingTimeStep() const
 {
-    for (int temperatureGroup = 0; temperatureGroup < numTemperatureGroups_; ++temperatureGroup)
-    {
-        if (!isAtFullCouplingTimeStep(temperatureGroup))
-        {
-            return false;
-        }
-    }
-    return true;
+    return std::all_of(noseHooverGroups_.begin(), noseHooverGroups_.end(), [](const auto& group) {
+        return group.isAtFullCouplingTimeStep();
+    });
 }
 
-void NoseHooverChainsData::calculateIntegral(int temperatureGroup)
+void NoseHooverGroup::calculateIntegral()
 {
     // Calculate current value of thermostat integral
-    double integral = 0.0;
+    temperatureCouplingIntegral_ = 0.0;
     for (auto chainPosition = 0; chainPosition < chainLength_; ++chainPosition)
     {
         // Chain thermostats have only one degree of freedom
-        const real numDegreesOfFreedomThisPosition =
-                (chainPosition == 0) ? numDegreesOfFreedom(temperatureGroup) : 1;
-        integral += 0.5 * gmx::square(xiVelocities_[temperatureGroup][chainPosition])
-                            / invXiMass_[temperatureGroup][chainPosition]
-                    + numDegreesOfFreedomThisPosition * xi_[temperatureGroup][chainPosition]
-                              * c_boltz * referenceTemperature_[temperatureGroup];
+        const real numDegreesOfFreedomThisPosition = (chainPosition == 0) ? numDegreesOfFreedom_ : 1;
+        temperatureCouplingIntegral_ +=
+                0.5 * gmx::square(xiVelocities_[chainPosition]) / invXiMass_[chainPosition]
+                + numDegreesOfFreedomThisPosition * xi_[chainPosition] * c_boltz * referenceTemperature_;
     }
-    temperatureCouplingIntegral_[temperatureGroup] = integral;
-    integralTime_[temperatureGroup]                = coordinateTime_[temperatureGroup];
+    integralTime_ = coordinateTime_;
+}
+
+inline double NoseHooverGroup::integral() const
+{
+    return temperatureCouplingIntegral_;
+}
+
+inline real NoseHooverGroup::integralTime() const
+{
+    return integralTime_;
 }
 
 double NoseHooverChainsData::temperatureCouplingIntegral(Time gmx_used_in_debug time) const
@@ -262,20 +285,24 @@ double NoseHooverChainsData::temperatureCouplingIntegral(Time gmx_used_in_debug 
      * extended system degrees of freedom are either in sync or ahead of the
      * rest of the system.
      */
-    GMX_ASSERT(!std::any_of(integralTime_.begin(),
-                            integralTime_.end(),
-                            [time](real integralTime) {
-                                return !(time <= integralTime || timesClose(integralTime, time));
+    GMX_ASSERT(!std::any_of(noseHooverGroups_.begin(),
+                            noseHooverGroups_.end(),
+                            [time](const auto& group) {
+                                return !(time <= group.integralTime()
+                                         || timesClose(group.integralTime(), time));
                             }),
                "NoseHooverChainsData conserved energy time mismatch.");
-    return std::accumulate(temperatureCouplingIntegral_.begin(), temperatureCouplingIntegral_.end(), 0.0);
+    double result = 0;
+    std::for_each(noseHooverGroups_.begin(), noseHooverGroups_.end(), [&result](const auto& group) {
+        result += group.integral();
+    });
+    return result;
 }
 
-bool NoseHooverChainsData::isAtFullCouplingTimeStep(int temperatureGroup) const
+inline bool NoseHooverGroup::isAtFullCouplingTimeStep() const
 {
     // Check whether coordinate time divided by the time step is close to integer
-    return timesClose(std::lround(coordinateTime_[temperatureGroup] / couplingTimeStep_) * couplingTimeStep_,
-                      coordinateTime_[temperatureGroup]);
+    return timesClose(std::lround(coordinateTime_ / couplingTimeStep_) * couplingTimeStep_, coordinateTime_);
 }
 
 namespace
@@ -299,15 +326,28 @@ void NoseHooverChainsData::doCheckpointData(CheckpointData<operation>* checkpoin
 {
     checkpointVersion(checkpointData, "NoseHooverChainsData version", c_currentVersion);
 
-    for (unsigned int temperatureGroup = 0; temperatureGroup < xi_.size(); ++temperatureGroup)
+    for (int temperatureGroup = 0; temperatureGroup < numTemperatureGroups_; ++temperatureGroup)
     {
-        const auto temperatureGroupStr = toString(static_cast<int>(temperatureGroup));
-        checkpointData->arrayRef("xi T-group " + temperatureGroupStr,
-                                 makeCheckpointArrayRef<operation>(xi_[temperatureGroup]));
-        checkpointData->arrayRef("xi velocities T-group " + temperatureGroupStr,
-                                 makeCheckpointArrayRef<operation>(xiVelocities_[temperatureGroup]));
+        const auto temperatureGroupStr = "T-group #" + toString(temperatureGroup);
+        auto       groupCheckpointData = checkpointData->subCheckpointData(temperatureGroupStr);
+        noseHooverGroups_[temperatureGroup].doCheckpoint(&groupCheckpointData);
     }
-    checkpointData->arrayRef("Coordinate times", makeCheckpointArrayRef<operation>(coordinateTime_));
+}
+
+template<CheckpointDataOperation operation>
+void NoseHooverGroup::doCheckpoint(CheckpointData<operation>* checkpointData)
+{
+    checkpointData->arrayRef("xi", makeCheckpointArrayRef<operation>(xi_));
+    checkpointData->arrayRef("xi velocities", makeCheckpointArrayRef<operation>(xiVelocities_));
+    checkpointData->scalar("Coordinate time", &coordinateTime_);
+}
+
+//! Broadcast values read from checkpoint over DD ranks
+void NoseHooverGroup::broadcastCheckpointValues(const gmx_domdec_t* dd)
+{
+    dd_bcast(dd, ssize(xi_) * int(sizeof(real)), xi_.data());
+    dd_bcast(dd, ssize(xiVelocities_) * int(sizeof(real)), xiVelocities_.data());
+    dd_bcast(dd, int(sizeof(real)), &coordinateTime_);
 }
 
 void NoseHooverChainsData::saveCheckpointState(std::optional<WriteCheckpointData> checkpointData,
@@ -326,20 +366,13 @@ void NoseHooverChainsData::restoreCheckpointState(std::optional<ReadCheckpointDa
     {
         doCheckpointData<CheckpointDataOperation::Read>(&checkpointData.value());
     }
-    if (DOMAINDECOMP(cr))
+    for (auto& group : noseHooverGroups_)
     {
-        for (unsigned int temperatureGroup = 0; temperatureGroup < xi_.size(); ++temperatureGroup)
+        if (DOMAINDECOMP(cr))
         {
-            dd_bcast(cr->dd, ssize(xi_[temperatureGroup]) * int(sizeof(real)), xi_[temperatureGroup].data());
-            dd_bcast(cr->dd,
-                     ssize(xiVelocities_[temperatureGroup]) * int(sizeof(real)),
-                     xiVelocities_[temperatureGroup].data());
+            group.broadcastCheckpointValues(cr->dd);
         }
-        dd_bcast(cr->dd, ssize(coordinateTime_) * int(sizeof(real)), coordinateTime_.data());
-    }
-    for (unsigned int temperatureGroup = 0; temperatureGroup < xi_.size(); ++temperatureGroup)
-    {
-        calculateIntegral(temperatureGroup);
+        group.calculateIntegral();
     }
 }
 
@@ -353,9 +386,7 @@ std::string NoseHooverChainsData::dataID(NhcUsage nhcUsage)
     return formatString("NoseHooverChainsData%s", nhcUsageNames[nhcUsage]);
 }
 
-/*! \brief Trotter operator for the NHC degrees of freedom
- *
- * This follows Tuckerman et al. 2006
+/* This follows Tuckerman et al. 2006
  *
  * In NVT, the Trotter decomposition reads
  *   exp[iL dt] = exp[iLT dt/2] exp[iLv dt/2] exp[iLx dt] exp[iLv dt/2] exp[iLT dt/2]
@@ -390,22 +421,13 @@ std::string NoseHooverChainsData::dataID(NhcUsage nhcUsage)
  * Suzuki-Yoshida scheme which uses weighted time steps chosen to cancel out
  * lower-order error terms. Here, the fifth order SY scheme is used.
  */
-static real applyNhc(real                 currentKineticEnergy,
-                     ArrayRef<real>       xi,
-                     ArrayRef<real>       xiVelocities,
-                     ArrayRef<const real> invXiMass,
-                     const real           numDofSystem,
-                     const real           referenceTemperature,
-                     const real           couplingTimeStep)
+real NoseHooverGroup::applyNhc(real currentKineticEnergy, const real couplingTimeStep)
 {
     if (currentKineticEnergy < 0)
     {
+        finalizeUpdate(couplingTimeStep);
         return 1.0;
     }
-
-    GMX_ASSERT(xi.size() == xiVelocities.size(),
-               "Xi positions and velocities must have matching size.");
-    const int chainLength = xi.size();
 
     constexpr unsigned int c_suzukiYoshidaOrder                         = 5;
     constexpr double       c_suzukiYoshidaWeights[c_suzukiYoshidaOrder] = {
@@ -424,61 +446,68 @@ static real applyNhc(real                 currentKineticEnergy,
 
             // Reverse loop - start from last thermostat in chain to update velocities,
             // because we need the new velocity to scale the next thermostat in the chain
-            for (auto chainPosition = chainLength - 1; chainPosition >= 0; --chainPosition)
+            for (auto chainPosition = chainLength_ - 1; chainPosition >= 0; --chainPosition)
             {
                 const real kineticEnergy2 =
                         ((chainPosition == 0) ? 2 * currentKineticEnergy
-                                              : gmx::square(xiVelocities[chainPosition - 1])
-                                                        / invXiMass[chainPosition - 1]);
-                const real numDof         = ((chainPosition == 0) ? numDofSystem : 1);
-                const real xiAcceleration = invXiMass[chainPosition]
-                                            * (kineticEnergy2 - numDof * c_boltz * referenceTemperature);
+                                              : gmx::square(xiVelocities_[chainPosition - 1])
+                                                        / invXiMass_[chainPosition - 1]);
+                // DOF of temperature group or chain member
+                const real numDof         = ((chainPosition == 0) ? numDegreesOfFreedom_ : 1);
+                const real xiAcceleration = invXiMass_[chainPosition]
+                                            * (kineticEnergy2 - numDof * c_boltz * referenceTemperature_);
 
                 // We scale based on the next thermostat in chain.
                 // Last thermostat in chain doesn't get scaled.
                 const real localScalingFactor =
-                        (chainPosition < chainLength - 1)
-                                ? exp(-0.25 * timeStep * xiVelocities[chainPosition + 1])
+                        (chainPosition < chainLength_ - 1)
+                                ? exp(-0.25 * timeStep * xiVelocities_[chainPosition + 1])
                                 : 1.0;
-                xiVelocities[chainPosition] = localScalingFactor
-                                              * (xiVelocities[chainPosition] * localScalingFactor
-                                                 + 0.5 * timeStep * xiAcceleration);
+                xiVelocities_[chainPosition] = localScalingFactor
+                                               * (xiVelocities_[chainPosition] * localScalingFactor
+                                                  + 0.5 * timeStep * xiAcceleration);
             }
 
             // Calculate the new system scaling factor
-            const real systemScalingFactor = std::exp(-timeStep * xiVelocities[0]);
+            const real systemScalingFactor = std::exp(-timeStep * xiVelocities_[0]);
             velocityScalingFactor *= systemScalingFactor;
             currentKineticEnergy *= systemScalingFactor * systemScalingFactor;
 
             // Forward loop - start from the system thermostat
-            for (auto chainPosition = 0; chainPosition < chainLength; ++chainPosition)
+            for (auto chainPosition = 0; chainPosition < chainLength_; ++chainPosition)
             {
                 // Update thermostat positions
-                xi[chainPosition] += timeStep * xiVelocities[chainPosition];
+                xi_[chainPosition] += timeStep * xiVelocities_[chainPosition];
 
                 // Kinetic energy of system or previous chain member
                 const real kineticEnergy2 =
                         ((chainPosition == 0) ? 2 * currentKineticEnergy
-                                              : gmx::square(xiVelocities[chainPosition - 1])
-                                                        / invXiMass[chainPosition - 1]);
-                // DOF of system or previous chain member
-                const real numDof         = ((chainPosition == 0) ? numDofSystem : 1);
-                const real xiAcceleration = invXiMass[chainPosition]
-                                            * (kineticEnergy2 - numDof * c_boltz * referenceTemperature);
+                                              : gmx::square(xiVelocities_[chainPosition - 1])
+                                                        / invXiMass_[chainPosition - 1]);
+                // DOF of temperature group or chain member
+                const real numDof         = ((chainPosition == 0) ? numDegreesOfFreedom_ : 1);
+                const real xiAcceleration = invXiMass_[chainPosition]
+                                            * (kineticEnergy2 - numDof * c_boltz * referenceTemperature_);
 
                 // We scale based on the next thermostat in chain.
                 // Last thermostat in chain doesn't get scaled.
                 const real localScalingFactor =
-                        (chainPosition < chainLength - 1)
-                                ? exp(-0.25 * timeStep * xiVelocities[chainPosition + 1])
+                        (chainPosition < chainLength_ - 1)
+                                ? exp(-0.25 * timeStep * xiVelocities_[chainPosition + 1])
                                 : 1.0;
-                xiVelocities[chainPosition] = localScalingFactor
-                                              * (xiVelocities[chainPosition] * localScalingFactor
-                                                 + 0.5 * timeStep * xiAcceleration);
+                xiVelocities_[chainPosition] = localScalingFactor
+                                               * (xiVelocities_[chainPosition] * localScalingFactor
+                                                  + 0.5 * timeStep * xiAcceleration);
             }
         }
     }
+    finalizeUpdate(couplingTimeStep);
     return velocityScalingFactor;
+}
+
+real NoseHooverChainsData::applyNhc(int temperatureGroup, double propagationTimeStep, real currentKineticEnergy)
+{
+    return noseHooverGroups_[temperatureGroup].applyNhc(currentKineticEnergy, propagationTimeStep);
 }
 
 /*!
@@ -519,15 +548,10 @@ void NoseHooverChainsElement::propagateNhc()
     for (int temperatureGroup = 0; (temperatureGroup < noseHooverChainData_->numTemperatureGroups());
          temperatureGroup++)
     {
-        auto nhcCoords     = noseHooverChainData_->coordinateView(temperatureGroup);
-        auto scalingFactor = applyNhc(currentKineticEnergy(ekind->tcstat[temperatureGroup]),
-                                      nhcCoords.positions,
-                                      nhcCoords.velocities,
-                                      nhcCoords.invMass,
-                                      noseHooverChainData_->numDegreesOfFreedom(temperatureGroup),
-                                      noseHooverChainData_->referenceTemperature(temperatureGroup),
-                                      propagationTimeStep_);
-        noseHooverChainData_->returnCoordinateView(std::move(nhcCoords), propagationTimeStep_);
+        auto scalingFactor =
+                noseHooverChainData_->applyNhc(temperatureGroup,
+                                               propagationTimeStep_,
+                                               currentKineticEnergy(ekind->tcstat[temperatureGroup]));
 
         if (nhcUsage_ == NhcUsage::System)
         {
@@ -693,7 +717,7 @@ ISimulatorElement* NoseHooverChainsElement::getElementPointerImpl(
     if (nhcUsage == NhcUsage::System)
     {
         auto* thermostat = static_cast<NoseHooverChainsElement*>(element);
-        // Capturing pointer is safe because lifetime is handled by caller
+        // Capturing pointer is safe because caller handles lifetime
         builderHelper->registerTemperaturePressureControl(
                 [thermostat, propagatorTag](const PropagatorConnection& connection) {
                     thermostat->connectWithPropagator(connection, propagatorTag);

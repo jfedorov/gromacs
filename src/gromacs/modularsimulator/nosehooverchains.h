@@ -58,7 +58,7 @@ class GlobalCommunicationHelper;
 class LegacySimulatorData;
 class ModularSimulatorAlgorithmBuilderHelper;
 class MttkData;
-struct NhcCoordinateView;
+class NoseHooverGroup;
 class StatePropagatorData;
 enum class UseFullStepKE;
 
@@ -106,30 +106,19 @@ public:
                          EnergyData*          energyData,
                          NhcUsage             nhcUsage);
 
-    /*! \brief Get view on the NHC coordinates
+    /*! \brief Propagate the NHC degrees of freedom for a temperature group and
+     *        return its current velocity scaling value
      *
-     * \param temperatureGroup  The temperature group of the requested coordinates
-     * \return  A view on the current coordinates
+     * \param temperatureGroup  The temperature group to be propagated
+     * \param propagationTimeStep  The time step by which the DOF are propagated
+     * \param currentKineticEnergy  The current kinetic energy of the temperature group
+     * \return  The current velocity scaling value for the temperature group
      */
-    NhcCoordinateView coordinateView(int temperatureGroup);
-    /*! \brief Return a view on the NHC coordinates
-     *
-     * This call represents an agreement that the caller will not continue to use
-     * a previously requested coordinate view. The caller also informs this object
-     * of the time increment it performed on the view.
-     *
-     * \param nhcCoordinateView  The coordinate view
-     * \param timeIncrement  By how much the coordinates have been propagated
-     */
-    void returnCoordinateView(NhcCoordinateView nhcCoordinateView, real timeIncrement);
+    real applyNhc(int temperatureGroup, double propagationTimeStep, real currentKineticEnergy);
 
     //! The number of temperature groups
     int numTemperatureGroups() const;
-    //! Coupling temperature for temperature group
-    real referenceTemperature(int temperatureGroup) const;
-    //! Number of degrees for temperature group
-    real numDegreesOfFreedom(int temperatureGroup) const;
-    //! Whether the NHC dofs are at a full coupling time step
+    //! Whether the NHC degrees of freedom are at a full coupling time step
     bool isAtFullCouplingTimeStep() const;
 
     //! ICheckpointHelperClient write checkpoint implementation
@@ -149,12 +138,8 @@ public:
     static std::string dataID(NhcUsage nhcUsage);
 
 private:
-    //! Calculate the current value of the NHC integral for a temperature group
-    void calculateIntegral(int temperatureGroup);
     //! Return the value of the coupling integral at a specific time
     double temperatureCouplingIntegral(Time time) const;
-    //! Whether a temperature group dof is at a full coupling time step
-    bool isAtFullCouplingTimeStep(int temperatureGroup) const;
 
     //! CheckpointHelper identifier
     const std::string identifier_;
@@ -162,33 +147,11 @@ private:
     template<CheckpointDataOperation operation>
     void doCheckpointData(CheckpointData<operation>* checkpointData);
 
-    //! The thermostat degree of freedom
-    std::vector<std::vector<real>> xi_;
-    //! Velocity of the thermostat dof
-    std::vector<std::vector<real>> xiVelocities_;
-    //! Work exerted by thermostat per group
-    std::vector<double> temperatureCouplingIntegral_;
-    //! Inverse mass of the thermostat dof
-    std::vector<std::vector<real>> invXiMass_;
-    //! Whether the xi view is currently in use
-    std::vector<bool> coordinateViewInUse_;
-    //! The current time of xi and xiVelocities
-    std::vector<real> coordinateTime_;
-    //! The current time of the temperature integral
-    std::vector<real> integralTime_;
+    //! List of temperature groups with Nose-Hoover chains
+    std::vector<NoseHooverGroup> noseHooverGroups_;
 
-    //! The coupling time step
-    const real couplingTimeStep_;
-    //! The length of the Nose-Hoover chains
-    const int chainLength_;
     //! The number of temperature groups
     const int numTemperatureGroups_;
-    //! Coupling temperature per group
-    ArrayRef<const real> referenceTemperature_;
-    //! Coupling time per group
-    ArrayRef<const real> couplingTime_;
-    //! Number of degrees of freedom per group
-    ArrayRef<const real> numDegreesOfFreedom_;
 };
 
 /*! \internal

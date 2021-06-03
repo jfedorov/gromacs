@@ -308,6 +308,11 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
         {
             builder->add<MttkBoxScaling>();
         }
+        else if (legacySimulatorData_->inputrec->epc == PressureCoupling::CRescale)
+        {
+            // Legacy implementation allows combination of C-Rescale with Trotter Nose-Hoover
+            builder->add<FirstOrderPressureCoupling>(0, ReportPreviousStepConservedEnergy::Yes);
+        }
     }
     else
     {

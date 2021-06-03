@@ -55,7 +55,7 @@ class EnergyData;
 enum class ScheduleOnInitStep;
 
 /*! \internal
- * \brief Class holding data used by the MTTK algorithm
+ * \brief Class holding the extra dof and parameters used by the MTTK algorithm
  *
  * As the Trotter update is split in several sub-steps (i.e. is updated
  * by several element instances), the MTTK degrees of freedom must be
@@ -66,7 +66,7 @@ enum class ScheduleOnInitStep;
  * related to the dof at the requested times, and writes the data needed
  * for restarts to checkpoint. As this is not implementing the
  * ISimulatorElement interface, it is not part of the simulator loop, but
- * relies on callbacks to perform it's duties.
+ * relies on callbacks to perform its duties.
  */
 class MttkData final : public ICheckpointHelperClient
 {
@@ -149,7 +149,8 @@ private:
 };
 
 /*! \internal
- * \brief Object holding information for the connection of MTTKElement objects to propagators
+ * \brief Object holding the callbacks and scaling views for the connection
+ *        of MTTKElement objects to propagators
  *
  * As the Trotter update is split in several sub-steps (i.e. is updated
  * by several element instances), the connection to propagators must be
