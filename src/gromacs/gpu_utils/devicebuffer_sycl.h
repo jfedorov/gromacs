@@ -439,7 +439,6 @@ inline cl::sycl::event fillSyclBufferWithNull(cl::sycl::buffer<Float3, 1>& buffe
             false;
 #endif
 
-
     if constexpr (usingHipSycl)
     {
         // hipSYCL does not support reinterpret but allows using Float3 directly.
