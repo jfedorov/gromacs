@@ -156,7 +156,7 @@ static inline void ljForceSwitch(const shift_consts_t         dispersionShift,
 
 //! \brief Fetch C6 grid contribution coefficients and return the product of these.
 template<enum VdwType vdwType>
-static inline float calculateLJEwaldC6Grid(RawAccessor<Float2, mode::read> a_nbfpComb, //const DeviceAccessor<Float2, mode::read> a_nbfpComb,
+static inline float calculateLJEwaldC6Grid(const DeviceAccessor<Float2, mode::read> a_nbfpComb,
                                            const int                                typeI,
                                            const int                                typeJ)
 {
@@ -181,7 +181,7 @@ static inline float calculateLJEwaldC6Grid(RawAccessor<Float2, mode::read> a_nbf
 
 //! Calculate LJ-PME grid force contribution with geometric or LB combination rule.
 template<bool doCalcEnergies, enum VdwType vdwType>
-static inline void ljEwaldComb(RawAccessor<Float2, mode::read> a_nbfpComb, //const DeviceAccessor<Float2, mode::read> a_nbfpComb,
+static inline void ljEwaldComb(const DeviceAccessor<Float2, mode::read> a_nbfpComb,
                                const float                              sh_lj_ewald,
                                const int                                typeI,
                                const int                                typeJ,
@@ -294,8 +294,7 @@ static inline T lerp(T d0, T d1, T t)
 }
 
 /*! \brief Interpolate Ewald coulomb force correction using the F*r table. */
-static inline float interpolateCoulombForceR(cl::sycl::global_ptr<float> a_coulombTab,
-                                             //RawAccessor<float, mode::read> a_coulombTab,
+static inline float interpolateCoulombForceR(const cl::sycl::global_ptr<float> a_coulombTab,
                                              const float coulombTabScale,
                                              const float r)
 {
@@ -505,11 +504,11 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
                  cl::sycl::buffer<nbnxn_cj4_t, 1>                            b_plistCJ4,
                  cl::sycl::buffer<nbnxn_sci_t, 1>                            b_plistSci,
                  cl::sycl::buffer<nbnxn_excl_t, 1>                           b_plistExcl,
-                 cl::sycl::buffer<Float2, 1>                                 b_ljComb,
-                 cl::sycl::buffer<int, 1>                                    b_atomTypes,
-                 cl::sycl::buffer<Float2, 1>                                 b_nbfp,
-                 cl::sycl::buffer<Float2, 1>                                  b_nbfpComb,
-                 cl::sycl::buffer<float, 1>                                   b_coulombTab,
+                 OptionalAccessor<Float2, mode::read, ljComb<vdwType>>       a_ljComb,
+                 OptionalAccessor<int, mode::read, !ljComb<vdwType>>         a_atomTypes,
+                 OptionalAccessor<Float2, mode::read, !ljComb<vdwType>>      a_nbfp,
+                 OptionalAccessor<Float2, mode::read, ljEwald<vdwType>>      a_nbfpComb,
+                 OptionalAccessor<float, mode::read, elecEwaldTab<elecType>> a_coulombTab,
                  const int                                                   numTypes,
                  const float                                                 rCoulombSq,
                  const float                                                 rVdwSq,
@@ -542,77 +541,23 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
     RawAccessor<nbnxn_cj4_t, doPruneNBL ? mode::read_write : mode::read> a_plistCJ4{ b_plistCJ4, cgh };
     RawAccessor<nbnxn_sci_t, mode::read> a_plistSci{ b_plistSci, cgh };
     RawAccessor<nbnxn_excl_t, mode::read> a_plistExcl{ b_plistExcl, cgh };
-
-    RawAccessor<Float2, mode::read> a_ljComb{b_ljComb, cgh};
-    /*
-    auto a_ljComb = [&]() {
-        if constexpr (props.vdwComb)
-        {
-            return RawAccessor<Float2, mode::read>(b_ljComb, cgh);
-        }
-        else
-        {
-            return nullptr;
-        }
-    }();
-    */
-
-    RawAccessor<int, mode::read> a_atomTypes{ b_atomTypes, cgh };
-    /*
-    auto a_atomTypes = [&]() {
-        if constexpr (!props.vdwComb)
-        {
-            return RawAccessor<int, mode::read>( b_atomTypes, cgh );
-        }
-        else
-        {
-            return nullptr;
-        }
-    }();
-    */
-
-    RawAccessor<Float2, mode::read> a_nbfp{ b_nbfp, cgh };
-    /*
-    auto a_nbfp = [&]() {
-
-        if constexpr (!props.vdwComb)
-        {
-            return RawAccessor<Float2, mode::read>( b_nbfp, cgh );
-        }
-        else
-        {
-            return nullptr;
-        }
-    }();
-    */
-
-    RawAccessor<Float2, mode::read> a_nbfpComb { b_nbfpComb, cgh };
-    /*
-    auto a_nbfpComb = [&]() {
-        if constexpr (props.vdwEwald)
-        {
-            return RawAccessor<Float2, mode::read>( b_nbfpComb, cgh );
-        }
-        else
-        {
-            return nullptr;
-        }
-    }();
-    */
-
-    RawAccessor<float, mode::read>a_coulombTab { b_coulombTab, cgh };
-    /*
-    auto a_coulombTab = [&]() {
-        if constexpr (props.elecEwaldTab)
-        {
-            return RawAccessor<float, mode::read>( b_coulombTab, cgh );
-        }
-        else
-        {
-            return nullptr;
-        }
-    }();
-    */
+    if constexpr (!props.vdwComb)
+    {
+        cgh.require(a_atomTypes);
+        cgh.require(a_nbfp);
+    }
+    else
+    {
+        cgh.require(a_ljComb);
+    }
+    if constexpr (props.vdwEwald)
+    {
+        cgh.require(a_nbfpComb);
+    }
+    if constexpr (props.elecEwaldTab)
+    {
+        cgh.require(a_coulombTab);
+    }
 
     // shmem buffer for i x+q pre-loading
     cl::sycl::accessor<Float4, 2, mode::read_write, target::local> sm_xq(
@@ -1140,11 +1085,11 @@ void launchNbnxmKernel(NbnxmGpu* nb, const gmx::StepWorkload& stepWork, const In
                                                    *plist->cj4.buffer_,
                                                    *plist->sci.buffer_,
                                                    *plist->excl.buffer_,
-                                                   *adat->ljComb.buffer_,
-                                                   *adat->atomTypes.buffer_,
-                                                   *nbp->nbfp.buffer_,
-                                                   *nbp->nbfp_comb.buffer_,
-                                                   *nbp->coulomb_tab.buffer_,
+                                                   adat->ljComb,
+                                                   adat->atomTypes,
+                                                   nbp->nbfp,
+                                                   nbp->nbfp_comb,
+                                                   nbp->coulomb_tab,
                                                    adat->numTypes,
                                                    nbp->rcoulomb_sq,
                                                    nbp->rvdw_sq,
