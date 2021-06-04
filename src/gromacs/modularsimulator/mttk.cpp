@@ -128,6 +128,14 @@ MttkData::MttkData(real                       referenceTemperature,
     energyData->setParrinelloRahmanBoxVelocities([this]() { return boxVelocity_; });
 }
 
+MttkData::~MttkData()
+{
+    sfree(boxVelocity_[XX]);
+    sfree(boxVelocity_[YY]);
+    sfree(boxVelocity_[ZZ]);
+    sfree(boxVelocity_);
+}
+
 void MttkData::calculateIntegralIfNeeded()
 {
     // Check whether coordinate time divided by the time step is close to integer

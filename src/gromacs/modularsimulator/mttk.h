@@ -114,6 +114,19 @@ public:
     //! Identifier used to store objects
     static std::string dataID();
 
+    // The use of a tensor complicates memory management. This is the
+    // lowest maintenance solution to avoid memory leaks.
+    //! Disallow copy construction
+    MttkData(const MttkData& other) = delete;
+    //! Disallow move construction
+    MttkData(MttkData&& other) = delete;
+    //! Disallow copy assignment
+    MttkData& operator=(const MttkData& other) = delete;
+    //! Disallow move assignment
+    MttkData& operator=(MttkData&& other) = delete;
+    //! Delete tensor
+    ~MttkData() override;
+
 private:
     //! Return the current value of the MTTK dof contribution to the conserved energy
     double temperatureCouplingIntegral(Time time) const;
