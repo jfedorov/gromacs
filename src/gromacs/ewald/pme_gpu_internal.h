@@ -340,16 +340,19 @@ void pme_gpu_destroy_3dfft(const PmeGpu* pmeGpu);
 /*! \libinternal \brief
  * A GPU spline computation and charge spreading function.
  *
- * \param[in]  pmeGpu                        The PME GPU structure.
- * \param[in]  xReadyOnDevice                Event synchronizer indicating that the coordinates are
- * ready in the device memory; can be nullptr when invoked on a separate PME rank or from PME tests.
- * \param[out] h_grids                       The host-side grid buffers (used only if the result of
- * the spread is expected on the host, e.g. testing or host-side FFT) \param[in]  computeSplines
- * Should the computation of spline parameters and gridline indices be performed. \param[in]
- * spreadCharges                 Should the charges/coefficients be spread on the grid. \param[in]
- * lambda                        The lambda value of the current system state. \param[in]
- * useGpuDirectComm              Whether direct GPU PME-PP communication is active \param[in]
- * pmeCoordinateReceiverGpu      Coordinate receiver object.
+ * \param[in]  pmeGpu                    The PME GPU structure.
+ * \param[in]  xReadyOnDevice            Event synchronizer indicating that the coordinates are
+ *                                       ready in the device memory; can be nullptr when invoked
+ *                                       on a separate PME rank or from PME tests.
+ * \param[out] h_grids                   The host-side grid buffers (used only if the result
+ *                                       of the spread is expected on the host, e.g. testing
+ *                                       or host-side FFT)
+ * \param[in]  computeSplines            Should the computation of spline parameters and gridline
+ *                                       indices be performed.
+ * \param[in]  spreadCharges             Should the charges/coefficients be spread on the grid.
+ * \param[in]  lambda                    The lambda value of the current system state.
+ * \param[in]  useGpuDirectComm          Whether direct GPU PME-PP communication is active
+ * \param[in]  pmeCoordinateReceiverGpu  Coordinate receiver object.
  */
 GPU_FUNC_QUALIFIER void
 pme_gpu_spread(const PmeGpu*                  GPU_FUNC_ARGUMENT(pmeGpu),

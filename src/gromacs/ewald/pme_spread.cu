@@ -232,6 +232,9 @@ __launch_bounds__(c_spreadMaxThreadsPerBlock) CLANG_DISABLE_OPTIMIZATION_ATTRIBU
     }
 
     /* Charges, required for both spline and spread */
+    // We don't use atom prefetching for with the pipelining mechanism,
+    // to avoid the situation that atoms required for this stage of the pipeline
+    // may be loaded by another stage, and thus inaccessible.
     if (!kernelParams.usePipeline && c_useAtomDataPrefetch)
     {
         pme_gpu_stage_atom_data<float, atomsPerBlock, 1>(sm_coefficients,

@@ -88,12 +88,14 @@ public:
     void launchReceiveCoordinatesFromPpCudaMpi(DeviceBuffer<RVec> recvbuf, int numAtoms, int numBytes, int ppRank);
 
     /*! \brief
-     * For lib MPI, wait for coordinates from PP ranks
-     * For thread MPI, enqueue PP co-ordinate transfer event into PME stream
-     * \param[in] senderIndex    Index of sender PP rank.
-     * \param[in] deviceStream   Stream in which to enqueue the wait event.
+     * For lib MPI, wait for coordinates from any PP rank
+     * For thread MPI, enqueue PP co-ordinate transfer event received from PP
+     * rank determined from pipeline stage into given stream
+     * \param[in] pipelineStage  stage of pipeline corresponding to this transfer
+     * \param[in] deviceStream   stream in which to enqueue the wait event.
+     * \returns                  rank of sending PP task
      */
-    void synchronizeOnCoordinatesFromPpRanks(int senderIndex, const DeviceStream& deviceStream);
+    int synchronizeOnCoordinatesFromPpRanks(int pipelineStage, const DeviceStream& deviceStream);
 
     /*! \brief
      * Return pointer to stream associated with specific PP rank sender index
