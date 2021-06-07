@@ -1368,28 +1368,38 @@ void pme_gpu_spread(const PmeGpu*                  pmeGpu,
                                    && (pmeCoordinateReceiverGpu->ppCommNumSenderRanks() > 1);
     if (kernelParamsPtr->usePipeline)
     {
-        numStagesInPipeline              = pmeCoordinateReceiverGpu->ppCommNumSenderRanks();
-        kernelParamsPtr->pipelineAtomEnd = 0;
+        numStagesInPipeline = pmeCoordinateReceiverGpu->ppCommNumSenderRanks();
     }
 #endif
 
     for (int i = 0; i < numStagesInPipeline; i++)
     {
-
+        int senderRank;
         if (useGpuDirectComm)
         {
-            pmeCoordinateReceiverGpu->synchronizeOnCoordinatesFromPpRanks(
+            senderRank = pmeCoordinateReceiverGpu->synchronizeOnCoordinatesFromPpRanks(
                     i, *(pmeCoordinateReceiverGpu->ppCommStream(i)));
+        }
+        else
+        {
+            senderRank = i;
         }
 
         const DeviceStream* launchStream = &(pmeGpu->archSpecific->pmeStream_);
+
 #if GMX_GPU_CUDA
         if (kernelParamsPtr->usePipeline)
         {
-            launchStream                       = pmeCoordinateReceiverGpu->ppCommStream(i);
-            kernelParamsPtr->pipelineAtomStart = kernelParamsPtr->pipelineAtomEnd;
-            kernelParamsPtr->pipelineAtomEnd += pmeCoordinateReceiverGpu->ppCommNumAtoms(i);
+            launchStream                     = pmeCoordinateReceiverGpu->ppCommStream(senderRank);
+            kernelParamsPtr->pipelineAtomEnd = 0;
+            for (int j = 0; j <= senderRank; j++)
+            {
+                kernelParamsPtr->pipelineAtomStart = kernelParamsPtr->pipelineAtomEnd;
+                kernelParamsPtr->pipelineAtomEnd += pmeCoordinateReceiverGpu->ppCommNumAtoms(j);
+            }
         }
+#else
+        GMX_UNUSED_VALUE(senderRank);
 #endif
 
 #if c_canEmbedBuffers
