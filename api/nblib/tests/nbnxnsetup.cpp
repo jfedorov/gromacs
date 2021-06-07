@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2020, by the GROMACS development team, led by
+ * Copyright (c) 2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -41,10 +41,11 @@
  * \author Prashanth Kanduri <kanduri@cscs.ch>
  * \author Sebastian Keller <keller@cscs.ch>
  */
-#include "nblib/gmxsetup.h"
-#include "nblib/tests/testhelpers.h"
-#include "nblib/tests/testsystems.h"
+#include <cmath>
 
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/mdtypes/forcerec.h"
+#include "nblib/nbnxmsetuphelpers.h"
 #include "testutils/testasserts.h"
 
 namespace nblib
@@ -53,12 +54,20 @@ namespace nblib
 namespace test
 {
 
-TEST(NBlibTest, CanConstructNbvSetupUtil)
+TEST(NBlibTest, findNumEnergyGroups)
 {
-    ArgonSimulationStateBuilder argonSimulationStateBuilder;
-    SimulationState             system = argonSimulationStateBuilder.setupSimulationState();
-    EXPECT_NO_THROW(NbvSetupUtil());
+    std::vector<int64_t> v(10);
+    int                  arbitraryGid = 7;
+
+    // this sets some bit outside the range of bits used for the group ID
+    // having all bits zero except those used for the group ID can otherwise hide bugs
+    v[5] |= gmx::sc_atomInfo_HasCharge;
+    v[5] = (v[5] & ~gmx::sc_atomInfo_EnergyGroupIdMask) | arbitraryGid;
+
+    int nEnergyGroups = arbitraryGid + 1;
+    EXPECT_EQ(nEnergyGroups, findNumEnergyGroups(v));
 }
+
 
 } // namespace test
 
