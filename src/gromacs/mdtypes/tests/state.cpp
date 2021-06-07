@@ -49,6 +49,7 @@
 #include <gtest/gtest.h>
 
 #include "testutils/testasserts.h"
+#include "testutils/testmatchers.h"
 
 namespace gmx
 {
@@ -156,6 +157,76 @@ TEST(StateRVecVectors, RetrievesRVecVector)
     for (int d = 0; d < DIM; d++)
     {
         EXPECT_EQ(vec[testIndex][d], testValue[d]);
+    }
+}
+
+// Checks that two state object with the same vectors added in the same order
+// iterate over all vectors in the same order (as would happen with MPI in mdrun)
+TEST(StateRVecVectors, HaveIndenticalOrder)
+{
+    constexpr int                          numStates = 2;
+    std::array<t_state, numStates>         states;
+    const int                              numAtoms = 3;
+    constexpr int                          numVecs  = 3;
+    const std::array<std::string, numVecs> strings = { "testString1", "testString3", "testString2" };
+
+    for (t_state& state : states)
+    {
+        state.changeNumAtoms(numAtoms);
+    }
+
+    // Add the vectors to both states and fill the vectors with different values
+    int value = 0;
+    for (const std::string& string : strings)
+    {
+        for (t_state& state : states)
+        {
+            auto ref = state.addRVecVector(string);
+            for (auto& elem : ref)
+            {
+                elem = { real(value), 0.0_real, 0.0_real };
+            }
+            value += 1;
+        }
+    }
+
+    // Collect array of ArrayRefs which are expected to be in the same order for both states
+    std::array<std::vector<ArrayRef<RVec>>, numStates> arrayOfRefs;
+    int                                                stateIndex = 0;
+    for (t_state& state : states)
+    {
+        auto& refs = arrayOfRefs[stateIndex];
+        for (auto& ref : state.rvecVectors())
+        {
+            refs.push_back(ref);
+        }
+        ASSERT_EQ(refs.size(), numVecs);
+        stateIndex++;
+    }
+    // Swap the contents of the vectors with the same array index
+    for (int v = 0; v < numVecs; v++)
+    {
+        ASSERT_EQ(arrayOfRefs[1][v].size(), arrayOfRefs[0][v].size());
+        for (index i = 0; i < ssize(arrayOfRefs[0][v]); i++)
+        {
+            std::swap(arrayOfRefs[0][v][i], arrayOfRefs[1][v][i]);
+        }
+    }
+
+    // Check that the values matched the expected swapped values
+    value = 0;
+    for (const std::string& string : strings)
+    {
+        // Reversed loop to match the swap
+        for (auto stateIt = states.rbegin(); stateIt < states.rend(); stateIt++)
+        {
+            auto ref = stateIt->rvecVector(string).value();
+            for (auto& elem : ref)
+            {
+                EXPECT_EQ(elem[0], real(value));
+            }
+            value += 1;
+        }
     }
 }
 
