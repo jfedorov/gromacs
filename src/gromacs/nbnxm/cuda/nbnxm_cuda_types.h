@@ -108,6 +108,11 @@ struct NbnxmGpu
     /*! \brief local and non-local GPU streams */
     gmx::EnumerationArray<Nbnxm::InteractionLocality, const DeviceStream*> deviceStreams;
 
+    //! true when we we did pruning on this step
+    gmx::EnumerationArray<Nbnxm::InteractionLocality, bool> didPrune = { { false } };
+    //! true when we did rolling pruning (at the previous step)
+    gmx::EnumerationArray<Nbnxm::InteractionLocality, bool> didRollingPrune = { { false } };
+
     /*! \brief Event triggered when the non-local non-bonded
      * kernel is done (and the local transfer can proceed) */
     GpuEventSynchronizer nonlocal_done;

@@ -80,6 +80,7 @@
 #include "gromacs/nbnxm/gpu_data_mgmt.h"
 #include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/nbnxm/nbnxm_gpu.h"
+#include "gromacs/nbnxm/nbnxm_gpu_internal.h"
 #include "gromacs/nbnxm/pairlist.h"
 #include "gromacs/timing/gpu_timing.h"
 #include "gromacs/utility/cstringutil.h"
@@ -516,8 +517,6 @@ void gpu_launch_kernel(NbnxmGpu* nb, const gmx::StepWorkload& stepWork, const Nb
 
     bool bDoTime = nb->bDoTime;
 
-    cl_nbparam_params_t nbparams_params;
-
     /* Don't launch the non-local kernel if there is no work to do.
        Doing the same for the local kernel is more complicated, since the
        local part of the force array also depends on the non-local kernel.
@@ -581,6 +580,7 @@ void gpu_launch_kernel(NbnxmGpu* nb, const gmx::StepWorkload& stepWork, const Nb
                 plist->na_c);
     }
 
+    cl_nbparam_params_t nbparams_params;
     fillin_ocl_structures(nbp, &nbparams_params);
 
     auto* timingEvent = bDoTime ? timers->interaction[iloc].nb_k.fetchNextEvent() : nullptr;
@@ -673,74 +673,17 @@ static inline int calc_shmem_required_prune(const int num_threads_z)
     return shmem;
 }
 
-/*! \brief
- * Launch the pairlist prune only kernel for the given locality.
- * \p numParts tells in how many parts, i.e. calls the list will be pruned.
- */
-void gpu_launch_kernel_pruneonly(NbnxmGpu* nb, const InteractionLocality iloc, const int numParts)
+void launchNbnxmKernelPruneOnly(NbnxmGpu*                      nb,
+                                const gmx::InteractionLocality iloc,
+                                const int                      numParts,
+                                const int                      part,
+                                const int                      numSciInPart,
+                                CommandEvent*                  timingEvent)
 {
     NBAtomDataGpu*      adat         = nb->atdat;
     NBParamGpu*         nbp          = nb->nbparam;
     gpu_plist*          plist        = nb->plist[iloc];
-    Nbnxm::GpuTimers*   timers       = nb->timers;
     const DeviceStream& deviceStream = *nb->deviceStreams[iloc];
-    bool                bDoTime      = nb->bDoTime;
-
-    if (plist->haveFreshList)
-    {
-        GMX_ASSERT(numParts == 1, "With first pruning we expect 1 part");
-
-        /* Set rollingPruningNumParts to signal that it is not set */
-        plist->rollingPruningNumParts = 0;
-        plist->rollingPruningPart     = 0;
-    }
-    else
-    {
-        if (plist->rollingPruningNumParts == 0)
-        {
-            plist->rollingPruningNumParts = numParts;
-        }
-        else
-        {
-            GMX_ASSERT(numParts == plist->rollingPruningNumParts,
-                       "It is not allowed to change numParts in between list generation steps");
-        }
-    }
-
-    /* Use a local variable for part and update in plist, so we can return here
-     * without duplicating the part increment code.
-     */
-    int part = plist->rollingPruningPart;
-
-    plist->rollingPruningPart++;
-    if (plist->rollingPruningPart >= plist->rollingPruningNumParts)
-    {
-        plist->rollingPruningPart = 0;
-    }
-
-    /* Compute the number of list entries to prune in this pass */
-    int numSciInPart = (plist->nsci - part) / numParts;
-
-    /* Don't launch the kernel if there is no work to do. */
-    if (numSciInPart <= 0)
-    {
-        plist->haveFreshList = false;
-
-        return;
-    }
-
-    GpuRegionTimer* timer = nullptr;
-    if (bDoTime)
-    {
-        timer = &(plist->haveFreshList ? timers->interaction[iloc].prune_k
-                                       : timers->interaction[iloc].rollingPrune_k);
-    }
-
-    /* beginning of timed prune calculation section */
-    if (bDoTime)
-    {
-        timer->openTimingRegion(deviceStream);
-    }
 
     /* Kernel launch config:
      * - The thread block dimensions match the size of i-clusters, j-clusters,
@@ -778,7 +721,6 @@ void gpu_launch_kernel_pruneonly(NbnxmGpu* nb, const InteractionLocality iloc, c
     cl_nbparam_params_t nbparams_params;
     fillin_ocl_structures(nbp, &nbparams_params);
 
-    auto*          timingEvent  = bDoTime ? timer->fetchNextEvent() : nullptr;
     constexpr char kernelName[] = "k_pruneonly";
     const auto     pruneKernel  = selectPruneKernel(nb->kernel_pruneonly, plist->haveFreshList);
     const auto     kernelArgs   = prepareGpuKernelArguments(pruneKernel,
@@ -792,23 +734,6 @@ void gpu_launch_kernel_pruneonly(NbnxmGpu* nb, const InteractionLocality iloc, c
                                                       &numParts,
                                                       &part);
     launchGpuKernel(pruneKernel, config, deviceStream, timingEvent, kernelName, kernelArgs);
-
-    if (plist->haveFreshList)
-    {
-        plist->haveFreshList = false;
-        /* Mark that pruning has been done */
-        nb->timers->interaction[iloc].didPrune = true;
-    }
-    else
-    {
-        /* Mark that rolling pruning has been done */
-        nb->timers->interaction[iloc].didRollingPrune = true;
-    }
-
-    if (bDoTime)
-    {
-        timer->closeTimingRegion(deviceStream);
-    }
 }
 
 } // namespace Nbnxm

@@ -56,7 +56,8 @@ void launchNbnxmKernelPruneOnly(NbnxmGpu*                 nb,
                                 const InteractionLocality iloc,
                                 const int                 numParts,
                                 const int                 part,
-                                const int                 numSciInPart);
+                                const int                 numSciInPart,
+                                CommandEvent*             timingEvent);
 
 } // namespace Nbnxm
 

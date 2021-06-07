@@ -1,7 +1,8 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2017,2018,2019,2021, by the GROMACS development team, led by
+ * Copyright (c) 2012,2013,2014,2015,2017 by the GROMACS development team.
+ * Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -32,51 +33,37 @@
  * To help us fund GROMACS development, we humbly ask that you cite
  * the research papers on the package. Check out http://www.gromacs.org.
  */
-/*! \internal \file
- * \brief
- * Declares nbnxn cuda cache and texture helper functions
+/*! \libinternal \file
+ *  \brief Declare internal interfaces for GPU kernel execution for NBNXN module
  *
- * \ingroup module_nbnxm
+ *  \author Szilard Pall <pall.szilard@gmail.com>
+ *  \author Mark Abraham <mark.j.abraham@gmail.com>
+ *  \author Artem Zhmurov <zhmurov@gmail.com>
+ *  \ingroup module_nbnxm
  */
-#ifndef GMX_NBNXN_CUDA_NBNXN_CUDA_H
-#define GMX_NBNXN_CUDA_NBNXN_CUDA_H
 
-#include "gromacs/hardware/device_information.h"
-#include "gromacs/utility/gmxassert.h"
-#include "gromacs/utility/fatalerror.h"
+#ifndef GMX_NBNXM_NBNXM_GPU_INTERNAL_H
+#define GMX_NBNXM_NBNXM_GPU_INTERNAL_H
+
+#include "gromacs/gpu_utils/gputraits.h"
+
+namespace gmx
+{
+enum class InteractionLocality;
+} // namespace gmx
+
+struct NbnxmGpu;
 
 namespace Nbnxm
 {
 
-/*! Returns the number of blocks to be used for the nonbonded GPU kernel. */
-static inline int calc_nb_kernel_nblock(int nwork_units, const DeviceInformation* deviceInfo)
-{
-    int max_grid_x_size;
-
-    assert(deviceInfo);
-    /* CUDA does not accept grid dimension of 0 (which can happen e.g. with an
-       empty domain) and that case should be handled before this point. */
-    assert(nwork_units > 0);
-
-    max_grid_x_size = deviceInfo->prop.maxGridSize[0];
-
-    /* do we exceed the grid x dimension limit? */
-    if (nwork_units > max_grid_x_size)
-    {
-        gmx_fatal(FARGS,
-                  "Watch out, the input system is too large to simulate!\n"
-                  "The number of nonbonded work units (=number of super-clusters) exceeds the"
-                  "maximum grid size in x dimension (%d > %d)!",
-                  nwork_units,
-                  max_grid_x_size);
-    }
-
-    return nwork_units;
-}
-
-//! Set up the cache configuration for the non-bonded kernels.
-void cuda_set_cacheconfig();
+void launchNbnxmKernelPruneOnly(NbnxmGpu*                      nb,
+                                const gmx::InteractionLocality iloc,
+                                const int                      numParts,
+                                const int                      part,
+                                const int                      numSciInPart,
+                                CommandEvent*                  timingEvent);
 
 } // namespace Nbnxm
 
-#endif
+#endif // GMX_NBNXM_NBNXM_GPU_INTERNAL_H

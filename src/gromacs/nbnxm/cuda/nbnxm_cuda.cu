@@ -51,14 +51,12 @@
 #    include <limits>
 #endif
 
-
 #include "nbnxm_cuda.h"
 
 #include "gromacs/gpu_utils/gpu_utils.h"
 #include "gromacs/gpu_utils/gpueventsynchronizer.cuh"
 #include "gromacs/gpu_utils/typecasts.cuh"
 #include "gromacs/gpu_utils/vectype_ops.cuh"
-#include "gromacs/hardware/device_information.h"
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/nbnxm/atomdata.h"
 #include "gromacs/nbnxm/gpu_common.h"
@@ -66,10 +64,10 @@
 #include "gromacs/nbnxm/gpu_data_mgmt.h"
 #include "gromacs/nbnxm/grid.h"
 #include "gromacs/nbnxm/nbnxm.h"
+#include "gromacs/nbnxm/nbnxm_gpu_internal.h"
 #include "gromacs/nbnxm/pairlist.h"
 #include "gromacs/timing/gpu_timing.h"
 #include "gromacs/utility/cstringutil.h"
-#include "gromacs/utility/gmxassert.h"
 
 #include "nbnxm_cuda_types.h"
 
@@ -120,33 +118,6 @@ namespace Nbnxm
 typedef void (*nbnxn_cu_kfunc_ptr_t)(const NBAtomDataGpu, const NBParamGpu, const gpu_plist, bool);
 
 /*********************************/
-
-/*! Returns the number of blocks to be used for the nonbonded GPU kernel. */
-static inline int calc_nb_kernel_nblock(int nwork_units, const DeviceInformation* deviceInfo)
-{
-    int max_grid_x_size;
-
-    assert(deviceInfo);
-    /* CUDA does not accept grid dimension of 0 (which can happen e.g. with an
-       empty domain) and that case should be handled before this point. */
-    assert(nwork_units > 0);
-
-    max_grid_x_size = deviceInfo->prop.maxGridSize[0];
-
-    /* do we exceed the grid x dimension limit? */
-    if (nwork_units > max_grid_x_size)
-    {
-        gmx_fatal(FARGS,
-                  "Watch out, the input system is too large to simulate!\n"
-                  "The number of nonbonded work units (=number of super-clusters) exceeds the"
-                  "maximum grid size in x dimension (%d > %d)!",
-                  nwork_units,
-                  max_grid_x_size);
-    }
-
-    return nwork_units;
-}
-
 
 /* Constant arrays listing all kernel function pointers and enabling selection
    of a kernel in an elegant manner. */
@@ -535,149 +506,6 @@ void gpu_launch_kernel(NbnxmGpu* nb, const gmx::StepWorkload& stepWork, const In
     if (bDoTime)
     {
         timers->interaction[iloc].nb_k.closeTimingRegion(deviceStream);
-    }
-
-    if (GMX_NATIVE_WINDOWS)
-    {
-        /* Windows: force flushing WDDM queue */
-        cudaStreamQuery(deviceStream.stream());
-    }
-}
-
-/*! Calculates the amount of shared memory required by the CUDA kernel in use. */
-static inline int calc_shmem_required_prune(const int num_threads_z)
-{
-    int shmem;
-
-    /* i-atom x in shared memory */
-    shmem = c_nbnxnGpuNumClusterPerSupercluster * c_clSize * sizeof(float4);
-    /* cj in shared memory, for each warp separately */
-    shmem += num_threads_z * c_nbnxnGpuClusterpairSplit * c_nbnxnGpuJgroupSize * sizeof(int);
-
-    return shmem;
-}
-
-void gpu_launch_kernel_pruneonly(NbnxmGpu* nb, const InteractionLocality iloc, const int numParts)
-{
-    NBAtomDataGpu*      adat         = nb->atdat;
-    NBParamGpu*         nbp          = nb->nbparam;
-    gpu_plist*          plist        = nb->plist[iloc];
-    Nbnxm::GpuTimers*   timers       = nb->timers;
-    const DeviceStream& deviceStream = *nb->deviceStreams[iloc];
-
-    bool bDoTime = nb->bDoTime;
-
-    if (plist->haveFreshList)
-    {
-        GMX_ASSERT(numParts == 1, "With first pruning we expect 1 part");
-
-        /* Set rollingPruningNumParts to signal that it is not set */
-        plist->rollingPruningNumParts = 0;
-        plist->rollingPruningPart     = 0;
-    }
-    else
-    {
-        if (plist->rollingPruningNumParts == 0)
-        {
-            plist->rollingPruningNumParts = numParts;
-        }
-        else
-        {
-            GMX_ASSERT(numParts == plist->rollingPruningNumParts,
-                       "It is not allowed to change numParts in between list generation steps");
-        }
-    }
-
-    /* Use a local variable for part and update in plist, so we can return here
-     * without duplicating the part increment code.
-     */
-    int part = plist->rollingPruningPart;
-
-    plist->rollingPruningPart++;
-    if (plist->rollingPruningPart >= plist->rollingPruningNumParts)
-    {
-        plist->rollingPruningPart = 0;
-    }
-
-    /* Compute the number of list entries to prune in this pass */
-    int numSciInPart = (plist->nsci - part) / numParts;
-
-    /* Don't launch the kernel if there is no work to do (not allowed with CUDA) */
-    if (numSciInPart <= 0)
-    {
-        plist->haveFreshList = false;
-
-        return;
-    }
-
-    GpuRegionTimer* timer = nullptr;
-    if (bDoTime)
-    {
-        timer = &(plist->haveFreshList ? timers->interaction[iloc].prune_k
-                                       : timers->interaction[iloc].rollingPrune_k);
-    }
-
-    /* beginning of timed prune calculation section */
-    if (bDoTime)
-    {
-        timer->openTimingRegion(deviceStream);
-    }
-
-    /* Kernel launch config:
-     * - The thread block dimensions match the size of i-clusters, j-clusters,
-     *   and j-cluster concurrency, in x, y, and z, respectively.
-     * - The 1D block-grid contains as many blocks as super-clusters.
-     */
-    int num_threads_z = c_pruneKernelJ4Concurrency;
-    int nblock        = calc_nb_kernel_nblock(numSciInPart, &nb->deviceContext_->deviceInfo());
-    KernelLaunchConfig config;
-    config.blockSize[0]     = c_clSize;
-    config.blockSize[1]     = c_clSize;
-    config.blockSize[2]     = num_threads_z;
-    config.gridSize[0]      = nblock;
-    config.sharedMemorySize = calc_shmem_required_prune(num_threads_z);
-
-    if (debug)
-    {
-        fprintf(debug,
-                "Pruning GPU kernel launch configuration:\n\tThread block: %zux%zux%zu\n\t"
-                "\tGrid: %zux%zu\n\t#Super-clusters/clusters: %d/%d (%d)\n"
-                "\tShMem: %zu\n",
-                config.blockSize[0],
-                config.blockSize[1],
-                config.blockSize[2],
-                config.gridSize[0],
-                config.gridSize[1],
-                numSciInPart * c_nbnxnGpuNumClusterPerSupercluster,
-                c_nbnxnGpuNumClusterPerSupercluster,
-                plist->na_c,
-                config.sharedMemorySize);
-    }
-
-    auto*          timingEvent  = bDoTime ? timer->fetchNextEvent() : nullptr;
-    constexpr char kernelName[] = "k_pruneonly";
-    const auto     kernel =
-            plist->haveFreshList ? nbnxn_kernel_prune_cuda<true> : nbnxn_kernel_prune_cuda<false>;
-    const auto kernelArgs = prepareGpuKernelArguments(kernel, config, adat, nbp, plist, &numParts, &part);
-    launchGpuKernel(kernel, config, deviceStream, timingEvent, kernelName, kernelArgs);
-
-    /* TODO: consider a more elegant way to track which kernel has been called
-       (combined or separate 1st pass prune, rolling prune). */
-    if (plist->haveFreshList)
-    {
-        plist->haveFreshList = false;
-        /* Mark that pruning has been done */
-        nb->timers->interaction[iloc].didPrune = true;
-    }
-    else
-    {
-        /* Mark that rolling pruning has been done */
-        nb->timers->interaction[iloc].didRollingPrune = true;
-    }
-
-    if (bDoTime)
-    {
-        timer->closeTimingRegion(deviceStream);
     }
 
     if (GMX_NATIVE_WINDOWS)

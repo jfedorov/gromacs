@@ -51,65 +51,6 @@
 namespace Nbnxm
 {
 
-void gpu_launch_kernel_pruneonly(NbnxmGpu* nb, const InteractionLocality iloc, const int numParts)
-{
-    gpu_plist* plist = nb->plist[iloc];
-
-    if (plist->haveFreshList)
-    {
-        GMX_ASSERT(numParts == 1, "With first pruning we expect 1 part");
-
-        /* Set rollingPruningNumParts to signal that it is not set */
-        plist->rollingPruningNumParts = 0;
-        plist->rollingPruningPart     = 0;
-    }
-    else
-    {
-        if (plist->rollingPruningNumParts == 0)
-        {
-            plist->rollingPruningNumParts = numParts;
-        }
-        else
-        {
-            GMX_ASSERT(numParts == plist->rollingPruningNumParts,
-                       "It is not allowed to change numParts in between list generation steps");
-        }
-    }
-
-    /* Use a local variable for part and update in plist, so we can return here
-     * without duplicating the part increment code.
-     */
-    const int part = plist->rollingPruningPart;
-
-    plist->rollingPruningPart++;
-    if (plist->rollingPruningPart >= plist->rollingPruningNumParts)
-    {
-        plist->rollingPruningPart = 0;
-    }
-
-    /* Compute the number of list entries to prune in this pass */
-    const int numSciInPart = (plist->nsci - part) / numParts;
-
-    /* Don't launch the kernel if there is no work to do */
-    if (numSciInPart <= 0)
-    {
-        plist->haveFreshList = false;
-        return;
-    }
-
-    launchNbnxmKernelPruneOnly(nb, iloc, numParts, part, numSciInPart);
-
-    if (plist->haveFreshList)
-    {
-        plist->haveFreshList = false;
-        nb->didPrune[iloc]   = true; // Mark that pruning has been done
-    }
-    else
-    {
-        nb->didRollingPrune[iloc] = true; // Mark that rolling pruning has been done
-    }
-}
-
 void gpu_launch_kernel(NbnxmGpu* nb, const gmx::StepWorkload& stepWork, const Nbnxm::InteractionLocality iloc)
 {
     const NBParamGpu* nbp   = nb->nbparam;

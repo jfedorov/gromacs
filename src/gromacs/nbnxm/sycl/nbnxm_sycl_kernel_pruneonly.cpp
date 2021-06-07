@@ -41,10 +41,9 @@
  */
 #include "gmxpre.h"
 
-#include "nbnxm_sycl_kernel_pruneonly.h"
-
 #include "gromacs/gpu_utils/devicebuffer.h"
 #include "gromacs/gpu_utils/gmxsycl.h"
+#include "gromacs/nbnxm/nbnxm_gpu_internal.h"
 #include "gromacs/utility/template_mp.h"
 
 #include "nbnxm_sycl_kernel_utils.h"
@@ -261,7 +260,8 @@ void launchNbnxmKernelPruneOnly(NbnxmGpu*                 nb,
                                 const InteractionLocality iloc,
                                 const int                 numParts,
                                 const int                 part,
-                                const int                 numSciInPart)
+                                const int                 numSciInPart,
+                                CommandEvent* /* timingEvent */)
 {
     NBAtomDataGpu*      adat          = nb->atdat;
     NBParamGpu*         nbp           = nb->nbparam;
