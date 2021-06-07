@@ -284,7 +284,7 @@ static inline T lerp(T d0, T d1, T t)
 }
 
 /*! \brief Interpolate Ewald coulomb force correction using the F*r table. */
-static inline float interpolateCoulombForceR(const DeviceAccessor<float, mode::read> a_coulombTab,
+static inline float interpolateCoulombForceR(cl::sycl::global_ptr<float> gm_coulombTab,
                                              const float coulombTabScale,
                                              const float r)
 {
@@ -292,8 +292,8 @@ static inline float interpolateCoulombForceR(const DeviceAccessor<float, mode::r
     const int   index      = static_cast<int>(normalized);
     const float fraction   = normalized - index;
 
-    const float left  = a_coulombTab[index];
-    const float right = a_coulombTab[index + 1];
+    const float left  = gm_coulombTab[index];
+    const float right = gm_coulombTab[index + 1];
 
     return lerp(left, right, fraction); // TODO: cl::sycl::mix
 }
@@ -557,7 +557,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
     // SYCL-TODO: Make into 3D; section 4.7.6.11 of SYCL2020 specs
     cl::sycl::accessor<float, 1, mode::read_write, target::local> a_sm_reductionBuffer(
             cl::sycl::range<1>(c_clSize * c_clSize * DIM), cgh);
-
+    
     auto sm_atomTypeI = [&]() {
         if constexpr (!props.vdwComb)
         {
@@ -582,7 +582,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
         }
     }();
 
-    /* Flag to control the calculation of exclusion forces in the kernel
+        /* Flag to control the calculation of exclusion forces in the kernel
      * We do that with Ewald (elec/vdw) and RF. Cut-off only has exclusion
      * energy terms. */
     constexpr bool doExclusionForces =
@@ -640,6 +640,16 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
             if constexpr (props.vdwEwald)
             {
                 return a_nbfpComb.get_pointer();
+            }
+            else
+            {
+                return nullptr;
+            }
+        }();
+        const cl::sycl::global_ptr<float> gm_coulombTab = [&]() {
+            if constexpr (props.elecEwaldTab)
+            {
+                return a_coulombTab.get_pointer();
             }
             else
             {
@@ -976,7 +986,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
                                 fInvR += qi * qj
                                          * (pairExclMask * r2Inv
                                             - interpolateCoulombForceR(
-                                                    a_coulombTab, coulombTabScale, r2 * rInv))
+                                                    gm_coulombTab, coulombTabScale, r2 * rInv))
                                          * rInv;
                             }
 
