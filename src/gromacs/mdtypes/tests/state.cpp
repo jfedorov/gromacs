@@ -54,7 +54,7 @@
 namespace gmx
 {
 
-const std::array<RVec, 2> c_forces = { { { 0.5, 0.1, 1.2 }, { -2.1, 0.2, 0.3 } } };
+static const std::array<RVec, 2> sc_forces = { { { 0.5, 0.1, 1.2 }, { -2.1, 0.2, 0.3 } } };
 
 TEST(StateRVecVectors, AddsRVecVector)
 {

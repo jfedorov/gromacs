@@ -1269,12 +1269,12 @@ static real pr_beta(const t_commrec*  cr,
 }
 
 //! Name for registering the CG "p" vector in t_state
-static const std::string c_cgpString = "CGp";
+static const std::string sc_cgpString = "CGp";
 
 //! Struct that holds em_state_p and the CG "p" vector
 struct CGState
 {
-    CGState() : p(emState.s.addRVecVector(c_cgpString)) {}
+    CGState() : p(emState.s.addRVecVector(sc_cgpString)) {}
 
     //! The general part of the EM state
     em_state_t emState;
@@ -1325,7 +1325,7 @@ void LegacySimulator::do_cg()
     if (MASTER(cr))
     {
         // In CG, the state is extended with a search direction
-        state_global->addRVecVector(c_cgpString);
+        state_global->addRVecVector(sc_cgpString);
     }
 
     /* Create 4 states on the stack and extract pointers that we will swap */
