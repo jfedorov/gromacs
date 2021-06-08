@@ -2851,7 +2851,10 @@ public:
          bool                              useGpuForPme);
 
     //! Build the resulting DD manager
-    gmx_domdec_t* build(LocalAtomSetManager* atomSets);
+    gmx_domdec_t* build(LocalAtomSetManager*       atomSets,
+                        const gmx_localtop_t&      localTopology,
+                        const t_state&             localState,
+                        ObservablesReducerBuilder* observablesReducerBuilder);
 
     //! Objects used in constructing and configuring DD
     //! {
@@ -2985,7 +2988,10 @@ DomainDecompositionBuilder::Impl::Impl(const MDLogger&                   mdlog,
             mdlog_, ddSettings_, options_.rankOrder, ddRankSetup_, cr_, ddCellIndex_, &pmeRanks_);
 }
 
-gmx_domdec_t* DomainDecompositionBuilder::Impl::build(LocalAtomSetManager* atomSets)
+gmx_domdec_t* DomainDecompositionBuilder::Impl::build(LocalAtomSetManager*  atomSets,
+                                                      const gmx_localtop_t& localTopology,
+                                                      const t_state&        localState,
+                                                      ObservablesReducerBuilder* observablesReducerBuilder)
 {
     gmx_domdec_t* dd = new gmx_domdec_t(ir_);
 
@@ -3023,7 +3029,7 @@ gmx_domdec_t* DomainDecompositionBuilder::Impl::build(LocalAtomSetManager* atomS
     dd->atomSets = atomSets;
 
     dd->localTopologyChecker = std::make_unique<LocalTopologyChecker>(
-            mdlog_, cr_, mtop_, dd->comm->systemInfo.useUpdateGroups);
+            mdlog_, cr_, mtop_, localTopology, localState, dd->comm->systemInfo.useUpdateGroups, observablesReducerBuilder);
 
     return dd;
 }
@@ -3059,9 +3065,12 @@ DomainDecompositionBuilder::DomainDecompositionBuilder(const MDLogger&          
 {
 }
 
-gmx_domdec_t* DomainDecompositionBuilder::build(LocalAtomSetManager* atomSets)
+gmx_domdec_t* DomainDecompositionBuilder::build(LocalAtomSetManager*       atomSets,
+                                                const gmx_localtop_t&      localTopology,
+                                                const t_state&             localState,
+                                                ObservablesReducerBuilder* observablesReducerBuilder)
 {
-    return impl_->build(atomSets);
+    return impl_->build(atomSets, localTopology, localState, observablesReducerBuilder);
 }
 
 DomainDecompositionBuilder::~DomainDecompositionBuilder() = default;
@@ -3218,16 +3227,6 @@ void communicateGpuHaloForces(const t_commrec& cr, bool accumulateForces)
             cr.dd->gpuHaloExchange[d][pulse]->communicateHaloForces(accumulateForces);
         }
     }
-}
-
-const gmx::LocalTopologyChecker& dd_localTopologyChecker(const gmx_domdec_t& dd)
-{
-    return *dd.localTopologyChecker;
-}
-
-gmx::LocalTopologyChecker* dd_localTopologyChecker(gmx_domdec_t* dd)
-{
-    return dd->localTopologyChecker.get();
 }
 
 void dd_init_local_state(const gmx_domdec_t& dd, const t_state* state_global, t_state* state_local)

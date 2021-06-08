@@ -44,7 +44,6 @@
 #include "computeglobalselement.h"
 
 #include "gromacs/domdec/domdec.h"
-#include "gromacs/domdec/localtopologychecker.h"
 #include "gromacs/gmxlib/network.h"
 #include "gromacs/gmxlib/nrnb.h"
 #include "gromacs/math/vec.h"
@@ -286,10 +285,6 @@ void ComputeGlobalsElement<algorithm>::compute(gmx::Step            step,
     const auto* lastbox = useLastBox ? statePropagatorData_->constPreviousBox()
                                      : statePropagatorData_->constBox();
 
-    if (DOMAINDECOMP(cr_) && dd_localTopologyChecker(*cr_->dd).shouldCheckNumberOfBondedInteractions())
-    {
-        flags |= CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS;
-    }
     compute_globals(gstat_,
                     cr_,
                     inputrec_,
@@ -315,10 +310,6 @@ void ComputeGlobalsElement<algorithm>::compute(gmx::Step            step,
                     flags,
                     step,
                     observablesReducer_);
-    if (DOMAINDECOMP(cr_))
-    {
-        dd_localTopologyChecker(cr_->dd)->checkNumberOfBondedInteractions(localTopology_, x, box);
-    }
     if (flags & CGLO_STOPCM && !isInit)
     {
         process_and_stopcm_grp(fplog_, &vcm_, *mdAtoms_->mdatoms(), x, v);

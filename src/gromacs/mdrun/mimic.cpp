@@ -338,11 +338,7 @@ void gmx::LegacySimulator::do_mimic()
     step_rel = 0;
 
     {
-        int cglo_flags = CGLO_GSTAT;
-        if (DOMAINDECOMP(cr) && dd_localTopologyChecker(*cr->dd).shouldCheckNumberOfBondedInteractions())
-        {
-            cglo_flags |= CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS;
-        }
+        int    cglo_flags   = CGLO_GSTAT;
         bool   bSumEkinhOld = false;
         t_vcm* vcm          = nullptr;
         compute_globals(gstat,
@@ -369,11 +365,6 @@ void gmx::LegacySimulator::do_mimic()
                         cglo_flags,
                         step,
                         &observablesReducer);
-        if (DOMAINDECOMP(cr))
-        {
-            dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
-                    top, makeConstArrayRef(state->x), state->box);
-        }
     }
 
     if (MASTER(cr))
@@ -627,10 +618,6 @@ void gmx::LegacySimulator::do_mimic()
             SimulationSignaller signaller(&signals, cr, ms, doInterSimSignal, doIntraSimSignal);
 
             int cglo_flags = CGLO_GSTAT | CGLO_ENERGY;
-            if (DOMAINDECOMP(cr) && dd_localTopologyChecker(*cr->dd).shouldCheckNumberOfBondedInteractions())
-            {
-                cglo_flags |= CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS;
-            }
             compute_globals(gstat,
                             cr,
                             ir,
@@ -655,11 +642,6 @@ void gmx::LegacySimulator::do_mimic()
                             cglo_flags,
                             step,
                             &observablesReducer);
-            if (DOMAINDECOMP(cr))
-            {
-                dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
-                        top, makeConstArrayRef(state->x), state->box);
-            }
         }
 
         {

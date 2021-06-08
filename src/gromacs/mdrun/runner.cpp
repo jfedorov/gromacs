@@ -1401,7 +1401,7 @@ int Mdrunner::mdrunner()
         state      = localState.get();
         // TODO Pass the GPU streams to ddBuilder to use in buffer
         // transfers (e.g. halo exchange)
-        cr->dd = ddBuilder->build(&atomSets);
+        cr->dd = ddBuilder->build(&atomSets, top, *state, &observablesReducerBuilder);
         // The builder's job is done, so destruct it
         ddBuilder.reset(nullptr);
         // Note that local state still does not exist yet.
