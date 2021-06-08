@@ -345,7 +345,7 @@ static inline void reduceForceJShuffle(Float3                             f,
  *
  * TODO: implement binary reduction flavor for the case where cl_Size is power of two.
  */
-static inline void reduceForceJGeneric(cl::sycl::accessor<float, 1, mode::read_write, target::local> sm_buf,
+static inline void reduceForceJGeneric(cl::sycl::local_ptr<float>         sm_buf,
                                        Float3                             f,
                                        const cl::sycl::nd_item<1>         itemIdx,
                                        const int                          tidxi,
@@ -379,8 +379,8 @@ static inline void reduceForceJGeneric(cl::sycl::accessor<float, 1, mode::read_w
 
 /*! \brief Reduce c_clSize j-force components using either shifts or local memory and atomically accumulate into a_f.
  */
-static inline void reduceForceJ(cl::sycl::accessor<float, 1, mode::read_write, target::local> sm_buf,
-                                Float3                                                        f,
+static inline void reduceForceJ(cl::sycl::local_ptr<float>         sm_buf,
+                                Float3                             f,
                                 const cl::sycl::nd_item<1>         itemIdx,
                                 const int                          tidxi,
                                 const int                          tidxj,
