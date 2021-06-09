@@ -71,7 +71,6 @@
 #include "gromacs/gpu_utils/device_context.h"
 #include "gromacs/gpu_utils/gputraits_ocl.h"
 #include "gromacs/gpu_utils/oclutils.h"
-#include "gromacs/hardware/device_information.h"
 #include "gromacs/hardware/hw_info.h"
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/nbnxm/atomdata.h"
@@ -81,10 +80,10 @@
 #include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/nbnxm/nbnxm_gpu.h"
 #include "gromacs/nbnxm/nbnxm_gpu_internal.h"
+#include "gromacs/nbnxm/opencl/nbnxm_ocl.h"
 #include "gromacs/nbnxm/pairlist.h"
 #include "gromacs/timing/gpu_timing.h"
 #include "gromacs/utility/cstringutil.h"
-#include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/gmxassert.h"
 
 #include "nbnxm_ocl_types.h"
@@ -96,61 +95,6 @@ namespace Nbnxm
 //@{
 static constexpr int c_clSize = c_nbnxnGpuClusterSize;
 //@}
-
-
-/*! \brief Validates the input global work size parameter.
- */
-static inline void validate_global_work_size(const KernelLaunchConfig& config,
-                                             int                       work_dim,
-                                             const DeviceInformation*  dinfo)
-{
-    cl_uint device_size_t_size_bits;
-    cl_uint host_size_t_size_bits;
-
-    GMX_ASSERT(dinfo, "Need a valid device info object");
-
-    size_t global_work_size[3];
-    GMX_ASSERT(work_dim <= 3, "Not supporting hyper-grids just yet");
-    for (int i = 0; i < work_dim; i++)
-    {
-        global_work_size[i] = config.blockSize[i] * config.gridSize[i];
-    }
-
-    /* Each component of a global_work_size must not exceed the range given by the
-       sizeof(device size_t) for the device on which the kernel execution will
-       be enqueued. See:
-       https://www.khronos.org/registry/cl/sdk/1.0/docs/man/xhtml/clEnqueueNDRangeKernel.html
-     */
-    device_size_t_size_bits = dinfo->adress_bits;
-    host_size_t_size_bits   = static_cast<cl_uint>(sizeof(size_t) * 8);
-
-    /* If sizeof(host size_t) <= sizeof(device size_t)
-            => global_work_size components will always be valid
-       else
-            => get device limit for global work size and
-            compare it against each component of global_work_size.
-     */
-    if (host_size_t_size_bits > device_size_t_size_bits)
-    {
-        size_t device_limit;
-
-        device_limit = (1ULL << device_size_t_size_bits) - 1;
-
-        for (int i = 0; i < work_dim; i++)
-        {
-            if (global_work_size[i] > device_limit)
-            {
-                gmx_fatal(
-                        FARGS,
-                        "Watch out, the input system is too large to simulate!\n"
-                        "The number of nonbonded work units (=number of super-clusters) exceeds the"
-                        "device capabilities. Global work size limit exceeded (%zu > %zu)!",
-                        global_work_size[i],
-                        device_limit);
-            }
-        }
-    }
-}
 
 /* Constant arrays listing non-bonded kernel function names. The arrays are
  * organized in 2-dim arrays by: electrostatics and VDW type.
@@ -344,28 +288,6 @@ static const char* nb_kfunc_ener_prune_ptr[c_numElecTypes][c_numVdwTypes] = {
       "nbnxn_kernel_ElecEwTwinCut_VdwLJEwCombLB_VF_prune_opencl" }
 };
 
-/*! \brief Return a pointer to the prune kernel version to be executed at the current invocation.
- *
- * \param[in] kernel_pruneonly  array of prune kernel objects
- * \param[in] firstPrunePass    true if the first pruning pass is being executed
- */
-static inline cl_kernel selectPruneKernel(cl_kernel kernel_pruneonly[], bool firstPrunePass)
-{
-    cl_kernel* kernelPtr;
-
-    if (firstPrunePass)
-    {
-        kernelPtr = &(kernel_pruneonly[epruneFirst]);
-    }
-    else
-    {
-        kernelPtr = &(kernel_pruneonly[epruneRolling]);
-    }
-    // TODO: consider creating the prune kernel object here to avoid a
-    // clCreateKernel for the rolling prune kernel if this is not needed.
-    return *kernelPtr;
-}
-
 /*! \brief Return a pointer to the kernel version to be executed at the current step.
  *  OpenCL kernel objects are cached in nb. If the requested kernel is not
  *  found in the cache, it will be created and the cache will be updated.
@@ -457,36 +379,6 @@ static inline int calc_shmem_required_nonbonded(enum VdwType vdwType, bool bPref
     /* Warp vote. In fact it must be * number of warps in block.. */
     shmem += sizeof(cl_uint) * 2; /* warp_any */
     return shmem;
-}
-
-/*! \brief Initializes data structures that are going to be sent to the OpenCL device.
- *
- *  The device can't use the same data structures as the host for two main reasons:
- *  - OpenCL restrictions (pointers are not accepted inside data structures)
- *  - some host side fields are not needed for the OpenCL kernels.
- *
- *  This function is called before the launch of both nbnxn and prune kernels.
- */
-static void fillin_ocl_structures(NBParamGpu* nbp, cl_nbparam_params_t* nbparams_params)
-{
-    nbparams_params->coulomb_tab_scale = nbp->coulomb_tab_scale;
-    nbparams_params->c_rf              = nbp->c_rf;
-    nbparams_params->dispersion_shift  = nbp->dispersion_shift;
-    nbparams_params->elecType          = nbp->elecType;
-    nbparams_params->epsfac            = nbp->epsfac;
-    nbparams_params->ewaldcoeff_lj     = nbp->ewaldcoeff_lj;
-    nbparams_params->ewald_beta        = nbp->ewald_beta;
-    nbparams_params->rcoulomb_sq       = nbp->rcoulomb_sq;
-    nbparams_params->repulsion_shift   = nbp->repulsion_shift;
-    nbparams_params->rlistOuter_sq     = nbp->rlistOuter_sq;
-    nbparams_params->rvdw_sq           = nbp->rvdw_sq;
-    nbparams_params->rlistInner_sq     = nbp->rlistInner_sq;
-    nbparams_params->rvdw_switch       = nbp->rvdw_switch;
-    nbparams_params->sh_ewald          = nbp->sh_ewald;
-    nbparams_params->sh_lj_ewald       = nbp->sh_lj_ewald;
-    nbparams_params->two_k_rf          = nbp->two_k_rf;
-    nbparams_params->vdwType           = nbp->vdwType;
-    nbparams_params->vdw_switch        = nbp->vdw_switch;
 }
 
 /*! \brief Launch GPU kernel
@@ -645,95 +537,6 @@ void gpu_launch_kernel(NbnxmGpu* nb, const gmx::StepWorkload& stepWork, const Nb
     {
         timers->interaction[iloc].nb_k.closeTimingRegion(deviceStream);
     }
-}
-
-
-/*! \brief Calculates the amount of shared memory required by the prune kernel.
- *
- *  Note that for the sake of simplicity we use the CUDA terminology "shared memory"
- *  for OpenCL local memory.
- *
- * \param[in] num_threads_z cj4 concurrency equal to the number of threads/work items in the 3-rd
- * dimension. \returns   the amount of local memory in bytes required by the pruning kernel
- */
-static inline int calc_shmem_required_prune(const int num_threads_z)
-{
-    int shmem;
-
-    /* i-atom x in shared memory (for convenience we load all 4 components including q) */
-    shmem = c_nbnxnGpuNumClusterPerSupercluster * c_clSize * sizeof(float) * 4;
-    /* cj in shared memory, for each warp separately
-     * Note: only need to load once per wavefront, but to keep the code simple,
-     * for now we load twice on AMD.
-     */
-    shmem += num_threads_z * c_nbnxnGpuClusterpairSplit * c_nbnxnGpuJgroupSize * sizeof(int);
-    /* Warp vote, requires one uint per warp/32 threads per block. */
-    shmem += sizeof(cl_uint) * 2 * num_threads_z;
-
-    return shmem;
-}
-
-void launchNbnxmKernelPruneOnly(NbnxmGpu*                      nb,
-                                const gmx::InteractionLocality iloc,
-                                const int                      numParts,
-                                const int                      part,
-                                const int                      numSciInPart,
-                                CommandEvent*                  timingEvent)
-{
-    NBAtomDataGpu*      adat         = nb->atdat;
-    NBParamGpu*         nbp          = nb->nbparam;
-    gpu_plist*          plist        = nb->plist[iloc];
-    const DeviceStream& deviceStream = *nb->deviceStreams[iloc];
-
-    /* Kernel launch config:
-     * - The thread block dimensions match the size of i-clusters, j-clusters,
-     *   and j-cluster concurrency, in x, y, and z, respectively.
-     * - The 1D block-grid contains as many blocks as super-clusters.
-     */
-    int num_threads_z = c_pruneKernelJ4Concurrency;
-    /* kernel launch config */
-    KernelLaunchConfig config;
-    config.sharedMemorySize = calc_shmem_required_prune(num_threads_z);
-    config.blockSize[0]     = c_clSize;
-    config.blockSize[1]     = c_clSize;
-    config.blockSize[2]     = num_threads_z;
-    config.gridSize[0]      = numSciInPart;
-
-    validate_global_work_size(config, 3, &nb->deviceContext_->deviceInfo());
-
-    if (debug)
-    {
-        fprintf(debug,
-                "Pruning GPU kernel launch configuration:\n\tLocal work size: %zux%zux%zu\n\t"
-                "\tGlobal work size: %zux%zu\n\t#Super-clusters/clusters: %d/%d (%d)\n"
-                "\tShMem: %zu\n",
-                config.blockSize[0],
-                config.blockSize[1],
-                config.blockSize[2],
-                config.blockSize[0] * config.gridSize[0],
-                config.blockSize[1] * config.gridSize[1],
-                plist->nsci * c_nbnxnGpuNumClusterPerSupercluster,
-                c_nbnxnGpuNumClusterPerSupercluster,
-                plist->na_c,
-                config.sharedMemorySize);
-    }
-
-    cl_nbparam_params_t nbparams_params;
-    fillin_ocl_structures(nbp, &nbparams_params);
-
-    constexpr char kernelName[] = "k_pruneonly";
-    const auto     pruneKernel  = selectPruneKernel(nb->kernel_pruneonly, plist->haveFreshList);
-    const auto     kernelArgs   = prepareGpuKernelArguments(pruneKernel,
-                                                      config,
-                                                      &nbparams_params,
-                                                      &adat->xq,
-                                                      &adat->shiftVec,
-                                                      &plist->sci,
-                                                      &plist->cj4,
-                                                      &plist->imask,
-                                                      &numParts,
-                                                      &part);
-    launchGpuKernel(pruneKernel, config, deviceStream, timingEvent, kernelName, kernelArgs);
 }
 
 } // namespace Nbnxm
