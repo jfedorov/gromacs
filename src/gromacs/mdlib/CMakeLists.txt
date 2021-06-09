@@ -46,6 +46,7 @@ if(GMX_GPU_CUDA)
        settle_gpu.cu
        update_constrain_gpu_impl.cu
        gpuforcereduction_impl.cu
+       mdgraph_gpu.cu
        )
 endif()
 

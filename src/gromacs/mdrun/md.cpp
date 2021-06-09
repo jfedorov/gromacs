@@ -63,6 +63,7 @@
 #include "gromacs/domdec/mdsetup.h"
 #include "gromacs/domdec/partition.h"
 #include "gromacs/essentialdynamics/edsam.h"
+#include "gromacs/ewald/pme.h"
 #include "gromacs/ewald/pme_load_balancing.h"
 #include "gromacs/ewald/pme_pp.h"
 #include "gromacs/fileio/trxio.h"
@@ -90,6 +91,7 @@
 #include "gromacs/mdlib/freeenergyparameters.h"
 #include "gromacs/mdlib/md_support.h"
 #include "gromacs/mdlib/mdatoms.h"
+#include "gromacs/mdlib/mdgraph_gpu.h"
 #include "gromacs/mdlib/mdoutf.h"
 #include "gromacs/mdlib/membed.h"
 #include "gromacs/mdlib/resethandler.h"
@@ -146,6 +148,7 @@
 #include "gromacs/utility/logger.h"
 #include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
+#include "gromacs/gpu_utils/gpueventsynchronizer.cuh"
 
 #include "legacysimulator.h"
 #include "replicaexchange.h"
@@ -911,6 +914,126 @@ void gmx::LegacySimulator::do_md()
             force_flags |= GMX_FORCE_DO_NOT_NEED_NORMAL_FORCE;
         }
 
+        const bool doTemperatureScaling =
+                (ir->etc != etcNO && do_per_step(step + ir->nsttcouple - 1, ir->nsttcouple));
+
+        /* With leap-frog type integrators we compute the kinetic energy
+         * at a whole time step as the average of the half-time step kinetic
+         * energies of two subsequent steps. Therefore we need to compute the
+         * half step kinetic energy also if we need energies at the next step.
+         */
+        const bool needHalfStepKineticEnergy =
+                (!EI_VV(ir->eI) && (do_per_step(step + 1, nstglobalcomm) || step_rel + 1 == ir->nsteps));
+
+        // Parrinello-Rahman requires the pressure to be availible before the update to compute
+        // the velocity scaling matrix. Hence, it runs one step after the nstpcouple step.
+        const bool doParrinelloRahman = (ir->epc == epcPARRINELLORAHMAN
+                                         && do_per_step(step + ir->nstpcouple - 1, ir->nstpcouple));
+
+        const bool useGraph=getenv("GMX_CUDA_GRAPH") != nullptr;
+
+        bool useGraphThisStep = useGraph && !bNS && !bCalcVir && !doTemperatureScaling && !doParrinelloRahman
+                                && !bGStat && !needHalfStepKineticEnergy
+                                && !runScheduleWork->stepWork.computeEnergy;
+
+        int ppRank = 0;
+        int ppSize = 1;
+        
+        if (DOMAINDECOMP(cr))
+        {
+            MPI_Comm_rank(cr->mpi_comm_mygroup, &ppRank);
+            MPI_Comm_size(cr->mpi_comm_mygroup, &ppSize);
+        }
+
+        MdGraph* mdGraph = fr->mdGraph[step%2].get();
+        
+        bool graphIsCapturing = (!(mdGraph->graphCreated) && useGraphThisStep);
+        int rank = 0;
+        if (DOMAINDECOMP(cr))
+            MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+
+        if(useGraph)
+        {
+        if(mdGraph->useGraphLastStep != useGraphThisStep)
+        {
+            mdGraph->syncGpu();
+            if (DOMAINDECOMP(cr))
+            {
+                MPI_Barrier(cr->mpi_comm_mygroup);
+            }
+        }
+        
+        if (bNS)
+        {
+            fr->mdGraph[0]->graphCreated = false;
+            fr->mdGraph[1]->graphCreated = false;
+        }
+
+
+        if (graphIsCapturing)
+        {
+
+            mdGraph->eventGraph->markEvent(
+                    fr->deviceStreamManager->stream(gmx::DeviceStreamType::NonBondedLocal));
+            mdGraph->eventGraph->waitForEvent();
+            if (DOMAINDECOMP(cr))
+                MPI_Barrier(cr->mpi_comm_mygroup);
+
+            if (ppRank == 0)
+                mdGraph->startGraphCapture(fr->deviceStreamManager->stream(gmx::DeviceStreamType::NonBondedLocal));
+
+            if (havePPDomainDecomposition(cr))
+            {
+                // Fork remote PP streams
+                for (int remotePpRank = 1; remotePpRank < ppSize; remotePpRank++)
+                {                        
+                    MPI_Barrier(cr->mpi_comm_mygroup);
+                    if (ppRank == 0)
+                    {
+                        mdGraph->eventGraph->markEvent(
+                                fr->deviceStreamManager->stream(gmx::DeviceStreamType::NonBondedLocal));
+                        MPI_Send(&mdGraph->eventGraph, sizeof(GpuEventSynchronizer*), MPI_BYTE,
+                                 remotePpRank, 0, cr->mpi_comm_mygroup);
+                    }
+                    else if (ppRank==remotePpRank)
+                    {
+
+                        GpuEventSynchronizer* event;
+                        MPI_Recv(&event, sizeof(GpuEventSynchronizer*), MPI_BYTE, 0, 0,
+                                 cr->mpi_comm_mygroup, MPI_STATUS_IGNORE);
+                        event->enqueueWaitEvent(
+                            fr->deviceStreamManager->stream(gmx::DeviceStreamType::NonBondedLocal));
+                    }
+                    MPI_Barrier(cr->mpi_comm_mygroup);
+                }
+                // fork nonlocal stream
+                mdGraph->eventGraph->markEvent(
+                        fr->deviceStreamManager->stream(gmx::DeviceStreamType::NonBondedLocal));
+                mdGraph->eventGraph->enqueueWaitEvent(
+                        fr->deviceStreamManager->stream(gmx::DeviceStreamType::NonBondedNonLocal));
+
+            }
+
+            // fork U+C stream
+            mdGraph->eventGraph->markEvent(
+                    fr->deviceStreamManager->stream(gmx::DeviceStreamType::NonBondedLocal));
+            mdGraph->eventGraph->enqueueWaitEvent(
+                    fr->deviceStreamManager->stream(gmx::DeviceStreamType::UpdateAndConstraints));
+
+        }
+
+        // fork PME stream
+        mdGraph->eventGraph->markEvent(
+                                    fr->deviceStreamManager->stream(gmx::DeviceStreamType::NonBondedLocal));
+        mdGraph->eventGraph->enqueueWaitEvent(fr->deviceStreamManager->stream(gmx::DeviceStreamType::Pme));
+
+        }
+
+
+        if (graphIsCapturing || !useGraphThisStep)
+        {
+
         if (shellfc)
         {
             /* Now is the time to relax the shells */
@@ -947,6 +1070,19 @@ void gmx::LegacySimulator::do_md()
                      vsite, mu_tot, t, ed ? ed->getLegacyED() : nullptr,
                      (bNS ? GMX_FORCE_NS : 0) | force_flags, ddBalanceRegionHandler);
         }
+
+        }
+
+        if (graphIsCapturing)
+        {
+            // Join PME stream
+            mdGraph->eventGraph->markEvent(fr->deviceStreamManager->stream(gmx::DeviceStreamType::Pme));
+            mdGraph->eventGraph->enqueueWaitEvent(
+                    fr->deviceStreamManager->stream(gmx::DeviceStreamType::NonBondedLocal));
+        }
+        
+        if (graphIsCapturing || !useGraphThisStep)
+        {
 
         // VV integrators do not need the following velocity half step
         // if it is the first step after starting from a checkpoint.
@@ -1240,19 +1376,6 @@ void gmx::LegacySimulator::do_md()
             std::copy(state->x.begin(), state->x.end(), cbuf.begin());
         }
 
-        /* With leap-frog type integrators we compute the kinetic energy
-         * at a whole time step as the average of the half-time step kinetic
-         * energies of two subsequent steps. Therefore we need to compute the
-         * half step kinetic energy also if we need energies at the next step.
-         */
-        const bool needHalfStepKineticEnergy =
-                (!EI_VV(ir->eI) && (do_per_step(step + 1, nstglobalcomm) || step_rel + 1 == ir->nsteps));
-
-        // Parrinello-Rahman requires the pressure to be availible before the update to compute
-        // the velocity scaling matrix. Hence, it runs one step after the nstpcouple step.
-        const bool doParrinelloRahman = (ir->epc == epcPARRINELLORAHMAN
-                                         && do_per_step(step + ir->nstpcouple - 1, ir->nstpcouple));
-
         if (useGpuForUpdate)
         {
             wallcycle_stop(wcycle, ewcUPDATE);
@@ -1280,9 +1403,14 @@ void gmx::LegacySimulator::do_md()
                 stateGpu->copyForcesToGpu(f.view().force(), AtomLocality::Local);
             }
 
-            const bool doTemperatureScaling =
-                    (ir->etc != etcNO && do_per_step(step + ir->nsttcouple - 1, ir->nsttcouple));
-
+            if (!useGraphThisStep)
+            {
+                (stateGpu->getForcesReadyOnDeviceEvent(
+                                                       AtomLocality::Local, runScheduleWork->stepWork.useGpuFBufferOps))
+                    ->enqueueWaitEvent(fr->deviceStreamManager->stream(
+                                                                       gmx::DeviceStreamType::UpdateAndConstraints));
+            }
+            
             // This applies Leap-Frog, LINCS and SETTLE in succession
             integrator->integrate(stateGpu->getForcesReadyOnDeviceEvent(
                                           AtomLocality::Local, runScheduleWork->stepWork.useGpuFBufferOps),
@@ -1322,7 +1450,7 @@ void gmx::LegacySimulator::do_md()
                               etrtPOSITION, cr, constr != nullptr);
 
             wallcycle_stop(wcycle, ewcUPDATE);
-
+            
             constrain_coordinates(constr, do_log, do_ene, step, state, upd.xp()->arrayRefWithPadding(),
                                   &dvdl_constr, bCalcVir && !fr->useMts, shake_vir);
 
@@ -1330,6 +1458,73 @@ void gmx::LegacySimulator::do_md()
                                       constr, do_log, do_ene);
             upd.finish_update(*ir, mdatoms, state, wcycle, constr != nullptr);
         }
+        
+
+            if (graphIsCapturing)
+            {
+
+                // Join U&C stream
+                mdGraph->eventGraph->markEvent(
+                        fr->deviceStreamManager->stream(gmx::DeviceStreamType::UpdateAndConstraints));
+                mdGraph->eventGraph->enqueueWaitEvent(
+                        fr->deviceStreamManager->stream(gmx::DeviceStreamType::NonBondedLocal));
+                if (havePPDomainDecomposition(cr))
+                {
+
+                    // Join Nonlocal stream
+                    mdGraph->eventGraph->markEvent(
+                                                fr->deviceStreamManager->stream(gmx::DeviceStreamType::NonBondedNonLocal));
+                    mdGraph->eventGraph->enqueueWaitEvent(
+                                                       fr->deviceStreamManager->stream(gmx::DeviceStreamType::NonBondedLocal));
+                    
+                    // Join remote PP streams
+                    for (int remotePpRank = 1; remotePpRank < ppSize; remotePpRank++)
+                    {
+                        
+                        MPI_Barrier(cr->mpi_comm_mygroup);
+                        
+                        if (ppRank == 0)
+                        {
+                            
+                            GpuEventSynchronizer* event;
+                            MPI_Recv(&event, sizeof(GpuEventSynchronizer*), MPI_BYTE, remotePpRank,
+                                     0, cr->mpi_comm_mygroup, MPI_STATUS_IGNORE);
+                            event->enqueueWaitEvent(fr->deviceStreamManager->stream(
+                                                                                    gmx::DeviceStreamType::NonBondedLocal));
+                        }
+                        else if (ppRank == remotePpRank)
+                        {
+                            mdGraph->eventGraph->markEvent(
+                                                        fr->deviceStreamManager->stream(gmx::DeviceStreamType::NonBondedLocal));
+                            MPI_Send(&mdGraph->eventGraph, sizeof(GpuEventSynchronizer*), MPI_BYTE, 0, 0,
+                                     cr->mpi_comm_mygroup);
+                        }
+                    }
+                    MPI_Barrier(cr->mpi_comm_mygroup);
+                }
+                if (DOMAINDECOMP(cr))
+                    MPI_Barrier(cr->mpi_comm_mygroup);
+                if (ppRank == 0)
+                    mdGraph->endGraphCapture(
+                            fr->deviceStreamManager->stream(gmx::DeviceStreamType::NonBondedLocal));
+                if (DOMAINDECOMP(cr))
+                    MPI_Barrier(cr->mpi_comm_mygroup);
+                mdGraph->graphCreated = true;
+            }
+        }
+
+
+        if (useGraphThisStep && mdGraph->graphCreated)
+        {
+            if (ppRank == 0)
+            {
+                mdGraph->launchGraph(fr->deviceStreamManager->stream(gmx::DeviceStreamType::NonBondedLocal));
+            }
+            integrator->coordinatesReadyMarkEvent();
+
+        }
+
+        mdGraph->useGraphLastStep=useGraphThisStep;
 
         if (ir->bPull && ir->pull->bSetPbcRefToPrevStepCOM)
         {
@@ -1659,6 +1854,7 @@ void gmx::LegacySimulator::do_md()
         }
 
         cycles = wallcycle_stop(wcycle, ewcSTEP);
+
         if (DOMAINDECOMP(cr) && wcycle)
         {
             dd_cycles_add(cr->dd, cycles, ddCyclStep);

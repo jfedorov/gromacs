@@ -99,6 +99,7 @@
 #include "gromacs/mdlib/makeconstraints.h"
 #include "gromacs/mdlib/md_support.h"
 #include "gromacs/mdlib/mdatoms.h"
+#include "gromacs/mdlib/mdgraph_gpu.h"
 #include "gromacs/mdlib/sighandler.h"
 #include "gromacs/mdlib/stophandler.h"
 #include "gromacs/mdlib/tgroup.h"
@@ -1690,6 +1691,8 @@ int Mdrunner::mdrunner()
             fr->gpuForceReduction[gmx::AtomLocality::NonLocal] = std::make_unique<gmx::GpuForceReduction>(
                     deviceStreamManager->context(),
                     deviceStreamManager->stream(gmx::DeviceStreamType::NonBondedNonLocal), wcycle);
+            fr->mdGraph[0] = std::make_unique<gmx::MdGraph>();
+            fr->mdGraph[1] = std::make_unique<gmx::MdGraph>();
         }
 
         std::unique_ptr<gmx::StatePropagatorDataGpu> stateGpu;

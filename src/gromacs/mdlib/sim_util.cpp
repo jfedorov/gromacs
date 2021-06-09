@@ -60,6 +60,7 @@
 #include "gromacs/gmxlib/nonbonded/nb_free_energy.h"
 #include "gromacs/gmxlib/nonbonded/nb_kernel.h"
 #include "gromacs/gmxlib/nonbonded/nonbonded.h"
+#include "gromacs/gpu_utils/device_stream_manager.h"
 #include "gromacs/gpu_utils/gpu_utils.h"
 #include "gromacs/imd/imd.h"
 #include "gromacs/listed_forces/disre.h"
@@ -122,6 +123,7 @@
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/strconvert.h"
 #include "gromacs/utility/sysinfo.h"
+#include "gromacs/gpu_utils/gpueventsynchronizer.cuh"
 
 #include "gpuforcereduction.h"
 
@@ -1280,6 +1282,9 @@ void do_force(FILE*                               fplog,
         }
     }
 
+    localXReadyOnDevice->markEvent(
+            fr->deviceStreamManager->stream(gmx::DeviceStreamType::UpdateAndConstraints));
+
     // If coordinates are to be sent to PME task from GPU memory, perform that send here.
     // Otherwise the send will occur before the H2D coordinate transfer.
     if (!thisRankHasDuty(cr, DUTY_PME) && pmeSendCoordinatesFromGpu)
@@ -1394,6 +1399,8 @@ void do_force(FILE*                               fplog,
         if (stepWork.useGpuXBufferOps)
         {
             GMX_ASSERT(stateGpu, "stateGpu should be valid when buffer ops are offloaded");
+            localXReadyOnDevice->markEvent(
+                    fr->deviceStreamManager->stream(gmx::DeviceStreamType::UpdateAndConstraints));
             nbv->convertCoordinatesGpu(AtomLocality::Local, false, stateGpu->getCoordinates(),
                                        localXReadyOnDevice);
         }

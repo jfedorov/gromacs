@@ -177,6 +177,8 @@ public:
      */
     static bool isNumCoupledConstraintsSupported(const gmx_mtop_t& mtop);
 
+    void coordinatesReadyMarkEvent();
+
 private:
     class Impl;
     gmx::PrivateImplPointer<Impl> impl_;

@@ -178,6 +178,9 @@ public:
      */
     static bool isNumCoupledConstraintsSupported(const gmx_mtop_t& mtop);
 
+    void coordinatesReadyMarkEvent();
+
+
 private:
     //! GPU context object
     const DeviceContext& deviceContext_;

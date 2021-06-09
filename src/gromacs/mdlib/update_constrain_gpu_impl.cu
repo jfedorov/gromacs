@@ -155,6 +155,11 @@ void UpdateConstrainGpu::Impl::integrate(GpuEventSynchronizer*             fRead
     return;
 }
 
+void UpdateConstrainGpu::Impl::coordinatesReadyMarkEvent()
+{
+    coordinatesReady_->markEvent(deviceStream_);
+}
+
 void UpdateConstrainGpu::Impl::scaleCoordinates(const matrix scalingMatrix)
 {
     wallcycle_start_nocount(wcycle_, ewcLAUNCH_GPU);
@@ -341,5 +346,11 @@ bool UpdateConstrainGpu::isNumCoupledConstraintsSupported(const gmx_mtop_t& mtop
 {
     return LincsGpu::isNumCoupledConstraintsSupported(mtop);
 }
+
+void UpdateConstrainGpu::coordinatesReadyMarkEvent()
+{
+    return impl_->coordinatesReadyMarkEvent();
+}
+
 
 } // namespace gmx

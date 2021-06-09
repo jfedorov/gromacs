@@ -100,6 +100,7 @@
 #include "gromacs/utility/strconvert.h"
 
 #include "gpuforcereduction.h"
+#include "mdgraph_gpu.h"
 
 ForceHelperBuffers::ForceHelperBuffers(bool haveDirectVirialContributions) :
     haveDirectVirialContributions_(haveDirectVirialContributions)
