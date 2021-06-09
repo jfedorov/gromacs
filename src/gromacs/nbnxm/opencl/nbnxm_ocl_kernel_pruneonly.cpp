@@ -68,21 +68,9 @@
 #    include <limits>
 #endif
 
-#include "gromacs/gpu_utils/gputraits_ocl.h"
 #include "gromacs/gpu_utils/oclutils.h"
-#include "gromacs/hardware/device_information.h"
-#include "gromacs/hardware/hw_info.h"
-#include "gromacs/mdtypes/simulation_workload.h"
-#include "gromacs/nbnxm/atomdata.h"
-#include "gromacs/nbnxm/gpu_common_utils.h"
-#include "gromacs/nbnxm/gpu_data_mgmt.h"
-#include "gromacs/nbnxm/nbnxm.h"
-#include "gromacs/nbnxm/nbnxm_gpu.h"
 #include "gromacs/nbnxm/nbnxm_gpu_internal.h"
 #include "gromacs/nbnxm/opencl/nbnxm_ocl.h"
-#include "gromacs/nbnxm/pairlist.h"
-#include "gromacs/timing/gpu_timing.h"
-#include "gromacs/utility/cstringutil.h"
 
 #include "nbnxm_ocl_types.h"
 

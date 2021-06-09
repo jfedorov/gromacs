@@ -45,7 +45,6 @@
 #include "gromacs/listed_forces/listed_forces_gpu.h"
 #include "gromacs/mdtypes/locality.h"
 #include "gromacs/nbnxm/gpu_types_common.h"
-#include "gromacs/nbnxm/opencl/nbnxm_ocl_types.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/range.h"
 
