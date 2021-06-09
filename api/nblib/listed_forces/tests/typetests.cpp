@@ -50,8 +50,17 @@
 namespace nblib
 {
 
-//! Coordinates for testing
-std::vector<std::vector<gmx::RVec>> c_coordinatesForTests = {
+//! Coordinates for testing bonds
+std::vector<std::vector<gmx::RVec>> c_coordinatesForBondTests = { { { 1.382, 1.573, 1.482 },
+                                                                    { 1.281, 1.559, 1.596 } } };
+
+//! Coordinates for testing angles
+std::vector<std::vector<gmx::RVec>> c_coordinatesForAngleTests = {
+    { { 1.382, 1.573, 1.482 }, { 1.281, 1.559, 1.596 }, { 1.292, 1.422, 1.663 } }
+};
+
+//! Coordinates for testing dihedrals
+std::vector<std::vector<gmx::RVec>> c_coordinatesForDiherdralsTests = {
     { { 0.0, 0.0, 0.0 }, { 0.0, 0.0, 0.2 }, { 0.005, 0.0, 0.1 }, { -0.001, 0.1, 0.0 } },
     { { 0.5, 0.0, 0.0 }, { 0.5, 0.0, 0.15 }, { 0.5, 0.07, 0.22 }, { 0.5, 0.18, 0.22 } },
     { { -0.1143, -0.0282, 0.0 }, { 0.0, 0.0434, 0.0 }, { 0.1185, -0.0138, 0.0 }, { -0.0195, 0.1498, 0.0 } }
@@ -87,7 +96,7 @@ public:
         x_(std::move(coordinates)),
         indices_(std::move(indices)),
         pbcHolder_(PbcType::Xyz, Box(1.5)),
-        refDataChecker_(1.0e-5),
+        refDataChecker_(1e-4),
         forces_(x_.size(), gmx::RVec{ 0, 0, 0 })
     {
         energy_ = computeForces(gmx::ArrayRef<const InteractionIndex<Interaction>>(indices_),
@@ -112,7 +121,7 @@ class ListedForcesHarmonicBondTest :
 
 public:
     ListedForcesHarmonicBondTest() :
-        Base(std::get<0>(GetParam()), std::get<1>(GetParam()), { { 0, 1, 0 }, { 1, 2, 0 }, { 2, 3, 0 } })
+        Base(std::get<0>(GetParam()), std::get<1>(GetParam()), { { 0, 1, 0 } })
     {
     }
 };
@@ -125,7 +134,7 @@ class ListedForcesHarmonicAngleTest :
 
 public:
     ListedForcesHarmonicAngleTest() :
-        Base(std::get<0>(GetParam()), std::get<1>(GetParam()), { { 0, 1, 2, 0 }, { 1, 2, 3, 0 } })
+        Base(std::get<0>(GetParam()), std::get<1>(GetParam()), { { 0, 1, 2, 0 } })
     {
     }
 };
@@ -161,16 +170,16 @@ TEST_P(ListedForcesProperDihedralTest, CheckListed)
 INSTANTIATE_TEST_CASE_P(TwoCenter,
                         ListedForcesHarmonicBondTest,
                         ::testing::Combine(::testing::ValuesIn(c_InputHarmonicBond),
-                                           ::testing::ValuesIn(c_coordinatesForTests)));
+                                           ::testing::ValuesIn(c_coordinatesForBondTests)));
 
 INSTANTIATE_TEST_CASE_P(ThreeCenter,
                         ListedForcesHarmonicAngleTest,
                         ::testing::Combine(::testing::ValuesIn(c_InputHarmonicAngle),
-                                           ::testing::ValuesIn(c_coordinatesForTests)));
+                                           ::testing::ValuesIn(c_coordinatesForAngleTests)));
 
 INSTANTIATE_TEST_CASE_P(FourCenter,
                         ListedForcesProperDihedralTest,
                         ::testing::Combine(::testing::ValuesIn(c_InputDihs),
-                                           ::testing::ValuesIn(c_coordinatesForTests)));
+                                           ::testing::ValuesIn(c_coordinatesForDiherdralsTests)));
 
 } // namespace nblib
