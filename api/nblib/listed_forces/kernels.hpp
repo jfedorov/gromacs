@@ -521,6 +521,8 @@ inline void spreadTwoCenterForces(const T bondForce,
 
 //! Three-center category common
 
+//! Three-center category common
+
 /*! \brief spread force to 3 centers based on scalar force and angle
  *
  * @tparam T
@@ -533,42 +535,34 @@ inline void spreadTwoCenterForces(const T bondForce,
  * @param force_k
  */
 template <class T>
-inline void spreadThreeCenterForces(T cos_theta,
-                             T force,
-                             const gmx::RVec& r_ij,
-                             const gmx::RVec& r_kj,
-                             gmx::RVec* force_i,
-                             gmx::RVec* force_j,
-                             gmx::RVec* force_k)
+inline void spreadThreeCenterForces(T                          cos_theta,
+                                    T                          force,
+                                    const gmx::BasicVector<T>& r_ij,
+                                    const gmx::BasicVector<T>& r_kj,
+                                    gmx::BasicVector<T>*       force_i,
+                                    gmx::BasicVector<T>*       force_j,
+                                    gmx::BasicVector<T>*       force_k)
 {
     T cos_theta2 = cos_theta * cos_theta;
-    if (cos_theta2 < 1)
+    if (cos_theta2 < 1)                              /*   1		*/
     {
         T st    = force / std::sqrt(1 - cos_theta2); /*  12		*/
-        T sth   = st * cos_theta;                      /*   1		*/
+        T sth   = st * cos_theta;                    /*   1		*/
         T nrij2 = dot(r_ij, r_ij);                   /*   5		*/
         T nrkj2 = dot(r_kj, r_kj);                   /*   5		*/
 
-        T nrij_1 = 1.0 / std::sqrt(nrij2); /*  10		*/
-        T nrkj_1 = 1.0 / std::sqrt(nrkj2); /*  10		*/
+        T cik = st / std::sqrt(nrij2 * nrkj2);       /*  11		*/
+        T cii = sth / nrij2;                         /*   1		*/
+        T ckk = sth / nrkj2;                         /*   1		*/
 
-        T cik = st * nrij_1 * nrkj_1;  /*   2		*/
-        T cii = sth * nrij_1 * nrij_1; /*   2		*/
-        T ckk = sth * nrkj_1 * nrkj_1; /*   2		*/
+        /*  33		*/
+        gmx::BasicVector<T> f_i = cii * r_ij - cik * r_kj;
+        gmx::BasicVector<T> f_k = ckk * r_kj - cik * r_ij;
+        *force_i += f_i;
+        *force_j -= (f_i + f_k);
+        *force_k += f_k;
 
-        gmx::RVec f_i{0, 0, 0};
-        gmx::RVec f_j{0, 0, 0};
-        gmx::RVec f_k{0, 0, 0};
-        for (int m = 0; m < dimSize; m++)
-        { /*  39		*/
-            f_i[m] = -(cik * r_kj[m] - cii * r_ij[m]);
-            f_k[m] = -(cik * r_ij[m] - ckk * r_kj[m]);
-            f_j[m] = -f_i[m] - f_k[m];
-            (*force_i)[m] += f_i[m];
-            (*force_j)[m] += f_j[m];
-            (*force_k)[m] += f_k[m];
-        }
-    } /* 161 TOTAL	*/
+    } /* 70 TOTAL	*/
 }
 
 //! Four-center category common
