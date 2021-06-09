@@ -50,9 +50,6 @@
 namespace nblib
 {
 
-//! Number of atoms used in these tests.
-constexpr int c_numAtoms = 4;
-
 //! Coordinates for testing
 std::vector<std::vector<gmx::RVec>> c_coordinatesForTests = {
     { { 0.0, 0.0, 0.0 }, { 0.0, 0.0, 0.2 }, { 0.005, 0.0, 0.1 }, { -0.001, 0.1, 0.0 } },
@@ -90,8 +87,8 @@ public:
         x_(std::move(coordinates)),
         indices_(std::move(indices)),
         pbcHolder_(PbcType::Xyz, Box(1.5)),
-        refDataChecker_(1e-5),
-        forces_(c_numAtoms, gmx::RVec{ 0, 0, 0 })
+        refDataChecker_(1.0e-5),
+        forces_(x_.size(), gmx::RVec{ 0, 0, 0 })
     {
         energy_ = computeForces(gmx::ArrayRef<const InteractionIndex<Interaction>>(indices_),
                                 gmx::ArrayRef<const Interaction>(input_),
