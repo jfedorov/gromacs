@@ -45,7 +45,6 @@
 #include "gromacs/utility/exceptions.h"
 
 #include "nbnxm_sycl_kernel.h"
-#include "nbnxm_sycl_kernel_pruneonly.h"
 #include "nbnxm_sycl_types.h"
 
 namespace Nbnxm
