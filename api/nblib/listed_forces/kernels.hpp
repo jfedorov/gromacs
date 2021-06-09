@@ -521,8 +521,6 @@ inline void spreadTwoCenterForces(const T bondForce,
 
 //! Three-center category common
 
-//! Three-center category common
-
 /*! \brief spread force to 3 centers based on scalar force and angle
  *
  * @tparam T
