@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="referencedata.xsl"?>
+<ReferenceData>
+  <Real Name="Epot">81.030065901054911</Real>
+  <Sequence Name="forces">
+    <Int Name="Length">4</Int>
+    <Vector>
+      <Real Name="X">-423.84271406809097</Real>
+      <Real Name="Y">0</Real>
+      <Real Name="Z">4.7055993997801131e-13</Real>
+    </Vector>
+    <Vector>
+      <Real Name="X">-454.72140088888034</Real>
+      <Real Name="Y">300.68270098347159</Real>
+      <Real Name="Z">-43.928205747850974</Real>
+    </Vector>
+    <Vector>
+      <Real Name="X">902.57551052362908</Real>
+      <Real Name="Y">-450.30370960820767</Real>
+      <Real Name="Z">-107.133486610885</Real>
+    </Vector>
+    <Vector>
+      <Real Name="X">-24.011395566657743</Real>
+      <Real Name="Y">149.62100862473608</Real>
+      <Real Name="Z">151.06169235873551</Real>
+    </Vector>
+  </Sequence>
+</ReferenceData>

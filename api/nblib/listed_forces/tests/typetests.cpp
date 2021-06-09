@@ -42,6 +42,7 @@
  * \author Sebastian Keller <keller@cscs.ch>
  */
 #include "nblib/listed_forces/dataflow.hpp"
+#include "nblib/tests/testhelpers.h"
 
 #include "testutils/refdata.h"
 #include "testutils/testasserts.h"
@@ -58,13 +59,12 @@ std::vector<std::vector<gmx::RVec>> c_coordinatesForTests = {
     { { 0.5, 0.0, 0.0 }, { 0.5, 0.0, 0.15 }, { 0.5, 0.07, 0.22 }, { 0.5, 0.18, 0.22 } },
     { { -0.1143, -0.0282, 0.0 }, { 0.0, 0.0434, 0.0 }, { 0.1185, -0.0138, 0.0 }, { -0.0195, 0.1498, 0.0 } }
 };
+
 // Parameters for harmonic bonds
-std::vector<InteractionIndex<HarmonicBondType>> c_HarmonicBondIndices{ { 0, 1, 0 }, { 1, 2, 0 }, { 2, 3, 0 } };
 std::vector<std::vector<HarmonicBondType>> c_InputHarmonicBond = { { HarmonicBondType(500, 0.15) } };
 
 // Parameters for harmonic angles
-std::vector<InteractionIndex<HarmonicAngle>> c_HarmonicAngleIndices{ { 0, 1, 2, 0 }, { 1, 2, 3, 0 } };
-std::vector<std::vector<HarmonicAngle>> c_InputHarmonicAngle = { { HarmonicAngle(Degrees(100), 50.0) } };
+std::vector<std::vector<HarmonicAngle>> c_InputHarmonicAngle = { { HarmonicAngle(50.0, Degrees(100)) } };
 
 //! Function types for testing dihedrals. Add new terms at the end.
 std::vector<std::vector<ProperDihedral>> c_InputDihs = { { { ProperDihedral(Degrees(-105.0), 15.0, 2) } } /*, { ImproperDihedral(100.0, 50.0) }*/ };
@@ -79,8 +79,7 @@ public:
     std::vector<gmx::RVec>                     x_;
     std::vector<InteractionIndex<Interaction>> indices_;
     PbcHolder                                  pbcHolder_;
-    gmx::test::TestReferenceData               refData_;
-    gmx::test::TestReferenceChecker            checker_;
+    test::RefDataChecker                       refDataChecker_;
     std::vector<gmx::RVec>                     forces_;
     real                                       energy_;
 
@@ -91,7 +90,7 @@ public:
         x_(std::move(coordinates)),
         indices_(std::move(indices)),
         pbcHolder_(PbcType::Xyz, Box(1.5)),
-        checker_(refData_.rootChecker()),
+        refDataChecker_(1e-5),
         forces_(c_numAtoms, gmx::RVec{ 0, 0, 0 })
     {
         energy_ = computeForces(gmx::ArrayRef<const InteractionIndex<Interaction>>(indices_),
@@ -103,94 +102,78 @@ public:
 
     void checkForcesAndEnergies()
     {
-        // We need quite specific tolerances here since angle functions
-        // etc. are not very precise and reproducible.
-        auto tolerances = gmx::test::FloatingPointTolerance(
-                singleAbsoluteTolerance_, 1.0e-12, singleRelativeTolerance_, 1.0e-12, 1000, 100, false);
-        checker_.setDefaultTolerance(tolerances);
-        checker_.checkReal(energy_, "Epot");
-        checker_.checkSequence(std::begin(forces_), std::end(forces_), "forces");
-    }
-
-    void setSingleTolerance(float relative, float absolute)
-    {
-        singleRelativeTolerance_ = relative;
-        singleAbsoluteTolerance_ = absolute;
-    }
-
-private:
-    float singleRelativeTolerance_ = 1.0e-12;
-    float singleAbsoluteTolerance_ = 1.0e-12;
-};
-
-class ProperDihedralTest :
-    public ListedForcesBase<ProperDihedral>,
-    public testing::TestWithParam<std::tuple<std::vector<ProperDihedral>, std::vector<gmx::RVec>>>
-{
-    using Base = ListedForcesBase<ProperDihedral>;
-
-public:
-    ProperDihedralTest() :
-        Base(std::get<0>(GetParam()), std::get<1>(GetParam()), { { 0, 1, 2, 3, 0 } })
-    {
+        refDataChecker_.testReal(energy_, "Epot");
+        refDataChecker_.testArrays<gmx::RVec>(forces_, "forces");
     }
 };
 
-TEST_P(ProperDihedralTest, CheckListed)
-{
-    checkForcesAndEnergies();
-}
-
-INSTANTIATE_TEST_CASE_P(FourCenter,
-                        ProperDihedralTest,
-                        ::testing::Combine(::testing::ValuesIn(c_InputDihs),
-                                           ::testing::ValuesIn(c_coordinatesForTests)));
-
-class HarmonicBondTest :
+class ListedForcesHarmonicBondTest :
     public ListedForcesBase<HarmonicBondType>,
     public testing::TestWithParam<std::tuple<std::vector<HarmonicBondType>, std::vector<gmx::RVec>>>
 {
     using Base = ListedForcesBase<HarmonicBondType>;
 
 public:
-    HarmonicBondTest() :
-        Base(std::get<0>(GetParam()), std::get<1>(GetParam()), c_HarmonicBondIndices)
+    ListedForcesHarmonicBondTest() :
+        Base(std::get<0>(GetParam()), std::get<1>(GetParam()), { { 0, 1, 0 }, { 1, 2, 0 }, { 2, 3, 0 } })
     {
     }
 };
 
-TEST_P(HarmonicBondTest, CheckListed)
-{
-    checkForcesAndEnergies();
-}
-
-INSTANTIATE_TEST_CASE_P(TwoCenter,
-                        HarmonicBondTest,
-                        ::testing::Combine(::testing::ValuesIn(c_InputHarmonicBond),
-                                           ::testing::ValuesIn(c_coordinatesForTests)));
-
-class HarmonicAngleTest :
+class ListedForcesHarmonicAngleTest :
     public ListedForcesBase<HarmonicAngle>,
     public testing::TestWithParam<std::tuple<std::vector<HarmonicAngle>, std::vector<gmx::RVec>>>
 {
     using Base = ListedForcesBase<HarmonicAngle>;
 
 public:
-    HarmonicAngleTest() :
-        Base(std::get<0>(GetParam()), std::get<1>(GetParam()), c_HarmonicAngleIndices)
+    ListedForcesHarmonicAngleTest() :
+        Base(std::get<0>(GetParam()), std::get<1>(GetParam()), { { 0, 1, 2, 0 }, { 1, 2, 3, 0 } })
     {
     }
 };
 
-TEST_P(HarmonicAngleTest, CheckListed)
+class ListedForcesProperDihedralTest :
+    public ListedForcesBase<ProperDihedral>,
+    public testing::TestWithParam<std::tuple<std::vector<ProperDihedral>, std::vector<gmx::RVec>>>
 {
-    setSingleTolerance(1e-12, 2e-3);
+    using Base = ListedForcesBase<ProperDihedral>;
+
+public:
+    ListedForcesProperDihedralTest() :
+        Base(std::get<0>(GetParam()), std::get<1>(GetParam()), { { 0, 1, 2, 3, 0 } })
+    {
+    }
+};
+
+TEST_P(ListedForcesHarmonicBondTest, CheckListed)
+{
     checkForcesAndEnergies();
 }
 
+TEST_P(ListedForcesHarmonicAngleTest, CheckListed)
+{
+    checkForcesAndEnergies();
+}
+
+TEST_P(ListedForcesProperDihedralTest, CheckListed)
+{
+    checkForcesAndEnergies();
+}
+
+INSTANTIATE_TEST_CASE_P(TwoCenter,
+                        ListedForcesHarmonicBondTest,
+                        ::testing::Combine(::testing::ValuesIn(c_InputHarmonicBond),
+                                           ::testing::ValuesIn(c_coordinatesForTests)));
+
 INSTANTIATE_TEST_CASE_P(ThreeCenter,
-                        HarmonicAngleTest,
+                        ListedForcesHarmonicAngleTest,
                         ::testing::Combine(::testing::ValuesIn(c_InputHarmonicAngle),
+                                           ::testing::ValuesIn(c_coordinatesForTests)));
+
+INSTANTIATE_TEST_CASE_P(FourCenter,
+                        ListedForcesProperDihedralTest,
+                        ::testing::Combine(::testing::ValuesIn(c_InputDihs),
                                            ::testing::ValuesIn(c_coordinatesForTests)));
 
 } // namespace nblib

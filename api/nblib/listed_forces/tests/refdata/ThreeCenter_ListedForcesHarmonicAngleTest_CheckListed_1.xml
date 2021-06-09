@@ -7,21 +7,21 @@
     <Vector>
       <Real Name="X">0</Real>
       <Real Name="Y">203.62174606600516</Real>
-      <Real Name="Z">0</Real>
+      <Real Name="Z">9.1452318162136264e-15</Real>
     </Vector>
     <Vector>
       <Real Name="X">0</Real>
-      <Real Name="Y">-203.62174606600516</Real>
+      <Real Name="Y">-203.62174606600519</Real>
       <Real Name="Z">8.5265128291212022e-14</Real>
     </Vector>
     <Vector>
       <Real Name="X">0</Real>
-      <Real Name="Y">8.5265128291212022e-14</Real>
+      <Real Name="Y">1.1368683772161603e-13</Real>
       <Real Name="Z">277.66601736273412</Real>
     </Vector>
     <Vector>
       <Real Name="X">0</Real>
-      <Real Name="Y">-5.6843418860808015e-14</Real>
+      <Real Name="Y">-6.9624244531249179e-14</Real>
       <Real Name="Z">-277.66601736273424</Real>
     </Vector>
   </Sequence>
