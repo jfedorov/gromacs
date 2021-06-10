@@ -128,43 +128,43 @@ __launch_bounds__(sc_maxThreadsPerBlock) __global__
     {
         // These are the indexes of three atoms in a single 'water' molecule.
         // TODO Can be reduced to one integer if atoms are consecutive in memory.
-        WaterMolecule indices = gm_settles[tid];
+        const WaterMolecule indices = gm_settles[tid];
 
-        float3 x_ow1 = gm_x[indices.ow1];
-        float3 x_hw2 = gm_x[indices.hw2];
-        float3 x_hw3 = gm_x[indices.hw3];
+        const float3 x_ow1 = gm_x[indices.ow1];
+        const float3 x_hw2 = gm_x[indices.hw2];
+        const float3 x_hw3 = gm_x[indices.hw3];
 
-        float3 xprime_ow1 = gm_xprime[indices.ow1];
-        float3 xprime_hw2 = gm_xprime[indices.hw2];
-        float3 xprime_hw3 = gm_xprime[indices.hw3];
+        const float3 xprime_ow1 = gm_xprime[indices.ow1];
+        const float3 xprime_hw2 = gm_xprime[indices.hw2];
+        const float3 xprime_hw3 = gm_xprime[indices.hw3];
 
-        float3 dist21 = pbcDxAiuc(pbcAiuc, x_hw2, x_ow1);
-        float3 dist31 = pbcDxAiuc(pbcAiuc, x_hw3, x_ow1);
-        float3 doh2   = pbcDxAiuc(pbcAiuc, xprime_hw2, xprime_ow1);
+        const float3 dist21 = pbcDxAiuc(pbcAiuc, x_hw2, x_ow1);
+        const float3 dist31 = pbcDxAiuc(pbcAiuc, x_hw3, x_ow1);
+        const float3 doh2   = pbcDxAiuc(pbcAiuc, xprime_hw2, xprime_ow1);
 
-        float3 doh3 = pbcDxAiuc(pbcAiuc, xprime_hw3, xprime_ow1);
+        const float3 doh3 = pbcDxAiuc(pbcAiuc, xprime_hw3, xprime_ow1);
 
-        float3 a1 = (-doh2 - doh3) * pars.wh;
+        const float3 a1 = (-doh2 - doh3) * pars.wh;
 
-        float3 b1 = doh2 + a1;
+        const float3 b1 = doh2 + a1;
 
-        float3 c1 = doh3 + a1;
+        const float3 c1 = doh3 + a1;
 
-        float xakszd = dist21.y * dist31.z - dist21.z * dist31.y;
-        float yakszd = dist21.z * dist31.x - dist21.x * dist31.z;
-        float zakszd = dist21.x * dist31.y - dist21.y * dist31.x;
+        const float xakszd = dist21.y * dist31.z - dist21.z * dist31.y;
+        const float yakszd = dist21.z * dist31.x - dist21.x * dist31.z;
+        const float zakszd = dist21.x * dist31.y - dist21.y * dist31.x;
 
-        float xaksxd = a1.y * zakszd - a1.z * yakszd;
-        float yaksxd = a1.z * xakszd - a1.x * zakszd;
-        float zaksxd = a1.x * yakszd - a1.y * xakszd;
+        const float xaksxd = a1.y * zakszd - a1.z * yakszd;
+        const float yaksxd = a1.z * xakszd - a1.x * zakszd;
+        const float zaksxd = a1.x * yakszd - a1.y * xakszd;
 
-        float xaksyd = yakszd * zaksxd - zakszd * yaksxd;
-        float yaksyd = zakszd * xaksxd - xakszd * zaksxd;
-        float zaksyd = xakszd * yaksxd - yakszd * xaksxd;
+        const float xaksyd = yakszd * zaksxd - zakszd * yaksxd;
+        const float yaksyd = zakszd * xaksxd - xakszd * zaksxd;
+        const float zaksyd = xakszd * yaksxd - yakszd * xaksxd;
 
-        float axlng = rsqrt(xaksxd * xaksxd + yaksxd * yaksxd + zaksxd * zaksxd);
-        float aylng = rsqrt(xaksyd * xaksyd + yaksyd * yaksyd + zaksyd * zaksyd);
-        float azlng = rsqrt(xakszd * xakszd + yakszd * yakszd + zakszd * zakszd);
+        const float axlng = rsqrt(xaksxd * xaksxd + yaksxd * yaksxd + zaksxd * zaksxd);
+        const float aylng = rsqrt(xaksyd * xaksyd + yaksyd * yaksyd + zaksyd * zaksyd);
+        const float azlng = rsqrt(xakszd * xakszd + yakszd * yakszd + zakszd * zakszd);
 
         // TODO {1,2,3} indexes should be swapped with {.x, .y, .z} components.
         //      This way, we will be able to use vector ops more.
@@ -183,60 +183,52 @@ __launch_bounds__(sc_maxThreadsPerBlock) __global__
         trns3.z = zakszd * azlng;
 
 
-        float2 b0d, c0d;
+        const float2 b0d = make_float2(trns1.x * dist21.x + trns2.x * dist21.y + trns3.x * dist21.z,
+                                       trns1.y * dist21.x + trns2.y * dist21.y + trns3.y * dist21.z);
 
-        b0d.x = trns1.x * dist21.x + trns2.x * dist21.y + trns3.x * dist21.z;
-        b0d.y = trns1.y * dist21.x + trns2.y * dist21.y + trns3.y * dist21.z;
-
-        c0d.x = trns1.x * dist31.x + trns2.x * dist31.y + trns3.x * dist31.z;
-        c0d.y = trns1.y * dist31.x + trns2.y * dist31.y + trns3.y * dist31.z;
-
-        float3 b1d, c1d;
+        const float2 c0d = make_float2(trns1.x * dist31.x + trns2.x * dist31.y + trns3.x * dist31.z,
+                                       trns1.y * dist31.x + trns2.y * dist31.y + trns3.y * dist31.z);
 
         float a1d_z = trns1.z * a1.x + trns2.z * a1.y + trns3.z * a1.z;
 
-        b1d.x = trns1.x * b1.x + trns2.x * b1.y + trns3.x * b1.z;
-        b1d.y = trns1.y * b1.x + trns2.y * b1.y + trns3.y * b1.z;
-        b1d.z = trns1.z * b1.x + trns2.z * b1.y + trns3.z * b1.z;
+        const float3 b1d = make_float3(trns1.x * b1.x + trns2.x * b1.y + trns3.x * b1.z,
+                                       trns1.y * b1.x + trns2.y * b1.y + trns3.y * b1.z,
+                                       trns1.z * b1.x + trns2.z * b1.y + trns3.z * b1.z);
 
-        c1d.x = trns1.x * c1.x + trns2.x * c1.y + trns3.x * c1.z;
-        c1d.y = trns1.y * c1.x + trns2.y * c1.y + trns3.y * c1.z;
-        c1d.z = trns1.z * c1.x + trns2.z * c1.y + trns3.z * c1.z;
+        const float3 c1d = make_float3(trns1.x * c1.x + trns2.x * c1.y + trns3.x * c1.z,
+                                       trns1.y * c1.x + trns2.y * c1.y + trns3.y * c1.z,
+                                       trns1.z * c1.x + trns2.z * c1.y + trns3.z * c1.z);
 
 
-        float sinphi = a1d_z * rsqrt(pars.ra * pars.ra);
-        float tmp2   = 1.0F - sinphi * sinphi;
+        const float sinphi  = a1d_z / pars.ra;
+        float       cosphi2 = 1.0F - sinphi * sinphi;
 
-        if (almost_zero > tmp2)
+        if (almost_zero > cosphi2)
         {
-            tmp2 = almost_zero;
+            cosphi2 = almost_zero;
         }
 
-        float tmp    = rsqrt(tmp2);
-        float cosphi = tmp2 * tmp;
-        float sinpsi = (b1d.z - c1d.z) * pars.irc2 * tmp;
-        tmp2         = 1.0F - sinpsi * sinpsi;
+        const float rcosphi = rsqrtf(cosphi2);
+        const float sinpsi  = (b1d.z - c1d.z) * pars.irc2 * rcosphi;
+        const float rcospsi = rsqrtf(1.0F - sinpsi * sinpsi);
 
-        float cospsi = tmp2 * rsqrt(tmp2);
-
-        float a2d_y = pars.ra * cosphi;
-        float b2d_x = -pars.rc * cospsi;
-        float t1    = -pars.rb * cosphi;
-        float t2    = pars.rc * sinpsi * sinphi;
-        float b2d_y = t1 - t2;
-        float c2d_y = t1 + t2;
+        const float a2d_y = pars.ra / rcosphi;
+        const float b2d_x = -pars.rc / rcospsi;
+        const float t1    = -pars.rb / rcosphi;
+        const float t2    = pars.rc * sinpsi * sinphi;
+        const float b2d_y = t1 - t2;
+        const float c2d_y = t1 + t2;
 
         /*     --- Step3  al,be,ga            --- */
-        float alpha  = b2d_x * (b0d.x - c0d.x) + b0d.y * b2d_y + c0d.y * c2d_y;
-        float beta   = b2d_x * (c0d.y - b0d.y) + b0d.x * b2d_y + c0d.x * c2d_y;
-        float gamma  = b0d.x * b1d.y - b1d.x * b0d.y + c0d.x * c1d.y - c1d.x * c0d.y;
-        float al2be2 = alpha * alpha + beta * beta;
-        tmp2         = (al2be2 - gamma * gamma);
-        float sinthe = (alpha * gamma - beta * tmp2 * rsqrt(tmp2)) * rsqrt(al2be2 * al2be2);
+        const float alpha  = b2d_x * (b0d.x - c0d.x) + b0d.y * b2d_y + c0d.y * c2d_y;
+        const float beta   = b2d_x * (c0d.y - b0d.y) + b0d.x * b2d_y + c0d.x * c2d_y;
+        const float gamma  = b0d.x * b1d.y - b1d.x * b0d.y + c0d.x * c1d.y - c1d.x * c0d.y;
+        const float al2be2 = alpha * alpha + beta * beta;
+        const float tmp2   = (al2be2 - gamma * gamma);
+        const float sinthe = (alpha * gamma - beta * sqrtf(tmp2)) / al2be2;
 
         /*  --- Step4  A3' --- */
-        tmp2         = 1.0F - sinthe * sinthe;
-        float costhe = tmp2 * rsqrt(tmp2);
+        const float costhe = sqrtf(1.0F - sinthe * sinthe);
 
         float3 a3d, b3d, c3d;
 
@@ -251,19 +243,18 @@ __launch_bounds__(sc_maxThreadsPerBlock) __global__
         c3d.z = c1d.z;
 
         /*    --- Step5  A3 --- */
-        float3 a3, b3, c3;
+        const float3 a3 = make_float3(trns1.x * a3d.x + trns1.y * a3d.y + trns1.z * a3d.z,
+                                      trns2.x * a3d.x + trns2.y * a3d.y + trns2.z * a3d.z,
+                                      trns3.x * a3d.x + trns3.y * a3d.y + trns3.z * a3d.z);
 
-        a3.x = trns1.x * a3d.x + trns1.y * a3d.y + trns1.z * a3d.z;
-        a3.y = trns2.x * a3d.x + trns2.y * a3d.y + trns2.z * a3d.z;
-        a3.z = trns3.x * a3d.x + trns3.y * a3d.y + trns3.z * a3d.z;
 
-        b3.x = trns1.x * b3d.x + trns1.y * b3d.y + trns1.z * b3d.z;
-        b3.y = trns2.x * b3d.x + trns2.y * b3d.y + trns2.z * b3d.z;
-        b3.z = trns3.x * b3d.x + trns3.y * b3d.y + trns3.z * b3d.z;
+        const float3 b3 = make_float3(trns1.x * b3d.x + trns1.y * b3d.y + trns1.z * b3d.z,
+                                      trns2.x * b3d.x + trns2.y * b3d.y + trns2.z * b3d.z,
+                                      trns3.x * b3d.x + trns3.y * b3d.y + trns3.z * b3d.z);
 
-        c3.x = trns1.x * c3d.x + trns1.y * c3d.y + trns1.z * c3d.z;
-        c3.y = trns2.x * c3d.x + trns2.y * c3d.y + trns2.z * c3d.z;
-        c3.z = trns3.x * c3d.x + trns3.y * c3d.y + trns3.z * c3d.z;
+        const float3 c3 = make_float3(trns1.x * c3d.x + trns1.y * c3d.y + trns1.z * c3d.z,
+                                      trns2.x * c3d.x + trns2.y * c3d.y + trns2.z * c3d.z,
+                                      trns3.x * c3d.x + trns3.y * c3d.y + trns3.z * c3d.z);
 
 
         /* Compute and store the corrected new coordinate */
@@ -293,9 +284,9 @@ __launch_bounds__(sc_maxThreadsPerBlock) __global__
 
         if (computeVirial)
         {
-            float3 mdb = pars.mH * dxHw2;
-            float3 mdc = pars.mH * dxHw3;
-            float3 mdo = pars.mO * dxOw1 + mdb + mdc;
+            const float3 mdb = pars.mH * dxHw2;
+            const float3 mdc = pars.mH * dxHw3;
+            const float3 mdo = pars.mO * dxOw1 + mdb + mdc;
 
             sm_threadVirial[0 * blockDim.x + threadIdx.x] =
                     -(x_ow1.x * mdo.x + dist21.x * mdb.x + dist31.x * mdc.x);
@@ -336,9 +327,9 @@ __launch_bounds__(sc_maxThreadsPerBlock) __global__
         // two virials. Then the first half is divided by two and the first half
         // of it sums two values... The procedure continues until only one thread left.
         // Only works if the threads per blocks is a power of two.
-        for (int divideBy = 2; divideBy <= blockSize; divideBy *= 2)
+        static_assert(gmx::isPowerOfTwo(sc_threadsPerBlock));
+        for (int dividedAt = blockSize / 2; dividedAt >= 1; dividedAt /= 2)
         {
-            int dividedAt = blockSize / divideBy;
             if (tib < dividedAt)
             {
                 for (int d = 0; d < 6; d++)
