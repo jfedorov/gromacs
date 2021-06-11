@@ -113,11 +113,14 @@ ListedForcesGpu::Impl::Impl(const gmx_ffparams_t& ffparams,
                 return sum + elem.cmap.size();
             });
     // set all the offsets correctly for indexing into the cmap data.
-    cmapGridIndices.emplace_back(0);
-    for (int i = 0; i < gmx::ssize(ffparams.cmap_grid.cmapdata) - 1; i++)
+    if (!ffparams.cmap_grid.cmapdata.empty())
     {
-        const auto& cmap = ffparams.cmap_grid.cmapdata[i];
-        cmapGridIndices.emplace_back(cmapGridIndices.back() + cmap.cmap.size());
+        cmapGridIndices.emplace_back(0);
+        for (int i = 0; i < gmx::ssize(ffparams.cmap_grid.cmapdata) - 1; i++)
+        {
+            const auto& cmap = ffparams.cmap_grid.cmapdata[i];
+            cmapGridIndices.emplace_back(cmapGridIndices.back() + cmap.cmap.size());
+        }
     }
 
     GMX_ASSERT(cmapGridIndices.size() == ffparams.cmap_grid.cmapdata.size(),
