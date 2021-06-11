@@ -200,7 +200,7 @@ int main()
     {
         zeroCartesianArray(simulationState.forces());
 
-        forceCalculator.compute(simulationState.coordinates(), simulationState.forces());
+        forceCalculator.compute(simulationState.coordinates(), box, simulationState.forces());
 
         listedForceCalculator.compute(simulationState.coordinates(), simulationState.forces());
 

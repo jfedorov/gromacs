@@ -79,7 +79,7 @@ TEST(NBlibTest, SpcMethanolForcesAreCorrect)
     auto forceCalculator = ForceCalculator(simState, options);
 
     gmx::ArrayRef<Vec3> forces(simState.forces());
-    ASSERT_NO_THROW(forceCalculator.compute(simState.coordinates(), forces));
+    ASSERT_NO_THROW(forceCalculator.compute(simState.coordinates(), simState.box(), forces));
 
     RefDataChecker forcesOutputTest(5e-5);
     forcesOutputTest.testArrays<Vec3>(forces, "SPC-methanol forces");
@@ -96,7 +96,7 @@ TEST(NBlibTest, ExpectedNumberOfForces)
     auto forceCalculator = ForceCalculator(simState, options);
 
     gmx::ArrayRef<Vec3> forces(simState.forces());
-    forceCalculator.compute(simState.coordinates(), forces);
+    forceCalculator.compute(simState.coordinates(), simState.box(), forces);
     EXPECT_EQ(simState.topology().numParticles(), forces.size());
 }
 
@@ -116,7 +116,7 @@ TEST(NBlibTest, CanIntegrateSystem)
     for (int iter = 0; iter < options.numIterations; iter++)
     {
         gmx::ArrayRef<Vec3> forces(simState.forces());
-        forceCalculator.compute(simState.coordinates(), simState.forces());
+        forceCalculator.compute(simState.coordinates(), simState.box(), simState.forces());
         EXPECT_NO_THROW(integrator.integrate(
                 1.0, simState.coordinates(), simState.velocities(), simState.forces()));
     }
@@ -150,7 +150,7 @@ TEST(NBlibTest, UpdateChangesForces)
 
     // step 1
     gmx::ArrayRef<Vec3> forces(simState.forces());
-    forceCalculator.compute(simState.coordinates(), simState.forces());
+    forceCalculator.compute(simState.coordinates(), simState.box(), simState.forces());
 
     // copy computed forces to another array
     std::vector<Vec3> forces_1(forces.size());
@@ -160,7 +160,7 @@ TEST(NBlibTest, UpdateChangesForces)
     zeroCartesianArray(forces);
 
     // check if forces change without update step
-    forceCalculator.compute(simState.coordinates(), forces);
+    forceCalculator.compute(simState.coordinates(), simState.box(), forces);
 
     // check if forces change without update
     for (size_t i = 0; i < forces_1.size(); i++)
@@ -178,7 +178,7 @@ TEST(NBlibTest, UpdateChangesForces)
     zeroCartesianArray(forces);
 
     // step 2
-    forceCalculator.compute(simState.coordinates(), forces);
+    forceCalculator.compute(simState.coordinates(), simState.box(), forces);
     std::vector<Vec3> forces_2(forces.size());
     std::copy(forces.begin(), forces.end(), begin(forces_2));
 
@@ -204,7 +204,7 @@ TEST(NBlibTest, ArgonOplsaForcesAreCorrect)
     auto forceCalculator = ForceCalculator(simState, options);
 
     gmx::ArrayRef<Vec3> testForces(simState.forces());
-    forceCalculator.compute(simState.coordinates(), simState.forces());
+    forceCalculator.compute(simState.coordinates(), simState.box(), simState.forces());
 
     RefDataChecker forcesOutputTest(1e-7);
     forcesOutputTest.testArrays<Vec3>(testForces, "Argon forces");
@@ -222,7 +222,7 @@ TEST(NBlibTest, ArgonGromos43A1ForcesAreCorrect)
     auto forceCalculator = ForceCalculator(simState, options);
 
     gmx::ArrayRef<Vec3> testForces(simState.forces());
-    forceCalculator.compute(simState.coordinates(), simState.forces());
+    forceCalculator.compute(simState.coordinates(), simState.box(), simState.forces());
 
     RefDataChecker forcesOutputTest(1e-7);
     forcesOutputTest.testArrays<Vec3>(testForces, "Argon forces");

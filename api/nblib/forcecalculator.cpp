@@ -60,21 +60,19 @@ ForceCalculator::ForceCalculator(const SimulationState& system, const NBKernelOp
     gmxForceCalculator_ = GmxSetupDirector::setupGmxForceCalculator(system, options);
 }
 
-void ForceCalculator::compute(gmx::ArrayRef<const Vec3> coordinates, gmx::ArrayRef<Vec3> forces)
+void ForceCalculator::compute(gmx::ArrayRef<const Vec3> coordinates, const Box& box, gmx::ArrayRef<Vec3> forces)
 {
     if (coordinates.size() != forces.size())
     {
         throw InputException("Coordinates array and force buffer size mismatch");
     }
 
-    gmxForceCalculator_->compute(coordinates, forces);
+    gmxForceCalculator_->compute(coordinates, box, forces);
 }
 
-void ForceCalculator::updatePairList(gmx::ArrayRef<const int64_t> particleInfoAllVdW,
-                                     gmx::ArrayRef<Vec3>          coordinates,
-                                     const Box&                   box)
+void ForceCalculator::updatePairList(gmx::ArrayRef<const Vec3> coordinates, const Box& box)
 {
-    gmxForceCalculator_->setParticlesOnGrid(particleInfoAllVdW, coordinates, box);
+    gmxForceCalculator_->setParticlesOnGrid(coordinates, box);
 }
 
 } // namespace nblib

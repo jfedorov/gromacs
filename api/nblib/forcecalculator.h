@@ -56,7 +56,6 @@ class ArrayRef;
 
 namespace nblib
 {
-class NbvSetupUtil;
 class GmxForceCalculator;
 
 /*! \brief Setups up and computes forces using gromacs backend.
@@ -85,23 +84,21 @@ public:
      * an output only param.
      *
      * \param[in] coordinates to be used for the force calculation
+     * \param[in] box coordinate bounding box
      * \param[out] forces buffer to store the output forces
      */
-    void compute(gmx::ArrayRef<const Vec3> coordinates, gmx::ArrayRef<Vec3> forces);
+    void compute(gmx::ArrayRef<const Vec3> coordinates, const Box& box, gmx::ArrayRef<Vec3> forces);
 
-    /*! \brief Puts particles on a grid based on bounds specified by the box
+    /*! \brief Calculates a new pairlist based on the provided coordinates
      *
      * As compute is called repeatedly, the particles drift apart and the force computation becomes
      * progressively less efficient. Calling this function recomputes the particle-particle pair
      * lists so that computation can proceed efficiently. Should be called around every 100 steps.
      *
-     * \param particleInfoAllVdW The types of the particles to be placed on grids
-     * \param coordinates The coordinates to be placed on grids
-     * \param[in] box The system simulation box
+     * \param[in] coordinates   The new particle coordinates
+     * \param[in] box coordinate bounding box
      */
-    void updatePairList(gmx::ArrayRef<const int64_t> particleInfoAllVdW,
-                        gmx::ArrayRef<Vec3>          coordinates,
-                        const Box&                   box);
+    void updatePairList(gmx::ArrayRef<const Vec3> coordinates, const Box& box);
 
 private:
     //! GROMACS force calculator to compute forces

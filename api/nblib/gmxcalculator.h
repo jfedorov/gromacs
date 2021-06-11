@@ -49,6 +49,7 @@
 
 #include <memory>
 
+#include "nblib/box.h"
 #include "nblib/vector.h"
 
 struct nonbonded_verlet_t;
@@ -66,7 +67,6 @@ class StepWorkload;
 
 namespace nblib
 {
-class Box;
 class NbvSetupUtil;
 class SimulationState;
 struct NBKernelOptions;
@@ -91,12 +91,12 @@ public:
     ~GmxForceCalculator();
 
     //! Compute forces and return
-    void compute(gmx::ArrayRef<const gmx::RVec> coordinateInput, gmx::ArrayRef<gmx::RVec> forceOutput);
+    void compute(gmx::ArrayRef<const gmx::RVec> coordinateInput,
+                 const Box&                     box,
+                 gmx::ArrayRef<gmx::RVec>       forceOutput);
 
     //! Puts particles on a grid based on bounds specified by the box (for every NS step)
-    void setParticlesOnGrid(gmx::ArrayRef<const int64_t>   particleInfoAllVdw,
-                            gmx::ArrayRef<const gmx::RVec> coordinates,
-                            const Box&                     box);
+    void setParticlesOnGrid(gmx::ArrayRef<const gmx::RVec> coordinates, const Box& box);
 
 private:
     //! Friend to allow setting up private members in this class
@@ -120,8 +120,11 @@ private:
     //! Non-bonded flop counter; currently only needed as an argument for dispatchNonbondedKernel
     std::unique_ptr<t_nrnb> nrnb_;
 
+    //! flag for each particle to set LJ and Q interactions
+    std::vector<int64_t> particleInfo_;
+
     //! Legacy matrix for box
-    matrix box_{ { 0 } };
+    Box box_{ 0 };
 };
 
 } // namespace nblib

@@ -63,7 +63,7 @@ TEST(NBlibTest, GmxForceCalculatorCanCompute)
     options.nbnxmSimd                    = SimdKernels::SimdNo;
     std::unique_ptr<GmxForceCalculator> gmxForceCalculator =
             nblib::GmxSetupDirector::setupGmxForceCalculator(simState, options);
-    EXPECT_NO_THROW(gmxForceCalculator->compute(simState.coordinates(), simState.forces()));
+    EXPECT_NO_THROW(gmxForceCalculator->compute(simState.coordinates(), simState.box(), simState.forces()));
 }
 
 TEST(NBlibTest, CanSetupStepWorkload)

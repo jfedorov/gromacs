@@ -51,6 +51,7 @@
 #include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/utility/range.h"
 #include "nblib/exception.h"
+#include "nbnxmsetuphelpers.h"
 #include "nblib/simulationstate.h"
 
 namespace nblib
@@ -68,8 +69,21 @@ GmxForceCalculator::GmxForceCalculator()
 GmxForceCalculator::~GmxForceCalculator() = default;
 
 void GmxForceCalculator::compute(gmx::ArrayRef<const gmx::RVec> coordinateInput,
+                                 const Box&                     box,
                                  gmx::ArrayRef<gmx::RVec>       forceOutput)
 {
+    if (coordinateInput.size() != forceOutput.size())
+    {
+        throw InputException("coordinate array and force buffer size mismatch");
+    }
+
+    // update the box if changed
+    if (!(box_ == box))
+    {
+        box_ = box;
+        updateForcerec(forcerec_.get(), box.legacyMatrix());
+    }
+
     // update the coordinates in the backend
     nbv_->convertCoordinates(gmx::AtomLocality::Local, coordinateInput);
 
@@ -87,9 +101,7 @@ void GmxForceCalculator::compute(gmx::ArrayRef<const gmx::RVec> coordinateInput,
     nbv_->atomdata_add_nbat_f_to_f(gmx::AtomLocality::All, forceOutput);
 }
 
-void GmxForceCalculator::setParticlesOnGrid(gmx::ArrayRef<const int64_t>   particleInfoAllVdw,
-                                            gmx::ArrayRef<const gmx::RVec> coordinates,
-                                            const Box&                     box)
+void GmxForceCalculator::setParticlesOnGrid(gmx::ArrayRef<const gmx::RVec> coordinates, const Box& box)
 {
     auto legacyBox = box.legacyMatrix();
 
@@ -110,7 +122,7 @@ void GmxForceCalculator::setParticlesOnGrid(gmx::ArrayRef<const int64_t>   parti
                       nullptr,
                       { 0, int(coordinates.size()) },
                       particleDensity,
-                      particleInfoAllVdw,
+                      particleInfo_,
                       coordinates,
                       0,
                       nullptr);

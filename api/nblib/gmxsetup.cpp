@@ -84,7 +84,7 @@ Nbnxm::KernelSetup NbvSetupUtil::getKernelSetup(const NBKernelOptions& options)
 void NbvSetupUtil::setParticleInfoAllVdv(const size_t numParticles)
 
 {
-    particleInfoAllVdw_ = createParticleInfoAllVdv(numParticles);
+    gmxForceCalculator_->particleInfo_ = createParticleInfoAllVdv(numParticles);
 }
 
 void NbvSetupUtil::setNonBondedParameters(const std::vector<ParticleType>& particleTypes,
@@ -124,7 +124,7 @@ void NbvSetupUtil::setupForceRec(const matrix& box)
 
 void NbvSetupUtil::setParticlesOnGrid(const std::vector<Vec3>& coordinates, const Box& box)
 {
-    gmxForceCalculator_->setParticlesOnGrid(particleInfoAllVdw_, coordinates, box);
+    gmxForceCalculator_->setParticlesOnGrid(coordinates, box);
 }
 
 void NbvSetupUtil::constructPairList(ExclusionLists<int> exclusionLists)

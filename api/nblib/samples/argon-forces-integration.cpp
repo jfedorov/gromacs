@@ -117,7 +117,7 @@ int main()
     printf("initial forces on particle 0: x %4f y %4f z %4f\n", forces[0][0], forces[0][1], forces[0][2]);
     // The forces are computed for the user
     gmx::ArrayRef<nblib::Vec3> userForces(simState.forces());
-    forceCalculator.compute(simState.coordinates(), userForces);
+    forceCalculator.compute(simState.coordinates(), box, userForces);
     // Print some diagnostic info
     printf("  final forces on particle 0: x %4f y %4f z %4f\n",
            userForces[0][0],
