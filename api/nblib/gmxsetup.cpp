@@ -96,7 +96,8 @@ void NbvSetupUtil::setNonBondedParameters(const std::vector<ParticleType>& parti
 void NbvSetupUtil::setAtomProperties(const std::vector<int>&  particleTypeIdOfAllParticles,
                                      const std::vector<real>& charges)
 {
-    gmxForceCalculator_->nbv_->setAtomProperties(particleTypeIdOfAllParticles, charges, particleInfoAllVdw_);
+    gmxForceCalculator_->nbv_->setAtomProperties(
+            particleTypeIdOfAllParticles, charges, gmxForceCalculator_->particleInfo_);
 }
 
 //! Sets up and returns a Nbnxm object for the given options and system

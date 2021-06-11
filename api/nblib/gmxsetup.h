@@ -120,9 +120,6 @@ private:
     //! Storage for parameters for short range interactions.
     std::vector<real> nonbondedParameters_;
 
-    //! Particle info where all particles are marked to have Van der Waals interactions
-    std::vector<int64_t> particleInfoAllVdw_;
-
     //! GROMACS force calculator to compute forces
     std::unique_ptr<GmxForceCalculator> gmxForceCalculator_;
 };
