@@ -49,6 +49,7 @@
 #include "gromacs/mdtypes/interaction_const.h"
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/nbnxm/nbnxm.h"
+#include "gromacs/utility/listoflists.h"
 #include "gromacs/utility/range.h"
 #include "nblib/exception.h"
 #include "nbnxmsetuphelpers.h"
@@ -103,16 +104,18 @@ void GmxForceCalculator::compute(gmx::ArrayRef<const gmx::RVec> coordinateInput,
 
 void GmxForceCalculator::setParticlesOnGrid(gmx::ArrayRef<const gmx::RVec> coordinates, const Box& box)
 {
-    auto legacyBox = box.legacyMatrix();
-
+    const auto* legacyBox = box.legacyMatrix();
+    box_                  = box;
+    updateForcerec(forcerec_.get(), box.legacyMatrix());
     if (TRICLINIC(legacyBox))
     {
         throw InputException("Only rectangular unit-cells are supported here");
     }
+
     const rvec lowerCorner = { 0, 0, 0 };
     const rvec upperCorner = { legacyBox[dimX][dimX], legacyBox[dimY][dimY], legacyBox[dimZ][dimZ] };
 
-    const real particleDensity = coordinates.size() / det(legacyBox);
+    const real particleDensity = static_cast<real>(coordinates.size()) / det(legacyBox);
 
     nbnxn_put_on_grid(nbv_.get(),
                       legacyBox,
@@ -126,6 +129,13 @@ void GmxForceCalculator::setParticlesOnGrid(gmx::ArrayRef<const gmx::RVec> coord
                       coordinates,
                       0,
                       nullptr);
+
+    gmx::ListOfLists<int> exclusions(std::move(exclusions_.ListRanges),
+                                     std::move(exclusions_.ListElements));
+    nbv_->constructPairlist(gmx::InteractionLocality::Local, exclusions, 0, nrnb_.get());
+
+    // Set Particle Types and Charges and VdW params
+    nbv_->setAtomProperties(particleTypeIdOfAllParticles_, charges_, particleInfo_);
 }
 
 } // namespace nblib

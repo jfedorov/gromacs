@@ -76,11 +76,6 @@ void NbvSetupUtil::setExecutionContext(const NBKernelOptions& options)
     setGmxNonBondedNThreads(options.numOpenMPThreads);
 }
 
-Nbnxm::KernelSetup NbvSetupUtil::getKernelSetup(const NBKernelOptions& options)
-{
-    return createKernelSetupCPU(options);
-}
-
 void NbvSetupUtil::setParticleInfoAllVdv(const size_t numParticles)
 
 {
@@ -96,8 +91,8 @@ void NbvSetupUtil::setNonBondedParameters(const std::vector<ParticleType>& parti
 void NbvSetupUtil::setAtomProperties(const std::vector<int>&  particleTypeIdOfAllParticles,
                                      const std::vector<real>& charges)
 {
-    gmxForceCalculator_->nbv_->setAtomProperties(
-            particleTypeIdOfAllParticles, charges, gmxForceCalculator_->particleInfo_);
+    gmxForceCalculator_->charges_                      = charges;
+    gmxForceCalculator_->particleTypeIdOfAllParticles_ = particleTypeIdOfAllParticles;
 }
 
 //! Sets up and returns a Nbnxm object for the given options and system
@@ -123,17 +118,9 @@ void NbvSetupUtil::setupForceRec(const matrix& box)
     updateForcerec(gmxForceCalculator_->forcerec_.get(), box);
 }
 
-void NbvSetupUtil::setParticlesOnGrid(const std::vector<Vec3>& coordinates, const Box& box)
+void NbvSetupUtil::setExclusions(ExclusionLists<int> exclusionLists)
 {
-    gmxForceCalculator_->setParticlesOnGrid(coordinates, box);
-}
-
-void NbvSetupUtil::constructPairList(ExclusionLists<int> exclusionLists)
-{
-    gmx::ListOfLists<int> exclusions(std::move(exclusionLists.ListRanges),
-                                     std::move(exclusionLists.ListElements));
-    gmxForceCalculator_->nbv_->constructPairlist(
-            gmx::InteractionLocality::Local, exclusions, 0, gmxForceCalculator_->nrnb_.get());
+    gmxForceCalculator_->exclusions_ = exclusionLists;
 }
 
 
@@ -149,8 +136,7 @@ std::unique_ptr<GmxForceCalculator> GmxSetupDirector::setupGmxForceCalculator(co
     nbvSetupUtil.setupInteractionConst(options);
     nbvSetupUtil.setupStepWorkload(options);
     nbvSetupUtil.setupNbnxmInstance(system.topology().getParticleTypes().size(), options);
-    nbvSetupUtil.setParticlesOnGrid(system.coordinates(), system.box());
-    nbvSetupUtil.constructPairList(system.topology().exclusionLists());
+    nbvSetupUtil.setExclusions(system.topology().exclusionLists());
     nbvSetupUtil.setAtomProperties(system.topology().getParticleTypeIdOfAllParticles(),
                                    system.topology().getCharges());
     nbvSetupUtil.setupForceRec(system.box().legacyMatrix());

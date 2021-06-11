@@ -179,6 +179,9 @@ int main()
     // The non-bonded force calculator contains all the data needed to compute forces
     ForceCalculator forceCalculator(simulationState, options);
 
+    // build the pair list
+    forceCalculator.updatePairList(simulationState.coordinates(), simulationState.box());
+
     // The listed force calculator is also initialized with the required arguments
     ListedForceCalculator listedForceCalculator(
             topology.getInteractionData(), topology.numParticles(), 4, box);

@@ -111,6 +111,8 @@ int main()
     options.nbnxmSimd = nblib::SimdKernels::SimdNo;
     // The force calculator contains all the data needed to compute forces.
     nblib::ForceCalculator forceCalculator(simState, options);
+    // build the pairlist
+    forceCalculator.updatePairList(simState.coordinates(), box);
     // Integration requires masses, positions, and forces
     nblib::LeapFrog integrator(simState.topology(), simState.box());
     // Print some diagnostic info

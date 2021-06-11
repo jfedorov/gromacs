@@ -50,6 +50,7 @@
 #include <memory>
 
 #include "nblib/box.h"
+#include "nblib/topology.h"
 #include "nblib/vector.h"
 
 struct nonbonded_verlet_t;
@@ -122,6 +123,15 @@ private:
 
     //! flag for each particle to set LJ and Q interactions
     std::vector<int64_t> particleInfo_;
+
+    //! electrostatic charges
+    std::vector<real> charges_;
+
+    //! particle type id of all particles
+    std::vector<int> particleTypeIdOfAllParticles_;
+
+    //! exlusion lists
+    ExclusionLists<int> exclusions_;
 
     //! Legacy matrix for box
     Box box_{ 0 };

@@ -85,9 +85,6 @@ public:
     //! Marks particles to have Van der Waals interactions
     void setParticleInfoAllVdv(size_t numParticles);
 
-    //! Returns the kernel setup
-    Nbnxm::KernelSetup getKernelSetup(const NBKernelOptions& options);
-
     //! Set up StepWorkload data
     void setupStepWorkload(const NBKernelOptions& options);
 
@@ -101,11 +98,8 @@ public:
     //! Sets up non-bonded verlet on the GmxForceCalculator
     void setupNbnxmInstance(size_t numParticleTypes, const NBKernelOptions& options);
 
-    //! Puts particles on a grid based on bounds specified by the box
-    void setParticlesOnGrid(const std::vector<Vec3>& coordinates, const Box& box);
-
     //! Constructs pair lists
-    void constructPairList(ExclusionLists<int> exclusionLists);
+    void setExclusions(ExclusionLists<int> exclusionLists);
 
     //! Sets up t_forcerec object on the GmxForceCalculator
     void setupForceRec(const matrix& box);

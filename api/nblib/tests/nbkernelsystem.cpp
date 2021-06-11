@@ -78,6 +78,8 @@ TEST(NBlibTest, SpcMethanolForcesAreCorrect)
     auto simState        = spcMethanolSystemBuilder.setupSimulationState();
     auto forceCalculator = ForceCalculator(simState, options);
 
+    forceCalculator.updatePairList(simState.coordinates(), simState.box());
+
     gmx::ArrayRef<Vec3> forces(simState.forces());
     ASSERT_NO_THROW(forceCalculator.compute(simState.coordinates(), simState.box(), forces));
 
@@ -95,6 +97,8 @@ TEST(NBlibTest, ExpectedNumberOfForces)
     auto simState        = spcMethanolSystemBuilder.setupSimulationState();
     auto forceCalculator = ForceCalculator(simState, options);
 
+    forceCalculator.updatePairList(simState.coordinates(), simState.box());
+
     gmx::ArrayRef<Vec3> forces(simState.forces());
     forceCalculator.compute(simState.coordinates(), simState.box(), forces);
     EXPECT_EQ(simState.topology().numParticles(), forces.size());
@@ -110,6 +114,8 @@ TEST(NBlibTest, CanIntegrateSystem)
 
     auto simState        = spcMethanolSystemBuilder.setupSimulationState();
     auto forceCalculator = ForceCalculator(simState, options);
+
+    forceCalculator.updatePairList(simState.coordinates(), simState.box());
 
     LeapFrog integrator(simState.topology(), simState.box());
 
@@ -145,6 +151,8 @@ TEST(NBlibTest, UpdateChangesForces)
 
     auto simState        = spcMethanolSystemBuilder.setupSimulationState();
     auto forceCalculator = ForceCalculator(simState, options);
+
+    forceCalculator.updatePairList(simState.coordinates(), simState.box());
 
     LeapFrog integrator(simState.topology(), simState.box());
 
@@ -203,6 +211,8 @@ TEST(NBlibTest, ArgonOplsaForcesAreCorrect)
     auto simState        = argonSystemBuilder.setupSimulationState();
     auto forceCalculator = ForceCalculator(simState, options);
 
+    forceCalculator.updatePairList(simState.coordinates(), simState.box());
+
     gmx::ArrayRef<Vec3> testForces(simState.forces());
     forceCalculator.compute(simState.coordinates(), simState.box(), simState.forces());
 
@@ -220,6 +230,8 @@ TEST(NBlibTest, ArgonGromos43A1ForcesAreCorrect)
 
     auto simState        = argonSystemBuilder.setupSimulationState();
     auto forceCalculator = ForceCalculator(simState, options);
+
+    forceCalculator.updatePairList(simState.coordinates(), simState.box());
 
     gmx::ArrayRef<Vec3> testForces(simState.forces());
     forceCalculator.compute(simState.coordinates(), simState.box(), simState.forces());
