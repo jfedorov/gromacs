@@ -59,6 +59,7 @@
 #include "gromacs/mdlib/stat.h"
 #include "gromacs/mdrun/replicaexchange.h"
 #include "gromacs/mdrun/shellfc.h"
+#include "gromacs/mdrunutility/freeenergy.h"
 #include "gromacs/mdrunutility/handlerestart.h"
 #include "gromacs/mdrunutility/printtime.h"
 #include "gromacs/mdtypes/commrec.h"
@@ -363,10 +364,20 @@ void ModularSimulatorAlgorithm::populateTaskQueue()
 
         // register pre-step (task queue is local, so no problem with `this`)
         registerRunFunction([this, step, time, isNSStep]() { preStep(step, time, isNSStep); });
+        // register pre step functions
+        for (const auto& schedulingFunction : preStepScheduling_)
+        {
+            schedulingFunction(step_, time, registerRunFunction);
+        }
         // register elements for step
         for (auto& element : elementCallList_)
         {
             element->scheduleTask(step_, time, registerRunFunction);
+        }
+        // register post step functions
+        for (const auto& schedulingFunction : postStepScheduling_)
+        {
+            schedulingFunction(step_, time, registerRunFunction);
         }
         // register post-step (task queue is local, so no problem with `this`)
         registerRunFunction([this, step, time]() { postStep(step, time); });
@@ -635,7 +646,10 @@ ModularSimulatorAlgorithm ModularSimulatorAlgorithmBuilder::build()
             }
         }
         addSignaller(energySignallerBuilder_.build(
-                inputrec->nstcalcenergy, inputrec->fepvals->nstdhdl, inputrec->nstpcouple, virialMode));
+                inputrec->nstcalcenergy,
+                computeFepPeriod(*inputrec, legacySimulatorData_->replExParams),
+                inputrec->nstpcouple,
+                virialMode));
         addSignaller(trajectorySignallerBuilder_.build(inputrec->nstxout,
                                                        inputrec->nstvout,
                                                        inputrec->nstfout,
@@ -655,6 +669,9 @@ ModularSimulatorAlgorithm ModularSimulatorAlgorithmBuilder::build()
 
     // Move setup / teardown list
     algorithm.elementSetupTeardownList_ = std::move(setupAndTeardownList_);
+    // Move pre- / post-step scheduling lists
+    algorithm.preStepScheduling_  = std::move(preStepScheduling_);
+    algorithm.postStepScheduling_ = std::move(postStepScheduling_);
 
     // Create element list
     // Checkpoint helper needs to be in the call list (as first element!) to react to last step
@@ -730,6 +747,16 @@ ModularSimulatorAlgorithmBuilderHelper::ModularSimulatorAlgorithmBuilderHelper(
 bool ModularSimulatorAlgorithmBuilderHelper::elementIsStored(const ISimulatorElement* element) const
 {
     return builder_->elementExists(element);
+}
+
+[[maybe_unused]] void ModularSimulatorAlgorithmBuilderHelper::registerPreStepScheduling(SchedulingFunction schedulingFunction)
+{
+    builder_->preStepScheduling_.emplace_back(std::move(schedulingFunction));
+}
+
+[[maybe_unused]] void ModularSimulatorAlgorithmBuilderHelper::registerPostStepScheduling(SchedulingFunction schedulingFunction)
+{
+    builder_->postStepScheduling_.emplace_back(std::move(schedulingFunction));
 }
 
 std::optional<std::any> ModularSimulatorAlgorithmBuilderHelper::builderData(const std::string& key) const

@@ -207,7 +207,7 @@ static void pull_potential_wrapper(const t_commrec*               cr,
     enerd->term[F_COM_PULL] +=
             pull_potential(pull_work,
                            gmx::arrayRefFromArray(mdatoms->massT, mdatoms->nr),
-                           &pbc,
+                           pbc,
                            cr,
                            t,
                            lambda[static_cast<int>(FreeEnergyPerturbationCouplingType::Restraint)],
@@ -900,11 +900,12 @@ static ForceOutputs setupForceOutputs(ForceHelperBuffers*                 forceH
 
 /*! \brief Set up flags that have the lifetime of the domain indicating what type of work is there to compute.
  */
-static DomainLifetimeWorkload setupDomainLifetimeWorkload(const t_inputrec&         inputrec,
-                                                          const t_forcerec&         fr,
-                                                          const pull_t*             pull_work,
-                                                          const gmx_edsam*          ed,
-                                                          const t_mdatoms&          mdatoms,
+static DomainLifetimeWorkload setupDomainLifetimeWorkload(const t_inputrec& inputrec,
+                                                          const t_forcerec& fr,
+                                                          const pull_t*     pull_work,
+                                                          const gmx_edsam*  ed,
+                                                          const t_mdatoms&  mdatoms,
+                                                          bool havePPDomainDecomposition,
                                                           const SimulationWorkload& simulationWork,
                                                           const StepWorkload&       stepWork)
 {
@@ -936,6 +937,10 @@ static DomainLifetimeWorkload setupDomainLifetimeWorkload(const t_inputrec&     
             domainWork.haveSpecialForces || domainWork.haveCpuListedForceWork
             || domainWork.haveFreeEnergyWork || simulationWork.useCpuNonbonded || simulationWork.useCpuPme
             || simulationWork.haveEwaldSurfaceContribution || inputrec.nwall > 0;
+    domainWork.haveLocalForceContribInCpuBuffer =
+            domainWork.haveCpuLocalForceWork || havePPDomainDecomposition;
+    domainWork.haveNonLocalForceContribInCpuBuffer =
+            domainWork.haveCpuBondedWork || domainWork.haveFreeEnergyWork;
 
     return domainWork;
 }
@@ -987,6 +992,10 @@ static StepWorkload setupStepWorkload(const int                     legacyFlags,
     flags.useGpuXHalo          = simulationWork.useGpuHaloExchange;
     flags.useGpuFHalo          = simulationWork.useGpuHaloExchange && flags.useGpuFBufferOps;
     flags.haveGpuPmeOnThisRank = simulationWork.useGpuPme && rankHasPmeDuty && flags.computeSlowForces;
+    flags.combineMtsForcesBeforeHaloExchange =
+            (flags.computeForces && simulationWork.useMts && flags.computeSlowForces
+             && flags.useOnlyMtsCombinedForceBuffer
+             && !(flags.computeVirial || simulationWork.useGpuNonbonded || flags.haveGpuPmeOnThisRank));
 
     return flags;
 }
@@ -1193,6 +1202,16 @@ static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
 }
 
 
+/*! \brief Return the number of local atoms.
+ */
+static int getLocalAtomCount(const gmx_domdec_t* dd, const t_mdatoms& mdatoms, bool havePPDomainDecomposition)
+{
+    GMX_ASSERT(!(havePPDomainDecomposition && (dd == nullptr)),
+               "Can't have PP decomposition with dd uninitialized!");
+    return havePPDomainDecomposition ? dd_numAtomsZones(*dd) : mdatoms.homenr;
+}
+
+
 void do_force(FILE*                               fplog,
               const t_commrec*                    cr,
               const gmx_multisim_t*               ms,
@@ -1317,7 +1336,7 @@ void do_force(FILE*                               fplog,
         {
             // TODO refactor this to do_md, after partitioning.
             stateGpu->reinit(mdatoms->homenr,
-                             cr->dd != nullptr ? dd_numAtomsZones(*cr->dd) : mdatoms->homenr);
+                             getLocalAtomCount(cr->dd, *mdatoms, havePPDomainDecomposition(cr)));
             if (stepWork.haveGpuPmeOnThisRank)
             {
                 // TODO: This should be moved into PME setup function ( pme_gpu_prepare_computation(...) )
@@ -1444,7 +1463,7 @@ void do_force(FILE*                               fplog,
         // Need to run after the GPU-offload bonded interaction lists
         // are set up to be able to determine whether there is bonded work.
         runScheduleWork->domainWork = setupDomainLifetimeWorkload(
-                inputrec, *fr, pull_work, ed, *mdatoms, simulationWork, stepWork);
+                inputrec, *fr, pull_work, ed, *mdatoms, havePPDomainDecomposition(cr), simulationWork, stepWork);
 
         wallcycle_start_nocount(wcycle, WallCycleCounter::NS);
         wallcycle_sub_start(wcycle, WallCycleSubCounter::NBSSearchLocal);
@@ -1721,7 +1740,7 @@ void do_force(FILE*                               fplog,
 
     // Force output for MTS combined forces, only set at level1 MTS steps
     std::optional<ForceOutputs> forceOutMts =
-            (fr->useMts && stepWork.computeSlowForces)
+            (simulationWork.useMts && stepWork.computeSlowForces)
                     ? std::optional(setupForceOutputs(&fr->forceHelperBuffers[1],
                                                       forceView->forceMtsCombinedWithPadding(),
                                                       domainWork,
@@ -1731,7 +1750,8 @@ void do_force(FILE*                               fplog,
                     : std::nullopt;
 
     ForceOutputs* forceOutMtsLevel1 =
-            fr->useMts ? (stepWork.computeSlowForces ? &forceOutMts.value() : nullptr) : &forceOutMtsLevel0;
+            simulationWork.useMts ? (stepWork.computeSlowForces ? &forceOutMts.value() : nullptr)
+                                  : &forceOutMtsLevel0;
 
     const bool nonbondedAtMtsLevel1 = runScheduleWork->simulationWork.computeNonbondedAtMtsLevel1;
 
@@ -1900,7 +1920,8 @@ void do_force(FILE*                               fplog,
             set_pbc_dd(&pbc, fr->pbcType, DOMAINDECOMP(cr) ? cr->dd->numCells : nullptr, TRUE, box);
         }
 
-        for (int mtsIndex = 0; mtsIndex < (fr->useMts && stepWork.computeSlowForces ? 2 : 1); mtsIndex++)
+        for (int mtsIndex = 0; mtsIndex < (simulationWork.useMts && stepWork.computeSlowForces ? 2 : 1);
+             mtsIndex++)
         {
             ListedForces& listedForces = fr->listedForces[mtsIndex];
             ForceOutputs& forceOut     = (mtsIndex == 0 ? forceOutMtsLevel0 : *forceOutMtsLevel1);
@@ -2028,13 +2049,7 @@ void do_force(FILE*                               fplog,
 
             if (stepWork.useGpuFBufferOps)
             {
-                // TODO: move this into DomainLifetimeWorkload, including the second part of the
-                // condition The bonded and free energy CPU tasks can have non-local force
-                // contributions which are a dependency for the GPU force reduction.
-                bool haveNonLocalForceContribInCpuBuffer =
-                        domainWork.haveCpuBondedWork || domainWork.haveFreeEnergyWork;
-
-                if (haveNonLocalForceContribInCpuBuffer)
+                if (domainWork.haveNonLocalForceContribInCpuBuffer)
                 {
                     stateGpu->copyForcesToGpu(forceOutMtsLevel0.forceWithShiftForces().force(),
                                               AtomLocality::NonLocal);
@@ -2065,13 +2080,9 @@ void do_force(FILE*                               fplog,
     /* Combining the forces for multiple time stepping before the halo exchange, when possible,
      * avoids an extra halo exchange (when DD is used) and post-processing step.
      */
-    const bool combineMtsForcesBeforeHaloExchange =
-            (stepWork.computeForces && fr->useMts && stepWork.computeSlowForces && stepWork.useOnlyMtsCombinedForceBuffer
-             && !(stepWork.computeVirial || simulationWork.useGpuNonbonded || stepWork.haveGpuPmeOnThisRank));
-    if (combineMtsForcesBeforeHaloExchange)
+    if (stepWork.combineMtsForcesBeforeHaloExchange)
     {
-        const int numAtoms = havePPDomainDecomposition(cr) ? dd_numAtomsZones(*cr->dd) : mdatoms->homenr;
-        combineMtsForces(numAtoms,
+        combineMtsForces(getLocalAtomCount(cr->dd, *mdatoms, havePPDomainDecomposition(cr)),
                          force.unpaddedArrayRef(),
                          forceView->forceMtsCombined(),
                          inputrec.mtsLevels[1].stepFactor);
@@ -2110,12 +2121,12 @@ void do_force(FILE*                               fplog,
 
                 // Without MTS or with MTS at slow steps with uncombined forces we need to
                 // communicate the fast forces
-                if (!fr->useMts || !combineMtsForcesBeforeHaloExchange)
+                if (!simulationWork.useMts || !stepWork.combineMtsForcesBeforeHaloExchange)
                 {
                     dd_move_f(cr->dd, &forceOutMtsLevel0.forceWithShiftForces(), wcycle);
                 }
                 // With MTS we need to communicate the slow or combined (in forceOutMtsLevel1) forces
-                if (fr->useMts && stepWork.computeSlowForces)
+                if (simulationWork.useMts && stepWork.computeSlowForces)
                 {
                     dd_move_f(cr->dd, &forceOutMtsLevel1->forceWithShiftForces(), wcycle);
                 }
@@ -2230,13 +2241,6 @@ void do_force(FILE*                               fplog,
         {
             ArrayRef<gmx::RVec> forceWithShift = forceOutNonbonded->forceWithShiftForces().force();
 
-            // Flag to specify whether the CPU force buffer has contributions to
-            // local atoms. This depends on whether there are CPU-based force tasks
-            // or when DD is active the halo exchange has resulted in contributions
-            // from the non-local part.
-            const bool haveLocalForceContribInCpuBuffer =
-                    (domainWork.haveCpuLocalForceWork || havePPDomainDecomposition(cr));
-
             // TODO: move these steps as early as possible:
             // - CPU f H2D should be as soon as all CPU-side forces are done
             // - wait for force reduction does not need to block host (at least not here, it's sufficient to wait
@@ -2244,7 +2248,7 @@ void do_force(FILE*                               fplog,
             // - copy is not perfomed if GPU force halo exchange is active, because it would overwrite the result
             //   of the halo exchange. In that case the copy is instead performed above, before the exchange.
             //   These should be unified.
-            if (haveLocalForceContribInCpuBuffer && !stepWork.useGpuFHalo)
+            if (domainWork.haveLocalForceContribInCpuBuffer && !stepWork.useGpuFHalo)
             {
                 // Note: AtomLocality::All is used for the non-DD case because, as in this
                 // case copyForcesToGpu() uses a separate stream, it allows overlap of
@@ -2288,14 +2292,14 @@ void do_force(FILE*                               fplog,
         dd_force_flop_stop(cr->dd, nrnb);
     }
 
-    const bool haveCombinedMtsForces = (stepWork.computeForces && fr->useMts && stepWork.computeSlowForces
-                                        && combineMtsForcesBeforeHaloExchange);
+    const bool haveCombinedMtsForces = (stepWork.computeForces && simulationWork.useMts && stepWork.computeSlowForces
+                                        && stepWork.combineMtsForcesBeforeHaloExchange);
     if (stepWork.computeForces)
     {
         postProcessForceWithShiftForces(
                 nrnb, wcycle, box, x.unpaddedArrayRef(), &forceOutMtsLevel0, vir_force, *mdatoms, *fr, vsite, stepWork);
 
-        if (fr->useMts && stepWork.computeSlowForces && !haveCombinedMtsForces)
+        if (simulationWork.useMts && stepWork.computeSlowForces && !haveCombinedMtsForces)
         {
             postProcessForceWithShiftForces(
                     nrnb, wcycle, box, x.unpaddedArrayRef(), forceOutMtsLevel1, vir_force, *mdatoms, *fr, vsite, stepWork);
@@ -2328,7 +2332,7 @@ void do_force(FILE*                               fplog,
         postProcessForces(
                 cr, step, nrnb, wcycle, box, x.unpaddedArrayRef(), &forceOutCombined, vir_force, mdatoms, fr, vsite, stepWork);
 
-        if (fr->useMts && stepWork.computeSlowForces && !haveCombinedMtsForces)
+        if (simulationWork.useMts && stepWork.computeSlowForces && !haveCombinedMtsForces)
         {
             postProcessForces(
                     cr, step, nrnb, wcycle, box, x.unpaddedArrayRef(), forceOutMtsLevel1, vir_force, mdatoms, fr, vsite, stepWork);

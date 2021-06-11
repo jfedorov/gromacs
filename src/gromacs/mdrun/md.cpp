@@ -106,6 +106,7 @@
 #include "gromacs/mdlib/update_vv.h"
 #include "gromacs/mdlib/vcm.h"
 #include "gromacs/mdlib/vsite.h"
+#include "gromacs/mdrunutility/freeenergy.h"
 #include "gromacs/mdrunutility/handlerestart.h"
 #include "gromacs/mdrunutility/multisim.h"
 #include "gromacs/mdrunutility/printtime.h"
@@ -188,7 +189,6 @@ void gmx::LegacySimulator::do_md()
     matrix            lastbox;
     int               lamnew = 0;
     /* for FEP */
-    int       nstfep = 0;
     double    cycles;
     real      saved_conserved_quantity = 0;
     real      last_ekin                = 0;
@@ -363,7 +363,7 @@ void gmx::LegacySimulator::do_md()
 
     gmx_localtop_t top(top_global.ffparams);
 
-    ForceBuffers     f(fr->useMts,
+    ForceBuffers     f(simulationWork.useMts,
                    ((useGpuForNonbonded && useGpuForBufferOps) || useGpuForUpdate)
                                ? PinningPolicy::PinnedIfSupported
                                : PinningPolicy::CannotBePinned);
@@ -595,24 +595,7 @@ void gmx::LegacySimulator::do_md()
         }
     }
 
-    if (ir->efep != FreeEnergyPerturbationType::No)
-    {
-        /* Set free energy calculation frequency as the greatest common
-         * denominator of nstdhdl and repl_ex_nst. */
-        nstfep = ir->fepvals->nstdhdl;
-        if (ir->bExpanded)
-        {
-            nstfep = std::gcd(ir->expandedvals->nstexpanded, nstfep);
-        }
-        if (useReplicaExchange)
-        {
-            nstfep = std::gcd(replExParams.exchangeInterval, nstfep);
-        }
-        if (ir->bDoAwh)
-        {
-            nstfep = std::gcd(ir->awhParams->nstSampleCoord(), nstfep);
-        }
-    }
+    const int nstfep = computeFepPeriod(*ir, replExParams);
 
     /* Be REALLY careful about what flags you set here. You CANNOT assume
      * this is the first step, since we might be restarting from a checkpoint,
@@ -662,7 +645,8 @@ void gmx::LegacySimulator::do_md()
             cglo_flags_iteration |= CGLO_STOPCM;
             cglo_flags_iteration &= ~CGLO_TEMPERATURE;
         }
-        if (DOMAINDECOMP(cr) && shouldCheckNumberOfBondedInteractions(*cr->dd) && cgloIteration == 0)
+        if (DOMAINDECOMP(cr) && dd_localTopologyChecker(*cr->dd).shouldCheckNumberOfBondedInteractions()
+            && cgloIteration == 0)
         {
             cglo_flags_iteration |= CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS;
         }
@@ -702,8 +686,8 @@ void gmx::LegacySimulator::do_md()
     }
     if (DOMAINDECOMP(cr))
     {
-        checkNumberOfBondedInteractions(
-                mdlog, cr, top_global, &top, makeConstArrayRef(state->x), state->box);
+        dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
+                &top, makeConstArrayRef(state->x), state->box);
     }
     if (ir->eI == IntegrationAlgorithm::VVAK)
     {
@@ -1057,7 +1041,7 @@ void gmx::LegacySimulator::do_md()
              * the full step kinetic energy and possibly for T-coupling.*/
             /* This may not be quite working correctly yet . . . . */
             int cglo_flags = CGLO_GSTAT | CGLO_TEMPERATURE;
-            if (DOMAINDECOMP(cr) && shouldCheckNumberOfBondedInteractions(*cr->dd))
+            if (DOMAINDECOMP(cr) && dd_localTopologyChecker(*cr->dd).shouldCheckNumberOfBondedInteractions())
             {
                 cglo_flags |= CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS;
             }
@@ -1085,8 +1069,8 @@ void gmx::LegacySimulator::do_md()
                             cglo_flags);
             if (DOMAINDECOMP(cr))
             {
-                checkNumberOfBondedInteractions(
-                        mdlog, cr, top_global, &top, makeConstArrayRef(state->x), state->box);
+                dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
+                        &top, makeConstArrayRef(state->x), state->box);
             }
         }
         clear_mat(force_vir);
@@ -1126,7 +1110,7 @@ void gmx::LegacySimulator::do_md()
         force_flags = (GMX_FORCE_STATECHANGED | ((inputrecDynamicBox(ir)) ? GMX_FORCE_DYNAMICBOX : 0)
                        | GMX_FORCE_ALLFORCES | (bCalcVir ? GMX_FORCE_VIRIAL : 0)
                        | (bCalcEner ? GMX_FORCE_ENERGY : 0) | (bDoFEP ? GMX_FORCE_DHDL : 0));
-        if (fr->useMts && !do_per_step(step, ir->nstfout))
+        if (simulationWork.useMts && !do_per_step(step, ir->nstfout))
         {
             // TODO: merge this with stepWork.useOnlyMtsCombinedForceBuffer
             force_flags |= GMX_FORCE_DO_NOT_NEED_NORMAL_FORCE;
@@ -1237,7 +1221,6 @@ void gmx::LegacySimulator::do_md()
                                  fcdata,
                                  &MassQ,
                                  &vcm,
-                                 top_global,
                                  top,
                                  enerd,
                                  ekind,
@@ -1264,7 +1247,6 @@ void gmx::LegacySimulator::do_md()
                                  &nullSignaller,
                                  trotter_seq,
                                  nrnb,
-                                 mdlog,
                                  fplog,
                                  wcycle);
             if (vsite != nullptr && needVirtualVelocitiesThisStep)
@@ -1584,7 +1566,7 @@ void gmx::LegacySimulator::do_md()
                  * Using that acceleration would result in a virial with the slow
                  * force contribution would be a factor mtsFactor too large.
                  */
-                if (fr->useMts && bCalcVir && constr != nullptr)
+                if (simulationWork.useMts && bCalcVir && constr != nullptr)
                 {
                     upd.update_for_constraint_virial(*ir,
                                                      md->homenr,
@@ -1607,7 +1589,7 @@ void gmx::LegacySimulator::do_md()
                 }
 
                 ArrayRefWithPadding<const RVec> forceCombined =
-                        (fr->useMts && step % ir->mtsLevels[1].stepFactor == 0)
+                        (simulationWork.useMts && step % ir->mtsLevels[1].stepFactor == 0)
                                 ? f.view().forceMtsCombinedWithPadding()
                                 : f.view().forceWithPadding();
                 upd.update_coords(*ir,
@@ -1635,7 +1617,7 @@ void gmx::LegacySimulator::do_md()
                                       state,
                                       upd.xp()->arrayRefWithPadding(),
                                       &dvdl_constr,
-                                      bCalcVir && !fr->useMts,
+                                      bCalcVir && !simulationWork.useMts,
                                       shake_vir);
 
                 upd.update_sd_second_half(*ir,
@@ -1718,13 +1700,13 @@ void gmx::LegacySimulator::do_md()
                                 | (!EI_VV(ir->eI) && bStopCM ? CGLO_STOPCM : 0)
                                 | (!EI_VV(ir->eI) ? CGLO_TEMPERATURE : 0)
                                 | (!EI_VV(ir->eI) ? CGLO_PRESSURE : 0) | CGLO_CONSTRAINT
-                                | (DOMAINDECOMP(cr) && shouldCheckNumberOfBondedInteractions(*cr->dd)
+                                | (DOMAINDECOMP(cr) && dd_localTopologyChecker(*cr->dd).shouldCheckNumberOfBondedInteractions()
                                            ? CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS
                                            : 0));
                 if (DOMAINDECOMP(cr))
                 {
-                    checkNumberOfBondedInteractions(
-                            mdlog, cr, top_global, &top, makeConstArrayRef(state->x), state->box);
+                    dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
+                            &top, makeConstArrayRef(state->x), state->box);
                 }
                 if (!EI_VV(ir->eI) && bStopCM)
                 {

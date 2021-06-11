@@ -107,14 +107,18 @@ _opencl_extra_packages = [
     'ocl-icd-libopencl1',
     'ocl-icd-opencl-dev',
     'opencl-headers',
-    # The following require
-    #             apt_keys=['http://repo.radeon.com/rocm/apt/debian/rocm.gpg.key'],
-    #             apt_repositories=['deb [arch=amd64] http://repo.radeon.com/rocm/apt/debian/ xenial main']
-    'libelf1',
-    'rocm-opencl',
-    'rocm-dev',
-    'clinfo'
 ]
+
+_rocm_extra_packages = [
+        # The following require
+        #             apt_keys=['http://repo.radeon.com/rocm/rocm.gpg.key'],
+        #             apt_repositories=['deb [arch=amd64] http://repo.radeon.com/rocm/apt/4.0.1/ xenial main']
+        'libelf1',
+        'rocm-opencl',
+        'rocm-dev',
+        'clinfo'
+]
+                     
 
 # Extra packages needed to build Intel Compute Runtime
 _intel_compute_runtime_extra_packages = ['pkg-config',
@@ -162,7 +166,6 @@ _docs_extra_packages = ['autoconf',
                         'help2man',
                         'imagemagick',
                         'libtool',
-                        'linkchecker',
                         'mscgen',
                         'm4',
                         'openssh-client',
@@ -223,6 +226,12 @@ def get_opencl_packages(args) -> typing.Iterable[str]:
         return _opencl_extra_packages
     else:
         return []
+
+def get_rocm_packages(args) -> typing.Iterable[str]:
+    if (args.rocm is None):
+        return []
+    else:
+        return _rocm_extra_packages
 
 def get_compiler(args, compiler_build_stage: hpccm.Stage = None) -> bb_base:
     # Compiler
@@ -300,6 +309,9 @@ def get_hipsycl(args):
         return None
     if args.llvm is None:
         raise RuntimeError('Can not build hipSYCL without llvm')
+
+    if args.rocm is None:
+        raise RuntimeError('hipSYCL requires the rocm packages')
 
     cmake_opts = [f'-DLLVM_DIR=/usr/lib/llvm-{args.llvm}/cmake',
                   f'-DCLANG_EXECUTABLE_PATH=/usr/bin/clang++-{args.llvm}',
@@ -532,6 +544,8 @@ def add_documentation_dependencies(input_args,
     """Add appropriate layers according to doxygen input arguments."""
     if input_args.doxygen is None:
         return
+    # Always clone the same version of linkchecker (latest release at June 1, 2021)
+    output_stages['main'] += hpccm.building_blocks.pip(pip='pip3', packages=['git+https://github.com/linkchecker/linkchecker.git@v10.0.1'])
     output_stages['main'] += hpccm.primitives.shell(
         commands=['sed -i \'/\"XPS\"/d;/\"PDF\"/d;/\"PS\"/d;/\"EPS\"/d;/disable ghostscript format types/d\' /etc/ImageMagick-6/policy.xml'])
     if input_args.doxygen == '1.8.5':
@@ -600,7 +614,7 @@ def build_stages(args) -> typing.Iterable[hpccm.Stage]:
             version=cmake)
 
     # Install additional packages early in the build to optimize Docker build layer cache.
-    os_packages = list(get_llvm_packages(args)) + get_opencl_packages(args)
+    os_packages = list(get_llvm_packages(args)) + get_opencl_packages(args) + get_rocm_packages(args)
     if args.doxygen is not None:
         os_packages += _docs_extra_packages
     if args.oneapi is not None:
@@ -609,12 +623,15 @@ def build_stages(args) -> typing.Iterable[hpccm.Stage]:
         os_packages += ['libboost-fiber-dev']
     if args.intel_compute_runtime is not None:
         os_packages += _intel_compute_runtime_extra_packages
-    building_blocks['extra_packages'] = hpccm.building_blocks.packages(
+    building_blocks['extra_packages'] = []
+    if args.rocm is not None:
+        building_blocks['extra_packages'] += hpccm.building_blocks.packages(
+            apt_keys=['http://repo.radeon.com/rocm/rocm.gpg.key'],
+            apt_repositories=[f'deb [arch=amd64] http://repo.radeon.com/rocm/apt/{args.rocm}/ xenial main']
+        )
+    building_blocks['extra_packages'] += hpccm.building_blocks.packages(
         ospackages=os_packages,
-        apt_ppas=['ppa:intel-opencl/intel-opencl'],
-        apt_keys=['http://repo.radeon.com/rocm/apt/debian/rocm.gpg.key'],
-        apt_repositories=['deb [arch=amd64] http://repo.radeon.com/rocm/apt/debian/ xenial main']
-    )
+        apt_ppas=['ppa:intel-opencl/intel-opencl'])
 
     if args.cuda is not None and args.llvm is not None:
         # Hack to tell clang what version of CUDA we're using

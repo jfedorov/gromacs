@@ -1858,7 +1858,9 @@ int gmx_grompp(int argc, char* argv[])
                        { efEDR, "-e", nullptr, ffOPTRD },
                        /* This group is needed by the VMD viewer as the start configuration for IMD sessions: */
                        { efGRO, "-imd", "imdgroup", ffOPTWR },
-                       { efTRN, "-ref", "rotref", ffOPTRW | ffALLOW_MISSING } };
+                       { efTRN, "-ref", "rotref", ffOPTRW | ffALLOW_MISSING },
+                       /* This group is needed by the QMMM MDModule: */
+                       { efQMI, "-qmi", nullptr, ffOPTRD } };
 #define NFILE asize(fnm)
 
     /* Command line options */
@@ -1930,6 +1932,14 @@ int gmx_grompp(int argc, char* argv[])
     // to eventual notifications during pre-processing their data
     mdModules.subscribeToPreProcessingNotifications();
 
+    // Notify MDModules of existing logger
+    mdModules.notifiers().preProcessingNotifier_.notify(logger);
+
+    // Notify QMMM MDModule of external QM input file command-line option
+    {
+        gmx::QMInputFileName qmInputFileName = { ftp2bSet(efQMI, NFILE, fnm), ftp2fn(efQMI, NFILE, fnm) };
+        mdModules.notifiers().preProcessingNotifier_.notify(qmInputFileName);
+    }
 
     if (bVerbose)
     {
@@ -2210,6 +2220,9 @@ int gmx_grompp(int argc, char* argv[])
     }
     do_index(mdparin, ftp2fn_null(efNDX, NFILE, fnm), &sys, bVerbose, mdModules.notifiers(), ir, wi);
 
+    // Notify topology to MdModules for pre-processing after all indexes were built
+    mdModules.notifiers().preProcessingNotifier_.notify(&sys);
+
     if (ir->cutoff_scheme == CutoffScheme::Verlet && ir->verletbuf_tol > 0)
     {
         if (EI_DYNAMICS(ir->eI) && inputrec2nboundeddim(ir) == 3)
@@ -2487,6 +2500,15 @@ int gmx_grompp(int argc, char* argv[])
         {
             GMX_LOG(logger.info).asParagraph().appendText(warningMessage);
         }
+    }
+
+    // Hand over box and coordiantes to MdModules before they evaluate their final parameters
+    {
+        gmx::CoordinatesAndBoxPreprocessed coordinatesAndBoxPreprocessed;
+        coordinatesAndBoxPreprocessed.coordinates_ = state.x.arrayRefWithPadding();
+        copy_mat(state.box, coordinatesAndBoxPreprocessed.box_);
+        coordinatesAndBoxPreprocessed.pbc_ = ir->pbcType;
+        mdModules.notifiers().preProcessingNotifier_.notify(coordinatesAndBoxPreprocessed);
     }
 
     // Add the md modules internal parameters that are not mdp options

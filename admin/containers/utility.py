@@ -41,7 +41,7 @@ CI pipeline jobs.
 Example::
 
     $ python3 -m utility --llvm --doxygen
-    gromacs/ci-ubuntu-18.04-llvm-7-docs
+    gromacs/ci-ubuntu-20.04-llvm-7-docs
 
 See Also:
     :file:`buildall.sh`
@@ -105,13 +105,12 @@ compiler_group.add_argument('--oneapi', type=str, nargs='?', const="2021.1.1", d
                             help='Select Intel oneAPI package version.')
 
 linux_group = parser.add_mutually_exclusive_group()
-# Ubuntu 20+ is not yet tested. See issue #3680
-linux_group.add_argument('--ubuntu', type=str, nargs='?', const='18.04', default='18.04',
-                         help='Select Ubuntu Linux base image. (default: ubuntu 18.04)')
+linux_group.add_argument('--ubuntu', type=str, nargs='?', const='20.04', default='20.04',
+                         help='Select Ubuntu Linux base image. (default: ubuntu 20.04)')
 linux_group.add_argument('--centos', type=str, nargs='?', const='7', default=None,
                          help='Select Centos Linux base image.')
 
-parser.add_argument('--cuda', type=str, nargs='?', const='10.2', default=None,
+parser.add_argument('--cuda', type=str, nargs='?', const='11.0', default=None,
                     help='Select a CUDA version for a base Linux image from NVIDIA.')
 
 parser.add_argument('--mpi', type=str, nargs='?', const='openmpi', default=None,
@@ -122,6 +121,9 @@ parser.add_argument('--tsan', type=str, nargs='?', const='llvm', default=None,
 
 parser.add_argument('--hipsycl', type=str, nargs='?', default=None,
                     help='Select hipSYCL repository tag/commit/branch.')
+
+parser.add_argument('--rocm', type=str, nargs='?', const='debian', default=None,
+                    help='Select AMD compute engine version.')
 
 parser.add_argument('--intel-compute-runtime', type=str, nargs='?', default=None,
                     help='Select Intel Compute Runtime version.')
@@ -171,6 +173,8 @@ def image_name(configuration: argparse.Namespace) -> str:
         elements.append('oneapi-' + configuration.oneapi)
     if configuration.intel_compute_runtime is not None:
         elements.append('intel-' + configuration.intel_compute_runtime)
+    if configuration.rocm is not None:
+        elements.append('rocm-' + configuration.rocm)
 
     # Check for special cases
     # The following attribute keys indicate the image is built for the named

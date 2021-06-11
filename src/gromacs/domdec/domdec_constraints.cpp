@@ -61,8 +61,8 @@
 #include "gromacs/math/vec.h"
 #include "gromacs/mdlib/constr.h"
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
+#include "gromacs/mdtypes/atominfo.h"
 #include "gromacs/mdtypes/commrec.h"
-#include "gromacs/mdtypes/forcerec.h" // only for GET_CGINFO_*
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/topology/ifunc.h"
 #include "gromacs/topology/mtop_lookup.h"
@@ -223,7 +223,7 @@ static void walk_out(int                       con,
 /*! \brief Looks up SETTLE constraints for a range of charge-groups */
 static void atoms_to_settles(gmx_domdec_t*                         dd,
                              const gmx_mtop_t&                     mtop,
-                             const int*                            atomInfo,
+                             gmx::ArrayRef<const int64_t>          atomInfo,
                              gmx::ArrayRef<const std::vector<int>> at2settle_mt,
                              int                                   cg_start,
                              int                                   cg_end,
@@ -236,7 +236,7 @@ static void atoms_to_settles(gmx_domdec_t*                         dd,
     int mb = 0;
     for (int a = cg_start; a < cg_end; a++)
     {
-        if (GET_CGINFO_SETTLE(atomInfo[a]))
+        if (atomInfo[a] & gmx::sc_atomInfo_Settle)
         {
             int a_gl  = dd->globalAtomIndices[a];
             int a_mol = 0;
@@ -298,7 +298,7 @@ static void atoms_to_settles(gmx_domdec_t*                         dd,
 /*! \brief Looks up constraint for the local atoms */
 static void atoms_to_constraints(gmx_domdec_t*                         dd,
                                  const gmx_mtop_t&                     mtop,
-                                 const int*                            atomInfo,
+                                 gmx::ArrayRef<const int64_t>          atomInfo,
                                  gmx::ArrayRef<const ListOfLists<int>> at2con_mt,
                                  int                                   nrec,
                                  InteractionList*                      ilc_local,
@@ -316,7 +316,7 @@ static void atoms_to_constraints(gmx_domdec_t*                         dd,
     int nhome = 0;
     for (int a = 0; a < dd->numHomeAtoms; a++)
     {
-        if (GET_CGINFO_CONSTR(atomInfo[a]))
+        if (atomInfo[a] & gmx::sc_atomInfo_Constraint)
         {
             int a_gl  = dd->globalAtomIndices[a];
             int molnr = 0;
@@ -399,7 +399,7 @@ static void atoms_to_constraints(gmx_domdec_t*                         dd,
 int dd_make_local_constraints(gmx_domdec_t*                  dd,
                               int                            at_start,
                               const struct gmx_mtop_t&       mtop,
-                              const int*                     atomInfo,
+                              gmx::ArrayRef<const int64_t>   atomInfo,
                               gmx::Constraints*              constr,
                               int                            nrec,
                               gmx::ArrayRef<InteractionList> il_local)

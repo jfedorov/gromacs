@@ -62,6 +62,7 @@
 #include "gromacs/domdec/domdec_struct.h"
 #include "gromacs/domdec/gpuhaloexchange.h"
 #include "gromacs/domdec/localatomsetmanager.h"
+#include "gromacs/domdec/makebondedlinks.h"
 #include "gromacs/domdec/partition.h"
 #include "gromacs/domdec/reversetopology.h"
 #include "gromacs/ewald/ewald_utils.h"
@@ -1058,9 +1059,19 @@ int Mdrunner::mdrunner()
     mdModules_->subscribeToSimulationSetupNotifications();
     const auto& setupNotifier = mdModules_->notifiers().simulationSetupNotifier_;
 
+    // Notify MdModules of existing logger
+    setupNotifier.notify(mdlog);
+
+    // Notify MdModules of internal parameters, saved into KVT
     if (inputrec->internalParameters != nullptr)
     {
         setupNotifier.notify(*inputrec->internalParameters);
+    }
+
+    // Let MdModules know the .tpr filename
+    {
+        gmx::MdRunInputFilename mdRunInputFilename = { ftp2fn(efTPR, filenames.size(), filenames.data()) };
+        setupNotifier.notify(mdRunInputFilename);
     }
 
     if (fplog != nullptr)
@@ -1615,6 +1626,7 @@ int Mdrunner::mdrunner()
         fr->forceProviders = mdModules_->initForceProviders();
         init_forcerec(fplog,
                       mdlog,
+                      runScheduleWork.simulationWork,
                       fr.get(),
                       *inputrec,
                       mtop,

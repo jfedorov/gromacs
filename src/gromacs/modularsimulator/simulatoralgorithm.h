@@ -193,6 +193,10 @@ private:
     std::vector<ISimulatorElement*> elementCallList_;
     //! List of schedulerElements (setup / teardown calling sequence)
     std::vector<ISimulatorElement*> elementSetupTeardownList_;
+    //! List of pre-step scheduling functions
+    std::vector<SchedulingFunction> preStepScheduling_;
+    //! List of post-step scheduling functions
+    std::vector<SchedulingFunction> postStepScheduling_;
 
     // Infrastructure elements
     //! The domain decomposition element
@@ -324,6 +328,22 @@ public:
     Element* storeElement(std::unique_ptr<Element> element);
     //! Check if an element is stored in the ModularSimulatorAlgorithmBuilder
     bool elementIsStored(const ISimulatorElement* element) const;
+    /*! \brief Register callback to schedule a pre-step run
+     *
+     * This allows elements to schedule a function call before the integration step.
+     * The function call is guaranteed to happen before any functions scheduled for
+     * the integration step. It is not guaranteed to happen in any specific order
+     * compared to other elements registering a pre-step scheduling function.
+     */
+    void registerPreStepScheduling(SchedulingFunction schedulingFunction);
+    /*! \brief Register callback to schedule a post-step run
+     *
+     * This allows elements to schedule a function call after the integration step.
+     * The function call is guaranteed to happen after all functions scheduled for
+     * the integration step. It is not guaranteed to happen in any specific order
+     * compared to other elements registering a post-step scheduling function.
+     */
+    void registerPostStepScheduling(SchedulingFunction schedulingFunction);
     /*! \brief Set arbitrary data in the ModularSimulatorAlgorithmBuilder
      *
      * Allows to store arbitrary data with lifetime equal to the builder. Functionality is used
@@ -335,7 +355,7 @@ public:
     std::optional<std::any> builderData(const std::string& key) const;
     //! \copydoc ModularSimulatorAlgorithmBuilder::storeSimulationData()
     template<typename ValueType>
-    void storeSimulationData(const std::string& key, std::unique_ptr<ValueType> value);
+    void storeSimulationData(const std::string& key, ValueType&& value);
     //! \copydoc ModularSimulatorAlgorithmBuilder::simulationData()
     template<typename ValueType>
     std::optional<ValueType*> simulationData(const std::string& key);
@@ -423,7 +443,7 @@ private:
      * Functionality allows elements to share arbitrary data.
      */
     template<typename ValueType>
-    void storeSimulationData(const std::string& key, std::unique_ptr<ValueType> value);
+    void storeSimulationData(const std::string& key, ValueType&& value);
 
     /*! \brief Get previously stored simulation data.
      *
@@ -491,6 +511,10 @@ private:
      * Elements should only appear once in this list
      */
     std::vector<ISimulatorElement*> setupAndTeardownList_;
+    //! List of pre-step scheduling functions
+    std::vector<SchedulingFunction> preStepScheduling_;
+    //! List of post-step scheduling functions
+    std::vector<SchedulingFunction> postStepScheduling_;
 
     //! Builder for the NeighborSearchSignaller
     SignallerBuilder<NeighborSearchSignaller> neighborSearchSignallerBuilder_;
@@ -696,10 +720,9 @@ void ModularSimulatorAlgorithmBuilderHelper::storeBuilderData(const std::string&
 }
 
 template<typename ValueType>
-void ModularSimulatorAlgorithmBuilderHelper::storeSimulationData(const std::string&         key,
-                                                                 std::unique_ptr<ValueType> value)
+void ModularSimulatorAlgorithmBuilderHelper::storeSimulationData(const std::string& key, ValueType&& value)
 {
-    builder_->storeSimulationData(key, std::move(value));
+    builder_->storeSimulationData(key, std::forward<ValueType>(value));
 }
 
 template<typename ValueType>
@@ -709,13 +732,13 @@ std::optional<ValueType*> ModularSimulatorAlgorithmBuilderHelper::simulationData
 }
 
 template<typename ValueType>
-void ModularSimulatorAlgorithmBuilder::storeSimulationData(const std::string&         key,
-                                                           std::unique_ptr<ValueType> value)
+void ModularSimulatorAlgorithmBuilder::storeSimulationData(const std::string& key, ValueType&& value)
 {
     GMX_RELEASE_ASSERT(simulationData_.count(key) == 0,
-                       "Key " + key + " was already stored in simulation data.");
-    registerWithInfrastructureAndSignallers(value.get());
-    simulationData_[key] = std::make_unique<std::any>(value.release());
+                       formatString("Key %s was already stored in simulation data.", key.c_str()).c_str());
+    simulationData_[key] = std::make_unique<std::any>(std::forward<ValueType>(value));
+    auto* ptrToData      = simulationData<ValueType>(key).value();
+    registerWithInfrastructureAndSignallers(ptrToData);
 }
 
 template<typename ValueType>
@@ -726,9 +749,13 @@ std::optional<ValueType*> ModularSimulatorAlgorithmBuilder::simulationData(const
     {
         return std::nullopt;
     }
-    ValueType** data = std::any_cast<ValueType*>(iter->second.get());
-    GMX_RELEASE_ASSERT(data != nullptr, "Key " + key + " does not have the expected type.");
-    return *data;
+    ValueType* data = std::any_cast<ValueType>(iter->second.get());
+    GMX_RELEASE_ASSERT(data != nullptr,
+                       formatString("Object stored in simulation data under key %s does not have "
+                                    "the expected type.",
+                                    key.c_str())
+                               .c_str());
+    return data;
 }
 
 

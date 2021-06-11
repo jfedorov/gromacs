@@ -479,9 +479,9 @@ static void dd_set_atominfo(gmx::ArrayRef<const int> index_gl, int cg0, int cg1,
 {
     if (fr != nullptr)
     {
-        gmx::ArrayRef<AtomInfoWithinMoleculeBlock> atomInfoForEachMoleculeBlock =
+        gmx::ArrayRef<gmx::AtomInfoWithinMoleculeBlock> atomInfoForEachMoleculeBlock =
                 fr->atomInfoForEachMoleculeBlock;
-        gmx::ArrayRef<int> atomInfo = fr->atomInfo;
+        gmx::ArrayRef<int64_t> atomInfo = fr->atomInfo;
 
         for (int cg = cg0; cg < cg1; cg++)
         {
@@ -1335,16 +1335,16 @@ void set_dd_dlb_max_cutoff(t_commrec* cr, real cutoff)
 }
 
 //! Merge atom buffers.
-static void merge_cg_buffers(int                                        ncell,
-                             gmx_domdec_comm_dim_t*                     cd,
-                             int                                        pulse,
-                             int*                                       ncg_cell,
-                             gmx::ArrayRef<int>                         index_gl,
-                             const int*                                 recv_i,
-                             gmx::ArrayRef<gmx::RVec>                   x,
-                             gmx::ArrayRef<const gmx::RVec>             recv_vr,
-                             gmx::ArrayRef<AtomInfoWithinMoleculeBlock> atomInfoForEachMoleculeBlock,
-                             gmx::ArrayRef<int>                         atomInfo)
+static void merge_cg_buffers(int                                             ncell,
+                             gmx_domdec_comm_dim_t*                          cd,
+                             int                                             pulse,
+                             int*                                            ncg_cell,
+                             gmx::ArrayRef<int>                              index_gl,
+                             const int*                                      recv_i,
+                             gmx::ArrayRef<gmx::RVec>                        x,
+                             gmx::ArrayRef<const gmx::RVec>                  recv_vr,
+                             gmx::ArrayRef<gmx::AtomInfoWithinMoleculeBlock> atomInfoForEachMoleculeBlock,
+                             gmx::ArrayRef<int64_t>                          atomInfo)
 {
     gmx_domdec_ind_t *ind, *ind_p;
     int               p, cell, c, cg, cg0, cg1, cg_gl;
@@ -1580,7 +1580,7 @@ static void get_zone_pulse_groups(gmx_domdec_t*                  dd,
                                   gmx_bool                       bDist2B,
                                   gmx_bool                       bDistMB,
                                   gmx::ArrayRef<const gmx::RVec> coordinates,
-                                  gmx::ArrayRef<const int>       atomInfo,
+                                  gmx::ArrayRef<const int64_t>   atomInfo,
                                   std::vector<int>*              localAtomGroups,
                                   dd_comm_setup_work_t*          work)
 {
@@ -1778,7 +1778,7 @@ static void get_zone_pulse_groups(gmx_domdec_t*                  dd,
         if (r2 < r_comm2
             || (bDistBonded && ((bDistMB && rb2 < r_bcomm2) || (bDist2B && r2 < r_bcomm2))
                 && (!bBondComm
-                    || (GET_CGINFO_BOND_INTER(atomInfo[cg])
+                    || ((atomInfo[cg] & gmx::sc_atomInfo_BondCommunication)
                         && missing_link(*comm->bondedLinks, globalAtomGroupIndices[cg], *dd->ga2la)))))
         {
             /* Store the local and global atom group indices and position */
@@ -1905,7 +1905,7 @@ static void setup_dd_communication(gmx_domdec_t* dd, matrix box, gmx_ddbox_t* dd
     }
 
     zone_cg_range = zones->cg_range.data();
-    gmx::ArrayRef<AtomInfoWithinMoleculeBlock> atomInfoForEachMoleculeBlock =
+    gmx::ArrayRef<gmx::AtomInfoWithinMoleculeBlock> atomInfoForEachMoleculeBlock =
             fr->atomInfoForEachMoleculeBlock;
 
     zone_cg_range[0]   = 0;
@@ -2599,7 +2599,7 @@ static void dd_sort_state(gmx_domdec_t* dd, t_forcerec* fr, t_state* state)
     /* Reorder the global cg index */
     orderVector<int>(cgsort, dd->globalAtomGroupIndices, &sort->intBuffer);
     /* Reorder the atom info */
-    orderVector<int>(cgsort, fr->atomInfo, &sort->intBuffer);
+    orderVector<int64_t>(cgsort, fr->atomInfo, &sort->int64Buffer);
     /* Set the home atom number */
     dd->comm->atomRanges.setEnd(DDAtomRanges::Type::Home, dd->numHomeAtoms);
 
@@ -3207,8 +3207,9 @@ void dd_partition_system(FILE*                     fplog,
                                                           fr,
                                                           state_local->x,
                                                           top_global,
+                                                          fr->atomInfo,
                                                           top_local);
-    scheduleCheckOfLocalTopology(dd, numBondedInteractionsToReduce);
+    dd->localTopologyChecker->scheduleCheckOfLocalTopology(numBondedInteractionsToReduce);
 
     wallcycle_sub_stop(wcycle, WallCycleSubCounter::DDMakeTop);
 
@@ -3236,7 +3237,7 @@ void dd_partition_system(FILE*                     fplog,
                     n = dd_make_local_constraints(dd,
                                                   n,
                                                   top_global,
-                                                  fr->atomInfo.data(),
+                                                  fr->atomInfo,
                                                   constr,
                                                   inputrec.nProjOrder,
                                                   top_local->idef.il);

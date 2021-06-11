@@ -55,6 +55,7 @@
 #include "gromacs/domdec/options.h"
 #include "gromacs/domdec/reversetopology.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/mdtypes/atominfo.h"
 #include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/pbcutil/pbc.h"
@@ -705,7 +706,7 @@ static void make_exclusions_zone(ArrayRef<const int>               globalAtomInd
                                  gmx_domdec_zones_t*               zones,
                                  ArrayRef<const MolblockIndices>   molblockIndices,
                                  const std::vector<gmx_moltype_t>& moltype,
-                                 const int*                        atomInfo,
+                                 gmx::ArrayRef<const int64_t>      atomInfo,
                                  ListOfLists<int>*                 lexcls,
                                  int                               iz,
                                  int                               at_start,
@@ -721,7 +722,7 @@ static void make_exclusions_zone(ArrayRef<const int>               globalAtomInd
     {
         exclusionsForAtom.clear();
 
-        if (GET_CGINFO_EXCL_INTER(atomInfo[at]))
+        if (atomInfo[at] & gmx::sc_atomInfo_Exclusion)
         {
             int mb    = 0;
             int mt    = 0;
@@ -780,7 +781,7 @@ static void make_exclusions_zone(ArrayRef<const int>               globalAtomInd
 static int make_local_bondeds_excls(gmx_domdec_t*           dd,
                                     gmx_domdec_zones_t*     zones,
                                     const gmx_mtop_t&       mtop,
-                                    const int*              atomInfo,
+                                    ArrayRef<const int64_t> atomInfo,
                                     const bool              checkDistanceMultiBody,
                                     const ivec              rcheck,
                                     const gmx_bool          checkDistanceTwoBody,
@@ -920,16 +921,17 @@ static int make_local_bondeds_excls(gmx_domdec_t*           dd,
     return numBondedInteractions;
 }
 
-int dd_make_local_top(gmx_domdec_t*        dd,
-                      gmx_domdec_zones_t*  zones,
-                      int                  npbcdim,
-                      matrix               box,
-                      rvec                 cellsize_min,
-                      const ivec           npulse,
-                      t_forcerec*          fr,
-                      ArrayRef<const RVec> coordinates,
-                      const gmx_mtop_t&    mtop,
-                      gmx_localtop_t*      ltop)
+int dd_make_local_top(gmx_domdec_t*                dd,
+                      gmx_domdec_zones_t*          zones,
+                      int                          npbcdim,
+                      matrix                       box,
+                      rvec                         cellsize_min,
+                      const ivec                   npulse,
+                      t_forcerec*                  fr,
+                      ArrayRef<const RVec>         coordinates,
+                      const gmx_mtop_t&            mtop,
+                      gmx::ArrayRef<const int64_t> atomInfo,
+                      gmx_localtop_t*              ltop)
 {
     real  rc = -1;
     ivec  rcheck;
@@ -1000,7 +1002,7 @@ int dd_make_local_top(gmx_domdec_t*        dd,
     int numBondedInteractionsToReduce = make_local_bondeds_excls(dd,
                                                                  zones,
                                                                  mtop,
-                                                                 fr->atomInfo.data(),
+                                                                 fr->atomInfo,
                                                                  checkDistanceMultiBody,
                                                                  rcheck,
                                                                  checkDistanceTwoBody,
@@ -1010,22 +1012,14 @@ int dd_make_local_top(gmx_domdec_t*        dd,
                                                                  &ltop->idef,
                                                                  &ltop->excls);
 
-    /* The ilist is not sorted yet,
-     * we can only do this when we have the charge arrays.
-     */
-    ltop->idef.ilsort = ilsortUNKNOWN;
-
-    return numBondedInteractionsToReduce;
-}
-
-void dd_sort_local_top(const gmx_domdec_t& dd, const t_mdatoms* mdatoms, gmx_localtop_t* ltop)
-{
-    if (dd.reverse_top->doSorting())
+    if (dd->reverse_top->doListedForcesSorting())
     {
-        gmx_sort_ilist_fe(&ltop->idef, mdatoms->chargeA, mdatoms->chargeB);
+        gmx_sort_ilist_fe(&ltop->idef, atomInfo);
     }
     else
     {
         ltop->idef.ilsort = ilsortNO_FE;
     }
+
+    return numBondedInteractionsToReduce;
 }

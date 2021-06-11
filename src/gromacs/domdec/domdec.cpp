@@ -55,6 +55,7 @@
 
 #include "gromacs/domdec/builder.h"
 #include "gromacs/domdec/collect.h"
+#include "gromacs/domdec/computemultibodycutoffs.h"
 #include "gromacs/domdec/dlb.h"
 #include "gromacs/domdec/dlbtiming.h"
 #include "gromacs/domdec/domdec_network.h"
@@ -81,6 +82,7 @@
 #include "gromacs/mdrun/mdmodules.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/forceoutput.h"
+#include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/mdrunoptions.h"
 #include "gromacs/mdtypes/state.h"
@@ -3020,8 +3022,8 @@ gmx_domdec_t* DomainDecompositionBuilder::Impl::build(LocalAtomSetManager* atomS
 
     dd->atomSets = atomSets;
 
-    dd->localTopologyChecker =
-            std::make_unique<LocalTopologyChecker>(mtop_, dd->comm->systemInfo.useUpdateGroups);
+    dd->localTopologyChecker = std::make_unique<LocalTopologyChecker>(
+            mdlog_, cr_, mtop_, dd->comm->systemInfo.useUpdateGroups);
 
     return dd;
 }
@@ -3216,4 +3218,33 @@ void communicateGpuHaloForces(const t_commrec& cr, bool accumulateForces)
             cr.dd->gpuHaloExchange[d][pulse]->communicateHaloForces(accumulateForces);
         }
     }
+}
+
+const gmx::LocalTopologyChecker& dd_localTopologyChecker(const gmx_domdec_t& dd)
+{
+    return *dd.localTopologyChecker;
+}
+
+gmx::LocalTopologyChecker* dd_localTopologyChecker(gmx_domdec_t* dd)
+{
+    return dd->localTopologyChecker.get();
+}
+
+void dd_init_local_state(const gmx_domdec_t& dd, const t_state* state_global, t_state* state_local)
+{
+    std::array<int, 5> buf;
+
+    if (DDMASTER(dd))
+    {
+        buf[0] = state_global->flags;
+        buf[1] = state_global->ngtc;
+        buf[2] = state_global->nnhpres;
+        buf[3] = state_global->nhchainlength;
+        buf[4] = state_global->dfhist ? state_global->dfhist->nlambda : 0;
+    }
+    dd_bcast(&dd, buf.size() * sizeof(int), buf.data());
+
+    init_gtc_state(state_local, buf[1], buf[2], buf[3]);
+    init_dfhist_state(state_local, buf[4]);
+    state_local->flags = buf[0];
 }

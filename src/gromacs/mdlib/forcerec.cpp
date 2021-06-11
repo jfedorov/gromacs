@@ -80,6 +80,7 @@
 #include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/multipletimestepping.h"
 #include "gromacs/mdtypes/nblist.h"
+#include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/pbcutil/ishift.h"
 #include "gromacs/pbcutil/pbc.h"
@@ -198,8 +199,8 @@ enum class ConstraintTypeForAtom : int
     Settle,     //! F_SETTLE active
 };
 
-static std::vector<AtomInfoWithinMoleculeBlock> makeAtomInfoForEachMoleculeBlock(const gmx_mtop_t& mtop,
-                                                                                 const t_forcerec* fr)
+static std::vector<gmx::AtomInfoWithinMoleculeBlock>
+makeAtomInfoForEachMoleculeBlock(const gmx_mtop_t& mtop, const t_forcerec* fr)
 {
     std::vector<bool> atomUsesVdw(fr->ntype, false);
     for (int ai = 0; ai < fr->ntype; ai++)
@@ -211,8 +212,8 @@ static std::vector<AtomInfoWithinMoleculeBlock> makeAtomInfoForEachMoleculeBlock
         }
     }
 
-    std::vector<AtomInfoWithinMoleculeBlock> atomInfoForEachMoleculeBlock;
-    int                                      indexOfFirstAtomInMoleculeBlock = 0;
+    std::vector<gmx::AtomInfoWithinMoleculeBlock> atomInfoForEachMoleculeBlock;
+    int                                           indexOfFirstAtomInMoleculeBlock = 0;
     for (size_t mb = 0; mb < mtop.molblock.size(); mb++)
     {
         const gmx_molblock_t& molb = mtop.molblock[mb];
@@ -255,7 +256,7 @@ static std::vector<AtomInfoWithinMoleculeBlock> makeAtomInfoForEachMoleculeBlock
             }
         }
 
-        AtomInfoWithinMoleculeBlock atomInfoOfMoleculeBlock;
+        gmx::AtomInfoWithinMoleculeBlock atomInfoOfMoleculeBlock;
         atomInfoOfMoleculeBlock.indexOfFirstAtomInMoleculeBlock = indexOfFirstAtomInMoleculeBlock;
         atomInfoOfMoleculeBlock.indexOfLastAtomInMoleculeBlock =
                 indexOfFirstAtomInMoleculeBlock + molb.nmol * molt.atoms.nr;
@@ -287,13 +288,13 @@ static std::vector<AtomInfoWithinMoleculeBlock> makeAtomInfoForEachMoleculeBlock
             for (int a = 0; a < molt.atoms.nr; a++)
             {
                 const t_atom& atom = molt.atoms.atom[a];
-                int& atomInfo      = atomInfoOfMoleculeBlock.atomInfo[moleculeOffsetInBlock + a];
+                int64_t& atomInfo  = atomInfoOfMoleculeBlock.atomInfo[moleculeOffsetInBlock + a];
 
                 /* Store the energy group in atomInfo */
-                int gid = getGroupType(mtop.groups,
+                int gid  = getGroupType(mtop.groups,
                                        SimulationAtomGroupType::EnergyOutput,
                                        indexOfFirstAtomInMoleculeBlock + moleculeOffsetInBlock + a);
-                SET_CGINFO_GID(atomInfo, gid);
+                atomInfo = (atomInfo & ~gmx::sc_atomInfo_EnergyGroupIdMask) | gid;
 
                 bool bHaveVDW = (atomUsesVdw[atom.type] || atomUsesVdw[atom.typeB]);
                 bool bHaveQ   = (atom.q != 0 || atom.qB != 0);
@@ -311,25 +312,34 @@ static std::vector<AtomInfoWithinMoleculeBlock> makeAtomInfoForEachMoleculeBlock
 
                 switch (constraintTypeOfAtom[a])
                 {
-                    case ConstraintTypeForAtom::Constraint: SET_CGINFO_CONSTR(atomInfo); break;
-                    case ConstraintTypeForAtom::Settle: SET_CGINFO_SETTLE(atomInfo); break;
+                    case ConstraintTypeForAtom::Constraint:
+                        atomInfo |= gmx::sc_atomInfo_Constraint;
+                        break;
+                    case ConstraintTypeForAtom::Settle: atomInfo |= gmx::sc_atomInfo_Settle; break;
                     default: break;
                 }
                 if (haveExclusions)
                 {
-                    SET_CGINFO_EXCL_INTER(atomInfo);
+                    atomInfo |= gmx::sc_atomInfo_Exclusion;
                 }
                 if (bHaveVDW)
                 {
-                    SET_CGINFO_HAS_VDW(atomInfo);
+                    atomInfo |= gmx::sc_atomInfo_HasVdw;
                 }
                 if (bHaveQ)
                 {
-                    SET_CGINFO_HAS_Q(atomInfo);
+                    atomInfo |= gmx::sc_atomInfo_HasCharge;
                 }
-                if (fr->efep != FreeEnergyPerturbationType::No && PERTURBED(atom))
+                if (fr->efep != FreeEnergyPerturbationType::No)
                 {
-                    SET_CGINFO_FEP(atomInfo);
+                    if (PERTURBED(atom))
+                    {
+                        atomInfo |= gmx::sc_atomInfo_FreeEnergyPerturbation;
+                    }
+                    if (atomHasPerturbedChargeIn14Interaction(a, molt))
+                    {
+                        atomInfo |= gmx::sc_atomInfo_HasPerturbedChargeIn14Interaction;
+                    }
                 }
             }
         }
@@ -342,12 +352,12 @@ static std::vector<AtomInfoWithinMoleculeBlock> makeAtomInfoForEachMoleculeBlock
     return atomInfoForEachMoleculeBlock;
 }
 
-static std::vector<int> expandAtomInfo(const int                                        nmb,
-                                       gmx::ArrayRef<const AtomInfoWithinMoleculeBlock> atomInfoForEachMoleculeBlock)
+static std::vector<int64_t> expandAtomInfo(const int nmb,
+                                           gmx::ArrayRef<const gmx::AtomInfoWithinMoleculeBlock> atomInfoForEachMoleculeBlock)
 {
     const int numAtoms = atomInfoForEachMoleculeBlock[nmb - 1].indexOfLastAtomInMoleculeBlock;
 
-    std::vector<int> atomInfo(numAtoms);
+    std::vector<int64_t> atomInfo(numAtoms);
 
     int mb = 0;
     for (int a = 0; a < numAtoms; a++)
@@ -645,6 +655,7 @@ real cutoff_inf(real cutoff)
 
 void init_forcerec(FILE*                            fplog,
                    const gmx::MDLogger&             mdlog,
+                   const gmx::SimulationWorkload&   simulationWork,
                    t_forcerec*                      forcerec,
                    const t_inputrec&                inputrec,
                    const gmx_mtop_t&                mtop,
@@ -869,10 +880,7 @@ void init_forcerec(FILE*                            fplog,
     /* 1-4 interaction electrostatics */
     forcerec->fudgeQQ = mtop.ffparams.fudgeQQ;
 
-    // Multiple time stepping
-    forcerec->useMts = inputrec.useMts;
-
-    if (forcerec->useMts)
+    if (simulationWork.useMts)
     {
         GMX_ASSERT(gmx::checkMtsRequirements(inputrec).empty(),
                    "All MTS requirements should be met here");
@@ -884,11 +892,11 @@ void init_forcerec(FILE*                            fplog,
             || inputrec.bRot || inputrec.bIMD;
     const bool haveDirectVirialContributionsSlow =
             EEL_FULL(interactionConst->eeltype) || EVDW_PME(interactionConst->vdwtype);
-    for (int i = 0; i < (forcerec->useMts ? 2 : 1); i++)
+    for (int i = 0; i < (simulationWork.useMts ? 2 : 1); i++)
     {
         bool haveDirectVirialContributions =
-                (((!forcerec->useMts || i == 0) && haveDirectVirialContributionsFast)
-                 || ((!forcerec->useMts || i == 1) && haveDirectVirialContributionsSlow));
+                (((!simulationWork.useMts || i == 0) && haveDirectVirialContributionsFast)
+                 || ((!simulationWork.useMts || i == 1) && haveDirectVirialContributionsSlow));
         forcerec->forceHelperBuffers.emplace_back(haveDirectVirialContributions);
     }
 
@@ -1003,7 +1011,7 @@ void init_forcerec(FILE*                            fplog,
     }
 
     /* Initialize the thread working data for bonded interactions */
-    if (forcerec->useMts)
+    if (simulationWork.useMts)
     {
         // Add one ListedForces object for each MTS level
         bool isFirstLevel = true;

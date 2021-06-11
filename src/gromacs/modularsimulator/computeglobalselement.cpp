@@ -167,7 +167,9 @@ void ComputeGlobalsElement<algorithm>::scheduleTask(Step                       s
 {
     const bool needComReduction    = doStopCM_ && do_per_step(step, nstcomm_);
     const bool needGlobalReduction = step == energyReductionStep_ || step == virialReductionStep_
-                                     || needComReduction || do_per_step(step, nstglobalcomm_);
+                                     || needComReduction || do_per_step(step, nstglobalcomm_)
+                                     || (EI_VV(inputrec_->eI) && inputrecNvtTrotter(inputrec_)
+                                         && do_per_step(step - 1, nstglobalcomm_));
 
     // TODO: CGLO_GSTAT is only used for needToSumEkinhOld_, i.e. to signal that we do or do not
     //       sum the previous kinetic energy. We should simplify / clarify this.
@@ -282,7 +284,7 @@ void ComputeGlobalsElement<algorithm>::compute(gmx::Step            step,
     const auto* lastbox = useLastBox ? statePropagatorData_->constPreviousBox()
                                      : statePropagatorData_->constBox();
 
-    if (DOMAINDECOMP(cr_) && shouldCheckNumberOfBondedInteractions(*cr_->dd))
+    if (DOMAINDECOMP(cr_) && dd_localTopologyChecker(*cr_->dd).shouldCheckNumberOfBondedInteractions())
     {
         flags |= CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS;
     }
@@ -311,7 +313,7 @@ void ComputeGlobalsElement<algorithm>::compute(gmx::Step            step,
                     flags);
     if (DOMAINDECOMP(cr_))
     {
-        checkNumberOfBondedInteractions(mdlog_, cr_, top_global_, localTopology_, x, box);
+        dd_localTopologyChecker(cr_->dd)->checkNumberOfBondedInteractions(localTopology_, x, box);
     }
     if (flags & CGLO_STOPCM && !isInit)
     {
