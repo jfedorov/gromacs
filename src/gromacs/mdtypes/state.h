@@ -267,14 +267,14 @@ public:
 
     /*! \brief Returns the list registered with name \p name or empty when not found
      *
-     * The returned ArrayRef is invalidated by a called to \p changeNumAtoms().
+     * Note: store the reference, as a copy of the arrayref itself can be invalidated.
      */
-    std::optional<gmx::ArrayRef<gmx::RVec>> rvecVector(const std::string& name)
+    std::optional<std::reference_wrapper<gmx::ArrayRef<gmx::RVec>>> rvecVector(const std::string& name)
     {
         auto it = rvecVectors_.find(name);
         if (it != rvecVectors_.end())
         {
-            return std::optional<gmx::ArrayRef<gmx::RVec>>(it->second.second);
+            return std::optional<std::reference_wrapper<gmx::ArrayRef<gmx::RVec>>>(it->second.second);
         }
         else
         {

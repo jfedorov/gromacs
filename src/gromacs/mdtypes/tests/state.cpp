@@ -151,13 +151,49 @@ TEST(StateRVecVectors, RetrievesRVecVector)
 
     auto req = state.rvecVector(testString2);
     ASSERT_EQ(req.has_value(), true);
-    gmx::ArrayRef<const gmx::RVec> vec = req.value();
+    gmx::ArrayRef<gmx::RVec>& vec = req.value();
 
     // Note that EXPECT_EQ does not seem to work for RVec
     for (int d = 0; d < DIM; d++)
     {
         EXPECT_EQ(vec[testIndex][d], testValue[d]);
     }
+}
+
+// Checks that the initially returned ref to ArrayRef remains valid after reallocation
+TEST(StateRVecVectors, IntialArrayRefRefRemainsValid)
+{
+    t_state state;
+
+    state.changeNumAtoms(1);
+
+    const std::string    testString1 = "testString1";
+    ArrayRef<gmx::RVec>& ref         = state.addRVecVector(testString1);
+
+    ref[0][0] = 1;
+
+    state.changeNumAtoms(200);
+
+    EXPECT_EQ(ref[0][0], 1);
+}
+
+// Checks that a retrieved ref to ArrayRef remains valid after reallocation
+TEST(StateRVecVectors, RetrievedArrayRefRefRemainsValid)
+{
+    t_state state;
+
+    state.changeNumAtoms(1);
+
+    const std::string testString1 = "testString1";
+    state.addRVecVector(testString1);
+
+    ArrayRef<gmx::RVec>& ref = state.rvecVector(testString1).value();
+
+    ref[0][0] = 1;
+
+    state.changeNumAtoms(200);
+
+    EXPECT_EQ(ref[0][0], 1);
 }
 
 // Checks that two state object with the same vectors added in the same order
@@ -220,7 +256,7 @@ TEST(StateRVecVectors, HaveIndenticalOrder)
         // Reversed loop to match the swap
         for (auto stateIt = states.rbegin(); stateIt < states.rend(); stateIt++)
         {
-            auto ref = stateIt->rvecVector(string).value();
+            ArrayRef<RVec>& ref = stateIt->rvecVector(string).value();
             for (auto& elem : ref)
             {
                 EXPECT_EQ(elem[0], real(value));

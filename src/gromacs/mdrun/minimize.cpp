@@ -370,7 +370,7 @@ static void get_state_f_norm_max(const t_commrec* cr, const t_grpopts* opts, t_m
 }
 
 //! Copies flags, coordinates, other state vectors and box and with FEP also lambas
-static void copyCoordinatesAndBox(em_state_t* ems, const t_state& state)
+static void copyCoordinatesBoxAndLambdas(em_state_t* ems, const t_state& state)
 {
     ems->s.flags = state.flags;
     ems->s.changeNumAtoms(state.natoms);
@@ -394,7 +394,7 @@ static void copyCoordinatesAndBox(em_state_t* ems, const t_state& state)
 
 em_state_t& em_state_t::operator=(const em_state_t& right)
 {
-    copyCoordinatesAndBox(this, right.s);
+    copyCoordinatesBoxAndLambdas(this, right.s);
 
     const auto fSrc = right.f.view().force();
     f.resize(fSrc.size());
@@ -514,7 +514,7 @@ static void init_em(FILE*                fplog,
     else
     {
         state_global->changeNumAtoms(state_global->natoms);
-        copyCoordinatesAndBox(ems, *state_global);
+        copyCoordinatesBoxAndLambdas(ems, *state_global);
 
         mdAlgorithmsSetupAtomData(
                 cr, *ir, top_global, top, fr, &ems->f, mdAtoms, constr, vsite, shellfc ? *shellfc : nullptr);
