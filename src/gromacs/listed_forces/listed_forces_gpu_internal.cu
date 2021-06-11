@@ -841,6 +841,17 @@ __device__ static void accumulateCmapForces(float3        gm_f[],
     }
 }
 
+/*! \brief
+Magic lookup table for cmap indices
+
+This maps the entries in the CMAP tables to the atoms in the
+interactions
+*/
+__device__ static const int loopIndex[4][4] = { { 0, 4, 8, 12 },
+                                                { 1, 5, 9, 13 },
+                                                { 2, 6, 10, 14 },
+                                                { 3, 7, 11, 15 } };
+
 template<bool calcVir, bool calcEner>
 __device__ void cmap_gpu(const int                  i,
                          float*                     vtot_loc,
@@ -855,8 +866,6 @@ __device__ void cmap_gpu(const int                  i,
                          float3                     sm_fShiftLoc[],
                          const PbcAiuc              pbcAiuc)
 {
-    int loop_index[4][4] = { { 0, 4, 8, 12 }, { 1, 5, 9, 13 }, { 2, 6, 10, 14 }, { 3, 7, 11, 15 } };
-
     if (i < numBonds)
     {
         /* Five atoms are involved in the two torsions */
@@ -886,7 +895,7 @@ __device__ void cmap_gpu(const int                  i,
         float  phi1 = dih_angle_gpu<calcVir>(
                 gm_xq[a1i], gm_xq[a1j], gm_xq[a1k], gm_xq[a1l], pbcAiuc, &r1_ij, &r1_kj, &r1_kl, &m, &n, &t11, &t21, &t31);
 
-        const float cos_phi1 = std::cos(phi1);
+        const float cos_phi1 = cos(phi1);
 
         float3 a1 = cprod(r1_ij, r1_kj);
         float3 b1 = cprod(r1_kl, r1_kj);
@@ -898,40 +907,40 @@ __device__ void cmap_gpu(const int                  i,
         const float rg21 = iprod(r1_kj, r1_kj); /* 5 */
         const float rg1  = sqrt(rg21);
 
-        const float rgr1  = 1.0 / rg1;
-        const float ra2r1 = 1.0 / ra21;
-        const float rb2r1 = 1.0 / rb21;
+        const float rgr1  = 1.0F / rg1;
+        const float ra2r1 = 1.0F / ra21;
+        const float rb2r1 = 1.0F / rb21;
         const float rabr1 = sqrt(ra2r1 * rb2r1);
 
-        const float sin_phi1 = rg1 * rabr1 * iprod(a1, h1) * (-1);
+        const float sin_phi1 = rg1 * rabr1 * iprod(a1, h1) * (-1.0F);
 
-        if (cos_phi1 < -0.5 || cos_phi1 > 0.5)
+        if (cos_phi1 < -0.5F || cos_phi1 > 0.5F)
         {
-            phi1 = std::asin(sin_phi1);
+            phi1 = asin(sin_phi1);
 
-            if (cos_phi1 < 0)
+            if (cos_phi1 < 0.0F)
             {
-                if (phi1 > 0)
+                if (phi1 > 0.0F)
                 {
-                    phi1 = M_PI - phi1;
+                    phi1 = CUDART_PI_F - phi1;
                 }
                 else
                 {
-                    phi1 = -M_PI - phi1;
+                    phi1 = -CUDART_PI_F - phi1;
                 }
             }
         }
         else
         {
-            phi1 = std::acos(cos_phi1);
+            phi1 = acos(cos_phi1);
 
-            if (sin_phi1 < 0)
+            if (sin_phi1 < 0.0F)
             {
                 phi1 = -phi1;
             }
         }
 
-        float xphi1 = phi1 + M_PI; /* 1 */
+        float xphi1 = phi1 + CUDART_PI_F; /* 1 */
 
         /* Second torsion */
         const int a2i = aj;
@@ -942,7 +951,7 @@ __device__ void cmap_gpu(const int                  i,
         float phi2 = dih_angle_gpu<calcVir>(
                 gm_xq[a2i], gm_xq[a2j], gm_xq[a2k], gm_xq[a2l], pbcAiuc, &r2_ij, &r2_kj, &r2_kl, &m, &n, &t12, &t22, &t32);
 
-        float cos_phi2 = std::cos(phi2);
+        float cos_phi2 = cos(phi2);
 
         float3 a2 = cprod(r2_ij, r2_kj);
         float3 b2 = cprod(r2_kl, r2_kj);
@@ -954,61 +963,61 @@ __device__ void cmap_gpu(const int                  i,
         const float rg22 = iprod(r2_kj, r2_kj); /* 5 */
         const float rg2  = sqrt(rg22);
 
-        const float rgr2  = 1.0 / rg2;
-        const float ra2r2 = 1.0 / ra22;
-        const float rb2r2 = 1.0 / rb22;
+        const float rgr2  = 1.0F / rg2;
+        const float ra2r2 = 1.0F / ra22;
+        const float rb2r2 = 1.0F / rb22;
         const float rabr2 = sqrt(ra2r2 * rb2r2);
 
-        const float sin_phi2 = rg2 * rabr2 * iprod(a2, h2) * (-1);
+        const float sin_phi2 = rg2 * rabr2 * iprod(a2, h2) * (-1.0F);
 
-        if (cos_phi2 < -0.5 || cos_phi2 > 0.5)
+        if (cos_phi2 < -0.5F || cos_phi2 > 0.5F)
         {
-            phi2 = std::asin(sin_phi2);
+            phi2 = asin(sin_phi2);
 
-            if (cos_phi2 < 0)
+            if (cos_phi2 < 0.0F)
             {
-                if (phi2 > 0)
+                if (phi2 > 0.0F)
                 {
-                    phi2 = M_PI - phi2;
+                    phi2 = CUDART_PI_F - phi2;
                 }
                 else
                 {
-                    phi2 = -M_PI - phi2;
+                    phi2 = -CUDART_PI_F - phi2;
                 }
             }
         }
         else
         {
-            phi2 = std::acos(cos_phi2);
+            phi2 = acos(cos_phi2);
 
-            if (sin_phi2 < 0)
+            if (sin_phi2 < 0.0F)
             {
                 phi2 = -phi2;
             }
         }
 
-        float xphi2 = phi2 + M_PI; /* 1 */
+        float xphi2 = phi2 + CUDART_PI_F; /* 1 */
         /* Range mangling */
         if (xphi1 < 0)
         {
-            xphi1 = xphi1 + 2 * M_PI;
+            xphi1 = xphi1 + 2 * CUDART_PI_F;
         }
-        else if (xphi1 >= 2 * M_PI)
+        else if (xphi1 >= 2 * CUDART_PI_F)
         {
-            xphi1 = xphi1 - 2 * M_PI;
+            xphi1 = xphi1 - 2 * CUDART_PI_F;
         }
 
         if (xphi2 < 0)
         {
-            xphi2 = xphi2 + 2 * M_PI;
+            xphi2 = xphi2 + 2 * CUDART_PI_F;
         }
-        else if (xphi2 >= 2 * M_PI)
+        else if (xphi2 >= 2 * CUDART_PI_F)
         {
-            xphi2 = xphi2 - 2 * M_PI;
+            xphi2 = xphi2 - 2 * CUDART_PI_F;
         }
 
         /* Number of grid points */
-        float dx = 2 * M_PI / cmapGridSpacing;
+        float dx = 2 * CUDART_PI_F / cmapGridSpacing;
 
         /* Where on the grid are we */
         int iphi1 = static_cast<int>(xphi1 / dx);
@@ -1022,65 +1031,74 @@ __device__ void cmap_gpu(const int                  i,
         const int pos3 = ip1p1 * cmapGridSpacing + ip2p1;
         const int pos4 = iphi1 * cmapGridSpacing + ip2p1;
 
-        float ty[4], ty1[4], ty2[4], ty12[4], tx[16];
-        ty[0] = cmapd[pos1 * 4];
-        ty[1] = cmapd[pos2 * 4];
-        ty[2] = cmapd[pos3 * 4];
-        ty[3] = cmapd[pos4 * 4];
+        float4 ty, ty1, ty2, ty12, tx[4];
+        ty.x = cmapd[pos1 * 4];
+        ty.y = cmapd[pos2 * 4];
+        ty.z = cmapd[pos3 * 4];
+        ty.w = cmapd[pos4 * 4];
 
-        ty1[0] = cmapd[pos1 * 4 + 1];
-        ty1[1] = cmapd[pos2 * 4 + 1];
-        ty1[2] = cmapd[pos3 * 4 + 1];
-        ty1[3] = cmapd[pos4 * 4 + 1];
+        ty1.x = cmapd[pos1 * 4 + 1];
+        ty1.y = cmapd[pos2 * 4 + 1];
+        ty1.z = cmapd[pos3 * 4 + 1];
+        ty1.w = cmapd[pos4 * 4 + 1];
 
-        ty2[0] = cmapd[pos1 * 4 + 2];
-        ty2[1] = cmapd[pos2 * 4 + 2];
-        ty2[2] = cmapd[pos3 * 4 + 2];
-        ty2[3] = cmapd[pos4 * 4 + 2];
+        ty2.x = cmapd[pos1 * 4 + 2];
+        ty2.y = cmapd[pos2 * 4 + 2];
+        ty2.z = cmapd[pos3 * 4 + 2];
+        ty2.w = cmapd[pos4 * 4 + 2];
 
-        ty12[0] = cmapd[pos1 * 4 + 3];
-        ty12[1] = cmapd[pos2 * 4 + 3];
-        ty12[2] = cmapd[pos3 * 4 + 3];
-        ty12[3] = cmapd[pos4 * 4 + 3];
+        ty12.x = cmapd[pos1 * 4 + 3];
+        ty12.y = cmapd[pos2 * 4 + 3];
+        ty12.z = cmapd[pos3 * 4 + 3];
+        ty12.w = cmapd[pos4 * 4 + 3];
 
         /* Switch to degrees */
-        dx    = 360.0 / cmapGridSpacing;
+        dx    = 360.0F / cmapGridSpacing;
         xphi1 = xphi1 * CUDA_RAD2DEG_F;
         xphi2 = xphi2 * CUDA_RAD2DEG_F;
 
-        for (int i = 0; i < 4; i++) /* 16 */
-        {
-            tx[i]      = ty[i];
-            tx[i + 4]  = ty1[i] * dx;
-            tx[i + 8]  = ty2[i] * dx;
-            tx[i + 12] = ty12[i] * dx * dx;
-        }
 
-        float tc[16] = { 0 };
+        tx[0] = ty;
+        tx[1] = ty1 * dx;
+        tx[2] = ty2 * dx;
+        tx[3] = ty12 * dx * dx;
+        // for (int i = 0; i < 4; i++) /* 16 */
+        // {
+        //     tx[i]      = ty[i];
+        //     tx[i + 4]  = ty1[i] * dx;
+        //     tx[i + 8]  = ty2[i] * dx;
+        //     tx[i + 12] = ty12[i] * dx * dx;
+        // }
+
+        float tc[16] = { 0.0F };
         for (int idx = 0; idx < 16; idx++) /* 1056 */
         {
-            for (int k = 0; k < 16; k++)
+            int kIndex = 0;
+            for (int k = 0; k < 4; k++)
             {
-                tc[idx] += cmap_coeff_matrix[k * 16 + idx] * tx[k];
+                tc[idx] += cmap_coeff_matrix[kIndex++ * 16 + idx] * tx[k].x;
+                tc[idx] += cmap_coeff_matrix[kIndex++ * 16 + idx] * tx[k].y;
+                tc[idx] += cmap_coeff_matrix[kIndex++ * 16 + idx] * tx[k].z;
+                tc[idx] += cmap_coeff_matrix[kIndex++ * 16 + idx] * tx[k].w;
             }
         }
 
         const float tt = (xphi1 - iphi1 * dx) / dx;
         const float tu = (xphi2 - iphi2 * dx) / dx;
 
-        float e   = 0;
-        float df1 = 0;
-        float df2 = 0;
+        float e   = 0.0F;
+        float df1 = 0.0F;
+        float df2 = 0.0F;
 
         for (int i = 3; i >= 0; i--)
         {
-            int l1 = loop_index[i][3];
-            int l2 = loop_index[i][2];
-            int l3 = loop_index[i][1];
+            int l1 = loopIndex[i][3];
+            int l2 = loopIndex[i][2];
+            int l3 = loopIndex[i][1];
 
             e = tt * e + ((tc[i * 4 + 3] * tu + tc[i * 4 + 2]) * tu + tc[i * 4 + 1]) * tu + tc[i * 4];
-            df1 = tu * df1 + (3.0 * tc[l1] * tt + 2.0 * tc[l2]) * tt + tc[l3];
-            df2 = tt * df2 + (3.0 * tc[i * 4 + 3] * tu + 2.0 * tc[i * 4 + 2]) * tu + tc[i * 4 + 1];
+            df1 = tu * df1 + (3.0F * tc[l1] * tt + 2.0 * tc[l2]) * tt + tc[l3];
+            df2 = tt * df2 + (3.0F * tc[i * 4 + 3] * tu + 2.0F * tc[i * 4 + 2]) * tu + tc[i * 4 + 1];
         }
 
         const float fac = CUDA_RAD2DEG_F / dx;
