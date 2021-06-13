@@ -110,7 +110,7 @@ int main()
     // Some performance flags can be set a run time
     options.nbnxmSimd = nblib::SimdKernels::SimdNo;
     // The force calculator contains all the data needed to compute forces.
-    nblib::ForceCalculator forceCalculator(simState, options);
+    nblib::ForceCalculator forceCalculator = createNonBondedForceCalculator(topology, options);
     // build the pairlist
     forceCalculator.updatePairList(simState.coordinates(), box);
     // Integration requires masses, positions, and forces

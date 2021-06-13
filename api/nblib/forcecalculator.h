@@ -56,7 +56,7 @@ class ArrayRef;
 
 namespace nblib
 {
-class GmxForceCalculator;
+class GmxNBForceCalculatorCpu;
 
 /*! \brief Setups up and computes forces using gromacs backend.
  *
@@ -74,7 +74,13 @@ class GmxForceCalculator;
 class ForceCalculator final
 {
 public:
-    ForceCalculator(const SimulationState& system, const NBKernelOptions& options);
+    ForceCalculator(gmx::ArrayRef<int>     particleTypeIdOfAllParticles,
+                    gmx::ArrayRef<real>    nonBondedParams,
+                    gmx::ArrayRef<real>    charges,
+                    gmx::ArrayRef<int64_t> particleInteractionFlags,
+                    gmx::ArrayRef<int>     exclusionRanges,
+                    gmx::ArrayRef<int>     exclusionElements,
+                    const NBKernelOptions& options);
 
     ~ForceCalculator();
 
@@ -102,8 +108,10 @@ public:
 
 private:
     //! GROMACS force calculator to compute forces
-    std::unique_ptr<GmxForceCalculator> gmxForceCalculator_;
+    std::unique_ptr<GmxNBForceCalculatorCpu> gmxForceCalculator_;
 };
+
+ForceCalculator createNonBondedForceCalculator(const Topology& topology, const NBKernelOptions& options);
 
 } // namespace nblib
 
