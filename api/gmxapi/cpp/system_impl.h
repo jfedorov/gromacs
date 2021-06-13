@@ -85,7 +85,6 @@ public:
      */
     std::shared_ptr<Session> launch(const std::shared_ptr<Context>& context);
 
-private:
     //! Description of simulation work.
     std::shared_ptr<Workflow> workflow_;
 

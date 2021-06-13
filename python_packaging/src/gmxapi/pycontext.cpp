@@ -40,8 +40,11 @@
  */
 #include "pycontext.h"
 
+#include "gmxapi/exceptions.h"
 #include "gmxapi/gmxapi.h"
 #include "gmxapi/md.h"
+#include "gmxapi/session.h"
+#include "gmxapi/status.h"
 
 
 namespace py = pybind11;
@@ -58,7 +61,23 @@ void PyContext::setMDArgs(const MDArgs& mdArgs)
 std::shared_ptr<gmxapi::Session> PyContext::launch(const gmxapi::Workflow& work)
 {
     assert(context_);
-    return context_->launch(work);
+    std::shared_ptr<gmxapi::Session> session = nullptr;
+
+    // TODO: gmxapi::Workflow, gmxapi::MDWorkSpec, and gmxapi::MDModule need sensible consolidation.
+    session = gmxapi::launchSession(context_.get(), work);
+    if (!session)
+    {
+        throw gmxapi::ProtocolError("Context::launch() expected to produce non-null session.");
+    }
+
+    for (auto&& module : workNodes_->getModules())
+    {
+        // TODO: This should be the job of the launching code that produces the Session.
+        // Configure the restraints in a restraint manager made available to the session launcher.
+        auto status = gmxapi::addSessionRestraint(session.get(), module);
+    }
+
+    return session;
 }
 
 std::shared_ptr<gmxapi::MDWorkSpec> PyContext::getSpec() const

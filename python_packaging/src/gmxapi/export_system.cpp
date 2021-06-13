@@ -81,10 +81,12 @@ void export_system(py::module& m)
     // Export system container class
     py::class_<System, std::shared_ptr<System>> system(m, "MDSystem");
     system.def("launch",
-               [](System* system, std::shared_ptr<PyContext> context) {
-                   auto newSession = system->launch(context->get());
-                   return newSession;
-               },
+               [](System* system, std::shared_ptr<PyContext> context)
+            {
+                auto work       = gmxapi::getWork(*system->get());
+                auto newSession = context->launch(*work);
+                return newSession;
+            },
                "Launch the configured workflow in the provided context.");
 
     // Module-level function
