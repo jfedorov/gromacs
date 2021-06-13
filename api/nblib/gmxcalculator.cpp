@@ -131,8 +131,8 @@ void GmxForceCalculator::setParticlesOnGrid(gmx::ArrayRef<const gmx::RVec> coord
                       nullptr);
 
     // Construct pair lists
-    std::vector<int> exclusionRanges(exclusions_.ListRanges.begin(), exclusions_.ListRanges.end());
-    std::vector<int> exclusionElements(exclusions_.ListElements.begin(), exclusions_.ListElements.end());
+    std::vector<int> exclusionRanges = exclusions_.ListRanges;
+    std::vector<int> exclusionElements = exclusions_.ListElements;
     gmx::ListOfLists<int> exclusions(std::move(exclusionRanges), std::move(exclusionElements));
     nbv_->constructPairlist(gmx::InteractionLocality::Local, exclusions, 0, nrnb_.get());
 
