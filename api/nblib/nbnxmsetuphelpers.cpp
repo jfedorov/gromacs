@@ -180,6 +180,29 @@ gmx::StepWorkload createStepWorkload([[maybe_unused]] const NBKernelOptions& opt
     return stepWorkload;
 }
 
+static gmx::SimulationWorkload createSimulationWorkload([[maybe_unused]] const NBKernelOptions& options)
+{
+    gmx::SimulationWorkload simulationWork;
+    simulationWork.computeNonbonded = true;
+    return simulationWork;
+}
+
+gmx::SimulationWorkload createSimulationWorkloadGpu(const NBKernelOptions& options)
+{
+    gmx::SimulationWorkload simulationWork = createSimulationWorkload(options);
+
+    simulationWork.useGpuNonbonded = true;
+    simulationWork.useGpuUpdate    = false;
+
+    return simulationWork;
+}
+
+std::shared_ptr<gmx::DeviceStreamManager> createDeviceStreamManager(const DeviceInformation& deviceInfo,
+                                                                    const gmx::SimulationWorkload& simulationWorkload)
+{
+    return std::make_shared<gmx::DeviceStreamManager>(deviceInfo, false, simulationWorkload, false);
+}
+
 real ewaldCoeff(const real ewald_rtol, const real pairlistCutoff)
 {
     return calc_ewaldcoeff_q(pairlistCutoff, ewald_rtol);
@@ -277,6 +300,54 @@ std::unique_ptr<nonbonded_verlet_t> createNbnxmCPU(const size_t              num
     auto nbv = std::make_unique<nonbonded_verlet_t>(
             std::move(pairlistSets), std::move(pairSearch), std::move(atomData), kernelSetup, nullptr, nullptr);
 
+    return nbv;
+}
+
+std::unique_ptr<nonbonded_verlet_t> createNbnxmGPU(const size_t               numParticleTypes,
+                                                   const NBKernelOptions&     options,
+                                                   const std::vector<real>&   nonbondedParameters,
+                                                   const interaction_const_t& interactionConst,
+                                                   std::shared_ptr<gmx::DeviceStreamManager> deviceStreamManager)
+{
+    const auto pinPolicy = gmx::PinningPolicy::PinnedIfSupported;
+    // Note: the options and Nbnxm combination rule enums values should match
+    const int combinationRule = static_cast<int>(options.ljCombinationRule);
+
+    Nbnxm::KernelSetup kernelSetup;
+    kernelSetup.kernelType         = Nbnxm::KernelType::Gpu8x8x8;
+    kernelSetup.ewaldExclusionType = options.useTabulatedEwaldCorr
+                                             ? Nbnxm::EwaldExclusionType::Table
+                                             : Nbnxm::EwaldExclusionType::Analytical;
+
+    PairlistParams pairlistParams(kernelSetup.kernelType, false, options.pairlistCutoff, false);
+
+
+    // nbnxn_atomdata is always initialized with 1 thread if the GPU is used
+    constexpr int numThreadsInit = 1;
+    // multiple energy groups are not supported on the GPU
+    constexpr int numEnergyGroups = 1;
+    auto          atomData        = std::make_unique<nbnxn_atomdata_t>(pinPolicy,
+                                                       gmx::MDLogger(),
+                                                       kernelSetup.kernelType,
+                                                       combinationRule,
+                                                       numParticleTypes,
+                                                       nonbondedParameters,
+                                                       numEnergyGroups,
+                                                       numThreadsInit);
+
+    NbnxmGpu* nbnxmGpu = Nbnxm::gpu_init(
+            *deviceStreamManager, &interactionConst, pairlistParams, atomData.get(), false);
+
+    // minimum iList count for GPU balancing
+    int iListCount = Nbnxm::gpu_min_ci_balanced(nbnxmGpu);
+
+    auto pairlistSets = std::make_unique<PairlistSets>(pairlistParams, false, iListCount);
+    auto pairSearch   = std::make_unique<PairSearch>(
+            PbcType::Xyz, false, nullptr, nullptr, pairlistParams.pairlistType, false, options.numOpenMPThreads, pinPolicy);
+
+    // Put everything together
+    auto nbv = std::make_unique<nonbonded_verlet_t>(
+            std::move(pairlistSets), std::move(pairSearch), std::move(atomData), kernelSetup, nbnxmGpu, nullptr);
     return nbv;
 }
 
