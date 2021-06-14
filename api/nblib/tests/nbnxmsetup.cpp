@@ -58,6 +58,10 @@
 
 namespace nblib
 {
+namespace test
+{
+namespace
+{
 
 TEST(NbnxmSetupTest, findNumEnergyGroups)
 {
@@ -211,4 +215,6 @@ TEST(NbnxmSetupTest, CanCreateNbnxmGPU)
 }
 #endif
 
+} // namespace
+} // namespace test
 } // namespace nblib
