@@ -379,7 +379,7 @@ static void copyCoordinatesBoxAndLambdas(em_state_t* ems, const t_state& state)
     GMX_ASSERT(ems->s.rvecVectors().size() == state.rvecVectors().size(),
                "size of rvecVectors should match");
     auto emsRVecVectorIt = ems->s.rvecVectors().begin();
-    for (auto& rvecVector : state.rvecVectors())
+    for (const auto& rvecVector : state.rvecVectors())
     {
         std::copy(rvecVector.second.second.begin(),
                   rvecVector.second.second.end(),

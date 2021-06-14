@@ -746,7 +746,7 @@ void dd_redistribute_cg(FILE*         fplog,
     {
         copyMovedAtomsToBufferPerAtom(move, nvec, vectorIndex++, state->v, comm);
     }
-    for (const auto rvecVector : state->rvecVectors())
+    for (const auto& rvecVector : state->rvecVectors())
     {
         copyMovedAtomsToBufferPerAtom(move, nvec, vectorIndex++, rvecVector.second.second, comm);
     }

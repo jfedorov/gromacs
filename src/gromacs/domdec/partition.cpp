@@ -2591,7 +2591,7 @@ static void dd_sort_state(gmx_domdec_t* dd, t_forcerec* fr, t_state* state)
     {
         orderVector(cgsort, makeArrayRef(state->v), rvecBuffer.buffer);
     }
-    for (auto rvecVector : state->rvecVectors())
+    for (const auto& rvecVector : state->rvecVectors())
     {
         orderVector(cgsort, rvecVector.second.second, rvecBuffer.buffer);
     }

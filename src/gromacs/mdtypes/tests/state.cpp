@@ -232,7 +232,7 @@ TEST(StateRVecVectors, HaveIndenticalOrder)
     for (t_state& state : states)
     {
         auto& refs = arrayOfRefs[stateIndex];
-        for (auto& entry : state.rvecVectors())
+        for (const auto& entry : state.rvecVectors())
         {
             refs.push_back(entry.second.second);
         }
