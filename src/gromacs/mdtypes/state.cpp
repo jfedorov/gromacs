@@ -436,6 +436,19 @@ gmx::ArrayRef<gmx::RVec>& t_state::addRVecVector(const std::string& name)
     return it->second.second;
 }
 
+std::optional<std::reference_wrapper<gmx::ArrayRef<gmx::RVec>>> t_state::rvecVector(const std::string& name)
+{
+    auto it = rvecVectors_.find(name);
+    if (it != rvecVectors_.end())
+    {
+        return std::optional<std::reference_wrapper<gmx::ArrayRef<gmx::RVec>>>(it->second.second);
+    }
+    else
+    {
+        return std::nullopt;
+    }
+}
+
 void set_box_rel(const t_inputrec* ir, t_state* state)
 {
     /* Make sure the box obeys the restrictions before we fix the ratios */

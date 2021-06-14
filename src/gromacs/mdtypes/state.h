@@ -269,18 +269,7 @@ public:
      *
      * Note: store the reference, as a copy of the arrayref itself can be invalidated.
      */
-    std::optional<std::reference_wrapper<gmx::ArrayRef<gmx::RVec>>> rvecVector(const std::string& name)
-    {
-        auto it = rvecVectors_.find(name);
-        if (it != rvecVectors_.end())
-        {
-            return std::optional<std::reference_wrapper<gmx::ArrayRef<gmx::RVec>>>(it->second.second);
-        }
-        else
-        {
-            return std::nullopt;
-        }
-    }
+    std::optional<std::reference_wrapper<gmx::ArrayRef<gmx::RVec>>> rvecVector(const std::string& name);
 
     //! Returns a list of array refs for the RVec vectors
     gmx::ArrayRef<gmx::ArrayRef<gmx::RVec>> rvecVectors() { return rvecVectorArrayRefs_; }
