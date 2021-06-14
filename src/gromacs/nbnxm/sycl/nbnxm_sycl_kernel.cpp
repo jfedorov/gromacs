@@ -504,7 +504,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
                  cl::sycl::buffer<nbnxn_cj4_t, 1>                            b_plistCJ4,
                  cl::sycl::buffer<nbnxn_sci_t, 1>                            b_plistSci,
                  cl::sycl::buffer<nbnxn_excl_t, 1>                           b_plistExcl,
-                 OptionalAccessor<Float2, mode::read, ljComb<vdwType>>       a_ljComb,
+                 cl::sycl::buffer<Float2, 1>                                 b_ljComb,
                  OptionalAccessor<int, mode::read, !ljComb<vdwType>>         a_atomTypes,
                  OptionalAccessor<Float2, mode::read, !ljComb<vdwType>>      a_nbfp,
                  OptionalAccessor<Float2, mode::read, ljEwald<vdwType>>      a_nbfpComb,
@@ -541,14 +541,25 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
     RawAccessor<nbnxn_cj4_t, doPruneNBL ? mode::read_write : mode::read> a_plistCJ4{ b_plistCJ4, cgh };
     RawAccessor<nbnxn_sci_t, mode::read> a_plistSci{ b_plistSci, cgh };
     RawAccessor<nbnxn_excl_t, mode::read> a_plistExcl{ b_plistExcl, cgh };
+
+    RawAccessor<Float2, mode::read> a_ljComb{b_ljComb, cgh};
+    /*
+    auto a_ljComb = [&]() {
+        if constexpr (props.vdwComb)
+        {
+            return RawAccessor<Float2, mode::read>(b_ljComb, cgh);
+        }
+        else
+        {
+            return nullptr;
+        }
+    }();
+    */
+
     if constexpr (!props.vdwComb)
     {
         cgh.require(a_atomTypes);
         cgh.require(a_nbfp);
-    }
-    else
-    {
-        cgh.require(a_ljComb);
     }
     if constexpr (props.vdwEwald)
     {
@@ -1085,7 +1096,7 @@ void launchNbnxmKernel(NbnxmGpu* nb, const gmx::StepWorkload& stepWork, const In
                                                    *plist->cj4.buffer_,
                                                    *plist->sci.buffer_,
                                                    *plist->excl.buffer_,
-                                                   adat->ljComb,
+                                                   *adat->ljComb.buffer_.get(),
                                                    adat->atomTypes,
                                                    nbp->nbfp,
                                                    nbp->nbfp_comb,
