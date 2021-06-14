@@ -2593,7 +2593,7 @@ static void dd_sort_state(gmx_domdec_t* dd, t_forcerec* fr, t_state* state)
     }
     for (auto rvecVector : state->rvecVectors())
     {
-        orderVector(cgsort, rvecVector, rvecBuffer.buffer);
+        orderVector(cgsort, rvecVector.second.second, rvecBuffer.buffer);
     }
 
     /* Reorder the global cg index */

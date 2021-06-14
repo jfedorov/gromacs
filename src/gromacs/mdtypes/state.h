@@ -271,13 +271,14 @@ public:
      */
     std::optional<std::reference_wrapper<gmx::ArrayRef<gmx::RVec>>> rvecVector(const std::string& name);
 
-    //! Returns a list of array refs for the RVec vectors
-    gmx::ArrayRef<gmx::ArrayRef<gmx::RVec>> rvecVectors() { return rvecVectorArrayRefs_; }
-
-    //! Returns a list of const array refs for the RVec vectors
-    gmx::ArrayRef<const gmx::ArrayRef<gmx::RVec>> rvecVectors() const
+    /*! \brief Returns a const reference to the map of RVec vectors
+     *
+     * Note that due to how gmx::ArrayRef works, the contents of the vectors
+     * can be changed with the constant reference returned.
+     */
+    const std::map<std::string, std::pair<PaddedVector<gmx::RVec>, gmx::ArrayRef<gmx::RVec>>>& rvecVectors() const
     {
-        return rvecVectorArrayRefs_;
+        return rvecVectors_;
     }
 
     // Most things public
@@ -320,13 +321,8 @@ public:
     std::vector<double> pull_com_prev_step; //!< The COM of the previous step of each pull group
 
 private:
-    //! Rebuilds rvecVectorArrayRefs_
-    void rebuildRVecVectorArrayRefs();
-
     //! A vector of padded RVec vectors with arrayRefs and names
     std::map<std::string, std::pair<PaddedVector<gmx::RVec>, gmx::ArrayRef<gmx::RVec>>> rvecVectors_;
-    //! A vector of arrayRefs into rvecVectors_, useful for looping over vectors
-    std::vector<gmx::ArrayRef<gmx::RVec>> rvecVectorArrayRefs_;
 
     GMX_DISALLOW_COPY_MOVE_AND_ASSIGN(t_state);
 };

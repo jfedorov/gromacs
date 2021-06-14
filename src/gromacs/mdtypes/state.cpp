@@ -174,20 +174,6 @@ void t_state::changeNumAtoms(const int numAtoms)
         rvecVector.second.first.resizeWithPadding(natoms);
         rvecVector.second.second = makeArrayRef(rvecVector.second.first);
     }
-
-    rebuildRVecVectorArrayRefs();
-}
-
-void t_state::rebuildRVecVectorArrayRefs()
-{
-    rvecVectorArrayRefs_.resize(rvecVectors_.size());
-
-    gmx::index i = 0;
-    for (const auto& it : rvecVectors_)
-    {
-        rvecVectorArrayRefs_[i] = it.second.second;
-        i++;
-    }
 }
 
 namespace
@@ -428,9 +414,6 @@ gmx::ArrayRef<gmx::RVec>& t_state::addRVecVector(const std::string& name)
     std::fill(viewWithPadding.begin(), viewWithPadding.end(), zeroVec);
     // Store the ArrayRef, so we can reference it permanently
     it->second.second = makeArrayRef(rvecVector);
-
-    // Rebuild all the ArrayRefs, as the order might have changed
-    rebuildRVecVectorArrayRefs();
 
     // Return a reference to an ArrayRef so the view remains valid after reallocation
     return it->second.second;

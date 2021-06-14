@@ -273,11 +273,12 @@ static void dd_distribute_state(gmx_domdec_t* dd, const t_state* state, t_state*
     }
     GMX_RELEASE_ASSERT(!DDMASTER(dd) || (state_local->rvecVectors().size() == state->rvecVectors().size()),
                        "state and state_local should have matching entries");
-    for (gmx::index i = 0; i < ssize(state_local->rvecVectors()); i++)
+    auto globalRVecVectors = state->rvecVectors().begin();
+    for (const auto& localRVecVector : state_local->rvecVectors())
     {
         distributeVec(dd,
-                      DDMASTER(dd) ? state->rvecVectors()[i] : gmx::ArrayRef<const gmx::RVec>(),
-                      state_local->rvecVectors()[i]);
+                      DDMASTER(dd) ? globalRVecVectors->second.second : gmx::ArrayRef<const gmx::RVec>(),
+                      localRVecVector.second.second);
     }
 }
 

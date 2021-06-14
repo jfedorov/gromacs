@@ -232,9 +232,9 @@ TEST(StateRVecVectors, HaveIndenticalOrder)
     for (t_state& state : states)
     {
         auto& refs = arrayOfRefs[stateIndex];
-        for (auto& ref : state.rvecVectors())
+        for (auto& entry : state.rvecVectors())
         {
-            refs.push_back(ref);
+            refs.push_back(entry.second.second);
         }
         ASSERT_EQ(refs.size(), numVecs);
         stateIndex++;

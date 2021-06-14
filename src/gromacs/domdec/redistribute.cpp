@@ -240,10 +240,11 @@ static void rotate_state_atom(t_state* state, int a)
         v[a][YY] = -v[a][YY];
         v[a][ZZ] = -v[a][ZZ];
     }
-    for (auto v : state->rvecVectors())
+    for (auto rvecVector : state->rvecVectors())
     {
-        v[a][YY] = -v[a][YY];
-        v[a][ZZ] = -v[a][ZZ];
+        gmx::ArrayRef<gmx::RVec> v = rvecVector.second.second;
+        v[a][YY]                   = -v[a][YY];
+        v[a][ZZ]                   = -v[a][ZZ];
     }
 }
 
@@ -747,7 +748,7 @@ void dd_redistribute_cg(FILE*         fplog,
     }
     for (const auto rvecVector : state->rvecVectors())
     {
-        copyMovedAtomsToBufferPerAtom(move, nvec, vectorIndex++, rvecVector, comm);
+        copyMovedAtomsToBufferPerAtom(move, nvec, vectorIndex++, rvecVector.second.second, comm);
     }
 
     int* moved = getMovedBuffer(comm, 0, dd->numHomeAtoms);
@@ -928,7 +929,7 @@ void dd_redistribute_cg(FILE*         fplog,
                 }
                 for (auto rvecVector : state->rvecVectors())
                 {
-                    copy_rvec(rvecPtr[buf_pos++], rvecVector[home_pos_at]);
+                    copy_rvec(rvecPtr[buf_pos++], rvecVector.second.second[home_pos_at]);
                 }
                 home_pos_at++;
             }

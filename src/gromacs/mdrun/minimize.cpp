@@ -378,11 +378,13 @@ static void copyCoordinatesBoxAndLambdas(em_state_t* ems, const t_state& state)
     copy_mat(state.box, ems->s.box);
     GMX_ASSERT(ems->s.rvecVectors().size() == state.rvecVectors().size(),
                "size of rvecVectors should match");
-    for (gmx::index v = 0; v < ssize(state.rvecVectors()); v++)
+    auto emsRVecVectorIt = ems->s.rvecVectors().begin();
+    for (auto& rvecVector : state.rvecVectors())
     {
-        std::copy(state.rvecVectors()[v].begin(),
-                  state.rvecVectors()[v].end(),
-                  ems->s.rvecVectors()[v].begin());
+        std::copy(rvecVector.second.second.begin(),
+                  rvecVector.second.second.end(),
+                  emsRVecVectorIt->second.second.begin());
+        emsRVecVectorIt++;
     }
 
     if (state.flags & enumValueToBitMask(StateEntry::Lambda))
