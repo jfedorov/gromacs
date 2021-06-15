@@ -722,44 +722,22 @@ __device__ static int cmap_setup_grid_index(int ip, int grid_spacing, int* ipm1,
     return ip;
 }
 
-__device__ static float3 processCmapForceComponent(const float3 a,
-                                                   const float3 b,
-                                                   const float  df,
-                                                   const float  gaa,
-                                                   const float  fga,
-                                                   const float  gbb,
-                                                   const float  hgb,
-                                                   int          dimension)
+__device__ static float3 processCmapForceComponent(const float a,
+                                                   const float b,
+                                                   const float df,
+                                                   const float gaa,
+                                                   const float fga,
+                                                   const float gbb,
+                                                   const float hgb)
 {
-    float3 result; // mapping x <-> f, y <-> g, z <-> h
-    switch (dimension)
-    {
-        case (XX):
-            result.x = gaa * a.x;
-            result.y = fga * a.x - hgb * b.x;
-            result.z = gbb * b.x;
-            break;
-        case (YY):
-            result.x = gaa * a.y;
-            result.y = fga * a.y - hgb * b.y;
-            result.z = gbb * b.y;
-            break;
-        case (ZZ):
-            result.x = gaa * a.z;
-            result.y = fga * a.z - hgb * b.z;
-            result.z = gbb * b.z;
-            break;
-        default: assert(false);
-    }
+    float3 result{ gaa * a, fga * a - hgb * b, gbb * b }; // mapping x <-> f, y <-> g, z <-> h
     return result * df;
 }
 
-using CmapForceStructure = float4;
-
-__device__ static CmapForceStructure applyCmapForceComponent(const float3 forceComponent)
+__device__ static float4 applyCmapForceComponent(const float3 forceComponent)
 {
     // forceComponent mapping is x <-> f, y <-> g, z <-> h
-    CmapForceStructure forces;
+    float4 forces;
     forces.x = forceComponent.x;
     forces.y = -forceComponent.x - forceComponent.y;
     forces.z = forceComponent.z + forceComponent.y;
@@ -798,33 +776,24 @@ __device__ static void accumulateCmapForces(float3        gm_f[],
     const float gbb = rb2r * rg;
 
     float3 f_i, f_j, f_k, f_l;
-    for (int i = 0; i < DIM; i++)
-    {
-        CmapForceStructure forces =
-                applyCmapForceComponent(processCmapForceComponent(a, b, df, gaa, fga, gbb, hgb, i));
-        switch (i)
-        {
-            case (XX):
-                f_i.x = forces.x;
-                f_j.x = forces.y;
-                f_k.x = forces.z;
-                f_l.x = forces.w;
-                break;
-            case (YY):
-                f_i.y = forces.x;
-                f_j.y = forces.y;
-                f_k.y = forces.z;
-                f_l.y = forces.w;
-                break;
-            case (ZZ):
-                f_i.z = forces.x;
-                f_j.z = forces.y;
-                f_k.z = forces.z;
-                f_l.z = forces.w;
-                break;
-            default: assert(false);
-        }
-    }
+    float4 forceX = applyCmapForceComponent(processCmapForceComponent(a.x, b.x, df, gaa, fga, gbb, hgb));
+    float4 forceY = applyCmapForceComponent(processCmapForceComponent(a.y, b.y, df, gaa, fga, gbb, hgb));
+    float4 forceZ = applyCmapForceComponent(processCmapForceComponent(a.z, b.z, df, gaa, fga, gbb, hgb));
+    f_i.x         = forceX.x;
+    f_j.x         = forceX.y;
+    f_k.x         = forceX.z;
+    f_l.x         = forceX.w;
+
+    f_i.y = forceY.x;
+    f_j.y = forceY.y;
+    f_k.y = forceY.z;
+    f_l.y = forceY.w;
+
+    f_i.z = forceZ.x;
+    f_j.z = forceZ.y;
+    f_k.z = forceZ.z;
+    f_l.z = forceZ.w;
+
     atomicAdd(&gm_f[ai], f_i);
     atomicAdd(&gm_f[aj], f_j); /* - f[i] - g[i] */
     atomicAdd(&gm_f[ak], f_k); /* h[i] + g[i] */
@@ -860,7 +829,7 @@ __device__ void cmap_gpu(const int                  i,
                          const t_iparams            d_forceparams[],
                          const int                  cmapGridSpacing,
                          const DeviceBuffer<float>& d_cmapData,
-                         const DeviceBuffer<int>&   d_cmapGridIndices,
+                         const int                  dc_cmapGridSize,
                          const float4               gm_xq[],
                          float3                     gm_f[],
                          float3                     sm_fShiftLoc[],
@@ -878,7 +847,7 @@ __device__ void cmap_gpu(const int                  i,
 
         /* Which CMAP type is this */
         const int    cmapA          = d_forceparams[type].cmap.cmapA;
-        const int    cmapAGridIndex = d_cmapGridIndices[cmapA];
+        const int    cmapAGridIndex = dc_cmapGridSize * cmapA;
         const float* cmapd          = d_cmapData + cmapAGridIndex;
 
         int ip1m1, ip2m1, ip1p1, ip2p1, ip1p2, ip2p2;
@@ -1255,9 +1224,9 @@ __global__ void exec_kernel_gpu(BondedCudaKernelParameters kernelParams, float4*
             const int      numBonds        = kernelParams.numFTypeBonds[j];
             int            fTypeTid        = tid - kernelParams.fTypeRangeStart[j];
             const t_iatom* iatoms          = kernelParams.d_iatoms[j];
-            const int      cmapGridSpacing = kernelParams.d_cmapGridSpacing;
             const auto     cmapData        = kernelParams.d_cmapData;
-            const auto     cmapGridIndices = kernelParams.d_cmapGridIndices;
+            const int      cmapGridSpacing = kernelParams.d_cmapGridSpacing;
+            const int      cmapGridSize    = kernelParams.dc_cmapGridSize;
             fType                          = kernelParams.fTypesOnGpu[j];
             if (calcEner)
             {
@@ -1341,7 +1310,7 @@ __global__ void exec_kernel_gpu(BondedCudaKernelParameters kernelParams, float4*
                                                 kernelParams.d_forceParams,
                                                 cmapGridSpacing,
                                                 cmapData,
-                                                cmapGridIndices,
+                                                cmapGridSize,
                                                 kernelParams.d_xq,
                                                 kernelParams.d_f,
                                                 sm_fShiftLoc,

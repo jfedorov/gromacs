@@ -100,50 +100,22 @@ ListedForcesGpu::Impl::Impl(const gmx_ffparams_t& ffparams,
                        GpuApiCallBehavior::Sync,
                        nullptr);
 
+
+    int cmapGridSize = ffparams.cmap_grid.grid_spacing * ffparams.cmap_grid.grid_spacing * 4;
     // temp buffer to store the indices
-    std::vector<int>   cmapGridIndices;
     std::vector<float> cmapGridDataPoints;
-    // get total size of all cmap grid indices.
-    int sumOfCmapGridIndices = std::accumulate(
-            ffparams.cmap_grid.cmapdata.begin(),
-            ffparams.cmap_grid.cmapdata.end(),
-            0,
-            [&cmapGridDataPoints](int sum, const auto& elem) {
-                cmapGridDataPoints.insert(cmapGridDataPoints.end(), elem.cmap.begin(), elem.cmap.end());
-                return sum + elem.cmap.size();
-            });
-    // set all the offsets correctly for indexing into the cmap data.
-    if (!ffparams.cmap_grid.cmapdata.empty())
+    for (auto& elem : ffparams.cmap_grid.cmapdata)
     {
-        cmapGridIndices.emplace_back(0);
-        for (int i = 0; i < gmx::ssize(ffparams.cmap_grid.cmapdata) - 1; i++)
-        {
-            const auto& cmap = ffparams.cmap_grid.cmapdata[i];
-            cmapGridIndices.emplace_back(cmapGridIndices.back() + cmap.cmap.size());
-        }
+        cmapGridDataPoints.insert(cmapGridDataPoints.end(), elem.cmap.begin(), elem.cmap.end());
     }
 
-    GMX_ASSERT(cmapGridIndices.size() == ffparams.cmap_grid.cmapdata.size(),
-               "Need to have copied all elements for CMAP to temporary buffer");
-    GMX_ASSERT(gmx::ssize(cmapGridDataPoints) == sumOfCmapGridIndices,
-               "Number of cmap data points needs to be correct");
     // allocate data for cmap.
-    allocateDeviceBuffer(&d_cmapData_, sumOfCmapGridIndices, deviceContext_);
-    // allocate data for grid indices
-    allocateDeviceBuffer(&d_cmapGridIndices_, cmapGridIndices.size(), deviceContext_);
-    // copy grid indices to device
-    copyToDeviceBuffer(&d_cmapGridIndices_,
-                       cmapGridIndices.data(),
-                       0,
-                       cmapGridIndices.size(),
-                       deviceStream_,
-                       GpuApiCallBehavior::Sync,
-                       nullptr);
+    allocateDeviceBuffer(&d_cmapData_, cmapGridDataPoints.size(), deviceContext_);
     // copy all cmap entries to device
     copyToDeviceBuffer(&d_cmapData_,
                        cmapGridDataPoints.data(),
                        0,
-                       sumOfCmapGridIndices,
+                       cmapGridDataPoints.size(),
                        deviceStream_,
                        GpuApiCallBehavior::Sync,
                        nullptr);
@@ -154,9 +126,9 @@ ListedForcesGpu::Impl::Impl(const gmx_ffparams_t& ffparams,
 
     kernelParams_.electrostaticsScaleFactor = electrostaticsScaleFactor;
     kernelParams_.d_forceParams             = d_forceParams_;
+    kernelParams_.dc_cmapGridSize           = cmapGridSize;
     kernelParams_.d_cmapGridSpacing         = ffparams.cmap_grid.grid_spacing;
     kernelParams_.d_cmapData                = d_cmapData_;
-    kernelParams_.d_cmapGridIndices         = d_cmapGridIndices_;
     kernelParams_.d_xq                      = d_xq_;
     kernelParams_.d_f                       = d_f_;
     kernelParams_.d_fShift                  = d_fShift_;
