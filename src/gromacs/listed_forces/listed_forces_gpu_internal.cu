@@ -683,7 +683,7 @@ __device__ void idihs_gpu(const int       i,
     }
 }
 
-/*! \brief Mysterious undocumented function */
+/*! \brief Map indices into the periodic grid */
 __device__ static int cmap_setup_grid_index(int ip, int grid_spacing, int* ipm1, int* ipp1, int* ipp2)
 {
     int im1, ip1, ip2;
