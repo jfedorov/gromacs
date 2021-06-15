@@ -412,7 +412,7 @@ gmx::ArrayRef<gmx::RVec>& t_state::addRVecVector(const std::string& name)
     gmx::ArrayRef<gmx::RVec> viewWithPadding = rvecVector.arrayRefWithPadding().paddedArrayRef();
     const gmx::RVec          zeroVec         = { 0.0_real, 0.0_real, 0.0_real };
     std::fill(viewWithPadding.begin(), viewWithPadding.end(), zeroVec);
-    // Store the ArrayRef, so we can reference it permanently
+    // Store an ArrayRef, so we can later create a permanently valid reference to it
     it->second.second = makeArrayRef(rvecVector);
 
     // Return a reference to an ArrayRef so the view remains valid after reallocation

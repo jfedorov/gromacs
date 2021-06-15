@@ -160,8 +160,8 @@ TEST(StateRVecVectors, RetrievesRVecVector)
     }
 }
 
-// Checks that the initially returned ref to ArrayRef remains valid after reallocation
-TEST(StateRVecVectors, IntialArrayRefRefRemainsValid)
+// Checks that the initially returned ref to ArrayRef remains valid after call to changeNumAtoms()
+TEST(StateRVecVectors, IntialArrayRefRefRemainsValid1)
 {
     t_state state;
 
@@ -177,8 +177,8 @@ TEST(StateRVecVectors, IntialArrayRefRefRemainsValid)
     EXPECT_EQ(ref[0][0], 1);
 }
 
-// Checks that a retrieved ref to ArrayRef remains valid after reallocation
-TEST(StateRVecVectors, RetrievedArrayRefRefRemainsValid)
+// Checks that a retrieved ref to ArrayRef remains valid after call to changeNumAtoms()
+TEST(StateRVecVectors, RetrievedArrayRefRefRemainsValid1)
 {
     t_state state;
 
@@ -192,6 +192,44 @@ TEST(StateRVecVectors, RetrievedArrayRefRefRemainsValid)
     ref[0][0] = 1;
 
     state.changeNumAtoms(200);
+
+    EXPECT_EQ(ref[0][0], 1);
+}
+
+// Checks that the initially returned ref to ArrayRef remains valid after call to addRVecVector()
+TEST(StateRVecVectors, IntialArrayRefRefRemainsValid2)
+{
+    t_state state;
+
+    state.changeNumAtoms(1);
+
+    const std::string    testString1 = "testStringB";
+    ArrayRef<gmx::RVec>& ref         = state.addRVecVector(testString1);
+
+    ref[0][0] = 1;
+
+    const std::string testString2 = "testStringA";
+    state.addRVecVector(testString2);
+
+    EXPECT_EQ(ref[0][0], 1);
+}
+
+// Checks that a retrieved ref to ArrayRef remains valid after call to addRVecVector()
+TEST(StateRVecVectors, RetrievedArrayRefRefRemainsValid2)
+{
+    t_state state;
+
+    state.changeNumAtoms(1);
+
+    const std::string testString1 = "testStringB";
+    state.addRVecVector(testString1);
+
+    ArrayRef<gmx::RVec>& ref = state.rvecVector(testString1).value();
+
+    ref[0][0] = 1;
+
+    const std::string testString2 = "testStringA";
+    state.addRVecVector(testString2);
 
     EXPECT_EQ(ref[0][0], 1);
 }
