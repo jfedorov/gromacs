@@ -1281,7 +1281,7 @@ struct CGState
     //! The general part of the EM state
     em_state_t emState;
     //! A reference to "p" vector in \p emState needed for Conjugate Gradients
-    gmx::ArrayRef<gmx::RVec>& p;
+    const gmx::ArrayRef<gmx::RVec>& p;
 };
 
 //! Copies the p vector contents from one CGState to another

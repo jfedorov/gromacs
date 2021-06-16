@@ -392,7 +392,7 @@ t_state::t_state() :
     clear_mat(fvir_prev);
 }
 
-gmx::ArrayRef<gmx::RVec>& t_state::addRVecVector(const std::string& name)
+const gmx::ArrayRef<gmx::RVec>& t_state::addRVecVector(const std::string& name)
 {
     // We use a global mutex for locking access to the state during registration of extra RVec vectors
     static std::mutex s_registrationMutex;

@@ -133,8 +133,8 @@ TEST(StateRVecVectors, IntialArrayRefRefRemainsValid1)
 
     state.changeNumAtoms(1);
 
-    const std::string    testString1 = "testString1";
-    ArrayRef<gmx::RVec>& ref         = state.addRVecVector(testString1);
+    const std::string          testString1 = "testString1";
+    const ArrayRef<gmx::RVec>& ref         = state.addRVecVector(testString1);
 
     ref[0][0] = 1;
 
@@ -169,8 +169,8 @@ TEST(StateRVecVectors, IntialArrayRefRefRemainsValid2)
 
     state.changeNumAtoms(1);
 
-    const std::string    testString1 = "testStringB";
-    ArrayRef<gmx::RVec>& ref         = state.addRVecVector(testString1);
+    const std::string          testString1 = "testStringB";
+    const ArrayRef<gmx::RVec>& ref         = state.addRVecVector(testString1);
 
     ref[0][0] = 1;
 

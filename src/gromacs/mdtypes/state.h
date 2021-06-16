@@ -262,7 +262,7 @@ public:
      *
      * \throws InvalidInputError when a name is passed that has been passed before to this method.
      */
-    gmx::ArrayRef<gmx::RVec>& addRVecVector(const std::string& name);
+    const gmx::ArrayRef<gmx::RVec>& addRVecVector(const std::string& name);
 
     /*! \brief Returns the list registered with name \p name or empty when not found
      *
