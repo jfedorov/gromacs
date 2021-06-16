@@ -256,10 +256,9 @@ public:
     /*! \brief Adds a vector to the state, returns a reference to the ArrayRef of the vector
      *
      * The vector will have size \p natoms and is initialized with zeros.
-     * The arrayref returned is valid for the lifetime of the t_state object.
-     * The memory and size of this ArrayRef can change, so never store a copy of the ArrayRef,
-     * only copies of the reference. You should not modify the ArrayRef itself, only the contents
-     * of the array elements it references.
+     * The reference to arrayref returned is valid for the lifetime of
+     * the t_state object. The memory and size of this ArrayRef can change,
+     * so never store a copy of the ArrayRef, only copies of the reference.
      *
      * \throws InvalidInputError when a name is passed that has been passed before to this method.
      */

@@ -97,38 +97,6 @@ TEST(StateRVecVectors, AddSameNameThrows)
     EXPECT_THROW_GMX(state.addRVecVector(testString), InvalidInputError);
 }
 
-TEST(StateRVecVectors, ArrayRefReferenceRemainsValid)
-{
-    t_state   state;
-    const int numAtoms = 3;
-
-    state.changeNumAtoms(numAtoms);
-
-    const std::string         testString1 = "testString1";
-    gmx::ArrayRef<gmx::RVec>& arrayRefRef = state.addRVecVector(testString1);
-
-    EXPECT_EQ(state.rvecVectors().size(), 1);
-
-    ASSERT_EQ(ssize(arrayRefRef), numAtoms);
-
-    const int       testIndex = 1;
-    const gmx::RVec testValue = { 3, 1, 2 };
-    arrayRefRef[testIndex]    = testValue;
-
-    const std::string testString2 = "testString2";
-    state.addRVecVector(testString2);
-
-    EXPECT_EQ(state.rvecVectors().size(), 2);
-
-    ASSERT_EQ(ssize(arrayRefRef), numAtoms);
-
-    // Note that EXPECT_EQ does not seem to work for RVec
-    for (int d = 0; d < DIM; d++)
-    {
-        EXPECT_EQ(arrayRefRef[testIndex][d], testValue[d]);
-    }
-}
-
 TEST(StateRVecVectors, RetrievesRVecVector)
 {
     t_state   state;
