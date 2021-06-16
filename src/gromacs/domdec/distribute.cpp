@@ -273,12 +273,19 @@ static void dd_distribute_state(gmx_domdec_t* dd, const t_state* state, t_state*
     }
     GMX_RELEASE_ASSERT(!DDMASTER(dd) || (state_local->rvecVectors().size() == state->rvecVectors().size()),
                        "state and state_local should have matching entries");
-    auto globalRVecVectors = state->rvecVectors().begin();
+    // On non-master ranks we don't use globalRVecVectorsIt and we assign the local vector iterator
+    // begin value to avoid type issues
+    auto globalRVecVectorsIt =
+            DDMASTER(dd) ? state->rvecVectors().begin() : state_local->rvecVectors().begin();
     for (const auto& localRVecVector : state_local->rvecVectors())
     {
         distributeVec(dd,
-                      DDMASTER(dd) ? globalRVecVectors->second.second : gmx::ArrayRef<const gmx::RVec>(),
+                      DDMASTER(dd) ? globalRVecVectorsIt->second.second : gmx::ArrayRef<const gmx::RVec>(),
                       localRVecVector.second.second);
+        if (DDMASTER(dd))
+        {
+            globalRVecVectorsIt++;
+        }
     }
 }
 

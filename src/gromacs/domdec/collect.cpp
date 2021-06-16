@@ -326,16 +326,16 @@ void dd_collect_state(gmx_domdec_t* dd, const t_state* state_local, t_state* sta
                        state_local->v,
                        globalVRef);
     }
-    auto localRVecVectors = state_local->rvecVectors().begin();
+    auto localRVecVectorsIt = state_local->rvecVectors().begin();
     for (const auto& globalRVecVector : state->rvecVectors())
     {
-        auto globalVecRef = state ? globalRVecVector.second.second : gmx::ArrayRef<gmx::RVec>();
+        auto globalVecRef = state ? globalRVecVectorIt.second.second : gmx::ArrayRef<gmx::RVec>();
         dd_collect_vec(dd,
                        state_local->ddp_count,
                        state_local->ddp_count_cg_gl,
                        state_local->cg_gl,
-                       localRVecVectors->second.second,
+                       localRVecVectorsIt->second.second,
                        globalVecRef);
-        localRVecVectors++;
+        localRVecVectorsIt++;
     }
 }
