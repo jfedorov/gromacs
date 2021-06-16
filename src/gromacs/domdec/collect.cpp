@@ -326,11 +326,8 @@ void dd_collect_state(gmx_domdec_t* dd, const t_state* state_local, t_state* sta
                        state_local->v,
                        globalVRef);
     }
-    if (DDMASTER(dd))
-    {
-        GMX_RELEASE_ASSERT(state->rvecVectors().size() == state_local->rvecVectors().size(),
-                           "The number of rvecVectors in the global and local state should match");
-    }
+    GMX_RELEASE_ASSERT(state == nullptr || state->rvecVectors().size() == state_local->rvecVectors().size(),
+                       "The number of rvecVectors in the global and local state should match");
     // On non-master ranks we don't use globalRVecVectorsIt and we assign the local vector iterator
     // begin value to avoid type issues
     auto globalRVecVectorsIt =
