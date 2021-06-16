@@ -101,12 +101,6 @@ struct BondedCudaKernelParameters
     int dc_cmapGridSize;
     //! CMAP parameters (on GPU). Note, this is a flat array instead of vec of vec
     DeviceBuffer<float> d_cmapData;
-    //! Coordinates before the timestep (on GPU)
-    const float4* d_xq;
-    //! Forces on atoms (on GPU)
-    float3* d_f;
-    //! Force shifts on atoms (on GPU)
-    float3* d_fShift;
     //! Total Energy (on GPU)
     float* d_vTot;
     //! Interaction list atoms (on GPU)
@@ -121,9 +115,6 @@ struct BondedCudaKernelParameters
         electrostaticsScaleFactor = 1.0;
         d_forceParams             = nullptr;
         dc_cmapGridSize           = 0;
-        d_xq                      = nullptr;
-        d_f                       = nullptr;
-        d_fShift                  = nullptr;
         d_vTot                    = nullptr;
     }
 };

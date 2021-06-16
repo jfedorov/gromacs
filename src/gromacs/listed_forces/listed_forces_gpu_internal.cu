@@ -1311,8 +1311,8 @@ __global__ void exec_kernel_gpu(BondedCudaKernelParameters kernelParams, float4*
                                                 cmapGridSpacing,
                                                 cmapData,
                                                 cmapGridSize,
-                                                kernelParams.d_xq,
-                                                kernelParams.d_f,
+                                                gm_xq,
+                                                gm_f,
                                                 sm_fShiftLoc,
                                                 kernelParams.pbcAiuc);
                     break;

@@ -129,9 +129,6 @@ ListedForcesGpu::Impl::Impl(const gmx_ffparams_t& ffparams,
     kernelParams_.dc_cmapGridSize           = cmapGridSize;
     kernelParams_.d_cmapGridSpacing         = ffparams.cmap_grid.grid_spacing;
     kernelParams_.d_cmapData                = d_cmapData_;
-    kernelParams_.d_xq                      = d_xq_;
-    kernelParams_.d_f                       = d_f_;
-    kernelParams_.d_fShift                  = d_fShift_;
     kernelParams_.d_vTot                    = d_vTot_;
     for (int i = 0; i < numFTypesOnGpu; i++)
     {
