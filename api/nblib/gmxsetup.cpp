@@ -40,121 +40,34 @@
  * \author Prashanth Kanduri <kanduri@cscs.ch>
  * \author Sebastian Keller <keller@cscs.ch>
  */
-#include "nblib/gmxsetup.h"
-#include "gromacs/ewald/ewald_utils.h"
-#include "gromacs/gmxlib/nrnb.h"
-#include "gromacs/mdlib/forcerec.h"
-#include "gromacs/mdlib/gmx_omp_nthreads.h"
-#include "gromacs/mdlib/rf_util.h"
-#include "gromacs/mdtypes/atominfo.h"
-#include "gromacs/mdtypes/forcerec.h"
-#include "gromacs/mdtypes/interaction_const.h"
-#include "gromacs/mdtypes/simulation_workload.h"
+#include "gromacs/gpu_utils/device_stream_manager.h"
 #include "gromacs/nbnxm/atomdata.h"
-#include "gromacs/nbnxm/nbnxm.h"
-#include "gromacs/nbnxm/nbnxm_simd.h"
-#include "gromacs/nbnxm/pairlistset.h"
-#include "gromacs/nbnxm/pairlistsets.h"
-#include "gromacs/nbnxm/pairsearch.h"
-#include "gromacs/pbcutil/pbc.h"
-#include "gromacs/utility/logger.h"
-#include "gromacs/utility/listoflists.h"
-#include "gromacs/utility/smalloc.h"
-#include "nblib/exception.h"
-#include "nblib/kerneloptions.h"
+#include "gromacs/utility/arrayref.h"
+
+#include "nblib/gmxsetup.h"
 #include "nblib/nbnxmsetuphelpers.h"
-#include "nblib/particletype.h"
 #include "nblib/simulationstate.h"
 
 namespace nblib
 {
 
-NbvSetupUtil::NbvSetupUtil() : gmxForceCalculator_(std::make_unique<GmxForceCalculator>()) {}
-
-void NbvSetupUtil::setExecutionContext(const NBKernelOptions& options)
+std::unique_ptr<GmxNBForceCalculatorCpu>
+GmxSetupDirector::setupGmxForceCalculatorCpu(const Topology& topology, const NBKernelOptions& options)
 {
-    setGmxNonBondedNThreads(options.numOpenMPThreads);
-}
+    // Todo in next MR: this should be a free utility function associated with the topology
+    std::vector<real> nonBondedParameters = createNonBondedParameters(
+            topology.getParticleTypes(), topology.getNonBondedInteractionMap());
 
-Nbnxm::KernelSetup NbvSetupUtil::getKernelSetup(const NBKernelOptions& options)
-{
-    return createKernelSetupCPU(options);
-}
+    // TODO in next MR: this should be part of topology
+    std::vector<int64_t> particleInteractionFlags = createParticleInfoAllVdv(topology.numParticles());
 
-void NbvSetupUtil::setParticleInfoAllVdv(const size_t numParticles)
-
-{
-    particleInfoAllVdw_ = createParticleInfoAllVdv(numParticles);
-}
-
-void NbvSetupUtil::setNonBondedParameters(const std::vector<ParticleType>& particleTypes,
-                                          const NonBondedInteractionMap&   nonBondedInteractionMap)
-{
-    nonbondedParameters_ = createNonBondedParameters(particleTypes, nonBondedInteractionMap);
-}
-
-void NbvSetupUtil::setAtomProperties(const std::vector<int>&  particleTypeIdOfAllParticles,
-                                     const std::vector<real>& charges)
-{
-    gmxForceCalculator_->nbv_->setAtomProperties(particleTypeIdOfAllParticles, charges, particleInfoAllVdw_);
-}
-
-//! Sets up and returns a Nbnxm object for the given options and system
-void NbvSetupUtil::setupNbnxmInstance(const size_t numParticleTypes, const NBKernelOptions& options)
-{
-
-    gmxForceCalculator_->nbv_ = createNbnxmCPU(numParticleTypes, options, 1, nonbondedParameters_);
-}
-
-void NbvSetupUtil::setupStepWorkload(const NBKernelOptions& options)
-{
-    gmxForceCalculator_->stepWork_ = std::make_unique<gmx::StepWorkload>(createStepWorkload(options));
-}
-
-void NbvSetupUtil::setupInteractionConst(const NBKernelOptions& options)
-{
-    gmxForceCalculator_->interactionConst_ =
-            std::make_unique<interaction_const_t>(createInteractionConst(options));
-}
-
-void NbvSetupUtil::setupForceRec(const matrix& box)
-{
-    updateForcerec(gmxForceCalculator_->forcerec_.get(), box);
-}
-
-void NbvSetupUtil::setParticlesOnGrid(const std::vector<Vec3>& coordinates, const Box& box)
-{
-    gmxForceCalculator_->setParticlesOnGrid(particleInfoAllVdw_, coordinates, box);
-}
-
-void NbvSetupUtil::constructPairList(ExclusionLists<int> exclusionLists)
-{
-    gmx::ListOfLists<int> exclusions(std::move(exclusionLists.ListRanges),
-                                     std::move(exclusionLists.ListElements));
-    gmxForceCalculator_->nbv_->constructPairlist(
-            gmx::InteractionLocality::Local, exclusions, 0, gmxForceCalculator_->nrnb_.get());
-}
-
-
-std::unique_ptr<GmxForceCalculator> GmxSetupDirector::setupGmxForceCalculator(const SimulationState& system,
-                                                                              const NBKernelOptions& options)
-{
-    NbvSetupUtil nbvSetupUtil;
-    nbvSetupUtil.setExecutionContext(options);
-    nbvSetupUtil.setNonBondedParameters(system.topology().getParticleTypes(),
-                                        system.topology().getNonBondedInteractionMap());
-    nbvSetupUtil.setParticleInfoAllVdv(system.topology().numParticles());
-
-    nbvSetupUtil.setupInteractionConst(options);
-    nbvSetupUtil.setupStepWorkload(options);
-    nbvSetupUtil.setupNbnxmInstance(system.topology().getParticleTypes().size(), options);
-    nbvSetupUtil.setParticlesOnGrid(system.coordinates(), system.box());
-    nbvSetupUtil.constructPairList(system.topology().exclusionLists());
-    nbvSetupUtil.setAtomProperties(system.topology().getParticleTypeIdOfAllParticles(),
-                                   system.topology().getCharges());
-    nbvSetupUtil.setupForceRec(system.box().legacyMatrix());
-
-    return nbvSetupUtil.getGmxForceCalculator();
+    return std::make_unique<GmxNBForceCalculatorCpu>(topology.getParticleTypeIdOfAllParticles(),
+                                                     nonBondedParameters,
+                                                     topology.getCharges(),
+                                                     particleInteractionFlags,
+                                                     topology.exclusionLists().ListRanges,
+                                                     topology.exclusionLists().ListElements,
+                                                     options);
 }
 
 } // namespace nblib

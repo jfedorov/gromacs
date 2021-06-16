@@ -177,7 +177,10 @@ int main()
     SimulationState simulationState(coordinates, velocities, forces, box, topology);
 
     // The non-bonded force calculator contains all the data needed to compute forces
-    ForceCalculator forceCalculator(simulationState, options);
+    ForceCalculator forceCalculator = createNonBondedForceCalculator(topology, options);
+
+    // build the pair list
+    forceCalculator.updatePairList(simulationState.coordinates(), simulationState.box());
 
     // The listed force calculator is also initialized with the required arguments
     ListedForceCalculator listedForceCalculator(
@@ -200,7 +203,8 @@ int main()
     {
         zeroCartesianArray(simulationState.forces());
 
-        forceCalculator.compute(simulationState.coordinates(), simulationState.forces());
+        forceCalculator.compute(
+                simulationState.coordinates(), simulationState.box(), simulationState.forces());
 
         listedForceCalculator.compute(simulationState.coordinates(), simulationState.forces());
 
