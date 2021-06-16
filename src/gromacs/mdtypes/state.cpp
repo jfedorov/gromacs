@@ -419,17 +419,15 @@ gmx::ArrayRef<gmx::RVec>& t_state::addRVecVector(const std::string& name)
     return it->second.second;
 }
 
-std::optional<std::reference_wrapper<gmx::ArrayRef<gmx::RVec>>> t_state::rvecVector(const std::string& name)
+const gmx::ArrayRef<gmx::RVec>& t_state::rvecVector(const std::string& name)
 {
     auto it = rvecVectors_.find(name);
-    if (it != rvecVectors_.end())
+    if (it == rvecVectors_.end())
     {
-        return std::optional<std::reference_wrapper<gmx::ArrayRef<gmx::RVec>>>(it->second.second);
+        GMX_THROW(gmx::InconsistentInputError(
+                "request for rvecVector with string that has not been added"));
     }
-    else
-    {
-        return std::nullopt;
-    }
+    return it->second.second;
 }
 
 void set_box_rel(const t_inputrec* ir, t_state* state)

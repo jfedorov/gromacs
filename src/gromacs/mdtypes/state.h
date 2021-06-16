@@ -267,8 +267,10 @@ public:
     /*! \brief Returns the list registered with name \p name or empty when not found
      *
      * Note: store the reference, as a copy of the arrayref itself can be invalidated.
+     *
+     * \throws InvalidInputError when a name is passed that has not been passed before to addRVecVector().
      */
-    std::optional<std::reference_wrapper<gmx::ArrayRef<gmx::RVec>>> rvecVector(const std::string& name);
+    const gmx::ArrayRef<gmx::RVec>& rvecVector(const std::string& name);
 
     /*! \brief Returns a const reference to the map of RVec vectors
      *

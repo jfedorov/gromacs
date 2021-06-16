@@ -117,9 +117,7 @@ TEST(StateRVecVectors, RetrievesRVecVector)
     const gmx::RVec testValue = { 3, 1, 2 };
     arrayRefRef[testIndex]    = testValue;
 
-    auto req = state.rvecVector(testString2);
-    ASSERT_EQ(req.has_value(), true);
-    gmx::ArrayRef<gmx::RVec>& vec = req.value();
+    const gmx::ArrayRef<gmx::RVec>& vec = state.rvecVector(testString2);
 
     // Note that EXPECT_EQ does not seem to work for RVec
     for (int d = 0; d < DIM; d++)
@@ -155,7 +153,7 @@ TEST(StateRVecVectors, RetrievedArrayRefRefRemainsValid1)
     const std::string testString1 = "testString1";
     state.addRVecVector(testString1);
 
-    ArrayRef<gmx::RVec>& ref = state.rvecVector(testString1).value();
+    const ArrayRef<gmx::RVec>& ref = state.rvecVector(testString1);
 
     ref[0][0] = 1;
 
@@ -192,7 +190,7 @@ TEST(StateRVecVectors, RetrievedArrayRefRefRemainsValid2)
     const std::string testString1 = "testStringB";
     state.addRVecVector(testString1);
 
-    ArrayRef<gmx::RVec>& ref = state.rvecVector(testString1).value();
+    const ArrayRef<gmx::RVec>& ref = state.rvecVector(testString1);
 
     ref[0][0] = 1;
 
@@ -262,7 +260,7 @@ TEST(StateRVecVectors, HaveIndenticalOrder)
         // Reversed loop to match the swap
         for (auto stateIt = states.rbegin(); stateIt < states.rend(); stateIt++)
         {
-            ArrayRef<RVec>& ref = stateIt->rvecVector(string).value();
+            const ArrayRef<RVec>& ref = stateIt->rvecVector(string);
             for (auto& elem : ref)
             {
                 EXPECT_EQ(elem[0], real(value));
