@@ -91,11 +91,6 @@
 namespace Nbnxm
 {
 
-/*! \brief Convenience constants */
-//@{
-static constexpr int c_clSize = c_nbnxnGpuClusterSize;
-//@}
-
 /* Constant arrays listing non-bonded kernel function names. The arrays are
  * organized in 2-dim arrays by: electrostatics and VDW type.
  *

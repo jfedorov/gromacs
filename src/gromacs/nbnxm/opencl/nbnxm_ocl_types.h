@@ -62,6 +62,9 @@
 
 struct gmx_wallclock_gpu_nbnxn_t;
 
+/*! \brief Convenience constants */
+static constexpr int c_clSize = c_nbnxnGpuClusterSize;
+
 /*! \brief Pruning kernel flavors.
  *
  * The values correspond to the first call of the pruning post-list generation

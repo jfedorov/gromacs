@@ -53,10 +53,10 @@ static inline int calc_nb_kernel_nblock(int nwork_units, const DeviceInformation
 {
     int max_grid_x_size;
 
-    assert(deviceInfo);
+    GMX_ASSERT(deviceInfo, "Device information should be provided");
     /* CUDA does not accept grid dimension of 0 (which can happen e.g. with an
        empty domain) and that case should be handled before this point. */
-    assert(nwork_units > 0);
+    GMX_ASSERT(nwork_units > 0, "Number of work units should be greater than zero");
 
     max_grid_x_size = deviceInfo->prop.maxGridSize[0];
 

@@ -77,11 +77,6 @@
 namespace Nbnxm
 {
 
-/*! \brief Convenience constants */
-//@{
-static constexpr int c_clSize = c_nbnxnGpuClusterSize;
-//@}
-
 /*! \brief Return a pointer to the prune kernel version to be executed at the current invocation.
  *
  * \param[in] kernel_pruneonly  array of prune kernel objects
