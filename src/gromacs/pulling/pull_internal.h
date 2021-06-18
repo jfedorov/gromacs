@@ -145,10 +145,10 @@ struct PullCoordSpatialData
     double value; /* The current value of the coordinate, units of nm or rad */
 };
 
-/* Struct with parameters and force evaluation local data for a pull coordinate */
+//! \brief Struct with parameters and force evaluation local data for a pull coordinate
 struct pull_coord_work_t
 {
-    /* Constructor */
+    //! Constructor
     pull_coord_work_t(const t_pull_coord& params) :
         params(params),
         value_ref(0),
@@ -158,18 +158,21 @@ struct pull_coord_work_t
     {
     }
 
-    const t_pull_coord params; /* Pull coordinate parameters */
+    //! Pull coordinate parameters
+    const t_pull_coord params;
 
-    /* Dynamic pull group 0 for this coordinate with dynamic weights, only present when needed */
+    //! Dynamic pull group 0 for this coordinate with dynamic weights, only present when needed */
     std::unique_ptr<pull_group_work_t> dynamicGroup0;
+    //! The reference value, usually init+rate*t, units of nm or rad.
+    double value_ref;
 
-    double value_ref; /* The reference value, usually init+rate*t, units of nm or rad */
+    //! Data defining the current geometry
+    PullCoordSpatialData spatialData;
 
-    PullCoordSpatialData spatialData; /* Data defining the current geometry */
+    //! Scalar force for this cooordinate
+    double scalarForce;
 
-    double scalarForce; /* Scalar force for this cooordinate */
-
-    /* For external-potential coordinates only, for checking if a provider has been registered */
+    //! For external-potential coordinates only, for checking if a provider has been registered
     bool bExternalPotentialProviderHasBeenRegistered;
 };
 
@@ -219,7 +222,7 @@ struct pull_comm_t
 #if GMX_MPI
     MPI_Comm mpi_comm_com; /* Communicator for pulling */
 #endif
-    int  nparticipate; /* The number of ranks participating */
+    int nparticipate; /* The number of ranks participating */
     bool isMasterRank; /* Tells whether our rank is the master rank and thus should add the pull virial */
 
     int64_t setup_count; /* The number of decomposition calls */

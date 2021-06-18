@@ -99,8 +99,7 @@ int numPbcDimensions(PbcType pbcType)
         case PbcType::XY: npbcdim = 2; break;
         case PbcType::Screw: npbcdim = 3; break;
         case PbcType::No: npbcdim = 0; break;
-        default:
-            gmx_fatal(FARGS, "Unknown pbcType=%s in numPbcDimensions", c_pbcTypeNames[pbcType].c_str());
+        default: GMX_RELEASE_ASSERT(false, "Invalid pbcType in numPbcDimensions");
     }
 
     return npbcdim;
@@ -209,6 +208,7 @@ real max_cutoff2(PbcType pbcType, const matrix box)
 }
 
 //! Set to true if warning has been printed
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static gmx_bool bWarnedGuess = FALSE;
 
 PbcType guessPbcType(const matrix box)

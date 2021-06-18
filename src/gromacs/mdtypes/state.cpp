@@ -65,15 +65,7 @@
 /* The source code in this file should be thread-safe.
       Please keep it that way. */
 
-history_t::history_t() :
-    disre_initf(0),
-    ndisrepairs(0),
-    disre_rm3tav(nullptr),
-    orire_initf(0),
-    norire_Dtav(0),
-    orire_Dtav(nullptr)
-{
-}
+history_t::history_t() : disre_initf(0), orire_initf(0) {}
 
 ekinstate_t::ekinstate_t() :
     bUpToDate(FALSE),
@@ -180,6 +172,87 @@ void state_change_natoms(t_state* state, int natoms)
         state->cg_p.resizeWithPadding(natoms);
     }
 }
+
+namespace
+{
+/*!
+ * \brief Enum describing the contents df_history_t writes to modular checkpoint
+ *
+ * When changing the checkpoint content, add a new element just above Count, and adjust the
+ * checkpoint functionality.
+ */
+enum class DFHistoryCheckpointVersion
+{
+    Base, //!< First version of modular checkpointing
+    Count //!< Number of entries. Add new versions right above this!
+};
+constexpr auto c_dfHistoryCurrentVersion =
+        DFHistoryCheckpointVersion(int(DFHistoryCheckpointVersion::Count) - 1);
+} // namespace
+
+template<gmx::CheckpointDataOperation operation>
+void df_history_t::doCheckpoint(gmx::CheckpointData<operation> checkpointData, LambdaWeightCalculation elamstats)
+{
+    gmx::checkpointVersion(&checkpointData, "df_history_t version", c_dfHistoryCurrentVersion);
+
+    auto numLambdas = nlambda;
+    checkpointData.scalar("nlambda", &numLambdas);
+    if (operation == gmx::CheckpointDataOperation::Read)
+    {
+        // If this isn't matching, we haven't allocated the right amount of data
+        GMX_RELEASE_ASSERT(numLambdas == nlambda,
+                           "df_history_t checkpoint reading: Lambda vectors size mismatch.");
+    }
+
+    checkpointData.scalar("bEquil", &bEquil);
+    checkpointData.arrayRef("n_at_lam", gmx::makeCheckpointArrayRefFromArray<operation>(n_at_lam, nlambda));
+
+    checkpointData.arrayRef("sum_weights",
+                            gmx::makeCheckpointArrayRefFromArray<operation>(sum_weights, nlambda));
+    checkpointData.arrayRef("sum_dg", gmx::makeCheckpointArrayRefFromArray<operation>(sum_dg, nlambda));
+    for (int idx = 0; idx < nlambda; idx++)
+    {
+        checkpointData.arrayRef(gmx::formatString("Tij[%d]", idx),
+                                gmx::makeCheckpointArrayRefFromArray<operation>(Tij[idx], nlambda));
+        checkpointData.arrayRef(
+                gmx::formatString("Tij_empirical[%d]", idx),
+                gmx::makeCheckpointArrayRefFromArray<operation>(Tij_empirical[idx], nlambda));
+    }
+
+    if (EWL(elamstats))
+    {
+        checkpointData.arrayRef("wl_histo",
+                                gmx::makeCheckpointArrayRefFromArray<operation>(wl_histo, nlambda));
+        checkpointData.scalar("wl_delta", &wl_delta);
+    }
+    if ((elamstats == LambdaWeightCalculation::Minvar) || (elamstats == LambdaWeightCalculation::Barker)
+        || (elamstats == LambdaWeightCalculation::Metropolis))
+    {
+        checkpointData.arrayRef(
+                "sum_minvar", gmx::makeCheckpointArrayRefFromArray<operation>(sum_minvar, nlambda));
+        checkpointData.arrayRef("sum_variance",
+                                gmx::makeCheckpointArrayRefFromArray<operation>(sum_variance, nlambda));
+        for (int idx = 0; idx < nlambda; idx++)
+        {
+            checkpointData.arrayRef(gmx::formatString("accum_p[%d]", idx),
+                                    gmx::makeCheckpointArrayRefFromArray<operation>(accum_p[idx], nlambda));
+            checkpointData.arrayRef(gmx::formatString("accum_m[%d]", idx),
+                                    gmx::makeCheckpointArrayRefFromArray<operation>(accum_m[idx], nlambda));
+            checkpointData.arrayRef(
+                    gmx::formatString("accum_p2[%d]", idx),
+                    gmx::makeCheckpointArrayRefFromArray<operation>(accum_p2[idx], nlambda));
+            checkpointData.arrayRef(
+                    gmx::formatString("accum_m2[%d]", idx),
+                    gmx::makeCheckpointArrayRefFromArray<operation>(accum_m2[idx], nlambda));
+        }
+    }
+}
+
+// explicit template instantiation
+template void df_history_t::doCheckpoint(gmx::CheckpointData<gmx::CheckpointDataOperation::Read> checkpointData,
+                                         LambdaWeightCalculation elamstats);
+template void df_history_t::doCheckpoint(gmx::CheckpointData<gmx::CheckpointDataOperation::Write> checkpointData,
+                                         LambdaWeightCalculation elamstats);
 
 void init_dfhist_state(t_state* state, int dfhistNumLambda)
 {
@@ -352,26 +425,28 @@ void printLambdaStateToLog(FILE* fplog, gmx::ArrayRef<const real> lambda, const 
     }
 }
 
-void initialize_lambdas(FILE*               fplog,
-                        const t_inputrec&   ir,
-                        gmx::ArrayRef<real> ref_t,
-                        bool                isMaster,
-                        int*                fep_state,
-                        gmx::ArrayRef<real> lambda)
+void initialize_lambdas(FILE*                            fplog,
+                        const FreeEnergyPerturbationType freeEnergyPerturbationType,
+                        const bool                       haveSimulatedTempering,
+                        const t_lambda&                  fep,
+                        gmx::ArrayRef<const real>        simulatedTemperingTemps,
+                        gmx::ArrayRef<real>              ref_t,
+                        bool                             isMaster,
+                        int*                             fep_state,
+                        gmx::ArrayRef<real>              lambda)
 {
     /* TODO: Clean up initialization of fep_state and lambda in
        t_state.  This function works, but could probably use a logic
        rewrite to keep all the different types of efep straight. */
 
-    if ((ir.efep == FreeEnergyPerturbationType::No) && (!ir.bSimTemp))
+    if ((freeEnergyPerturbationType == FreeEnergyPerturbationType::No) && (!haveSimulatedTempering))
     {
         return;
     }
 
-    const t_lambda* fep = ir.fepvals.get();
     if (isMaster)
     {
-        *fep_state = fep->init_fep_state; /* this might overwrite the checkpoint
+        *fep_state = fep.init_fep_state; /* this might overwrite the checkpoint
                                              if checkpoint is set -- a kludge is in for now
                                              to prevent this.*/
     }
@@ -380,27 +455,27 @@ void initialize_lambdas(FILE*               fplog,
     {
         double thisLambda;
         /* overwrite lambda state with init_lambda for now for backwards compatibility */
-        if (fep->init_lambda >= 0) /* if it's -1, it was never initialized */
+        if (fep.init_lambda >= 0) /* if it's -1, it was never initialized */
         {
-            thisLambda = fep->init_lambda;
+            thisLambda = fep.init_lambda;
         }
         else
         {
-            thisLambda = fep->all_lambda[i][fep->init_fep_state];
+            thisLambda = fep.all_lambda[i][fep.init_fep_state];
         }
         if (isMaster)
         {
             lambda[i] = thisLambda;
         }
     }
-    if (ir.bSimTemp)
+    if (haveSimulatedTempering)
     {
         /* need to rescale control temperatures to match current state */
         for (int i = 0; i < ref_t.ssize(); i++)
         {
             if (ref_t[i] > 0)
             {
-                ref_t[i] = ir.simtempvals->temperatures[fep->init_fep_state];
+                ref_t[i] = simulatedTemperingTemps[fep.init_fep_state];
             }
         }
     }

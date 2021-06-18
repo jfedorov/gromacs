@@ -59,9 +59,6 @@
 #include "gromacs/utility/enumerationhelpers.h"
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/futil.h"
-#include "gromacs/utility/enumerationhelpers.h"
-#include "gromacs/utility/fatalerror.h"
-#include "gromacs/utility/futil.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/strdb.h"
 #include "gromacs/utility/stringtoenumvalueconverter.h"
@@ -92,8 +89,6 @@ static std::optional<EnumType> findTypeFromKeyword(char* keyw)
     gmx::StringToEnumValueConverter<EnumType, enumValueToString, gmx::StringCompareType::CaseInsensitive, gmx::StripStrings::Yes> converter;
     return converter.valueFrom(keyw);
 }
-
-#define FATAL() gmx_fatal(FARGS, "Reading Termini Database: not enough items on line\n%s", line)
 
 static void read_atom(char* line, bool bAdd, std::string* nname, t_atom* a, PreprocessingAtomTypes* atype, int* cgnr)
 {

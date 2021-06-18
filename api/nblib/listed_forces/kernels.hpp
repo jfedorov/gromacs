@@ -114,7 +114,7 @@ inline std::tuple<T, T, T> harmonicScalarForce(T kA, T kB, T xA, T xB, T x, T la
 template <class T>
 inline auto bondKernel(T dr, const HarmonicBondType& bond)
 {
-    return harmonicScalarForce(bond.forceConstant(), bond.equilDistance(), dr);
+    return harmonicScalarForce(bond.forceConstant(), bond.equilConstant(), dr);
 }
 
 
@@ -177,8 +177,8 @@ inline std::tuple<T, T, T> g96ScalarForce(T kA, T kB, T xA, T xB, T x, T lambda)
 template <class T>
 inline auto bondKernel(T dr, const G96BondType& bond)
 {
-    // NOTE: Not assuming GROMACS' convention of storing squared bond.equilDistance() for this type
-    return g96ScalarForce(bond.forceConstant(), bond.equilDistance() * bond.equilDistance(), dr * dr);
+    // NOTE: Not assuming GROMACS' convention of storing squared bond.equilConstant() for this type
+    return g96ScalarForce(bond.forceConstant(), bond.equilConstant() * bond.equilConstant(), dr * dr);
 }
 
 
@@ -284,7 +284,7 @@ inline std::tuple<T, T> FENEScalarForce(T k, T x0, T x)
 template <class T>
 inline auto bondKernel(T dr, const FENEBondType& bond)
 {
-    return FENEScalarForce(bond.forceConstant(), bond.equilDistance(), dr);
+    return FENEScalarForce(bond.forceConstant(), bond.equilConstant(), dr);
 }
 
 
@@ -384,7 +384,7 @@ inline std::tuple<T, T, T> halfAttractiveScalarForce(T kA, T kB, T xA, T xB, T x
 template <class T>
 inline auto bondKernel(T dr, const HalfAttractiveQuarticBondType& bond)
 {
-    return halfAttractiveScalarForce(bond.forceConstant(), bond.equilDistance(), dr);
+    return halfAttractiveScalarForce(bond.forceConstant(), bond.equilConstant(), dr);
 }
 
 
@@ -396,9 +396,9 @@ inline auto bondKernel(T dr, const HalfAttractiveQuarticBondType& bond)
 //! Three-center interaction type dispatch
 
 template <class T>
-inline auto threeCenterKernel(T dr, const HarmonicAngleType& angle)
+inline auto threeCenterKernel(T dr, const HarmonicAngle& angle)
 {
-    return harmonicScalarForce(angle.forceConstant(), angle.equilDistance(), dr);
+    return harmonicScalarForce(angle.forceConstant(), angle.equilConstant(), dr);
 }
 
 
@@ -426,6 +426,33 @@ static inline void makeAnglePeriodic(real& angle)
     }
 }
 
+/*! \brief calculate the cosine of the angle between a and b
+ *
+ * \tparam T  float or double
+ * \param a   a 3D vector
+ * \param b   another 3D vector
+ * \return    the cosine of the angle between a and b
+ *
+ *                  ax*bx + ay*by + az*bz
+ * cos-vec (a,b) =  ---------------------
+ *                      ||a|| * ||b||
+ */
+template<class T>
+inline T basicVectorCosAngle(gmx::BasicVector<T> a, gmx::BasicVector<T> b)
+{
+    gmx::BasicVector<double> a_double(a[0], a[1], a[2]);
+    gmx::BasicVector<double> b_double(b[0], b[1], b[2]);
+
+    double numerator     = dot(a_double, b_double);
+    double denominatorSq = dot(a_double, a_double) * dot(b_double, b_double);
+
+    T cosval = (denominatorSq > 0) ? static_cast<T>(numerator * gmx::invsqrt(denominatorSq)) : 1;
+    cosval   = std::min(cosval, T(1.0));
+
+    /* 25 TOTAL */
+    return std::max(cosval, T(-1.0));
+}
+
 //! \brief Computes and returns a dihedral phi angle
 static inline real dihedralPhi(rvec dxIJ, rvec dxKJ, rvec dxKL, rvec m, rvec n)
 {
@@ -442,7 +469,7 @@ static inline real dihedralPhi(rvec dxIJ, rvec dxKJ, rvec dxKL, rvec m, rvec n)
 template <class T>
 inline auto fourCenterKernel(T phi, const ImproperDihedral& improperDihedral)
 {
-    T deltaPhi = phi - improperDihedral.equilDistance();
+    T deltaPhi = phi - improperDihedral.equilConstant();
     /* deltaPhi cannot be outside (-pi,pi) */
     makeAnglePeriodic(deltaPhi);
     const T force = -improperDihedral.forceConstant()  * deltaPhi;

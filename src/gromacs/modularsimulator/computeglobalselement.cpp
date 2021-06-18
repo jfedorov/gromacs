@@ -44,6 +44,7 @@
 #include "computeglobalselement.h"
 
 #include "gromacs/domdec/domdec.h"
+#include "gromacs/domdec/localtopologychecker.h"
 #include "gromacs/gmxlib/network.h"
 #include "gromacs/gmxlib/nrnb.h"
 #include "gromacs/math/vec.h"
@@ -52,10 +53,10 @@
 #include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/stat.h"
 #include "gromacs/mdlib/update.h"
+#include "gromacs/mdlib/vcm.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/group.h"
 #include "gromacs/mdtypes/inputrec.h"
-#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/topology/topology.h"
 
@@ -160,13 +161,15 @@ void ComputeGlobalsElement<algorithm>::elementSetup()
 }
 
 template<ComputeGlobalsAlgorithm algorithm>
-void ComputeGlobalsElement<algorithm>::scheduleTask(Step step,
+void ComputeGlobalsElement<algorithm>::scheduleTask(Step                       step,
                                                     Time gmx_unused            time,
                                                     const RegisterRunFunction& registerRunFunction)
 {
     const bool needComReduction    = doStopCM_ && do_per_step(step, nstcomm_);
     const bool needGlobalReduction = step == energyReductionStep_ || step == virialReductionStep_
-                                     || needComReduction || do_per_step(step, nstglobalcomm_);
+                                     || needComReduction || do_per_step(step, nstglobalcomm_)
+                                     || (EI_VV(inputrec_->eI) && inputrecNvtTrotter(inputrec_)
+                                         && do_per_step(step - 1, nstglobalcomm_));
 
     // TODO: CGLO_GSTAT is only used for needToSumEkinhOld_, i.e. to signal that we do or do not
     //       sum the previous kinetic energy. We should simplify / clarify this.
@@ -275,13 +278,13 @@ void ComputeGlobalsElement<algorithm>::compute(gmx::Step            step,
                                                bool                 useLastBox,
                                                bool                 isInit)
 {
-    auto x       = statePropagatorData_->positionsView().unpaddedArrayRef();
-    auto v       = statePropagatorData_->velocitiesView().unpaddedArrayRef();
-    auto box     = statePropagatorData_->constBox();
-    auto lastbox = useLastBox ? statePropagatorData_->constPreviousBox()
-                              : statePropagatorData_->constBox();
+    auto        x       = statePropagatorData_->positionsView().unpaddedArrayRef();
+    auto        v       = statePropagatorData_->velocitiesView().unpaddedArrayRef();
+    const auto* box     = statePropagatorData_->constBox();
+    const auto* lastbox = useLastBox ? statePropagatorData_->constPreviousBox()
+                                     : statePropagatorData_->constBox();
 
-    if (DOMAINDECOMP(cr_) && shouldCheckNumberOfBondedInteractions(*cr_->dd))
+    if (DOMAINDECOMP(cr_) && dd_localTopologyChecker(*cr_->dd).shouldCheckNumberOfBondedInteractions())
     {
         flags |= CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS;
     }
@@ -310,7 +313,7 @@ void ComputeGlobalsElement<algorithm>::compute(gmx::Step            step,
                     flags);
     if (DOMAINDECOMP(cr_))
     {
-        checkNumberOfBondedInteractions(mdlog_, cr_, top_global_, localTopology_, x, box);
+        dd_localTopologyChecker(cr_->dd)->checkNumberOfBondedInteractions(localTopology_, x, box);
     }
     if (flags & CGLO_STOPCM && !isInit)
     {
@@ -399,7 +402,7 @@ ISimulatorElement* ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet
     // actual element built
     static const std::string key("vvComputeGlobalsElement");
 
-    const std::optional<std::any> cachedValue = builderHelper->getStoredValue(key);
+    const std::optional<std::any> cachedValue = builderHelper->builderData(key);
 
     if (cachedValue)
     {
@@ -424,7 +427,7 @@ ISimulatorElement* ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet
                         simulator->fr,
                         simulator->top_global,
                         simulator->constr));
-        builderHelper->storeValue(key, vvComputeGlobalsElement);
+        builderHelper->storeBuilderData(key, vvComputeGlobalsElement);
         return vvComputeGlobalsElement;
     }
 }

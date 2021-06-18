@@ -463,9 +463,9 @@ void pme_gpu_free_fract_shifts(const PmeGpu* pmeGpu)
     auto* kernelParamsPtr = pmeGpu->kernelParams.get();
 #if GMX_GPU_CUDA
     destroyParamLookupTable(&kernelParamsPtr->grid.d_fractShiftsTable,
-                            kernelParamsPtr->fractShiftsTableTexture);
+                            &kernelParamsPtr->fractShiftsTableTexture);
     destroyParamLookupTable(&kernelParamsPtr->grid.d_gridlineIndicesTable,
-                            kernelParamsPtr->gridlineIndicesTableTexture);
+                            &kernelParamsPtr->gridlineIndicesTableTexture);
 #elif GMX_GPU_OPENCL || GMX_GPU_SYCL
     freeDeviceBuffer(&kernelParamsPtr->grid.d_fractShiftsTable);
     freeDeviceBuffer(&kernelParamsPtr->grid.d_gridlineIndicesTable);
@@ -828,7 +828,7 @@ static void pme_gpu_copy_common_data_from(const gmx_pme_t* pme)
     pmeGpu->common->nn.insert(pmeGpu->common->nn.end(), pme->nnz, pme->nnz + cellCount * pme->nkz);
     pmeGpu->common->runMode       = pme->runMode;
     pmeGpu->common->isRankPmeOnly = !pme->bPPnode;
-    pmeGpu->common->boxScaler     = pme->boxScaler;
+    pmeGpu->common->boxScaler     = pme->boxScaler.get();
 }
 
 /*! \libinternal \brief
@@ -1133,8 +1133,8 @@ static auto selectSplineAndSpreadKernelPtr(const PmeGpu*  pmeGpu,
  *
  * \return Pointer to CUDA kernel
  */
-static auto selectSplineKernelPtr(const PmeGpu*  pmeGpu,
-                                  ThreadsPerAtom threadsPerAtom,
+static auto selectSplineKernelPtr(const PmeGpu*   pmeGpu,
+                                  ThreadsPerAtom  threadsPerAtom,
                                   bool gmx_unused writeSplinesToGlobal,
                                   const int       numGrids)
 {

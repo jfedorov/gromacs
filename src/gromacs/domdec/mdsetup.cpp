@@ -38,6 +38,7 @@
 
 #include "gromacs/domdec/domdec.h"
 #include "gromacs/domdec/domdec_struct.h"
+#include "gromacs/domdec/localtopology.h"
 #include "gromacs/ewald/pme.h"
 #include "gromacs/listed_forces/listed_forces.h"
 #include "gromacs/mdlib/constr.h"
@@ -107,18 +108,17 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
              mdAtoms);
 
     t_mdatoms* mdatoms = mdAtoms->mdatoms();
-    if (usingDomDec)
-    {
-        dd_sort_local_top(*cr->dd, mdatoms, top);
-    }
-    else
+    if (!usingDomDec)
     {
         gmx_mtop_generate_local_top(top_global, top, inputrec.efep != FreeEnergyPerturbationType::No);
     }
 
     if (vsite)
     {
-        vsite->setVirtualSites(top->idef.il, *mdatoms);
+        vsite->setVirtualSites(top->idef.il,
+                               mdatoms->nr,
+                               mdatoms->homenr,
+                               gmx::arrayRefFromArray(mdatoms->ptype, mdatoms->nr));
     }
 
     /* Note that with DD only flexible constraints, not shells, are supported
@@ -134,7 +134,7 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
 
     for (auto& listedForces : fr->listedForces)
     {
-        listedForces.setup(top->idef, fr->natoms_force, fr->gpuBonded != nullptr);
+        listedForces.setup(top->idef, fr->natoms_force, fr->listedForcesGpu != nullptr);
     }
 
     if (EEL_PME(fr->ic->eeltype) && (cr->duty & DUTY_PME))
@@ -143,7 +143,12 @@ void mdAlgorithmsSetupAtomData(const t_commrec*     cr,
          * For PME-only ranks, gmx_pmeonly() has its own call to gmx_pme_reinit_atoms().
          */
         const int numPmeAtoms = numHomeAtoms - fr->n_tpi;
-        gmx_pme_reinit_atoms(fr->pmedata, numPmeAtoms, mdatoms->chargeA, mdatoms->chargeB);
+        gmx_pme_reinit_atoms(fr->pmedata,
+                             numPmeAtoms,
+                             mdatoms->chargeA ? gmx::arrayRefFromArray(mdatoms->chargeA, mdatoms->nr)
+                                              : gmx::ArrayRef<real>{},
+                             mdatoms->chargeB ? gmx::arrayRefFromArray(mdatoms->chargeB, mdatoms->nr)
+                                              : gmx::ArrayRef<real>{});
     }
 
     if (constr)

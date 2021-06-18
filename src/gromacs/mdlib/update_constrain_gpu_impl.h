@@ -49,8 +49,8 @@
 #include "gmxpre.h"
 
 #include "gromacs/mdlib/leapfrog_gpu.h"
-#include "gromacs/mdlib/lincs_gpu.cuh"
-#include "gromacs/mdlib/settle_gpu.cuh"
+#include "gromacs/mdlib/lincs_gpu.h"
+#include "gromacs/mdlib/settle_gpu.h"
 #include "gromacs/mdlib/update_constrain_gpu.h"
 #include "gromacs/mdtypes/inputrec.h"
 
@@ -153,7 +153,7 @@ public:
      */
     void set(DeviceBuffer<Float3>          d_x,
              DeviceBuffer<Float3>          d_v,
-             const DeviceBuffer<Float3>    d_f,
+             DeviceBuffer<Float3>          d_f,
              const InteractionDefinitions& idef,
              const t_mdatoms&              md);
 
@@ -226,24 +226,6 @@ private:
     GpuEventSynchronizer* coordinatesReady_;
     //! The wallclock counter
     gmx_wallcycle* wcycle_ = nullptr;
-};
-
-/*! \brief Scaling matrix struct.
- *
- * \todo Should be generalized.
- */
-struct ScalingMatrix
-{
-    ScalingMatrix(const matrix m) :
-        xx(m[XX][XX]),
-        yy(m[YY][YY]),
-        zz(m[ZZ][ZZ]),
-        yx(m[YY][XX]),
-        zx(m[ZZ][XX]),
-        zy(m[ZZ][YY])
-    {
-    }
-    float xx, yy, zz, yx, zx, zy;
 };
 
 } // namespace gmx

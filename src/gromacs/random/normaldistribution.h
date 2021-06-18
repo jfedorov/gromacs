@@ -126,8 +126,7 @@ public:
          * \param stddev   Standard deviation of normal distribution
          */
         explicit param_type(result_type mean = 0.0, result_type stddev = 1.0) :
-            mean_(mean),
-            stddev_(stddev)
+            mean_(mean), stddev_(stddev)
         {
         }
 
@@ -152,16 +151,13 @@ public:
         bool operator!=(const param_type& x) const { return !operator==(x); }
     };
 
-public:
     /*! \brief Construct new distribution with given floating-point parameters.
      *
      * \param mean     Mean of normal distribution
      * \param stddev   Standard deviation of normal distribution
      */
     explicit NormalDistribution(result_type mean = 0.0, result_type stddev = 1.0) :
-        param_(param_type(mean, stddev)),
-        hot_(false),
-        saved_(0)
+        param_(param_type(mean, stddev)), hot_(false), saved_(0)
     {
     }
 

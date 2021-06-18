@@ -58,9 +58,10 @@
 static constexpr auto mode_atomic = GMX_SYCL_DPCPP ? cl::sycl::access::mode::read_write :
                                                    /* GMX_SYCL_HIPSYCL */ cl::sycl::access::mode::atomic;
 
+// \brief Full warp active thread mask used in CUDA warp-level primitives.
+static constexpr unsigned int c_cudaFullWarpMask = 0xffffffff;
+
 /*! \brief Convenience wrapper to do atomic addition to a global buffer.
- *
- * Skips sub-normal values.
  *
  * The implementation differences between DPCPP and hipSYCL are explained in \ref mode_atomic.
  */
@@ -76,7 +77,11 @@ static inline void atomicFetchAdd(DeviceAccessor<float, mode_atomic> acc, const 
     /* While there is support for float atomics on device, the host implementation uses
      * Clang's __atomic_fetch_add intrinsic, that, at least in Clang 11, does not support
      * floats. Luckily, we don't want to run on host. */
+    // The pragmas below can be removed once we switch to sycl::atomic
+#        pragma clang diagnostic push
+#        pragma clang diagnostic ignored "-Wdeprecated-declarations"
     acc[idx].fetch_add(val);
+#        pragma clang diagnostic push
 #    else
     GMX_ASSERT(false, "hipSYCL host codepath not supported");
     GMX_UNUSED_VALUE(val);
@@ -86,16 +91,31 @@ static inline void atomicFetchAdd(DeviceAccessor<float, mode_atomic> acc, const 
 #endif
 }
 
+/* \brief Issue an intra sub-group barrier.
+ *
+ * Equivalent with CUDA syncwarp(c_cudaFullWarpMask).
+ *
+ */
+static inline void subGroupBarrier(const cl::sycl::nd_item<1> itemIdx)
+{
+#if GMX_SYCL_HIPSYCL
+    cl::sycl::group_barrier(itemIdx.get_sub_group(), cl::sycl::memory_scope::sub_group);
+#else
+    itemIdx.get_sub_group().barrier();
+#endif
+}
+
 namespace sycl_2020
 {
 #if GMX_SYCL_HIPSYCL
-__device__ static inline float shift_left(sycl_2020::sub_group, float var, sycl_2020::sub_group::linear_id_type delta)
+__device__ __host__ static inline float shift_left(sycl_2020::sub_group,
+                                                   float                                var,
+                                                   sycl_2020::sub_group::linear_id_type delta)
 {
     // No sycl::sub_group::shift_left / shuffle_down in hipSYCL yet
 #    ifdef SYCL_DEVICE_ONLY
 #        if defined(HIPSYCL_PLATFORM_CUDA) && defined(__HIPSYCL_ENABLE_CUDA_TARGET__)
-    static const unsigned int sc_cudaFullWarpMask = 0xffffffff;
-    return __shfl_down_sync(sc_cudaFullWarpMask, var, delta);
+    return __shfl_down_sync(c_cudaFullWarpMask, var, delta);
 #        elif defined(HIPSYCL_PLATFORM_ROCM) && defined(__HIPSYCL_ENABLE_HIP_TARGET__)
     // Do we need more ifdefs? https://github.com/ROCm-Developer-Tools/HIP/issues/1491
     return __shfl_down(var, delta);
@@ -110,12 +130,6 @@ __device__ static inline float shift_left(sycl_2020::sub_group, float var, sycl_
     return NAN;
 #    endif
 }
-__host__ static inline float shift_left(sycl_2020::sub_group, float, sycl_2020::sub_group::linear_id_type)
-{
-    // Should never be called
-    assert(false);
-    return NAN;
-}
 #elif GMX_SYCL_DPCPP
 static inline float shift_left(sycl_2020::sub_group sg, float var, sycl_2020::sub_group::linear_id_type delta)
 {
@@ -124,15 +138,14 @@ static inline float shift_left(sycl_2020::sub_group sg, float var, sycl_2020::su
 #endif
 
 #if GMX_SYCL_HIPSYCL
-__device__ static inline float shift_right(sycl_2020::sub_group,
-                                           float                                var,
-                                           sycl_2020::sub_group::linear_id_type delta)
+__device__ __host__ static inline float shift_right(sycl_2020::sub_group,
+                                                    float                                var,
+                                                    sycl_2020::sub_group::linear_id_type delta)
 {
     // No sycl::sub_group::shift_right / shuffle_up in hipSYCL yet
 #    ifdef SYCL_DEVICE_ONLY
 #        if defined(HIPSYCL_PLATFORM_CUDA) && defined(__HIPSYCL_ENABLE_CUDA_TARGET__)
-    static const unsigned int sc_cudaFullWarpMask = 0xffffffff;
-    return __shfl_up_sync(sc_cudaFullWarpMask, var, delta);
+    return __shfl_up_sync(c_cudaFullWarpMask, var, delta);
 #        elif defined(HIPSYCL_PLATFORM_ROCM) && defined(__HIPSYCL_ENABLE_HIP_TARGET__)
     // Do we need more ifdefs? https://github.com/ROCm-Developer-Tools/HIP/issues/1491
     return __shfl_up(var, delta);
@@ -146,12 +159,6 @@ __device__ static inline float shift_right(sycl_2020::sub_group,
     GMX_UNUSED_VALUE(delta);
     return NAN;
 #    endif
-}
-__host__ static inline float shift_right(sycl_2020::sub_group, float, sycl_2020::sub_group::linear_id_type)
-{
-    // Should never be called
-    assert(false);
-    return NAN;
 }
 #elif GMX_SYCL_DPCPP
 static inline float shift_right(sycl_2020::sub_group sg, float var, sycl_2020::sub_group::linear_id_type delta)

@@ -351,14 +351,15 @@ std::vector<std::string> read_pullparams(std::vector<t_inpfile>* inp, pull_param
     pull->group.emplace_back(t_pull_group());
     for (int groupNum = 1; groupNum < pull->ngroup; groupNum++)
     {
-        t_pull_group pullGroup; //= &pull->group[groupNum];
+        t_pull_group pullGroup;
         sprintf(buf, "pull-group%d-name", groupNum);
         setStringEntry(inp, buf, readBuffer, "");
         pullGroups[groupNum] = readBuffer;
         sprintf(buf, "pull-group%d-weights", groupNum);
         setStringEntry(inp, buf, wbuf, "");
         sprintf(buf, "pull-group%d-pbcatom", groupNum);
-        pullGroup.pbcatom = get_eint(inp, buf, 0, wi);
+        pullGroup.pbcatom       = get_eint(inp, buf, 0, wi);
+        pullGroup.pbcatom_input = pullGroup.pbcatom;
 
         /* Initialize the pull group */
         pullGroup.weight = setupPullGroupWeights(wbuf);
@@ -582,9 +583,9 @@ pull_t* set_pull_init(t_inputrec*                    ir,
 
     if (pull->bSetPbcRefToPrevStepCOM)
     {
-        initPullComFromPrevStep(nullptr, pull_work, gmx::arrayRefFromArray(md->massT, md->nr), &pbc, x);
+        initPullComFromPrevStep(nullptr, pull_work, gmx::arrayRefFromArray(md->massT, md->nr), pbc, x);
     }
-    pull_calc_coms(nullptr, pull_work, gmx::arrayRefFromArray(md->massT, md->nr), &pbc, t_start, x, {});
+    pull_calc_coms(nullptr, pull_work, gmx::arrayRefFromArray(md->massT, md->nr), pbc, t_start, x, {});
 
     for (int g = 0; g < pull->ngroup; g++)
     {
@@ -660,7 +661,7 @@ pull_t* set_pull_init(t_inputrec*                    ir,
             pcrd->init = 0;
         }
 
-        value = get_pull_coord_value(pull_work, c, &pbc);
+        value = get_pull_coord_value(pull_work, c, pbc);
 
         value *= pull_conversion_factor_internal2userinput(*pcrd);
         fprintf(stderr, " %10.3f %s", value, pull_coordinate_units(*pcrd));

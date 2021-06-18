@@ -67,14 +67,6 @@ enum class UseFullStepKE
     Count
 };
 
-//! Enum describing whether the thermostat is reporting conserved energy from the previous step
-enum class ReportPreviousStepConservedEnergy
-{
-    Yes,
-    No,
-    Count
-};
-
 /*! \internal
  * \ingroup module_modularsimulator
  * \brief Element implementing the a velocity-scaling thermostat
@@ -120,8 +112,8 @@ public:
     void elementTeardown() override {}
 
     //! Connect this to propagator
-    void connectWithMatchingPropagator(const PropagatorThermostatConnection& connectionData,
-                                       const PropagatorTag&                  propagatorTag);
+    void connectWithMatchingPropagator(const PropagatorConnection& connectionData,
+                                       const PropagatorTag&        propagatorTag);
 
     //! ICheckpointHelperClient write checkpoint implementation
     void saveCheckpointState(std::optional<WriteCheckpointData> checkpointData, const t_commrec* cr) override;
@@ -158,6 +150,10 @@ public:
                           const PropagatorTag&                    propagatorTag);
 
 private:
+    //! Update the reference temperature
+    void updateReferenceTemperature(ArrayRef<const real>                temperatures,
+                                    ReferenceTemperatureChangeAlgorithm algorithm);
+
     //! The frequency at which the thermostat is applied
     const int nstcouple_;
     //! If != 0, offset the step at which the thermostat is applied
@@ -172,7 +168,7 @@ private:
     //! The coupling time step - simulation time step x nstcouple_
     const double couplingTimeStep_;
     //! Coupling temperature per group
-    const std::vector<real> referenceTemperature_;
+    std::vector<real> referenceTemperature_;
     //! Coupling time per group
     const std::vector<real> couplingTime_;
     //! Number of degrees of freedom per group

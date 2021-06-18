@@ -40,14 +40,12 @@
 #include "update_vv.h"
 
 #include <cmath>
-#include <cstdio>
 
 #include <algorithm>
-#include <memory>
 
 #include "gromacs/domdec/domdec.h"
+#include "gromacs/domdec/localtopologychecker.h"
 #include "gromacs/gmxlib/nrnb.h"
-#include "gromacs/math/units.h"
 #include "gromacs/math/vec.h"
 #include "gromacs/mdlib/constr.h"
 #include "gromacs/mdlib/coupling.h"
@@ -57,6 +55,7 @@
 #include "gromacs/mdlib/stat.h"
 #include "gromacs/mdlib/tgroup.h"
 #include "gromacs/mdlib/update.h"
+#include "gromacs/mdrunutility/handlerestart.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/enerdata.h"
 #include "gromacs/mdtypes/fcdata.h"
@@ -70,49 +69,47 @@
 #include "gromacs/timing/wallcycle.h"
 #include "gromacs/topology/topology.h"
 
-void integrateVVFirstStep(int64_t                                  step,
-                          bool                                     bFirstStep,
-                          bool                                     bInitStep,
-                          gmx::StartingBehavior                    startingBehavior,
-                          int                                      nstglobalcomm,
-                          const t_inputrec*                        ir,
-                          t_forcerec*                              fr,
-                          t_commrec*                               cr,
-                          t_state*                                 state,
-                          t_mdatoms*                               mdatoms,
-                          const t_fcdata&                          fcdata,
-                          t_extmass*                               MassQ,
-                          t_vcm*                                   vcm,
-                          const gmx_mtop_t&                        top_global,
-                          const gmx_localtop_t&                    top,
-                          gmx_enerdata_t*                          enerd,
-                          gmx_ekindata_t*                          ekind,
-                          gmx_global_stat*                         gstat,
-                          real*                                    last_ekin,
-                          bool                                     bCalcVir,
-                          tensor                                   total_vir,
-                          tensor                                   shake_vir,
-                          tensor                                   force_vir,
-                          tensor                                   pres,
-                          matrix                                   M,
-                          bool                                     do_log,
-                          bool                                     do_ene,
-                          bool                                     bCalcEner,
-                          bool                                     bGStat,
-                          bool                                     bStopCM,
-                          bool                                     bTrotter,
-                          bool                                     bExchanged,
-                          bool*                                    bSumEkinhOld,
-                          real*                                    saved_conserved_quantity,
-                          gmx::ForceBuffers*                       f,
-                          gmx::Update*                             upd,
-                          gmx::Constraints*                        constr,
-                          gmx::SimulationSignaller*                nullSignaller,
-                          std::array<std::vector<int>, ettTSEQMAX> trotter_seq,
-                          t_nrnb*                                  nrnb,
-                          const gmx::MDLogger&                     mdlog,
-                          FILE*                                    fplog,
-                          gmx_wallcycle*                           wcycle)
+void integrateVVFirstStep(int64_t                   step,
+                          bool                      bFirstStep,
+                          bool                      bInitStep,
+                          gmx::StartingBehavior     startingBehavior,
+                          int                       nstglobalcomm,
+                          const t_inputrec*         ir,
+                          t_forcerec*               fr,
+                          t_commrec*                cr,
+                          t_state*                  state,
+                          t_mdatoms*                mdatoms,
+                          const t_fcdata&           fcdata,
+                          t_extmass*                MassQ,
+                          t_vcm*                    vcm,
+                          const gmx_localtop_t&     top,
+                          gmx_enerdata_t*           enerd,
+                          gmx_ekindata_t*           ekind,
+                          gmx_global_stat*          gstat,
+                          real*                     last_ekin,
+                          bool                      bCalcVir,
+                          tensor                    total_vir,
+                          tensor                    shake_vir,
+                          tensor                    force_vir,
+                          tensor                    pres,
+                          matrix                    M,
+                          bool                      do_log,
+                          bool                      do_ene,
+                          bool                      bCalcEner,
+                          bool                      bGStat,
+                          bool                      bStopCM,
+                          bool                      bTrotter,
+                          bool                      bExchanged,
+                          bool*                     bSumEkinhOld,
+                          real*                     saved_conserved_quantity,
+                          gmx::ForceBuffers*        f,
+                          gmx::Update*              upd,
+                          gmx::Constraints*         constr,
+                          gmx::SimulationSignaller* nullSignaller,
+                          gmx::EnumerationArray<TrotterSequence, std::vector<int>> trotter_seq,
+                          t_nrnb*                                                  nrnb,
+                          FILE*                                                    fplog,
+                          gmx_wallcycle*                                           wcycle)
 {
     if (!bFirstStep || startingBehavior == gmx::StartingBehavior::NewSimulation)
     {
@@ -134,7 +131,19 @@ void integrateVVFirstStep(int64_t                                  step,
         else
         {
             /* this is for NHC in the Ekin(t+dt/2) version of vv */
-            trotter_update(ir, step, ekind, enerd, state, total_vir, mdatoms, MassQ, trotter_seq, ettTSEQ1);
+            trotter_update(ir,
+                           step,
+                           ekind,
+                           enerd,
+                           state,
+                           total_vir,
+                           mdatoms->homenr,
+                           mdatoms->cTC ? gmx::arrayRefFromArray(mdatoms->cTC, mdatoms->nr)
+                                        : gmx::ArrayRef<const unsigned short>(),
+                           gmx::arrayRefFromArray(mdatoms->invmass, mdatoms->nr),
+                           MassQ,
+                           trotter_seq,
+                           TrotterSequence::One);
         }
 
         upd->update_coords(*ir,
@@ -181,7 +190,7 @@ void integrateVVFirstStep(int64_t                                  step,
                     ((bGStat ? CGLO_GSTAT : 0) | (bCalcEner ? CGLO_ENERGY : 0)
                      | (bTemp ? CGLO_TEMPERATURE : 0) | (bPres ? CGLO_PRESSURE : 0)
                      | (bPres ? CGLO_CONSTRAINT : 0) | (bStopCM ? CGLO_STOPCM : 0) | CGLO_SCALEEKIN);
-            if (DOMAINDECOMP(cr) && shouldCheckNumberOfBondedInteractions(*cr->dd))
+            if (DOMAINDECOMP(cr) && dd_localTopologyChecker(*cr->dd).shouldCheckNumberOfBondedInteractions())
             {
                 cglo_flags |= CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS;
             }
@@ -216,8 +225,8 @@ void integrateVVFirstStep(int64_t                                  step,
                 EkinAveVel because it's needed for the pressure */
             if (DOMAINDECOMP(cr))
             {
-                checkNumberOfBondedInteractions(
-                        mdlog, cr, top_global, &top, makeConstArrayRef(state->x), state->box);
+                dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
+                        &top, makeConstArrayRef(state->x), state->box);
             }
             if (bStopCM)
             {
@@ -233,7 +242,19 @@ void integrateVVFirstStep(int64_t                                  step,
             if (bTrotter)
             {
                 m_add(force_vir, shake_vir, total_vir); /* we need the un-dispersion corrected total vir here */
-                trotter_update(ir, step, ekind, enerd, state, total_vir, mdatoms, MassQ, trotter_seq, ettTSEQ2);
+                trotter_update(ir,
+                               step,
+                               ekind,
+                               enerd,
+                               state,
+                               total_vir,
+                               mdatoms->homenr,
+                               mdatoms->cTC ? gmx::arrayRefFromArray(mdatoms->cTC, mdatoms->nr)
+                                            : gmx::ArrayRef<const unsigned short>(),
+                               gmx::arrayRefFromArray(mdatoms->invmass, mdatoms->nr),
+                               MassQ,
+                               trotter_seq,
+                               TrotterSequence::Two);
 
                 /* TODO This is only needed when we're about to write
                  * a checkpoint, because we use it after the restart
@@ -310,39 +331,39 @@ void integrateVVFirstStep(int64_t                                  step,
     }
 }
 
-void integrateVVSecondStep(int64_t                                  step,
-                           const t_inputrec*                        ir,
-                           t_forcerec*                              fr,
-                           t_commrec*                               cr,
-                           t_state*                                 state,
-                           t_mdatoms*                               mdatoms,
-                           const t_fcdata&                          fcdata,
-                           t_extmass*                               MassQ,
-                           t_vcm*                                   vcm,
-                           pull_t*                                  pull_work,
-                           gmx_enerdata_t*                          enerd,
-                           gmx_ekindata_t*                          ekind,
-                           gmx_global_stat*                         gstat,
-                           real*                                    dvdl_constr,
-                           bool                                     bCalcVir,
-                           tensor                                   total_vir,
-                           tensor                                   shake_vir,
-                           tensor                                   force_vir,
-                           tensor                                   pres,
-                           matrix                                   M,
-                           matrix                                   lastbox,
-                           bool                                     do_log,
-                           bool                                     do_ene,
-                           bool                                     bGStat,
-                           bool*                                    bSumEkinhOld,
-                           gmx::ForceBuffers*                       f,
-                           std::vector<gmx::RVec>*                  cbuf,
-                           gmx::Update*                             upd,
-                           gmx::Constraints*                        constr,
-                           gmx::SimulationSignaller*                nullSignaller,
-                           std::array<std::vector<int>, ettTSEQMAX> trotter_seq,
-                           t_nrnb*                                  nrnb,
-                           gmx_wallcycle*                           wcycle)
+void integrateVVSecondStep(int64_t                                                  step,
+                           const t_inputrec*                                        ir,
+                           t_forcerec*                                              fr,
+                           t_commrec*                                               cr,
+                           t_state*                                                 state,
+                           t_mdatoms*                                               mdatoms,
+                           const t_fcdata&                                          fcdata,
+                           t_extmass*                                               MassQ,
+                           t_vcm*                                                   vcm,
+                           pull_t*                                                  pull_work,
+                           gmx_enerdata_t*                                          enerd,
+                           gmx_ekindata_t*                                          ekind,
+                           gmx_global_stat*                                         gstat,
+                           real*                                                    dvdl_constr,
+                           bool                                                     bCalcVir,
+                           tensor                                                   total_vir,
+                           tensor                                                   shake_vir,
+                           tensor                                                   force_vir,
+                           tensor                                                   pres,
+                           matrix                                                   M,
+                           matrix                                                   lastbox,
+                           bool                                                     do_log,
+                           bool                                                     do_ene,
+                           bool                                                     bGStat,
+                           bool*                                                    bSumEkinhOld,
+                           gmx::ForceBuffers*                                       f,
+                           std::vector<gmx::RVec>*                                  cbuf,
+                           gmx::Update*                                             upd,
+                           gmx::Constraints*                                        constr,
+                           gmx::SimulationSignaller*                                nullSignaller,
+                           gmx::EnumerationArray<TrotterSequence, std::vector<int>> trotter_seq,
+                           t_nrnb*                                                  nrnb,
+                           gmx_wallcycle*                                           wcycle)
 {
     /* velocity half-step update */
     upd->update_coords(*ir,
@@ -442,7 +463,19 @@ void integrateVVSecondStep(int64_t                                  step,
                         bSumEkinhOld,
                         (bGStat ? CGLO_GSTAT : 0) | CGLO_TEMPERATURE);
         wallcycle_start(wcycle, WallCycleCounter::Update);
-        trotter_update(ir, step, ekind, enerd, state, total_vir, mdatoms, MassQ, trotter_seq, ettTSEQ4);
+        trotter_update(ir,
+                       step,
+                       ekind,
+                       enerd,
+                       state,
+                       total_vir,
+                       mdatoms->homenr,
+                       mdatoms->cTC ? gmx::arrayRefFromArray(mdatoms->cTC, mdatoms->nr)
+                                    : gmx::ArrayRef<const unsigned short>(),
+                       gmx::arrayRefFromArray(mdatoms->invmass, mdatoms->nr),
+                       MassQ,
+                       trotter_seq,
+                       TrotterSequence::Four);
         /* now we know the scaling, we can compute the positions again */
         std::copy(cbuf->begin(), cbuf->end(), state->x.begin());
 

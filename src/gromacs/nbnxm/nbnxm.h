@@ -138,6 +138,7 @@ struct t_lambda;
 struct t_nrnb;
 struct t_forcerec;
 struct t_inputrec;
+struct gmx_grppairener_t;
 
 class GpuEventSynchronizer;
 
@@ -145,7 +146,7 @@ namespace gmx
 {
 class DeviceStreamManager;
 class ForceWithShiftForces;
-class GpuBonded;
+class ListedForcesGpu;
 template<typename>
 class ListOfLists;
 class MDLogger;
@@ -313,9 +314,9 @@ public:
                            t_nrnb*                      nrnb) const;
 
     //! Updates all the atom properties in Nbnxm
-    void setAtomProperties(gmx::ArrayRef<const int>  atomTypes,
-                           gmx::ArrayRef<const real> atomCharges,
-                           gmx::ArrayRef<const int>  atomInfo) const;
+    void setAtomProperties(gmx::ArrayRef<const int>     atomTypes,
+                           gmx::ArrayRef<const real>    atomCharges,
+                           gmx::ArrayRef<const int64_t> atomInfo) const;
 
     /*!\brief Convert the coordinates to NBNXM format for the given locality.
      *
@@ -358,19 +359,26 @@ public:
     void dispatchPruneKernelGpu(int64_t step);
 
     //! \brief Executes the non-bonded kernel of the GPU or launches it on the GPU
-    void dispatchNonbondedKernel(gmx::InteractionLocality   iLocality,
-                                 const interaction_const_t& ic,
-                                 const gmx::StepWorkload&   stepWork,
-                                 int                        clearF,
-                                 const t_forcerec&          fr,
-                                 gmx_enerdata_t*            enerd,
-                                 t_nrnb*                    nrnb);
+    void dispatchNonbondedKernel(gmx::InteractionLocality       iLocality,
+                                 const interaction_const_t&     ic,
+                                 const gmx::StepWorkload&       stepWork,
+                                 int                            clearF,
+                                 gmx::ArrayRef<const gmx::RVec> shiftvec,
+                                 gmx::ArrayRef<real>            repulsionDispersionSR,
+                                 gmx::ArrayRef<real>            CoulombSR,
+                                 t_nrnb*                        nrnb) const;
 
     //! Executes the non-bonded free-energy kernel, always runs on the CPU
     void dispatchFreeEnergyKernel(gmx::InteractionLocality       iLocality,
-                                  const t_forcerec&              fr,
                                   gmx::ArrayRef<const gmx::RVec> coords,
                                   gmx::ForceWithShiftForces*     forceWithShiftForces,
+                                  bool                           useSimd,
+                                  int                            ntype,
+                                  real                           rlist,
+                                  const interaction_const_t&     ic,
+                                  gmx::ArrayRef<const gmx::RVec> shiftvec,
+                                  gmx::ArrayRef<const real>      nbfp,
+                                  gmx::ArrayRef<const real>      nbfp_grid,
                                   gmx::ArrayRef<const real>      chargeA,
                                   gmx::ArrayRef<const real>      chargeB,
                                   gmx::ArrayRef<const int>       typeA,
@@ -394,12 +402,6 @@ public:
      */
     int getNumAtoms(gmx::AtomLocality locality) const;
 
-    /*! \brief Get the pointer to the GPU nonbonded force buffer
-     *
-     * \returns A pointer to the force buffer in GPU memory
-     */
-    DeviceBuffer<gmx::RVec> getGpuForces() const;
-
     //! Return the kernel setup
     const Nbnxm::KernelSetup& kernelSetup() const { return kernelSetup_; }
 
@@ -413,7 +415,8 @@ public:
     void changePairlistRadii(real rlistOuter, real rlistInner) const;
 
     //! Set up internal flags that indicate what type of short-range work there is.
-    void setupGpuShortRangeWork(const gmx::GpuBonded* gpuBonded, gmx::InteractionLocality iLocality) const;
+    void setupGpuShortRangeWork(const gmx::ListedForcesGpu* listedForcesGpu,
+                                gmx::InteractionLocality    iLocality) const;
 
     // TODO: Make all data members private
     //! All data related to the pair lists
@@ -428,6 +431,8 @@ private:
     Nbnxm::KernelSetup kernelSetup_;
     //! \brief Pointer to wallcycle structure.
     gmx_wallcycle* wcycle_;
+    //! Temporary array for storing foreign lambda group pair energies
+    std::unique_ptr<gmx_grppairener_t> foreignEnergyGroups_;
 
 public:
     //! GPU Nbnxm data, only used with a physical GPU (TODO: use unique_ptr)
@@ -486,7 +491,7 @@ void nbnxn_put_on_grid(nonbonded_verlet_t*            nb_verlet,
                        const gmx::UpdateGroupsCog*    updateGroupsCog,
                        gmx::Range<int>                atomRange,
                        real                           atomDensity,
-                       gmx::ArrayRef<const int>       atomInfo,
+                       gmx::ArrayRef<const int64_t>   atomInfo,
                        gmx::ArrayRef<const gmx::RVec> x,
                        int                            numAtomsMoved,
                        const int*                     move);
@@ -498,7 +503,14 @@ void nbnxn_put_on_grid(nonbonded_verlet_t*            nb_verlet,
  */
 void nbnxn_put_on_grid_nonlocal(nonbonded_verlet_t*              nb_verlet,
                                 const struct gmx_domdec_zones_t* zones,
-                                gmx::ArrayRef<const int>         atomInfo,
+                                gmx::ArrayRef<const int64_t>     atomInfo,
                                 gmx::ArrayRef<const gmx::RVec>   x);
+
+/*! \brief Check if GROMACS has been built with GPU support.
+ *
+ * \param[in] error Pointer to error string or nullptr.
+ * \todo Move this to NB module once it exists.
+ */
+bool buildSupportsNonbondedOnGpu(std::string* error);
 
 #endif // GMX_NBNXN_NBNXM_H

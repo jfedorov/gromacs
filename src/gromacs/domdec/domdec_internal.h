@@ -189,6 +189,8 @@ typedef struct gmx_domdec_sort
     std::vector<gmx_cgsort_t> moved;
     /**< Integer buffer for sorting */
     std::vector<int> intBuffer;
+    /**< Int64 buffer for sorting */
+    std::vector<int64_t> int64Buffer;
 } gmx_domdec_sort_t;
 
 /*! \brief Manages atom ranges and order for the local state atom vectors */
@@ -423,7 +425,7 @@ struct DDSystemInfo
     //! True when update groups are used
     bool useUpdateGroups = false;
     //! Update atom grouping for each molecule type
-    std::vector<gmx::RangePartitioning> updateGroupingsPerMoleculeType;
+    gmx::ArrayRef<const gmx::RangePartitioning> updateGroupingsPerMoleculeType;
     //! The maximum radius over all update groups
     real maxUpdateGroupRadius;
 
@@ -442,9 +444,9 @@ struct DDSystemInfo
     real cellsizeLimit = 0;
 
     //! Can atoms connected by constraints be assigned to different domains?
-    bool haveSplitConstraints = false;
+    bool mayHaveSplitConstraints = false;
     //! Can atoms connected by settles be assigned to different domains?
-    bool haveSplitSettles = false;
+    bool mayHaveSplitSettles = false;
     //! Estimated communication range needed for constraints
     real constraintCommunicationRange = 0;
 
@@ -798,19 +800,5 @@ static constexpr double DD_CELL_MARGIN2 = 1.00005;
 static constexpr double DD_PRES_SCALE_MARGIN = 1.02;
 
 /*! \endcond */
-
-//! \internal \brief Reverse topology class
-struct gmx_reverse_top_t
-{
-    //! Constructor
-    gmx_reverse_top_t(const gmx_mtop_t& mtop, bool useFreeEnergy, const ReverseTopOptions& reverseTopOptions);
-    //! Destructor
-    ~gmx_reverse_top_t();
-
-    //! Private implementation definition
-    struct Impl;
-    //! Private implementation declaration
-    std::unique_ptr<Impl> impl_;
-};
 
 #endif

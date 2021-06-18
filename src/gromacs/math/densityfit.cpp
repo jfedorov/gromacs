@@ -98,8 +98,7 @@ private:
 };
 
 DensitySimilarityInnerProduct::DensitySimilarityInnerProduct(density referenceDensity) :
-    referenceDensity_{ referenceDensity },
-    gradient_{ referenceDensity.extents() }
+    referenceDensity_{ referenceDensity }, gradient_{ referenceDensity.extents() }
 {
     const auto numVoxels = gradient_.asConstView().mapping().required_span_size();
     /* the gradient for the inner product measure of fit is constant and does not
@@ -184,8 +183,7 @@ private:
 };
 
 DensitySimilarityRelativeEntropy::DensitySimilarityRelativeEntropy(density referenceDensity) :
-    referenceDensity_{ referenceDensity },
-    gradient_(referenceDensity.extents())
+    referenceDensity_{ referenceDensity }, gradient_(referenceDensity.extents())
 {
 }
 
@@ -253,7 +251,7 @@ CrossCorrelationEvaluationHelperValues evaluateHelperValues(DensitySimilarityMea
 
     index i = 0;
 
-    auto referenceIterator = begin(reference);
+    const auto* referenceIterator = begin(reference);
     for (const real comp : compared)
     {
         const real refHelper        = *referenceIterator - helperValues.meanReference;
@@ -284,7 +282,7 @@ public:
     {
     }
     //! Evaluate the cross correlation gradient at a voxel
-    real operator()(real reference, real comparison)
+    real operator()(real reference, real comparison) const
     {
         return prefactor_
                * (reference - meanReference_ - comparisonPrefactor_ * (comparison - meanComparison_));
@@ -330,8 +328,7 @@ private:
 };
 
 DensitySimilarityCrossCorrelation::DensitySimilarityCrossCorrelation(density referenceDensity) :
-    referenceDensity_{ referenceDensity },
-    gradient_(referenceDensity.extents())
+    referenceDensity_{ referenceDensity }, gradient_(referenceDensity.extents())
 {
 }
 

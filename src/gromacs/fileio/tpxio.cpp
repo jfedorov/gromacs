@@ -95,7 +95,7 @@
  * merging with mainstream GROMACS, set this tag string back to
  * TPX_TAG_RELEASE, and instead add an element to tpxv.
  */
-static const char* tpx_tag = TPX_TAG_RELEASE;
+static const std::string tpx_tag = TPX_TAG_RELEASE;
 
 /*! \brief Enum of values that describe the contents of a tpr file
  * whose format matches a version number
@@ -246,9 +246,6 @@ static const t_ftupd ftupd[] = {
     { 79, F_DVDL_TEMPERATURE },
 };
 #define NFTUPD asize(ftupd)
-
-/* Needed for backward compatibility */
-#define MAXNODES 256
 
 /**************************************************************
  *
@@ -2719,7 +2716,7 @@ static void do_tpxheader(gmx::FileIOXdrSerializer* serializer,
         serializer->doString(&buf);
         gmx_fio_setprecision(fio, tpx->isDouble);
         serializer->doInt(&precision);
-        fileTag = gmx::formatString("%s", tpx_tag);
+        fileTag = tpx_tag;
     }
 
     /* Check versions! */
@@ -2751,7 +2748,7 @@ static void do_tpxheader(gmx::FileIOXdrSerializer* serializer,
 
         if (fileTag != tpx_tag)
         {
-            fprintf(stderr, "Note: file tpx tag '%s', software tpx tag '%s'\n", fileTag.c_str(), tpx_tag);
+            fprintf(stderr, "Note: file tpx tag '%s', software tpx tag '%s'\n", fileTag.c_str(), tpx_tag.c_str());
 
             /* We only support reading tpx files with the same tag as the code
              * or tpx files with the release tag and with lower version number.
@@ -2765,7 +2762,7 @@ static void do_tpxheader(gmx::FileIOXdrSerializer* serializer,
                           tpx->fileVersion,
                           fileTag.c_str(),
                           tpx_version,
-                          tpx_tag);
+                          tpx_tag.c_str());
             }
         }
     }

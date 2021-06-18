@@ -151,7 +151,7 @@
 #if !(defined LJ_COMB_GEOM || defined LJ_COMB_LB || defined FIX_LJ_C)
     /* No combination rule used */
     const real* gmx_restrict nbfp_ptr = nbatParams.nbfp_aligned.data();
-    const int* gmx_restrict type      = nbatParams.type.data();
+    const int* gmx_restrict  type     = nbatParams.type.data();
 #endif
 
     /* Load j-i for the first i */
@@ -351,8 +351,6 @@
 #endif
 
     const nbnxn_cj_t* l_cj = nbl->cj.data();
-
-    int ninner = 0;
 
     for (const nbnxn_ci_t& ciEntry : nbl->ci)
     {
@@ -631,8 +629,6 @@
             }
         }
 #undef CALC_LJ
-        ninner += cjind1 - cjind0;
-
         /* Add accumulated i-forces to the force array */
         real fShiftX = reduceIncr4ReturnSum(f + scix, fix_S0, fix_S1, fix_S2, fix_S3);
         real fShiftY = reduceIncr4ReturnSum(f + sciy, fiy_S0, fiy_S1, fiy_S2, fiy_S3);

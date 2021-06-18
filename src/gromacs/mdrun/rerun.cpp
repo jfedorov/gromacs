@@ -56,6 +56,7 @@
 #include "gromacs/domdec/domdec.h"
 #include "gromacs/domdec/domdec_network.h"
 #include "gromacs/domdec/domdec_struct.h"
+#include "gromacs/domdec/localtopologychecker.h"
 #include "gromacs/domdec/mdsetup.h"
 #include "gromacs/domdec/partition.h"
 #include "gromacs/essentialdynamics/edsam.h"
@@ -116,6 +117,7 @@
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/mimic/utilities.h"
 #include "gromacs/pbcutil/pbc.h"
+#include "gromacs/pulling/output.h"
 #include "gromacs/pulling/pull.h"
 #include "gromacs/swap/swapcoords.h"
 #include "gromacs/timing/wallcycle.h"
@@ -270,13 +272,20 @@ void gmx::LegacySimulator::do_rerun()
     const SimulationGroups* groups = &top_global.groups;
     if (ir->eI == IntegrationAlgorithm::Mimic)
     {
-        auto nonConstGlobalTopology                          = const_cast<gmx_mtop_t*>(&top_global);
+        auto* nonConstGlobalTopology                         = const_cast<gmx_mtop_t*>(&top_global);
         nonConstGlobalTopology->intermolecularExclusionGroup = genQmmmIndices(top_global);
     }
     int*                fep_state = MASTER(cr) ? &state_global->fep_state : nullptr;
     gmx::ArrayRef<real> lambda    = MASTER(cr) ? state_global->lambda : gmx::ArrayRef<real>();
-    initialize_lambdas(
-            fplog, *ir, gmx::arrayRefFromArray(ir->opts.ref_t, ir->opts.ngtc), MASTER(cr), fep_state, lambda);
+    initialize_lambdas(fplog,
+                       ir->efep,
+                       ir->bSimTemp,
+                       *ir->fepvals,
+                       ir->simtempvals->temperatures,
+                       gmx::arrayRefFromArray(ir->opts.ref_t, ir->opts.ngtc),
+                       MASTER(cr),
+                       fep_state,
+                       lambda);
     const bool        simulationsShareState = false;
     gmx_mdoutf*       outf                  = init_mdoutf(fplog,
                                    nfile,
@@ -362,7 +371,7 @@ void gmx::LegacySimulator::do_rerun()
         mdAlgorithmsSetupAtomData(cr, *ir, top_global, &top, fr, &f, mdAtoms, constr, vsite, shellfc);
     }
 
-    auto mdatoms = mdAtoms->mdatoms();
+    auto* mdatoms = mdAtoms->mdatoms();
 
     // NOTE: The global state is no longer used at this point.
     // But state_global is still used as temporary storage space for writing
@@ -378,7 +387,7 @@ void gmx::LegacySimulator::do_rerun()
 
     {
         int cglo_flags = CGLO_GSTAT;
-        if (DOMAINDECOMP(cr) && shouldCheckNumberOfBondedInteractions(*cr->dd))
+        if (DOMAINDECOMP(cr) && dd_localTopologyChecker(*cr->dd).shouldCheckNumberOfBondedInteractions())
         {
             cglo_flags |= CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS;
         }
@@ -408,8 +417,8 @@ void gmx::LegacySimulator::do_rerun()
                         cglo_flags);
         if (DOMAINDECOMP(cr))
         {
-            checkNumberOfBondedInteractions(
-                    mdlog, cr, top_global, &top, makeConstArrayRef(state->x), state->box);
+            dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
+                    &top, makeConstArrayRef(state->x), state->box);
         }
     }
 
@@ -733,7 +742,7 @@ void gmx::LegacySimulator::do_rerun()
             SimulationSignaller signaller(&signals, cr, ms, doInterSimSignal, doIntraSimSignal);
 
             int cglo_flags = CGLO_GSTAT | CGLO_ENERGY;
-            if (DOMAINDECOMP(cr) && shouldCheckNumberOfBondedInteractions(*cr->dd))
+            if (DOMAINDECOMP(cr) && dd_localTopologyChecker(*cr->dd).shouldCheckNumberOfBondedInteractions())
             {
                 cglo_flags |= CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS;
             }
@@ -761,8 +770,8 @@ void gmx::LegacySimulator::do_rerun()
                             cglo_flags);
             if (DOMAINDECOMP(cr))
             {
-                checkNumberOfBondedInteractions(
-                        mdlog, cr, top_global, &top, makeConstArrayRef(state->x), state->box);
+                dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
+                        &top, makeConstArrayRef(state->x), state->box);
             }
         }
 
@@ -789,8 +798,6 @@ void gmx::LegacySimulator::do_rerun()
                                                                 state->nhpres_xi,
                                                                 state->nhpres_vxi }),
                                              state->fep_state,
-                                             shake_vir,
-                                             force_vir,
                                              total_vir,
                                              pres,
                                              ekind,
@@ -813,6 +820,11 @@ void gmx::LegacySimulator::do_rerun()
                                                t,
                                                fr->fcdata.get(),
                                                awh);
+
+            if (ir->bPull)
+            {
+                pull_print_output(pull_work, step, t);
+            }
 
             if (do_per_step(step, ir->nstlog))
             {

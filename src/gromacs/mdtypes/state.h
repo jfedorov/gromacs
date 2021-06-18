@@ -67,6 +67,8 @@
 #include "gromacs/utility/real.h"
 
 struct t_inputrec;
+struct t_lambda;
+enum class FreeEnergyPerturbationType;
 
 namespace gmx
 {
@@ -151,12 +153,10 @@ class history_t
 public:
     history_t();
 
-    real  disre_initf;  //!< The scaling factor for initializing the time av.
-    int   ndisrepairs;  //!< The number of distance restraints
-    real* disre_rm3tav; //!< The r^-3 time averaged pair distances
-    real  orire_initf;  //!< The scaling factor for initializing the time av.
-    int   norire_Dtav;  //!< The number of matrix element in dtav (npair*5)
-    real* orire_Dtav;   //!< The time averaged orientation tensors
+    real              disre_initf;  //!< The scaling factor for initializing the time av.
+    std::vector<real> disre_rm3tav; //!< The r^-3 time averaged pair distances
+    real              orire_initf;  //!< The scaling factor for initializing the time av.
+    std::vector<real> orire_Dtav;   //!< The time averaged orientation tensors
 };
 
 /*! \libinternal \brief Struct used for checkpointing only
@@ -202,7 +202,7 @@ public:
  *
  * \todo Split out into microstate and observables history.
  */
-typedef struct df_history_t
+struct df_history_t
 {
     int nlambda; //!< total number of lambda states - for history
 
@@ -224,7 +224,15 @@ typedef struct df_history_t
     real** Tij;           //!< transition matrix
     real** Tij_empirical; //!< Empirical transition matrix
 
-} df_history_t;
+    /*! \brief Allows to read and write checkpoint within modular simulator
+     *
+     * \tparam operation  Whether we're reading or writing
+     * \param checkpointData  The CheckpointData object
+     * \param elamstats  How the lambda weights are calculated
+     */
+    template<gmx::CheckpointDataOperation operation>
+    void doCheckpoint(gmx::CheckpointData<operation> checkpointData, LambdaWeightCalculation elamstats);
+};
 
 
 /*! \brief The microstate of the system
@@ -365,11 +373,14 @@ void printLambdaStateToLog(FILE* fplog, gmx::ArrayRef<const real> lambda, bool i
  * and lambda on master rank.
  *
  * Reports the initial lambda state to the log file. */
-void initialize_lambdas(FILE*               fplog,
-                        const t_inputrec&   ir,
-                        gmx::ArrayRef<real> ref_t,
-                        bool                isMaster,
-                        int*                fep_state,
-                        gmx::ArrayRef<real> lambda);
+void initialize_lambdas(FILE*                      fplog,
+                        FreeEnergyPerturbationType freeEnergyPerturbationType,
+                        bool                       haveSimulatedTempering,
+                        const t_lambda&            fep,
+                        gmx::ArrayRef<const real>  simulatedTemperingTemps,
+                        gmx::ArrayRef<real>        ref_t,
+                        bool                       isMaster,
+                        int*                       fep_state,
+                        gmx::ArrayRef<real>        lambda);
 
 #endif

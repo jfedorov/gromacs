@@ -107,7 +107,7 @@ static inline void init_ewald_coulomb_force_table(const EwaldCorrectionTables& t
 {
     if (nbp->coulomb_tab)
     {
-        destroyParamLookupTable(&nbp->coulomb_tab, nbp->coulomb_tab_texobj);
+        destroyParamLookupTable(&nbp->coulomb_tab, &nbp->coulomb_tab_texobj);
     }
 
     nbp->coulomb_tab_scale = tables.scale;
@@ -746,7 +746,9 @@ bool gpu_is_kernel_ewald_analytical(const NbnxmGpu* nb)
             || (nb->nbparam->elecType == ElecType::EwaldAnaTwin));
 }
 
-void setupGpuShortRangeWork(NbnxmGpu* nb, const gmx::GpuBonded* gpuBonded, const gmx::InteractionLocality iLocality)
+void setupGpuShortRangeWork(NbnxmGpu*                      nb,
+                            const gmx::ListedForcesGpu*    listedForcesGpu,
+                            const gmx::InteractionLocality iLocality)
 {
     GMX_ASSERT(nb, "Need a valid nbnxn_gpu object");
 
@@ -754,7 +756,7 @@ void setupGpuShortRangeWork(NbnxmGpu* nb, const gmx::GpuBonded* gpuBonded, const
     // interaction locality contains entries or if there is any
     // bonded work (as this is not split into local/nonlocal).
     nb->haveWork[iLocality] = ((nb->plist[iLocality]->nsci != 0)
-                               || (gpuBonded != nullptr && gpuBonded->haveInteractions()));
+                               || (listedForcesGpu != nullptr && listedForcesGpu->haveInteractions()));
 }
 
 bool haveGpuShortRangeWork(const NbnxmGpu* nb, const gmx::InteractionLocality interactionLocality)
@@ -1132,17 +1134,17 @@ void gpu_free(NbnxmGpu* nb)
     /* Free nbparam */
     if (nbparam->elecType == ElecType::EwaldTab || nbparam->elecType == ElecType::EwaldTabTwin)
     {
-        destroyParamLookupTable(&nbparam->coulomb_tab, nbparam->coulomb_tab_texobj);
+        destroyParamLookupTable(&nbparam->coulomb_tab, &nbparam->coulomb_tab_texobj);
     }
 
     if (!useLjCombRule(nb->nbparam->vdwType))
     {
-        destroyParamLookupTable(&nbparam->nbfp, nbparam->nbfp_texobj);
+        destroyParamLookupTable(&nbparam->nbfp, &nbparam->nbfp_texobj);
     }
 
     if (nbparam->vdwType == VdwType::EwaldGeom || nbparam->vdwType == VdwType::EwaldLB)
     {
-        destroyParamLookupTable(&nbparam->nbfp_comb, nbparam->nbfp_comb_texobj);
+        destroyParamLookupTable(&nbparam->nbfp_comb, &nbparam->nbfp_comb_texobj);
     }
 
     /* Free plist */
@@ -1180,6 +1182,13 @@ void gpu_free(NbnxmGpu* nb)
     {
         fprintf(debug, "Cleaned up NBNXM GPU data structures.\n");
     }
+}
+
+DeviceBuffer<gmx::RVec> gpu_get_f(NbnxmGpu* nb)
+{
+    GMX_ASSERT(nb != nullptr, "nb pointer must be valid");
+
+    return nb->atdat->f;
 }
 
 } // namespace Nbnxm

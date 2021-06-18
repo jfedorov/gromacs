@@ -39,6 +39,7 @@
 
 #include "grompp.h"
 
+#include <array>
 #include <cerrno>
 #include <climits>
 #include <cmath>
@@ -115,14 +116,13 @@
 InteractionOfType::InteractionOfType(gmx::ArrayRef<const int>  atoms,
                                      gmx::ArrayRef<const real> params,
                                      const std::string&        name) :
-    atoms_(atoms.begin(), atoms.end()),
-    interactionTypeName_(name)
+    atoms_(atoms.begin(), atoms.end()), interactionTypeName_(name)
 {
     GMX_RELEASE_ASSERT(
             params.size() <= forceParam_.size(),
             gmx::formatString("Cannot have more parameters than the maximum number possible (%d)", MAXFORCEPARAM)
                     .c_str());
-    auto* forceParamIt = forceParam_.begin();
+    std::array<real, MAXFORCEPARAM>::iterator forceParamIt = forceParam_.begin();
     for (const auto param : params)
     {
         *forceParamIt++ = param;
@@ -1858,7 +1858,9 @@ int gmx_grompp(int argc, char* argv[])
                        { efEDR, "-e", nullptr, ffOPTRD },
                        /* This group is needed by the VMD viewer as the start configuration for IMD sessions: */
                        { efGRO, "-imd", "imdgroup", ffOPTWR },
-                       { efTRN, "-ref", "rotref", ffOPTRW | ffALLOW_MISSING } };
+                       { efTRN, "-ref", "rotref", ffOPTRW | ffALLOW_MISSING },
+                       /* This group is needed by the QMMM MDModule: */
+                       { efQMI, "-qmi", nullptr, ffOPTRD } };
 #define NFILE asize(fnm)
 
     /* Command line options */
@@ -1930,6 +1932,14 @@ int gmx_grompp(int argc, char* argv[])
     // to eventual notifications during pre-processing their data
     mdModules.subscribeToPreProcessingNotifications();
 
+    // Notify MDModules of existing logger
+    mdModules.notifiers().preProcessingNotifier_.notify(logger);
+
+    // Notify QMMM MDModule of external QM input file command-line option
+    {
+        gmx::QMInputFileName qmInputFileName = { ftp2bSet(efQMI, NFILE, fnm), ftp2fn(efQMI, NFILE, fnm) };
+        mdModules.notifiers().preProcessingNotifier_.notify(qmInputFileName);
+    }
 
     if (bVerbose)
     {
@@ -2176,6 +2186,13 @@ int gmx_grompp(int argc, char* argv[])
     /* check masses */
     check_mol(&sys, wi);
 
+    if (haveFepPerturbedMassesInSettles(sys))
+    {
+        warning_error(wi,
+                      "SETTLE is not implemented for atoms whose mass is perturbed. "
+                      "You might instead use normal constraints.");
+    }
+
     checkForUnboundAtoms(&sys, bVerbose, wi, logger);
 
     if (EI_DYNAMICS(ir->eI) && ir->eI != IntegrationAlgorithm::BD)
@@ -2202,6 +2219,9 @@ int gmx_grompp(int argc, char* argv[])
         GMX_LOG(logger.info).asParagraph().appendTextFormatted("initialising group options...");
     }
     do_index(mdparin, ftp2fn_null(efNDX, NFILE, fnm), &sys, bVerbose, mdModules.notifiers(), ir, wi);
+
+    // Notify topology to MdModules for pre-processing after all indexes were built
+    mdModules.notifiers().preProcessingNotifier_.notify(&sys);
 
     if (ir->cutoff_scheme == CutoffScheme::Verlet && ir->verletbuf_tol > 0)
     {
@@ -2336,7 +2356,7 @@ int gmx_grompp(int argc, char* argv[])
     {
         /* Calculate the optimal grid dimensions */
         matrix          scaledBox;
-        EwaldBoxZScaler boxScaler(*ir);
+        EwaldBoxZScaler boxScaler(inputrecPbcXY2Walls(ir), ir->wall_ewald_zfac);
         boxScaler.scaleBox(state.box, scaledBox);
 
         if (ir->nkx > 0 && ir->nky > 0 && ir->nkz > 0)
@@ -2415,10 +2435,9 @@ int gmx_grompp(int argc, char* argv[])
                 ir->pbcType,
                 compressibility,
                 &ir->opts,
-                ir->efep != FreeEnergyPerturbationType::No
-                        ? ir->fepvals->all_lambda[static_cast<int>(FreeEnergyPerturbationCouplingType::Fep)]
-                                                 [ir->fepvals->init_fep_state]
-                        : 0,
+                ir->efep != FreeEnergyPerturbationType::No ? ir->fepvals->all_lambda[static_cast<int>(
+                        FreeEnergyPerturbationCouplingType::Fep)][ir->fepvals->init_fep_state]
+                                                           : 0,
                 sys,
                 wi);
     }
@@ -2481,6 +2500,15 @@ int gmx_grompp(int argc, char* argv[])
         {
             GMX_LOG(logger.info).asParagraph().appendText(warningMessage);
         }
+    }
+
+    // Hand over box and coordiantes to MdModules before they evaluate their final parameters
+    {
+        gmx::CoordinatesAndBoxPreprocessed coordinatesAndBoxPreprocessed;
+        coordinatesAndBoxPreprocessed.coordinates_ = state.x.arrayRefWithPadding();
+        copy_mat(state.box, coordinatesAndBoxPreprocessed.box_);
+        coordinatesAndBoxPreprocessed.pbc_ = ir->pbcType;
+        mdModules.notifiers().preProcessingNotifier_.notify(coordinatesAndBoxPreprocessed);
     }
 
     // Add the md modules internal parameters that are not mdp options

@@ -35,8 +35,8 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 
-#ifndef _nb_free_energy_h_
-#define _nb_free_energy_h_
+#ifndef GMX_GMXLIB_NONBONDED_NB_FREE_ENERGY_H
+#define GMX_GMXLIB_NONBONDED_NB_FREE_ENERGY_H
 
 #include "gromacs/math/vectypes.h"
 #include "gromacs/utility/basedefinitions.h"
@@ -71,6 +71,6 @@ void gmx_nb_free_energy_kernel(const t_nblist&                nlist,
                                gmx::ArrayRef<real>            dvdl,
                                gmx::ArrayRef<real>            energygrp_elec,
                                gmx::ArrayRef<real>            energygrp_vdw,
-                               t_nrnb* gmx_restrict nrnb);
+                               t_nrnb* gmx_restrict           nrnb);
 
 #endif

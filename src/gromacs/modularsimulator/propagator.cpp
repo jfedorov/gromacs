@@ -73,12 +73,12 @@ constexpr EnumerationArray<IntegrationStage, const char*> integrationStepNames =
 template<NumVelocityScalingValues        numStartVelocityScalingValues,
          ParrinelloRahmanVelocityScaling parrinelloRahmanVelocityScaling,
          NumVelocityScalingValues        numEndVelocityScalingValues>
-static void inline updateVelocities(int         a,
-                                    real        dt,
-                                    real        lambdaStart,
-                                    real        lambdaEnd,
+static void inline updateVelocities(int                      a,
+                                    real                     dt,
+                                    real                     lambdaStart,
+                                    real                     lambdaEnd,
                                     const rvec* gmx_restrict invMassPerDim,
-                                    rvec* gmx_restrict v,
+                                    rvec* gmx_restrict       v,
                                     const rvec* gmx_restrict f,
                                     const rvec               diagPR,
                                     const matrix             matrixPR)
@@ -120,10 +120,10 @@ static void inline updateVelocities(int         a,
 }
 
 //! Update positions
-static void inline updatePositions(int         a,
-                                   real        dt,
+static void inline updatePositions(int                      a,
+                                   real                     dt,
                                    const rvec* gmx_restrict x,
-                                   rvec* gmx_restrict xprime,
+                                   rvec* gmx_restrict       xprime,
                                    const rvec* gmx_restrict v)
 {
     for (int d = 0; d < DIM; d++)
@@ -192,9 +192,9 @@ void Propagator<IntegrationStage::PositionsOnly>::run()
 {
     wallcycle_start(wcycle_, WallCycleCounter::Update);
 
-    auto xp = as_rvec_array(statePropagatorData_->positionsView().paddedArrayRef().data());
-    auto x  = as_rvec_array(statePropagatorData_->constPositionsView().paddedArrayRef().data());
-    auto v  = as_rvec_array(statePropagatorData_->constVelocitiesView().paddedArrayRef().data());
+    auto*       xp = as_rvec_array(statePropagatorData_->positionsView().paddedArrayRef().data());
+    const auto* x = as_rvec_array(statePropagatorData_->constPositionsView().paddedArrayRef().data());
+    const auto* v = as_rvec_array(statePropagatorData_->constVelocitiesView().paddedArrayRef().data());
 
     int nth    = gmx_omp_nthreads_get(ModuleMultiThread::Update);
     int homenr = mdAtoms_->mdatoms()->homenr;
@@ -269,16 +269,16 @@ void Propagator<IntegrationStage::VelocitiesOnly>::run()
 {
     wallcycle_start(wcycle_, WallCycleCounter::Update);
 
-    auto v = as_rvec_array(statePropagatorData_->velocitiesView().paddedArrayRef().data());
-    auto f = as_rvec_array(statePropagatorData_->constForcesView().force().data());
-    auto invMassPerDim = mdAtoms_->mdatoms()->invMassPerDim;
+    auto*       v = as_rvec_array(statePropagatorData_->velocitiesView().paddedArrayRef().data());
+    const auto* f = as_rvec_array(statePropagatorData_->constForcesView().force().data());
+    const auto* invMassPerDim = mdAtoms_->mdatoms()->invMassPerDim;
 
     const real lambdaStart = (numStartVelocityScalingValues == NumVelocityScalingValues::Single)
                                      ? startVelocityScaling_[0]
                                      : 1.0;
-    const real lambdaEnd = (numEndVelocityScalingValues == NumVelocityScalingValues::Single)
-                                   ? endVelocityScaling_[0]
-                                   : 1.0;
+    const real lambdaEnd   = (numEndVelocityScalingValues == NumVelocityScalingValues::Single)
+                                     ? endVelocityScaling_[0]
+                                     : 1.0;
 
     const bool isFullScalingMatrixDiagonal =
             diagonalizePRMatrix<parrinelloRahmanVelocityScaling>(matrixPR_, diagPR_);
@@ -350,18 +350,18 @@ void Propagator<IntegrationStage::LeapFrog>::run()
 {
     wallcycle_start(wcycle_, WallCycleCounter::Update);
 
-    auto xp = as_rvec_array(statePropagatorData_->positionsView().paddedArrayRef().data());
-    auto x  = as_rvec_array(statePropagatorData_->constPositionsView().paddedArrayRef().data());
-    auto v  = as_rvec_array(statePropagatorData_->velocitiesView().paddedArrayRef().data());
-    auto f  = as_rvec_array(statePropagatorData_->constForcesView().force().data());
-    auto invMassPerDim = mdAtoms_->mdatoms()->invMassPerDim;
+    auto*       xp = as_rvec_array(statePropagatorData_->positionsView().paddedArrayRef().data());
+    const auto* x = as_rvec_array(statePropagatorData_->constPositionsView().paddedArrayRef().data());
+    auto*       v = as_rvec_array(statePropagatorData_->velocitiesView().paddedArrayRef().data());
+    const auto* f = as_rvec_array(statePropagatorData_->constForcesView().force().data());
+    const auto* invMassPerDim = mdAtoms_->mdatoms()->invMassPerDim;
 
     const real lambdaStart = (numStartVelocityScalingValues == NumVelocityScalingValues::Single)
                                      ? startVelocityScaling_[0]
                                      : 1.0;
-    const real lambdaEnd = (numEndVelocityScalingValues == NumVelocityScalingValues::Single)
-                                   ? endVelocityScaling_[0]
-                                   : 1.0;
+    const real lambdaEnd   = (numEndVelocityScalingValues == NumVelocityScalingValues::Single)
+                                     ? endVelocityScaling_[0]
+                                     : 1.0;
 
     const bool isFullScalingMatrixDiagonal =
             diagonalizePRMatrix<parrinelloRahmanVelocityScaling>(matrixPR_, diagPR_);
@@ -435,18 +435,18 @@ void Propagator<IntegrationStage::VelocityVerletPositionsAndVelocities>::run()
 {
     wallcycle_start(wcycle_, WallCycleCounter::Update);
 
-    auto xp = as_rvec_array(statePropagatorData_->positionsView().paddedArrayRef().data());
-    auto x  = as_rvec_array(statePropagatorData_->constPositionsView().paddedArrayRef().data());
-    auto v  = as_rvec_array(statePropagatorData_->velocitiesView().paddedArrayRef().data());
-    auto f  = as_rvec_array(statePropagatorData_->constForcesView().force().data());
-    auto invMassPerDim = mdAtoms_->mdatoms()->invMassPerDim;
+    auto*       xp = as_rvec_array(statePropagatorData_->positionsView().paddedArrayRef().data());
+    const auto* x = as_rvec_array(statePropagatorData_->constPositionsView().paddedArrayRef().data());
+    auto*       v = as_rvec_array(statePropagatorData_->velocitiesView().paddedArrayRef().data());
+    const auto* f = as_rvec_array(statePropagatorData_->constForcesView().force().data());
+    const auto* invMassPerDim = mdAtoms_->mdatoms()->invMassPerDim;
 
     const real lambdaStart = (numStartVelocityScalingValues == NumVelocityScalingValues::Single)
                                      ? startVelocityScaling_[0]
                                      : 1.0;
-    const real lambdaEnd = (numEndVelocityScalingValues == NumVelocityScalingValues::Single)
-                                   ? endVelocityScaling_[0]
-                                   : 1.0;
+    const real lambdaEnd   = (numEndVelocityScalingValues == NumVelocityScalingValues::Single)
+                                     ? endVelocityScaling_[0]
+                                     : 1.0;
 
     const bool isFullScalingMatrixDiagonal =
             diagonalizePRMatrix<parrinelloRahmanVelocityScaling>(matrixPR_, diagPR_);
@@ -581,7 +581,7 @@ Propagator<integrationStage>::Propagator(double               timestep,
 }
 
 template<IntegrationStage integrationStage>
-void Propagator<integrationStage>::scheduleTask(Step step,
+void Propagator<integrationStage>::scheduleTask(Step                       step,
                                                 Time gmx_unused            time,
                                                 const RegisterRunFunction& registerRunFunction)
 {
@@ -896,6 +896,62 @@ PropagatorCallback Propagator<integrationStage>::prScalingCallback()
     return [this](Step step) { scalingStepPR_ = step; };
 }
 
+template<IntegrationStage integrationStage>
+static PropagatorConnection getConnection(Propagator<integrationStage> gmx_unused* propagator,
+                                          const PropagatorTag&                     propagatorTag)
+{
+    // gmx_unused is needed because gcc-7 & gcc-8 can't see that
+    // propagator is used for all IntegrationStage options
+
+    PropagatorConnection propagatorConnection{ propagatorTag };
+
+    if constexpr (hasStartVelocityScaling<integrationStage>() || hasEndVelocityScaling<integrationStage>())
+    {
+        propagatorConnection.setNumVelocityScalingVariables =
+                [propagator](int num, ScaleVelocities scaleVelocities) {
+                    propagator->setNumVelocityScalingVariables(num, scaleVelocities);
+                };
+        propagatorConnection.getVelocityScalingCallback = [propagator]() {
+            return propagator->velocityScalingCallback();
+        };
+    }
+    if constexpr (hasStartVelocityScaling<integrationStage>())
+    {
+        propagatorConnection.getViewOnStartVelocityScaling = [propagator]() {
+            return propagator->viewOnStartVelocityScaling();
+        };
+    }
+    if constexpr (hasEndVelocityScaling<integrationStage>())
+    {
+        propagatorConnection.getViewOnEndVelocityScaling = [propagator]() {
+            return propagator->viewOnEndVelocityScaling();
+        };
+    }
+    if constexpr (hasPositionScaling<integrationStage>())
+    {
+        propagatorConnection.setNumPositionScalingVariables = [propagator](int num) {
+            propagator->setNumPositionScalingVariables(num);
+        };
+        propagatorConnection.getViewOnPositionScaling = [propagator]() {
+            return propagator->viewOnPositionScaling();
+        };
+        propagatorConnection.getPositionScalingCallback = [propagator]() {
+            return propagator->positionScalingCallback();
+        };
+    }
+    if constexpr (hasParrinelloRahmanScaling<integrationStage>())
+    {
+        propagatorConnection.getViewOnPRScalingMatrix = [propagator]() {
+            return propagator->viewOnPRScalingMatrix();
+        };
+        propagatorConnection.getPRScalingCallback = [propagator]() {
+            return propagator->prScalingCallback();
+        };
+    }
+
+    return propagatorConnection;
+}
+
 // doxygen is confused by the two definitions
 //! \cond
 template<IntegrationStage integrationStage>
@@ -916,18 +972,7 @@ ISimulatorElement* Propagator<integrationStage>::getElementPointerImpl(
     auto* element    = builderHelper->storeElement(std::make_unique<Propagator<integrationStage>>(
             timestep, statePropagatorData, legacySimulatorData->mdAtoms, legacySimulatorData->wcycle));
     auto* propagator = static_cast<Propagator<integrationStage>*>(element);
-    builderHelper->registerWithThermostat(
-            { [propagator](int num, ScaleVelocities scaleVelocities) {
-                 propagator->setNumVelocityScalingVariables(num, scaleVelocities);
-             },
-              [propagator]() { return propagator->viewOnStartVelocityScaling(); },
-              [propagator]() { return propagator->viewOnEndVelocityScaling(); },
-              [propagator]() { return propagator->velocityScalingCallback(); },
-              propagatorTag });
-    builderHelper->registerWithBarostat(
-            { [propagator]() { return propagator->viewOnPRScalingMatrix(); },
-              [propagator]() { return propagator->prScalingCallback(); },
-              propagatorTag });
+    builderHelper->registerPropagator(getConnection<integrationStage>(propagator, propagatorTag));
     return element;
 }
 

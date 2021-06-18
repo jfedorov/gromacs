@@ -2,7 +2,7 @@
  * This file is part of the GROMACS molecular simulation package.
  *
  * Copyright (c) 2011-2018, The GROMACS development team.
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -96,7 +96,7 @@ public:
     TestReferenceDataImpl(ReferenceDataMode mode, bool bSelfTestMode);
 
     //! Performs final reference data processing when test ends.
-    void onTestEnd(bool testPassed);
+    void onTestEnd(bool testPassed) const;
 
     //! Full path of the reference data file.
     std::string fullFilename_;
@@ -288,12 +288,10 @@ namespace internal
 {
 
 TestReferenceDataImpl::TestReferenceDataImpl(ReferenceDataMode mode, bool bSelfTestMode) :
-    updateMismatchingEntries_(false),
-    bSelfTestMode_(bSelfTestMode),
-    bInUse_(false)
+    updateMismatchingEntries_(false), bSelfTestMode_(bSelfTestMode), bInUse_(false)
 {
-    const std::string dirname = bSelfTestMode ? TestFileManager::getGlobalOutputTempDirectory()
-                                              : TestFileManager::getInputDataDirectory();
+    const std::string dirname  = bSelfTestMode ? TestFileManager::getGlobalOutputTempDirectory()
+                                               : TestFileManager::getInputDataDirectory();
     const std::string filename = TestFileManager::getTestSpecificFileName(".xml");
     fullFilename_              = Path::join(dirname, "refdata", filename);
 
@@ -336,7 +334,7 @@ TestReferenceDataImpl::TestReferenceDataImpl(ReferenceDataMode mode, bool bSelfT
     }
 }
 
-void TestReferenceDataImpl::onTestEnd(bool testPassed)
+void TestReferenceDataImpl::onTestEnd(bool testPassed) const
 {
     if (!bInUse_)
     {

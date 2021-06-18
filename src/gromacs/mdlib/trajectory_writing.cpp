@@ -41,6 +41,7 @@
 #include "gromacs/fileio/confio.h"
 #include "gromacs/fileio/tngio.h"
 #include "gromacs/math/vec.h"
+#include "gromacs/mdlib/energyoutput.h"
 #include "gromacs/mdlib/mdoutf.h"
 #include "gromacs/mdlib/stat.h"
 #include "gromacs/mdlib/update.h"
@@ -196,7 +197,7 @@ void do_md_trajectory_writing(FILE*                          fplog,
 #if GMX_FAHCORE
     if (MASTER(cr))
     {
-        fcWriteVisFrame(ir->ePBC, state_global->box, top_global, state_global->x.rvec_array());
+        fcWriteVisFrame(ir->pbcType, state_global->box, top_global, state_global->x.rvec_array());
     }
 #endif
 }

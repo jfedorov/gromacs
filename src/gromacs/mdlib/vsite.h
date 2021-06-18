@@ -56,10 +56,10 @@ struct gmx_domdec_t;
 struct gmx_mtop_t;
 struct t_commrec;
 struct InteractionList;
-struct t_mdatoms;
 struct t_nrnb;
 struct gmx_wallcycle;
 enum class PbcType : int;
+enum class ParticleType : int;
 
 namespace gmx
 {
@@ -96,7 +96,10 @@ class VirtualSitesHandler
 {
 public:
     //! Constructor, used only be the makeVirtualSitesHandler() factory function
-    VirtualSitesHandler(const gmx_mtop_t& mtop, gmx_domdec_t* domdec, PbcType pbcType);
+    VirtualSitesHandler(const gmx_mtop_t&                 mtop,
+                        gmx_domdec_t*                     domdec,
+                        PbcType                           pbcType,
+                        ArrayRef<const RangePartitioning> updateGroupingPerMoleculeType);
 
     ~VirtualSitesHandler();
 
@@ -104,7 +107,10 @@ public:
     int numInterUpdategroupVirtualSites() const;
 
     //! Set VSites and distribute VSite work over threads, should be called after each DD partitioning
-    void setVirtualSites(ArrayRef<const InteractionList> ilist, const t_mdatoms& mdatoms);
+    void setVirtualSites(ArrayRef<const InteractionList> ilist,
+                         int                             numAtoms,
+                         int                             homenr,
+                         ArrayRef<const ParticleType>    ptype);
 
     /*! \brief Create positions of vsite atoms based for the local system
      *
@@ -187,14 +193,18 @@ int countInterUpdategroupVsites(const gmx_mtop_t&                 mtop,
 
 /*! \brief Create the virtual site handler
  *
- * \param[in] mtop      The global topology
- * \param[in] cr        The communication record
- * \param[in] pbcType   The type of PBC
+ * \param[in] mtop                           The global topology
+ * \param[in] cr                             The communication record
+ * \param[in] pbcType                        The type of PBC
+ * \param[in] updateGroupingPerMoleculeType  Update grouping per molecule type, pass
+ *                                           empty when not using update groups
  * \returns A valid vsite handler object or nullptr when there are no virtual sites
  */
-std::unique_ptr<VirtualSitesHandler> makeVirtualSitesHandler(const gmx_mtop_t& mtop,
-                                                             const t_commrec*  cr,
-                                                             PbcType           pbcType);
+std::unique_ptr<VirtualSitesHandler>
+makeVirtualSitesHandler(const gmx_mtop_t&                 mtop,
+                        const t_commrec*                  cr,
+                        PbcType                           pbcType,
+                        ArrayRef<const RangePartitioning> updateGroupingPerMoleculeType);
 
 } // namespace gmx
 

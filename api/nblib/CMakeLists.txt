@@ -38,31 +38,6 @@
 # \author Sebastian Keller <keller@cscs.ch>
 #
 
-# The following are copied directly from src/CMakeLists.txt
-set(IGNORED_CLANG_ALL_WARNINGS
-        "-Wno-c++98-compat -Wno-c++98-compat-pedantic" #No intention of C++98 compability
-        "-Wno-source-uses-openmp" #Don't warn for no-omp build
-        "-Wno-c++17-extensions"   #Allowed in attributes (compilers are required to ignore unknown attributes)
-        "-Wno-documentation-unknown-command" #Custom commands are used
-        "-Wno-covered-switch-default" #GCC gives maybe-uninitialized without default label and checks for illegal enum values.
-        "-Wno-switch-enum" # default statement for enum is OK
-
-        # These are all needed, mostly for testing code
-        "-Wno-conversion"
-        "-Wno-documentation"
-        "-Wno-double-promotion"
-        "-Wno-exit-time-destructors"
-        "-Wno-float-equal"
-        "-Wno-global-constructors"
-        "-Wno-padded"
-        "-Wno-reserved-id-macro"
-        "-Wno-shadow"
-        "-Wno-unused-macros"
-        "-Wno-weak-vtables"
-        )
-
-string(REPLACE " " ";" IGNORED_CLANG_ALL_WARNINGS "${IGNORED_CLANG_ALL_WARNINGS}")
-
 set(TESTUTILS_DIR ${PROJECT_SOURCE_DIR}/src/testutils)
 if (BUILD_TESTING)
     if(NOT GMX_DEVELOPER_BUILD)
@@ -71,11 +46,19 @@ if (BUILD_TESTING)
     include(${TESTUTILS_DIR}/TestMacros.cmake)
 endif()
 
+add_custom_target(nblib-tests
+        COMMENT "Target to build all nblib tests including samples"
+        )
+# Ensure that "make tests" builds all nblib tests so the top-level
+# "make check" will work.
+add_dependencies(tests nblib-tests)
+
 # this allows all nblib tests to be run with "make check-nblib"
 add_custom_target(check-nblib
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -R NbLib
         COMMENT "Running nblib tests"
         USES_TERMINAL VERBATIM)
+add_dependencies(check-nblib nblib-tests)
 
 set(NBLIB_MAJOR 0)
 set(NBLIB_MINOR 1)
@@ -91,6 +74,16 @@ set_target_properties(nblib PROPERTIES
         LINKER_LANGUAGE CXX
         OUTPUT_NAME "nblib")
 
+if (GMX_GPU_CUDA)
+    if(${CMAKE_VERSION} VERSION_LESS "3.17.0")
+        find_package(CUDA)
+        target_include_directories(nblib PRIVATE "${CUDA_INCLUDE_DIRS}")
+    else()
+        find_package(CUDAToolkit)
+        target_link_libraries(nblib PRIVATE CUDA::cudart)
+    endif()
+endif()
+
 target_sources(nblib
         PRIVATE
         box.cpp
@@ -100,6 +93,7 @@ target_sources(nblib
         integrator.cpp
         interactions.cpp
         molecules.cpp
+        nbnxmsetuphelpers.cpp
         particlesequencer.cpp
         particletype.cpp
         simulationstate.cpp
@@ -110,6 +104,7 @@ target_sources(nblib
 gmx_target_compile_options(nblib)
 
 target_link_libraries(nblib PRIVATE libgromacs)
+target_include_directories(nblib SYSTEM BEFORE PRIVATE ${PROJECT_SOURCE_DIR}/src/external/thread_mpi/include)
 target_include_directories(nblib PRIVATE ${PROJECT_SOURCE_DIR}/api)
 include_directories(BEFORE ${CMAKE_SOURCE_DIR}/api)
 target_link_libraries(nblib PRIVATE common)

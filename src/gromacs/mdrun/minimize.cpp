@@ -52,6 +52,7 @@
 #include <ctime>
 
 #include <algorithm>
+#include <limits>
 #include <vector>
 
 #include "gromacs/commandline/filenm.h"
@@ -394,8 +395,15 @@ static void init_em(FILE*                fplog,
     }
     int*                fep_state = MASTER(cr) ? &state_global->fep_state : nullptr;
     gmx::ArrayRef<real> lambda    = MASTER(cr) ? state_global->lambda : gmx::ArrayRef<real>();
-    initialize_lambdas(
-            fplog, *ir, gmx::arrayRefFromArray(ir->opts.ref_t, ir->opts.ngtc), MASTER(cr), fep_state, lambda);
+    initialize_lambdas(fplog,
+                       ir->efep,
+                       ir->bSimTemp,
+                       *ir->fepvals,
+                       ir->simtempvals->temperatures,
+                       gmx::arrayRefFromArray(ir->opts.ref_t, ir->opts.ngtc),
+                       MASTER(cr),
+                       fep_state,
+                       lambda);
 
     if (ir->eI == IntegrationAlgorithm::NM)
     {
@@ -635,9 +643,9 @@ static bool do_em_step(const t_commrec*                          cr,
                        int64_t                                   count)
 
 {
-    t_state *s1, *s2;
-    int      start, end;
-    real     dvdl_constr;
+    t_state *    s1, *s2;
+    int          start, end;
+    real         dvdl_constr;
     int nthreads gmx_unused;
 
     bool validStep = true;
@@ -1360,8 +1368,6 @@ void LegacySimulator::do_cg()
                                          nullBox,
                                          PTCouplingArrays(),
                                          0,
-                                         nullptr,
-                                         nullptr,
                                          vir,
                                          pres,
                                          nullptr,
@@ -1811,8 +1817,6 @@ void LegacySimulator::do_cg()
                                              nullBox,
                                              PTCouplingArrays(),
                                              0,
-                                             nullptr,
-                                             nullptr,
                                              vir,
                                              pres,
                                              nullptr,
@@ -2099,8 +2103,6 @@ void LegacySimulator::do_lbfgs()
                                          nullBox,
                                          PTCouplingArrays(),
                                          0,
-                                         nullptr,
-                                         nullptr,
                                          vir,
                                          pres,
                                          nullptr,
@@ -2623,8 +2625,6 @@ void LegacySimulator::do_lbfgs()
                                              nullBox,
                                              PTCouplingArrays(),
                                              0,
-                                             nullptr,
-                                             nullptr,
                                              vir,
                                              pres,
                                              nullptr,
@@ -2901,8 +2901,6 @@ void LegacySimulator::do_steep()
                                                  nullBox,
                                                  PTCouplingArrays(),
                                                  0,
-                                                 nullptr,
-                                                 nullptr,
                                                  vir,
                                                  pres,
                                                  nullptr,

@@ -348,10 +348,10 @@ updateMDLeapfrogSimple(int                                 start,
                        gmx::ArrayRef<const t_grp_tcstat>   tcstat,
                        gmx::ArrayRef<const unsigned short> cTC,
                        const rvec                          pRVScaleMatrixDiagonal,
-                       const rvec* gmx_restrict x,
-                       rvec* gmx_restrict xprime,
-                       VelocityType* gmx_restrict v,
-                       const rvec* gmx_restrict f)
+                       const rvec* gmx_restrict            x,
+                       rvec* gmx_restrict                  xprime,
+                       VelocityType* gmx_restrict          v,
+                       const rvec* gmx_restrict            f)
 {
     real lambdaGroup;
 
@@ -381,12 +381,12 @@ updateMDLeapfrogSimple(int                                 start,
             {
                 vNew -= dtPressureCouple * pRVScaleMatrixDiagonal[d] * v[a][d];
             }
-            // TODO: Remove NOLINTs once clang-tidy is updated to v11, it should be able to handle constexpr.
-            if constexpr (storeUpdatedVelocities == StoreUpdatedVelocities::yes) // NOLINT // NOLINTNEXTLINE
+            if constexpr (storeUpdatedVelocities == StoreUpdatedVelocities::yes)
             {
                 v[a][d] = vNew;
             }
-            xprime[a][d] = x[a][d] + vNew * dt; // NOLINT(readability-misleading-indentation)
+            // NOLINTNEXTLINE(readability-misleading-indentation) remove when clang-tidy-13 is required
+            xprime[a][d] = x[a][d] + vNew * dt;
         }
     }
 }
@@ -467,10 +467,10 @@ updateMDLeapfrogSimpleSimd(int                               start,
                            real                              dt,
                            gmx::ArrayRef<const real>         invMass,
                            gmx::ArrayRef<const t_grp_tcstat> tcstat,
-                           const rvec* gmx_restrict x,
-                           rvec* gmx_restrict xprime,
-                           VelocityType* gmx_restrict v,
-                           const rvec* gmx_restrict f)
+                           const rvec* gmx_restrict          x,
+                           rvec* gmx_restrict                xprime,
+                           VelocityType* gmx_restrict        v,
+                           const rvec* gmx_restrict          f)
 {
     SimdReal timestep(dt);
     SimdReal lambdaSystem(tcstat[0].lambda);
@@ -494,13 +494,13 @@ updateMDLeapfrogSimpleSimd(int                               start,
         v1 = fma(f1 * invMass1, timestep, lambdaSystem * v1);
         v2 = fma(f2 * invMass2, timestep, lambdaSystem * v2);
 
-        // TODO: Remove NOLINTs once clang-tidy is updated to v11, it should be able to handle constexpr.
-        if constexpr (storeUpdatedVelocities == StoreUpdatedVelocities::yes) // NOLINT // NOLINTNEXTLINE
+        if constexpr (storeUpdatedVelocities == StoreUpdatedVelocities::yes)
         {
             simdStoreRvecs(v, a, v0, v1, v2);
         }
 
-        SimdReal x0, x1, x2; // NOLINT(readability-misleading-indentation)
+        // NOLINTNEXTLINE(readability-misleading-indentation) remove when clang-tidy-13 is required
+        SimdReal x0, x1, x2;
         simdLoadRvecs(x, a, &x0, &x1, &x2);
 
         SimdReal xprime0 = fma(v0, timestep, x0);
@@ -551,13 +551,13 @@ static void updateMDLeapfrogGeneral(int                                 start,
                                     gmx::ArrayRef<const rvec>           invMassPerDim,
                                     const gmx_ekindata_t*               ekind,
                                     const matrix                        box,
-                                    const rvec* gmx_restrict x,
-                                    rvec* gmx_restrict xprime,
-                                    rvec* gmx_restrict v,
-                                    const rvec* gmx_restrict f,
-                                    const double* gmx_restrict nh_vxi,
-                                    const int                  nsttcouple,
-                                    const matrix               M)
+                                    const rvec* gmx_restrict            x,
+                                    rvec* gmx_restrict                  xprime,
+                                    rvec* gmx_restrict                  v,
+                                    const rvec* gmx_restrict            f,
+                                    const double* gmx_restrict          nh_vxi,
+                                    const int                           nsttcouple,
+                                    const matrix                        M)
 {
     /* This is a version of the leap-frog integrator that supports
      * all combinations of T-coupling, P-coupling and NEMD.
@@ -628,26 +628,26 @@ static void updateMDLeapfrogGeneral(int                                 start,
 }
 
 /*! \brief Handles the Leap-frog MD x and v integration */
-static void do_update_md(int         start,
-                         int         nrend,
-                         real        dt,
-                         int64_t     step,
-                         const rvec* gmx_restrict x,
-                         rvec* gmx_restrict xprime,
-                         rvec* gmx_restrict v,
-                         const rvec* gmx_restrict            f,
-                         const TemperatureCoupling           etc,
-                         const PressureCoupling              epc,
-                         const int                           nsttcouple,
-                         const int                           nstpcouple,
-                         gmx::ArrayRef<const unsigned short> cTC,
+static void do_update_md(int                                  start,
+                         int                                  nrend,
+                         real                                 dt,
+                         int64_t                              step,
+                         const rvec* gmx_restrict             x,
+                         rvec* gmx_restrict                   xprime,
+                         rvec* gmx_restrict                   v,
+                         const rvec* gmx_restrict             f,
+                         const TemperatureCoupling            etc,
+                         const PressureCoupling               epc,
+                         const int                            nsttcouple,
+                         const int                            nstpcouple,
+                         gmx::ArrayRef<const unsigned short>  cTC,
                          gmx::ArrayRef<const real> gmx_unused invmass,
                          gmx::ArrayRef<const rvec>            invMassPerDim,
                          const gmx_ekindata_t*                ekind,
                          const matrix                         box,
-                         const double* gmx_restrict nh_vxi,
-                         const matrix               M,
-                         bool gmx_unused havePartiallyFrozenAtoms)
+                         const double* gmx_restrict           nh_vxi,
+                         const matrix                         M,
+                         bool gmx_unused                      havePartiallyFrozenAtoms)
 {
     GMX_ASSERT(nrend == start || xprime != x,
                "For SIMD optimization certain compilers need to have xprime != x");
@@ -784,14 +784,14 @@ static void do_update_md(int         start,
     }
 }
 /*! \brief Handles the Leap-frog MD x and v integration */
-static void doUpdateMDDoNotUpdateVelocities(int         start,
-                                            int         nrend,
-                                            real        dt,
+static void doUpdateMDDoNotUpdateVelocities(int                      start,
+                                            int                      nrend,
+                                            real                     dt,
                                             const rvec* gmx_restrict x,
-                                            rvec* gmx_restrict xprime,
+                                            rvec* gmx_restrict       xprime,
                                             const rvec* gmx_restrict v,
                                             const rvec* gmx_restrict f,
-                                            bool gmx_unused           havePartiallyFrozenAtoms,
+                                            bool gmx_unused          havePartiallyFrozenAtoms,
                                             gmx::ArrayRef<const real> gmx_unused invmass,
                                             gmx::ArrayRef<const rvec>            invMassPerDim,
                                             const gmx_ekindata_t&                ekind)
@@ -1001,8 +1001,7 @@ void Update::Impl::update_temperature_constants(const t_inputrec& inputRecord)
 }
 
 Update::Impl::Impl(const t_inputrec& inputRecord, BoxDeformation* boxDeformation) :
-    sd_(inputRecord),
-    deform_(boxDeformation)
+    sd_(inputRecord), deform_(boxDeformation)
 {
     update_temperature_constants(inputRecord);
     xp_.resizeWithPadding(0);
@@ -1137,13 +1136,13 @@ static void doSDUpdateGeneral(const gmx_stochd_t&                 sd,
     }
 }
 
-static void do_update_sd(int         start,
-                         int         nrend,
-                         real        dt,
-                         int64_t     step,
-                         const rvec* gmx_restrict x,
-                         rvec* gmx_restrict xprime,
-                         rvec* gmx_restrict v,
+static void do_update_sd(int                                 start,
+                         int                                 nrend,
+                         real                                dt,
+                         int64_t                             step,
+                         const rvec* gmx_restrict            x,
+                         rvec* gmx_restrict                  xprime,
+                         rvec* gmx_restrict                  v,
                          const rvec* gmx_restrict            f,
                          gmx::ArrayRef<const ivec>           nFreeze,
                          gmx::ArrayRef<const real>           invmass,
@@ -1196,13 +1195,13 @@ static void do_update_sd(int         start,
     }
 }
 
-static void do_update_bd(int         start,
-                         int         nrend,
-                         real        dt,
-                         int64_t     step,
-                         const rvec* gmx_restrict x,
-                         rvec* gmx_restrict xprime,
-                         rvec* gmx_restrict v,
+static void do_update_bd(int                                 start,
+                         int                                 nrend,
+                         real                                dt,
+                         int64_t                             step,
+                         const rvec* gmx_restrict            x,
+                         rvec* gmx_restrict                  xprime,
+                         rvec* gmx_restrict                  v,
                          const rvec* gmx_restrict            f,
                          gmx::ArrayRef<const ivec>           nFreeze,
                          gmx::ArrayRef<const real>           invmass,

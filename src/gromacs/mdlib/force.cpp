@@ -165,10 +165,16 @@ void calculateLongRangeNonbondeds(t_forcerec*                    fr,
                                 cr,
                                 nthreads,
                                 t,
-                                *fr,
-                                ir,
-                                gmx::constArrayRefFromArray(md->chargeA, md->nr),
-                                gmx::constArrayRefFromArray(md->chargeB, md->nr),
+                                fr->ic->epsilon_r,
+                                fr->qsum,
+                                ir.ewald_geometry,
+                                ir.epsilon_surface,
+                                inputrecPbcXY2Walls(&ir),
+                                ir.wall_ewald_zfac,
+                                md->chargeA ? gmx::constArrayRefFromArray(md->chargeA, md->nr)
+                                            : gmx::ArrayRef<const real>{},
+                                md->chargeB ? gmx::constArrayRefFromArray(md->chargeB, md->nr)
+                                            : gmx::ArrayRef<const real>{},
                                 (md->nChargePerturbed != 0),
                                 coordinates,
                                 box,
@@ -193,7 +199,9 @@ void calculateLongRangeNonbondeds(t_forcerec*                    fr,
                    negligible and constant-sized amount of time */
                 ewaldOutput.Vcorr_q += ewald_charge_correction(
                         cr,
-                        fr,
+                        fr->ic->epsilon_r,
+                        fr->ic->ewaldcoeff_q,
+                        fr->qsum,
                         lambda[static_cast<int>(FreeEnergyPerturbationCouplingType::Coul)],
                         box,
                         &ewaldOutput.dvdl[FreeEnergyPerturbationCouplingType::Coul],
@@ -217,12 +225,18 @@ void calculateLongRangeNonbondeds(t_forcerec*                    fr,
                             fr->pmedata,
                             gmx::constArrayRefFromArray(coordinates.data(), md->homenr - fr->n_tpi),
                             forceWithVirial->force_,
-                            gmx::constArrayRefFromArray(md->chargeA, md->nr),
-                            gmx::constArrayRefFromArray(md->chargeB, md->nr),
-                            gmx::constArrayRefFromArray(md->sqrt_c6A, md->nr),
-                            gmx::constArrayRefFromArray(md->sqrt_c6B, md->nr),
-                            gmx::constArrayRefFromArray(md->sigmaA, md->nr),
-                            gmx::constArrayRefFromArray(md->sigmaB, md->nr),
+                            md->chargeA ? gmx::constArrayRefFromArray(md->chargeA, md->nr)
+                                        : gmx::ArrayRef<const real>{},
+                            md->chargeB ? gmx::constArrayRefFromArray(md->chargeB, md->nr)
+                                        : gmx::ArrayRef<const real>{},
+                            md->sqrt_c6A ? gmx::constArrayRefFromArray(md->sqrt_c6A, md->nr)
+                                         : gmx::ArrayRef<const real>{},
+                            md->sqrt_c6B ? gmx::constArrayRefFromArray(md->sqrt_c6B, md->nr)
+                                         : gmx::ArrayRef<const real>{},
+                            md->sigmaA ? gmx::constArrayRefFromArray(md->sigmaA, md->nr)
+                                       : gmx::ArrayRef<const real>{},
+                            md->sigmaB ? gmx::constArrayRefFromArray(md->sigmaB, md->nr)
+                                       : gmx::ArrayRef<const real>{},
                             box,
                             cr,
                             DOMAINDECOMP(cr) ? dd_pme_maxshift_x(*cr->dd) : 0,
@@ -257,18 +271,20 @@ void calculateLongRangeNonbondeds(t_forcerec*                    fr,
                     /* Determine the PME grid energy of the test molecule
                      * with the PME grid potential of the other charges.
                      */
-                    gmx_pme_calc_energy(
+                    Vlr_q = gmx_pme_calc_energy(
                             fr->pmedata,
                             coordinates.subArray(md->homenr - fr->n_tpi, fr->n_tpi),
-                            gmx::arrayRefFromArray(md->chargeA + md->homenr - fr->n_tpi, fr->n_tpi),
-                            &Vlr_q);
+                            gmx::arrayRefFromArray(md->chargeA + md->homenr - fr->n_tpi, fr->n_tpi));
                 }
             }
         }
 
         if (fr->ic->eeltype == CoulombInteractionType::Ewald)
         {
-            Vlr_q = do_ewald(ir,
+            Vlr_q = do_ewald(inputrecPbcXY2Walls(&ir),
+                             ir.wall_ewald_zfac,
+                             ir.epsilon_r,
+                             ir.efep,
                              coordinates,
                              forceWithVirial->force_,
                              gmx::arrayRefFromArray(md->chargeA, md->nr),

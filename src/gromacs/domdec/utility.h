@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -43,7 +43,7 @@
 #define GMX_DOMDEC_DOMDEC_UTILITY_H
 
 #include "gromacs/math/vectypes.h"
-#include "gromacs/mdtypes/forcerec.h"
+#include "gromacs/mdtypes/atominfo.h"
 
 #include "domdec_internal.h"
 
@@ -82,17 +82,19 @@ void make_tric_corr_matrix(int npbcdim, const matrix box, matrix tcm);
 /*! \brief Ensure box obeys the screw restrictions, fatal error if not */
 void check_screw_box(const matrix box);
 
-/*! \brief Return the charge group information flags for charge group cg */
-static inline int ddcginfo(gmx::ArrayRef<const cginfo_mb_t> cginfo_mb, int cg)
+/*! \brief Return the atom information flags for atom a */
+static inline int ddGetAtomInfo(gmx::ArrayRef<const gmx::AtomInfoWithinMoleculeBlock> atomInfoForEachMoleculeBlock,
+                                int                                                   a)
 {
     size_t index = 0;
-    while (cg >= cginfo_mb[index].cg_end)
+    while (a >= atomInfoForEachMoleculeBlock[index].indexOfLastAtomInMoleculeBlock)
     {
         index++;
     }
-    const cginfo_mb_t& cgimb = cginfo_mb[index];
+    const gmx::AtomInfoWithinMoleculeBlock& atomInfoOfMoleculeBlock = atomInfoForEachMoleculeBlock[index];
 
-    return cgimb.cginfo[(cg - cgimb.cg_start) % cgimb.cg_mod];
+    return atomInfoOfMoleculeBlock.atomInfo[(a - atomInfoOfMoleculeBlock.indexOfFirstAtomInMoleculeBlock)
+                                            % atomInfoOfMoleculeBlock.atomInfo.size()];
 };
 
 /*! \brief Returns the number of MD steps for which load has been recorded */

@@ -78,6 +78,7 @@ class EnergySignaller;
 class LastStepSignaller;
 class LoggingSignaller;
 class NeighborSearchSignaller;
+enum class ReferenceTemperatureChangeAlgorithm;
 enum class ScaleVelocities;
 template<class Signaller>
 class SignallerBuilder;
@@ -97,6 +98,8 @@ typedef std::function<void()> SimulatorRunFunction;
 
 //! The function type that allows to register run functions
 typedef std::function<void(SimulatorRunFunction)> RegisterRunFunction;
+//! The function type scheduling run functions for a step / time using a RegisterRunFunction reference
+typedef std::function<void(Step, Time, const RegisterRunFunction&)> SchedulingFunction;
 
 /*! \internal
  * \brief The general interface for elements of the modular simulator
@@ -505,34 +508,88 @@ private:
 };
 
 /*! \internal
- * \brief Information needed to connect a propagator to a thermostat
+ * \brief Information needed to connect a propagator to a temperature and / or pressure coupling element
  */
-struct PropagatorThermostatConnection
+struct PropagatorConnection
 {
-    //! Function variable for setting velocity scaling variables.
-    std::function<void(int, ScaleVelocities)> setNumVelocityScalingVariables;
-    //! Function variable for receiving view on velocity scaling (before step).
-    std::function<ArrayRef<real>()> getViewOnStartVelocityScaling;
-    //! Function variable for receiving view on velocity scaling (after step).
-    std::function<ArrayRef<real>()> getViewOnEndVelocityScaling;
-    //! Function variable for callback.
-    std::function<PropagatorCallback()> getVelocityScalingCallback;
     //! The tag of the creating propagator
     PropagatorTag tag;
+
+    //! Whether the propagator offers start velocity scaling
+    bool hasStartVelocityScaling() const
+    {
+        return setNumVelocityScalingVariables && getVelocityScalingCallback && getViewOnStartVelocityScaling;
+    }
+    //! Whether the propagator offers end velocity scaling
+    bool hasEndVelocityScaling() const
+    {
+        return setNumVelocityScalingVariables && getVelocityScalingCallback && getViewOnEndVelocityScaling;
+    }
+    //! Whether the propagator offers position scaling
+    bool hasPositionScaling() const
+    {
+        return setNumPositionScalingVariables && getPositionScalingCallback && getViewOnPositionScaling;
+    }
+    //! Whether the propagator offers Parrinello-Rahman scaling
+    bool hasParrinelloRahmanScaling() const
+    {
+        return getPRScalingCallback && getViewOnPRScalingMatrix;
+    }
+
+    //! Function object for setting velocity scaling variables
+    std::function<void(int, ScaleVelocities)> setNumVelocityScalingVariables;
+    //! Function object for setting velocity scaling variables
+    std::function<void(int)> setNumPositionScalingVariables;
+    //! Function object for receiving view on velocity scaling (before step)
+    std::function<ArrayRef<real>()> getViewOnStartVelocityScaling;
+    //! Function object for receiving view on velocity scaling (after step)
+    std::function<ArrayRef<real>()> getViewOnEndVelocityScaling;
+    //! Function object for receiving view on position scaling
+    std::function<ArrayRef<real>()> getViewOnPositionScaling;
+    //! Function object to request callback allowing to signal a velocity scaling step
+    std::function<PropagatorCallback()> getVelocityScalingCallback;
+    //! Function object to request callback allowing to signal a position scaling step
+    std::function<PropagatorCallback()> getPositionScalingCallback;
+    //! Function object for receiving view on pressure scaling matrix
+    std::function<ArrayRef<rvec>()> getViewOnPRScalingMatrix;
+    //! Function object to request callback allowing to signal a Parrinello-Rahman scaling step
+    std::function<PropagatorCallback()> getPRScalingCallback;
 };
 
-/*! \internal
- * \brief Information needed to connect a propagator to a barostat
- */
-struct PropagatorBarostatConnection
+//! Enum describing whether an element is reporting conserved energy from the previous step
+enum class ReportPreviousStepConservedEnergy
 {
-    //! Function variable for receiving view on pressure scaling matrix.
-    std::function<ArrayRef<rvec>()> getViewOnPRScalingMatrix;
-    //! Function variable for callback.
-    std::function<PropagatorCallback()> getPRScalingCallback;
-    //! The tag of the creating propagator
-    PropagatorTag tag;
+    Yes,
+    No,
+    Count
 };
+
+//! Callback used by the DomDecHelper object to inform clients about system re-partitioning
+typedef std::function<void()> DomDecCallback;
+
+/*! \internal
+ * \brief Client interface of the DomDecHelper class
+ *
+ * Classes implementing this interface will register with the DomDecHelper
+ * builder object.
+ * Before the simulation, the DomDecHelper builder will call the clients'
+ * registerDomDecCallback() function and build a list of callbacks to be
+ * passed to the DomDecHelper. After every time the DomDecHelper object
+ * performed system partitioning, it will use the callbacks to inform the
+ * clients that a re-partitioning has happened.
+ */
+class IDomDecHelperClient
+{
+public:
+    //! Standard virtual destructor
+    virtual ~IDomDecHelperClient() = default;
+    //! Register function to be informed about system re-partitioning
+    virtual DomDecCallback registerDomDecCallback() = 0;
+};
+
+//! Callback updating the reference temperature
+using ReferenceTemperatureCallback =
+        std::function<void(ArrayRef<const real>, ReferenceTemperatureChangeAlgorithm algorithm)>;
 
 //! /}
 } // namespace gmx

@@ -275,14 +275,13 @@ private:
      */
     bool isOutputStep(int64_t step) const;
 
-private:
     std::vector<BiasCoupledToSystem> biasCoupledToSystem_; /**< AWH biases and definitions of their coupling to the system. */
     const int64_t    seed_;   /**< Random seed for MC jumping with umbrella type bias potential. */
     const int        nstout_; /**< Interval in steps for writing to energy file. */
     const t_commrec* commRecord_;          /**< Pointer to the communication record. */
     const gmx_multisim_t* multiSimRecord_; /**< Handler for multi-simulations. */
     pull_t*               pull_;           /**< Pointer to the pull working data. */
-    double                potentialOffset_; /**< The offset of the bias potential which changes due to bias updates. */
+    double potentialOffset_; /**< The offset of the bias potential which changes due to bias updates. */
     const int numFepLambdaStates_; /**< The number of free energy lambda states of the system. */
     int       fepLambdaState_;     /**< The current free energy lambda state. */
 };

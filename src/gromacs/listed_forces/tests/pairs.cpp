@@ -101,8 +101,7 @@ constexpr int c_numAtoms = 3;
 struct OutputQuantities
 {
     OutputQuantities(int energyGroup) :
-        energy(energyGroup),
-        dvdLambda(static_cast<int>(FreeEnergyPerturbationCouplingType::Count), 0.0)
+        energy(energyGroup), dvdLambda(static_cast<int>(FreeEnergyPerturbationCouplingType::Count), 0.0)
     {
     }
 
@@ -381,7 +380,11 @@ protected:
                      &pbc_,
                      lambdas.data(),
                      output.dvdLambda.data(),
-                     &mdatoms,
+                     gmx::arrayRefFromArray(mdatoms.chargeA, mdatoms.nr),
+                     gmx::arrayRefFromArray(mdatoms.chargeB, mdatoms.nr),
+                     gmx::arrayRefFromArray(mdatoms.bPerturbed, mdatoms.nr),
+                     gmx::arrayRefFromArray(mdatoms.cENER, mdatoms.nr),
+                     mdatoms.nPerturbed,
                      fr,
                      havePerturbedInteractions,
                      stepWork,

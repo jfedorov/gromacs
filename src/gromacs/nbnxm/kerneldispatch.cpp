@@ -109,8 +109,8 @@ static void reduceGroupEnergySimdBuffers(int numGroups, int numGroups_2log, nbnx
 
     const real* gmx_restrict vVdwSimd     = out->VSvdw.data();
     const real* gmx_restrict vCoulombSimd = out->VSc.data();
-    real* gmx_restrict vVdw               = out->Vvdw.data();
-    real* gmx_restrict vCoulomb           = out->Vc.data();
+    real* gmx_restrict       vVdw         = out->Vvdw.data();
+    real* gmx_restrict       vCoulomb     = out->Vc.data();
 
     /* The size of the SIMD energy group buffer array is:
      * numGroups*numGroups*numGroupsStorage*unrollj_half*simd_width
@@ -135,77 +135,81 @@ static void reduceGroupEnergySimdBuffers(int numGroups, int numGroups_2log, nbnx
     }
 }
 
-static int getCoulombKernelType(const Nbnxm::KernelSetup& kernelSetup, const interaction_const_t& ic)
+CoulombKernelType getCoulombKernelType(const Nbnxm::EwaldExclusionType ewaldExclusionType,
+                                       const CoulombInteractionType    coulombInteractionType,
+                                       const bool                      haveEqualCoulombVwdRadii)
 {
 
-    if (EEL_RF(ic.eeltype) || ic.eeltype == CoulombInteractionType::Cut)
+    if (EEL_RF(coulombInteractionType) || coulombInteractionType == CoulombInteractionType::Cut)
     {
-        return coulktRF;
+        return CoulombKernelType::ReactionField;
     }
     else
     {
-        if (kernelSetup.ewaldExclusionType == Nbnxm::EwaldExclusionType::Table)
+        if (ewaldExclusionType == Nbnxm::EwaldExclusionType::Table)
         {
-            if (ic.rcoulomb == ic.rvdw)
+            if (haveEqualCoulombVwdRadii)
             {
-                return coulktTAB;
+                return CoulombKernelType::Table;
             }
             else
             {
-                return coulktTAB_TWIN;
+                return CoulombKernelType::TableTwin;
             }
         }
         else
         {
-            if (ic.rcoulomb == ic.rvdw)
+            if (haveEqualCoulombVwdRadii)
             {
-                return coulktEWALD;
+                return CoulombKernelType::Ewald;
             }
             else
             {
-                return coulktEWALD_TWIN;
+                return CoulombKernelType::EwaldTwin;
             }
         }
     }
 }
 
-static int getVdwKernelType(const Nbnxm::KernelSetup&       kernelSetup,
-                            const nbnxn_atomdata_t::Params& nbatParams,
-                            const interaction_const_t&      ic)
+int getVdwKernelType(const Nbnxm::KernelType    kernelType,
+                     const LJCombinationRule    ljCombinationRule,
+                     const VanDerWaalsType      vanDerWaalsType,
+                     const InteractionModifiers interactionModifiers,
+                     const LongRangeVdW         longRangeVdW)
 {
-    if (ic.vdwtype == VanDerWaalsType::Cut)
+    if (vanDerWaalsType == VanDerWaalsType::Cut)
     {
-        switch (ic.vdw_modifier)
+        switch (interactionModifiers)
         {
             case InteractionModifiers::None:
             case InteractionModifiers::PotShift:
-                switch (nbatParams.ljCombinationRule)
+                switch (ljCombinationRule)
                 {
                     case LJCombinationRule::Geometric: return vdwktLJCUT_COMBGEOM;
                     case LJCombinationRule::LorentzBerthelot: return vdwktLJCUT_COMBLB;
                     case LJCombinationRule::None: return vdwktLJCUT_COMBNONE;
-                    default: gmx_incons("Unknown combination rule");
+                    default: GMX_THROW(gmx::InvalidInputError("Unknown combination rule"));
                 }
             case InteractionModifiers::ForceSwitch: return vdwktLJFORCESWITCH;
             case InteractionModifiers::PotSwitch: return vdwktLJPOTSWITCH;
             default:
                 std::string errorMsg =
                         gmx::formatString("Unsupported VdW interaction modifier %s (%d)",
-                                          enumValueToString(ic.vdw_modifier),
-                                          static_cast<int>(ic.vdw_modifier));
-                gmx_incons(errorMsg);
+                                          enumValueToString(interactionModifiers),
+                                          static_cast<int>(interactionModifiers));
+                GMX_THROW(gmx::InvalidInputError(errorMsg));
         }
     }
-    else if (ic.vdwtype == VanDerWaalsType::Pme)
+    else if (vanDerWaalsType == VanDerWaalsType::Pme)
     {
-        if (ic.ljpme_comb_rule == LongRangeVdW::Geom)
+        if (longRangeVdW == LongRangeVdW::Geom)
         {
             return vdwktLJEWALDCOMBGEOM;
         }
         else
         {
             /* At setup we (should have) selected the C reference kernel */
-            GMX_RELEASE_ASSERT(kernelSetup.kernelType == Nbnxm::KernelType::Cpu4x4_PlainC,
+            GMX_RELEASE_ASSERT(kernelType == Nbnxm::KernelType::Cpu4x4_PlainC,
                                "Only the C reference nbnxn SIMD kernel supports LJ-PME with LB "
                                "combination rules");
             return vdwktLJEWALDCOMBLB;
@@ -214,9 +218,9 @@ static int getVdwKernelType(const Nbnxm::KernelSetup&       kernelSetup,
     else
     {
         std::string errorMsg = gmx::formatString("Unsupported VdW interaction type %s (%d)",
-                                                 enumValueToString(ic.vdwtype),
-                                                 static_cast<int>(ic.vdwtype));
-        gmx_incons(errorMsg);
+                                                 enumValueToString(vanDerWaalsType),
+                                                 static_cast<int>(vanDerWaalsType));
+        GMX_THROW(gmx::InvalidInputError(errorMsg));
     }
 }
 
@@ -251,8 +255,10 @@ static void nbnxn_kernel_cpu(const PairlistSet&             pairlistSet,
 
     const nbnxn_atomdata_t::Params& nbatParams = nbat->params();
 
-    const int coulkt = getCoulombKernelType(kernelSetup, ic);
-    const int vdwkt  = getVdwKernelType(kernelSetup, nbatParams, ic);
+    const int coulkt = static_cast<int>(getCoulombKernelType(
+            kernelSetup.ewaldExclusionType, ic.eeltype, (ic.rcoulomb == ic.rvdw)));
+    const int vdwkt  = getVdwKernelType(
+            kernelSetup.kernelType, nbatParams.ljCombinationRule, ic.vdwtype, ic.vdw_modifier, ic.ljpme_comb_rule);
 
     gmx::ArrayRef<const NbnxnPairlistCpu> pairlists = pairlistSet.cpuLists();
 
@@ -441,13 +447,14 @@ static void accountFlops(t_nrnb*                    nrnb,
     }
 }
 
-void nonbonded_verlet_t::dispatchNonbondedKernel(gmx::InteractionLocality   iLocality,
-                                                 const interaction_const_t& ic,
-                                                 const gmx::StepWorkload&   stepWork,
-                                                 int                        clearF,
-                                                 const t_forcerec&          fr,
-                                                 gmx_enerdata_t*            enerd,
-                                                 t_nrnb*                    nrnb)
+void nonbonded_verlet_t::dispatchNonbondedKernel(gmx::InteractionLocality       iLocality,
+                                                 const interaction_const_t&     ic,
+                                                 const gmx::StepWorkload&       stepWork,
+                                                 int                            clearF,
+                                                 gmx::ArrayRef<const gmx::RVec> shiftvec,
+                                                 gmx::ArrayRef<real> repulsionDispersionSR,
+                                                 gmx::ArrayRef<real> CoulombSR,
+                                                 t_nrnb*             nrnb) const
 {
     const PairlistSet& pairlistSet = pairlistSets().pairlistSet(iLocality);
 
@@ -456,19 +463,16 @@ void nonbonded_verlet_t::dispatchNonbondedKernel(gmx::InteractionLocality   iLoc
         case Nbnxm::KernelType::Cpu4x4_PlainC:
         case Nbnxm::KernelType::Cpu4xN_Simd_4xN:
         case Nbnxm::KernelType::Cpu4xN_Simd_2xNN:
-            nbnxn_kernel_cpu(
-                    pairlistSet,
-                    kernelSetup(),
-                    nbat.get(),
-                    ic,
-                    fr.shift_vec,
-                    stepWork,
-                    clearF,
-                    enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::CoulombSR].data(),
-                    fr.haveBuckingham
-                            ? enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::BuckinghamSR].data()
-                            : enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::LJSR].data(),
-                    wcycle_);
+            nbnxn_kernel_cpu(pairlistSet,
+                             kernelSetup(),
+                             nbat.get(),
+                             ic,
+                             shiftvec,
+                             stepWork,
+                             clearF,
+                             CoulombSR.data(),
+                             repulsionDispersionSR.data(),
+                             wcycle_);
             break;
 
         case Nbnxm::KernelType::Gpu8x8x8:
@@ -476,19 +480,16 @@ void nonbonded_verlet_t::dispatchNonbondedKernel(gmx::InteractionLocality   iLoc
             break;
 
         case Nbnxm::KernelType::Cpu8x8x8_PlainC:
-            nbnxn_kernel_gpu_ref(
-                    pairlistSet.gpuList(),
-                    nbat.get(),
-                    &ic,
-                    fr.shift_vec,
-                    stepWork,
-                    clearF,
-                    nbat->out[0].f,
-                    nbat->out[0].fshift.data(),
-                    enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::CoulombSR].data(),
-                    fr.haveBuckingham
-                            ? enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::BuckinghamSR].data()
-                            : enerd->grpp.energyGroupPairTerms[NonBondedEnergyTerms::LJSR].data());
+            nbnxn_kernel_gpu_ref(pairlistSet.gpuList(),
+                                 nbat.get(),
+                                 &ic,
+                                 shiftvec,
+                                 stepWork,
+                                 clearF,
+                                 nbat->out[0].f,
+                                 nbat->out[0].fshift.data(),
+                                 CoulombSR.data(),
+                                 repulsionDispersionSR.data());
             break;
 
         default: GMX_RELEASE_ASSERT(false, "Invalid nonbonded kernel type passed!");
@@ -498,18 +499,24 @@ void nonbonded_verlet_t::dispatchNonbondedKernel(gmx::InteractionLocality   iLoc
 }
 
 void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality       iLocality,
-                                                  const t_forcerec&              fr,
                                                   gmx::ArrayRef<const gmx::RVec> coords,
                                                   gmx::ForceWithShiftForces* forceWithShiftForces,
-                                                  gmx::ArrayRef<const real>  chargeA,
-                                                  gmx::ArrayRef<const real>  chargeB,
-                                                  gmx::ArrayRef<const int>   typeA,
-                                                  gmx::ArrayRef<const int>   typeB,
-                                                  t_lambda*                  fepvals,
-                                                  gmx::ArrayRef<const real>  lambda,
-                                                  gmx_enerdata_t*            enerd,
-                                                  const gmx::StepWorkload&   stepWork,
-                                                  t_nrnb*                    nrnb)
+                                                  bool                       useSimd,
+                                                  int                        ntype,
+                                                  real                       rlist,
+                                                  const interaction_const_t& ic,
+                                                  gmx::ArrayRef<const gmx::RVec> shiftvec,
+                                                  gmx::ArrayRef<const real>      nbfp,
+                                                  gmx::ArrayRef<const real>      nbfp_grid,
+                                                  gmx::ArrayRef<const real>      chargeA,
+                                                  gmx::ArrayRef<const real>      chargeB,
+                                                  gmx::ArrayRef<const int>       typeA,
+                                                  gmx::ArrayRef<const int>       typeB,
+                                                  t_lambda*                      fepvals,
+                                                  gmx::ArrayRef<const real>      lambda,
+                                                  gmx_enerdata_t*                enerd,
+                                                  const gmx::StepWorkload&       stepWork,
+                                                  t_nrnb*                        nrnb)
 {
     const auto nbl_fep = pairlistSets().pairlistSet(iLocality).fepLists();
 
@@ -556,13 +563,13 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
             gmx_nb_free_energy_kernel(*nbl_fep[th],
                                       coords,
                                       forceWithShiftForces,
-                                      fr.use_simd_kernels,
-                                      fr.ntype,
-                                      fr.rlist,
-                                      *fr.ic,
-                                      fr.shift_vec,
-                                      fr.nbfp,
-                                      fr.ljpme_c6grid,
+                                      useSimd,
+                                      ntype,
+                                      rlist,
+                                      ic,
+                                      shiftvec,
+                                      nbfp,
+                                      nbfp_grid,
                                       chargeA,
                                       chargeB,
                                       typeA,
@@ -603,9 +610,9 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
         kernelLambda = lam_i;
         kernelDvdl   = dvdl_nb;
         gmx::ArrayRef<real> energygrp_elec =
-                enerd->foreign_grpp.energyGroupPairTerms[NonBondedEnergyTerms::CoulombSR];
+                foreignEnergyGroups_->energyGroupPairTerms[NonBondedEnergyTerms::CoulombSR];
         gmx::ArrayRef<real> energygrp_vdw =
-                enerd->foreign_grpp.energyGroupPairTerms[NonBondedEnergyTerms::LJSR];
+                foreignEnergyGroups_->energyGroupPairTerms[NonBondedEnergyTerms::LJSR];
 
         for (gmx::index i = 0; i < 1 + enerd->foreignLambdaTerms.numLambdas(); i++)
         {
@@ -614,7 +621,7 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
             {
                 lam_i[j] = (i == 0 ? lambda[j] : fepvals->all_lambda[j][i - 1]);
             }
-            reset_foreign_enerdata(enerd);
+            foreignEnergyGroups_->clear();
 #pragma omp parallel for schedule(static) num_threads(nbl_fep.ssize())
             for (gmx::index th = 0; th < nbl_fep.ssize(); th++)
             {
@@ -623,13 +630,13 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
                     gmx_nb_free_energy_kernel(*nbl_fep[th],
                                               coords,
                                               forceWithShiftForces,
-                                              fr.use_simd_kernels,
-                                              fr.ntype,
-                                              fr.rlist,
-                                              *fr.ic,
-                                              fr.shift_vec,
-                                              fr.nbfp,
-                                              fr.ljpme_c6grid,
+                                              useSimd,
+                                              ntype,
+                                              rlist,
+                                              ic,
+                                              shiftvec,
+                                              nbfp,
+                                              nbfp_grid,
                                               chargeA,
                                               chargeB,
                                               typeA,
@@ -643,11 +650,11 @@ void nonbonded_verlet_t::dispatchFreeEnergyKernel(gmx::InteractionLocality      
                 }
                 GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR
             }
-
-            sum_epot(enerd->foreign_grpp, enerd->foreign_term.data());
+            std::array<real, F_NRE> foreign_term = { 0 };
+            sum_epot(*foreignEnergyGroups_, foreign_term.data());
             enerd->foreignLambdaTerms.accumulate(
                     i,
-                    enerd->foreign_term[F_EPOT],
+                    foreign_term[F_EPOT],
                     dvdl_nb[FreeEnergyPerturbationCouplingType::Vdw]
                             + dvdl_nb[FreeEnergyPerturbationCouplingType::Coul]);
         }

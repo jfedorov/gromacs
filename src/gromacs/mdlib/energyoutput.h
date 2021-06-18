@@ -49,7 +49,12 @@
 
 #include <memory>
 
+#include "gromacs/math/vectypes.h"
+#include "gromacs/mdtypes/md_enums.h"
 #include "gromacs/mdtypes/enerdata.h"
+#include "gromacs/topology/ifunc.h"
+#include "gromacs/utility/arrayref.h"
+#include "gromacs/utility/real.h"
 
 class energyhistory_t;
 struct ener_file;
@@ -124,7 +129,6 @@ struct PTCouplingArrays
  * be written out to the .edr file.
  *
  * \todo Use more std containers.
- * \todo Remove GMX_CONSTRAINTVIR
  * \todo Write free-energy output also to energy file (after adding more tests)
  */
 class EnergyOutput
@@ -168,8 +172,6 @@ public:
      * \param[in] lastbox           PBC data.
      * \param[in] ptCouplingArrays  Arrays connected to pressure and temperature coupling.
      * \param[in] fep_state         The current alchemical state we are in.
-     * \param[in] svir              Constraint virial.
-     * \param[in] fvir              Force virial.
      * \param[in] vir               Total virial.
      * \param[in] pres              Pressure.
      * \param[in] ekind             Kinetic energy data.
@@ -186,8 +188,6 @@ public:
                              const matrix            lastbox,
                              PTCouplingArrays        ptCouplingArrays,
                              int                     fep_state,
-                             const tensor            svir,
-                             const tensor            fvir,
                              const tensor            vir,
                              const tensor            pres,
                              const gmx_ekindata_t*   ekind,
@@ -342,14 +342,6 @@ private:
     //! Index for entalpy (pV + total energy)
     int ienthalpy_ = 0;
 
-    /*! \brief If the constraints virial should be printed.
-     * Can only be true if "GMX_CONSTRAINTVIR" environmental variable is set */
-    bool bConstrVir_ = false;
-    //! Index for constrains virial
-    int isvir_ = 0;
-    //! Index for force virial
-    int ifvir_ = 0;
-
     //! If we have pressure computed
     bool bPres_ = false;
     //! Index for total virial
@@ -413,7 +405,7 @@ private:
     //! Energy components for dhdl.xvg output
     std::vector<double> dE_;
     //! The delta U components (raw data + histogram)
-    t_mde_delta_h_coll* dhc_ = nullptr;
+    std::unique_ptr<t_mde_delta_h_coll> dhc_;
     //! Temperatures for simulated tempering groups
     std::vector<real> temperatures_;
 

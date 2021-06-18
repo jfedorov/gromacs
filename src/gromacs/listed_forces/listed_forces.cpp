@@ -91,7 +91,8 @@ ListedForces::ListedForces(const gmx_ffparams_t&      ffparams,
                            FILE*                      fplog) :
     idefSelection_(ffparams),
     threading_(std::make_unique<bonded_threading_t>(numThreads, numEnergyGroups, fplog)),
-    interactionSelection_(interactionSelection)
+    interactionSelection_(interactionSelection),
+    foreignEnergyGroups_(std::make_unique<gmx_grppairener_t>(numEnergyGroups))
 {
 }
 
@@ -444,7 +445,7 @@ real calc_one_bond(int                           thread,
     const int nat1   = interaction_function[ftype].nratoms + 1;
     const int nbonds = iatoms.ssize() / nat1;
 
-    GMX_ASSERT(fr->gpuBonded != nullptr || workDivision.end(ftype) == iatoms.ssize(),
+    GMX_ASSERT(fr->listedForcesGpu != nullptr || workDivision.end(ftype) == iatoms.ssize(),
                "The thread division should match the topology");
 
     const int nb0 = workDivision.bound(ftype, thread);
@@ -492,7 +493,7 @@ real calc_one_bond(int                           thread,
                                     gmx::arrayRefFromArray(md->chargeA, md->nr),
                                     fcd,
                                     fcd->disres,
-                                    fcd->orires,
+                                    fcd->orires.get(),
                                     global_atom_index,
                                     flavor);
         }
@@ -512,7 +513,11 @@ real calc_one_bond(int                           thread,
                  pbc,
                  lambda.data(),
                  dvdl.data(),
-                 md,
+                 md->chargeA ? gmx::arrayRefFromArray(md->chargeA, md->nr) : gmx::ArrayRef<real>{},
+                 md->chargeB ? gmx::arrayRefFromArray(md->chargeB, md->nr) : gmx::ArrayRef<real>{},
+                 md->bPerturbed ? gmx::arrayRefFromArray(md->bPerturbed, md->nr) : gmx::ArrayRef<bool>(),
+                 gmx::arrayRefFromArray(md->cENER, md->nr),
+                 md->nPerturbed,
                  fr,
                  havePerturbedInteractions,
                  stepWork,
@@ -618,9 +623,9 @@ static void calcBondedForces(const InteractionDefinitions& idef,
 
 bool ListedForces::haveRestraints(const t_fcdata& fcdata) const
 {
-    GMX_ASSERT(fcdata.orires && fcdata.disres, "NMR restraints objects should be set up");
+    GMX_ASSERT(fcdata.disres, "NMR distance restraint object should be set up");
 
-    return (!idef_->il[F_POSRES].empty() || !idef_->il[F_FBPOSRES].empty() || fcdata.orires->nr > 0
+    return (!idef_->il[F_POSRES].empty() || !idef_->il[F_FBPOSRES].empty() || fcdata.orires
             || fcdata.disres->nres > 0);
 }
 
@@ -710,7 +715,7 @@ void calc_listed_lambda(const InteractionDefinitions& idef,
                         gmx::ArrayRef<real>           forceBufferLambda,
                         gmx::ArrayRef<gmx::RVec>      shiftForceBufferLambda,
                         gmx_grppairener_t*            grpp,
-                        real*                         epot,
+                        gmx::ArrayRef<real>           epot,
                         gmx::ArrayRef<real>           dvdl,
                         t_nrnb*                       nrnb,
                         gmx::ArrayRef<const real>     lambda,
@@ -842,7 +847,7 @@ void ListedForces::calculate(struct gmx_wallcycle*                     wcycle,
         }
 
         /* Do pre force calculation stuff which might require communication */
-        if (fcdata->orires->nr > 0)
+        if (fcdata->orires)
         {
             GMX_ASSERT(!xWholeMolecules.empty(), "Need whole molecules for orienation restraints");
             enerd->term[F_ORIRESDEV] = calc_orires_dev(ms,
@@ -853,7 +858,7 @@ void ListedForces::calculate(struct gmx_wallcycle*                     wcycle,
                                                        xWholeMolecules,
                                                        x,
                                                        fr->bMolPBC ? pbc : nullptr,
-                                                       fcdata->orires,
+                                                       fcdata->orires.get(),
                                                        hist);
         }
         if (fcdata->disres->nres > 0)
@@ -893,8 +898,8 @@ void ListedForces::calculate(struct gmx_wallcycle*                     wcycle,
             for (int i = 0; i < 1 + enerd->foreignLambdaTerms.numLambdas(); i++)
             {
                 gmx::EnumerationArray<FreeEnergyPerturbationCouplingType, real> lam_i;
-
-                reset_foreign_enerdata(enerd);
+                foreignEnergyGroups_->clear();
+                std::array<real, F_NRE> foreign_term = { 0 };
                 for (auto j : keysOf(lam_i))
                 {
                     lam_i[j] = (i == 0 ? lambda[static_cast<int>(j)] : fepvals->all_lambda[j][i - 1]);
@@ -906,18 +911,18 @@ void ListedForces::calculate(struct gmx_wallcycle*                     wcycle,
                                    pbc,
                                    forceBufferLambda_,
                                    shiftForceBufferLambda_,
-                                   &(enerd->foreign_grpp),
-                                   enerd->foreign_term.data(),
+                                   foreignEnergyGroups_.get(),
+                                   foreign_term,
                                    dvdl,
                                    nrnb,
                                    lam_i,
                                    md,
                                    fcdata,
                                    global_atom_index);
-                sum_epot(enerd->foreign_grpp, enerd->foreign_term.data());
+                sum_epot(*foreignEnergyGroups_, foreign_term.data());
                 const double dvdlSum = std::accumulate(std::begin(dvdl), std::end(dvdl), 0.);
                 std::fill(std::begin(dvdl), std::end(dvdl), 0.0);
-                enerd->foreignLambdaTerms.accumulate(i, enerd->foreign_term[F_EPOT], dvdlSum);
+                enerd->foreignLambdaTerms.accumulate(i, foreign_term[F_EPOT], dvdlSum);
             }
             wallcycle_sub_stop(wcycle, WallCycleSubCounter::ListedFep);
         }

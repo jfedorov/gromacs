@@ -196,12 +196,15 @@
     # If $GMX_TEST_REQUIRED_NUMBER_OF_DEVICES is not set and we have GPUs, set it
     - if [ -z $GMX_TEST_REQUIRED_NUMBER_OF_DEVICES ] && [ -n $KUBERNETES_EXTENDED_RESOURCE_NAME ] ; then
       if grep -q '/gpu$' <<< "$KUBERNETES_EXTENDED_RESOURCE_NAME"; then
-      echo "export GMX_TEST_REQUIRED_NUMBER_OF_DEVICES=\"$KUBERNETES_EXTENDED_RESOURCE_LIMIT\"";
-      export GMX_TEST_REQUIRED_NUMBER_OF_DEVICES="$KUBERNETES_EXTENDED_RESOURCE_LIMIT";
+      echo "export GMX_TEST_REQUIRED_NUMBER_OF_DEVICES=\"0\"";
+      export GMX_TEST_REQUIRED_NUMBER_OF_DEVICES=0;
       fi
       fi
     - if grep -qF 'nvidia.com/gpu' <<< "$KUBERNETES_EXTENDED_RESOURCE_NAME"; then
       nvidia-smi || true;
+      fi
+    - if grep -qF 'intel.com/gpu' <<< "$KUBERNETES_EXTENDED_RESOURCE_NAME"; then
+      sycl-ls || true;
       fi
     - ctest -D $CTEST_RUN_MODE --output-on-failure | tee ctestLog.log || true
     - awk '/The following tests FAILED/,/^Errors while running CTest|^$/'
@@ -255,8 +258,7 @@
     expire_in: 1 week
 
 include:
-  - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.clang-8-cuda-10.0.gitlab-ci.yml'
-  - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.clang-8-cuda-10.1-release.gitlab-ci.yml'
+  - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.clang-8-cuda-11.0-release.gitlab-ci.yml'
   - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.clang-8.gitlab-ci.yml'
   - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.clang-9-mpi.gitlab-ci.yml'
   - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.clang-9-release.gitlab-ci.yml'
@@ -267,12 +269,13 @@ include:
   - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.clang-UBSAN.gitlab-ci.yml'
   - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.gcc-10.gitlab-ci.yml'
   - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.gcc-10-coverage.gitlab-ci.yml'  
-  - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.gcc-7-cuda-10.2.gitlab-ci.yml'
-  - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.gcc-8-cuda-11.0.gitlab-ci.yml'
-  - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.gcc-8-cuda-11.0-release.gitlab-ci.yml'
+  - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.gcc-7-cuda-11.0.gitlab-ci.yml'
+  - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.gcc-10-cuda-11.2.gitlab-ci.yml'
+  - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.gcc-10-cuda-11.2-release.gitlab-ci.yml'
   - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.gcc-9-release.gitlab-ci.yml'
   - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.hipsycl-dev.gitlab-ci.yml'
   - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.oneapi-2021.1.1-opencl.gitlab-ci.yml'
   - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.oneapi-2021.1.1-opencl-release.gitlab-ci.yml'
   - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.oneapi-2021.1.1-sycl.gitlab-ci.yml'
+  - local: '/admin/gitlab-ci/gromacs.matrix/gromacs.oneapi-2021.2.0-sycl-nightly.gitlab-ci.yml'
 

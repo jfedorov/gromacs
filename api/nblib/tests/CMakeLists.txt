@@ -1,7 +1,7 @@
 #
 # This file is part of the GROMACS molecular simulation package.
 #
-# Copyright (c) 2020, by the GROMACS development team, led by
+# Copyright (c) 2020,2021, by the GROMACS development team, led by
 # Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
 # and including many others, as listed in the AUTHORS file in the
 # top-level source directory and at http://www.gromacs.org.
@@ -31,7 +31,7 @@
 #
 # To help us fund GROMACS development, we humbly ask that you cite
 # the research papers on the package. Check out http://www.gromacs.org.
-#
+
 # \author Victor Holanda <victor.holanda@cscs.ch>
 # \author Joe Jordan <ejjordan@kth.se>
 # \author Prashanth Kanduri <kanduri@cscs.ch>
@@ -41,14 +41,11 @@
 # Make a static library for test infrastructure code that we re-use
 # in multiple test executables across the repository.
 gmx_add_unit_test_library(nblib_test_infrastructure
-        testhelpers.cpp
         testsystems.cpp
     )
 target_include_directories(nblib_test_infrastructure PRIVATE ${PROJECT_SOURCE_DIR}/api)
 target_include_directories(nblib_test_infrastructure SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/src/external)
-target_link_libraries(nblib_test_infrastructure PRIVATE legacy_api)
-# TODO: Explicitly link specific modules: math,
-target_link_libraries(nblib_test_infrastructure PRIVATE legacy_modules)
+target_link_libraries(nblib_test_infrastructure PUBLIC legacy_api)
 
 set(testname "NbLibSetupTests")
 set(exename "nblib-setup-test")
@@ -62,12 +59,14 @@ gmx_add_gtest_executable(
         particletype.cpp
         pbcholder.cpp
         molecules.cpp
+        nbnxmsetup.cpp
         topology.cpp
     )
+target_link_libraries(${exename} PRIVATE mdrun_test_infrastructure)
 target_link_libraries(${exename} PRIVATE nblib_test_infrastructure nblib)
 target_include_directories(${exename} PRIVATE ${PROJECT_SOURCE_DIR}/api)
 gmx_register_gtest_test(${testname} ${exename} INTEGRATION_TEST)
-add_dependencies(check-nblib ${exename})
+add_dependencies(nblib-tests ${exename})
 
 set(testname "NbLibIntegrationTests")
 set(exename "nblib-integration-test")
@@ -78,13 +77,12 @@ gmx_add_gtest_executable(
     # files with code for tests
         gmxcalculator.cpp
         nbkernelsystem.cpp
-        nbnxnsetup.cpp
         simstate.cpp
     )
 target_link_libraries(${exename} PRIVATE nblib_test_infrastructure nblib)
 target_include_directories(${exename} PRIVATE ${PROJECT_SOURCE_DIR}/api)
 gmx_register_gtest_test(${testname} ${exename} INTEGRATION_TEST)
-add_dependencies(check-nblib ${exename})
+add_dependencies(nblib-tests ${exename})
 
 # The integrator sometimes times out on TSAN so it gets its own test harness
 set(testname "NbLibIntegratorTests")
@@ -98,5 +96,5 @@ gmx_add_gtest_executable(
 target_link_libraries(${exename} PRIVATE nblib_test_infrastructure nblib)
 target_include_directories(${exename} PRIVATE ${PROJECT_SOURCE_DIR}/api)
 gmx_register_gtest_test(${testname} ${exename} INTEGRATION_TEST)
-add_dependencies(check-nblib ${exename})
+add_dependencies(nblib-tests ${exename})
 

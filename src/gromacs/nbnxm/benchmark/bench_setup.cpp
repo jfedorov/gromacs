@@ -49,6 +49,7 @@
 
 #include "gromacs/gmxlib/nrnb.h"
 #include "gromacs/math/units.h"
+#include "gromacs/math/vectypes.h"
 #include "gromacs/mdlib/dispersioncorrection.h"
 #include "gromacs/mdlib/force_flags.h"
 #include "gromacs/mdlib/forcerec.h"
@@ -178,7 +179,7 @@ static std::unique_ptr<nonbonded_verlet_t> setupNbnxmForBenchInstance(const Kern
                                                                       const gmx::BenchmarkSystem& system)
 {
     const auto pinPolicy  = (options.useGpu ? gmx::PinningPolicy::PinnedIfSupported
-                                           : gmx::PinningPolicy::CannotBePinned);
+                                            : gmx::PinningPolicy::CannotBePinned);
     const int  numThreads = options.numThreads;
     // Note: the options and Nbnxm combination rule enums values should match
     const int combinationRule = static_cast<int>(options.ljCombinationRule);
@@ -200,20 +201,18 @@ static std::unique_ptr<nonbonded_verlet_t> setupNbnxmForBenchInstance(const Kern
     auto pairSearch = std::make_unique<PairSearch>(
             PbcType::Xyz, false, nullptr, nullptr, pairlistParams.pairlistType, false, numThreads, pinPolicy);
 
-    auto atomData = std::make_unique<nbnxn_atomdata_t>(pinPolicy);
+    auto atomData = std::make_unique<nbnxn_atomdata_t>(pinPolicy,
+                                                       gmx::MDLogger(),
+                                                       kernelSetup.kernelType,
+                                                       combinationRule,
+                                                       system.numAtomTypes,
+                                                       system.nonbondedParameters,
+                                                       1,
+                                                       numThreads);
 
     // Put everything together
     auto nbv = std::make_unique<nonbonded_verlet_t>(
             std::move(pairlistSets), std::move(pairSearch), std::move(atomData), kernelSetup, nullptr, nullptr);
-
-    nbnxn_atomdata_init(gmx::MDLogger(),
-                        nbv->nbat.get(),
-                        kernelSetup.kernelType,
-                        combinationRule,
-                        system.numAtomTypes,
-                        system.nonbondedParameters,
-                        1,
-                        numThreads);
 
     t_nrnb nrnb;
 
@@ -221,7 +220,7 @@ static std::unique_ptr<nonbonded_verlet_t> setupNbnxmForBenchInstance(const Kern
     const rvec lowerCorner = { 0, 0, 0 };
     const rvec upperCorner = { system.box[XX][XX], system.box[YY][YY], system.box[ZZ][ZZ] };
 
-    gmx::ArrayRef<const int> atomInfo;
+    gmx::ArrayRef<const int64_t> atomInfo;
     if (options.useHalfLJOptimization)
     {
         atomInfo = system.atomInfoOxygenVdw;
@@ -360,7 +359,15 @@ static void setupAndRunInstance(const gmx::BenchmarkSystem& system,
     for (int iter = 0; iter < options.numPreIterations; iter++)
     {
         nbv->dispatchNonbondedKernel(
-                gmx::InteractionLocality::Local, ic, stepWork, enbvClearFYes, system.forceRec, &enerd, &nrnb);
+                gmx::InteractionLocality::Local,
+                ic,
+                stepWork,
+                enbvClearFYes,
+                system.forceRec.shift_vec,
+                enerd.grpp.energyGroupPairTerms[system.forceRec.haveBuckingham ? NonBondedEnergyTerms::BuckinghamSR
+                                                                               : NonBondedEnergyTerms::LJSR],
+                enerd.grpp.energyGroupPairTerms[NonBondedEnergyTerms::CoulombSR],
+                &nrnb);
     }
 
     const int numIterations = (doWarmup ? options.numWarmupIterations : options.numIterations);
@@ -371,7 +378,15 @@ static void setupAndRunInstance(const gmx::BenchmarkSystem& system,
     {
         // Run the kernel without force clearing
         nbv->dispatchNonbondedKernel(
-                gmx::InteractionLocality::Local, ic, stepWork, enbvClearFNo, system.forceRec, &enerd, &nrnb);
+                gmx::InteractionLocality::Local,
+                ic,
+                stepWork,
+                enbvClearFNo,
+                system.forceRec.shift_vec,
+                enerd.grpp.energyGroupPairTerms[system.forceRec.haveBuckingham ? NonBondedEnergyTerms::BuckinghamSR
+                                                                               : NonBondedEnergyTerms::LJSR],
+                enerd.grpp.energyGroupPairTerms[NonBondedEnergyTerms::CoulombSR],
+                &nrnb);
     }
     cycles = gmx_cycles_read() - cycles;
     if (!doWarmup)

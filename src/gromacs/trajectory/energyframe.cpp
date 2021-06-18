@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -54,10 +54,9 @@ namespace gmx
 {
 
 EnergyFrame::EnergyFrame(const t_enxframe& enxframe, const std::map<std::string, int>& indicesOfEnergyFields) :
-    step_(enxframe.step),
-    time_(enxframe.t)
+    step_(enxframe.step), time_(enxframe.t)
 {
-    for (auto& index : indicesOfEnergyFields)
+    for (const auto& index : indicesOfEnergyFields)
     {
         if (index.second >= enxframe.nre)
         {

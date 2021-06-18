@@ -2,7 +2,7 @@
  * This file is part of the GROMACS molecular simulation package.
  *
  * Copyright (c) 2010-2018, The GROMACS development team.
- * Copyright (c) 2019, by the GROMACS development team, led by
+ * Copyright (c) 2019,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -52,7 +52,7 @@
 #include "gromacs/selection/selectionoptionmanager.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/gmxassert.h"
-#include "gromacs/utility/messagestringcollector.h"
+#include "gromacs/utility/message_string_collector.h"
 
 #include "selectionfileoptionstorage.h"
 #include "selectionoptionstorage.h"
@@ -164,10 +164,8 @@ void SelectionOptionStorage::setAllowedValueCount(int count)
     {
         // Should not throw because efOption_DontCheckMinimumCount is set.
         setMinValueCount(count);
-        if (valueCount() > 0 && valueCount() < count)
-        {
-            errors.append("Too few (valid) values provided");
-        }
+        errors.appendIf((valueCount() > 0 && valueCount() < count),
+                        "Too few (valid) values provided");
     }
     try
     {

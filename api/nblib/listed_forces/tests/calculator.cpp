@@ -104,22 +104,22 @@ protected:
         // one bond between atoms 0-1 with bond1 parameters and another between atoms 1-2 with bond2 parameters
         std::vector<InteractionIndex<HarmonicBondType>> bondIndices{ { 0, 1, 0 }, { 1, 2, 1 } };
 
-        HarmonicAngleType                                angle(Degrees(108.53), 397.5);
-        std::vector<HarmonicAngleType>                   angles{ angle };
-        std::vector<InteractionIndex<HarmonicAngleType>> angleIndices{ { 0, 1, 2, 0 } };
+        HarmonicAngle                                angle(Degrees(108.53), 397.5);
+        std::vector<HarmonicAngle>                   angles{ angle };
+        std::vector<InteractionIndex<HarmonicAngle>> angleIndices{ { 0, 1, 2, 0 } };
 
         pickType<HarmonicBondType>(interactions).indices    = bondIndices;
         pickType<HarmonicBondType>(interactions).parameters = bonds;
 
-        pickType<HarmonicAngleType>(interactions).indices    = angleIndices;
-        pickType<HarmonicAngleType>(interactions).parameters = angles;
+        pickType<HarmonicAngle>(interactions).indices    = angleIndices;
+        pickType<HarmonicAngle>(interactions).parameters = angles;
 
         // initial position for the methanol atoms from the spc-water example
         x = std::vector<gmx::RVec>{ { 1.97, 1.46, 1.209 }, { 1.978, 1.415, 1.082 }, { 1.905, 1.46, 1.03 } };
         forces = std::vector<gmx::RVec>(3, gmx::RVec{ 0, 0, 0 });
 
         box.reset(new Box(3, 3, 3));
-        pbc.reset(new PbcHolder(*box));
+        pbc.reset(new PbcHolder(PbcType::Xyz, *box));
     }
 
     std::vector<gmx::RVec> x;
@@ -133,40 +133,43 @@ protected:
 
 TEST_F(ListedExampleData, ComputeHarmonicBondForces)
 {
-    auto indices = pickType<HarmonicBondType>(interactions).indices;
-    auto bonds   = pickType<HarmonicBondType>(interactions).parameters;
+    gmx::ArrayRef<const InteractionIndex<HarmonicBondType>> indices =
+            pickType<HarmonicBondType>(interactions).indices;
+    gmx::ArrayRef<const HarmonicBondType> bonds = pickType<HarmonicBondType>(interactions).parameters;
     computeForces(indices, bonds, x, &forces, *pbc);
 
-    Vector3DTest vector3DTest(1e-3);
-    vector3DTest.testVectors(forces, "Bond forces");
+    RefDataChecker vector3DTest(1e-3);
+    vector3DTest.testArrays<Vec3>(forces, "Bond forces");
 }
 
 TEST_F(ListedExampleData, ComputeHarmonicBondEnergies)
 {
-    auto indices = pickType<HarmonicBondType>(interactions).indices;
-    auto bonds   = pickType<HarmonicBondType>(interactions).parameters;
-    real energy  = computeForces(indices, bonds, x, &forces, *pbc);
+    gmx::ArrayRef<const InteractionIndex<HarmonicBondType>> indices =
+            pickType<HarmonicBondType>(interactions).indices;
+    gmx::ArrayRef<const HarmonicBondType> bonds = pickType<HarmonicBondType>(interactions).parameters;
+    real                                  energy = computeForces(indices, bonds, x, &forces, *pbc);
 
-    Vector3DTest vector3DTest(1e-4);
+    RefDataChecker vector3DTest(1e-4);
     vector3DTest.testReal(energy, "Bond energy");
 }
 
 TEST_F(ListedExampleData, ComputeHarmonicAngleForces)
 {
-    auto indices = pickType<HarmonicAngleType>(interactions).indices;
-    auto angles  = pickType<HarmonicAngleType>(interactions).parameters;
+    gmx::ArrayRef<const InteractionIndex<HarmonicAngle>> indices =
+            pickType<HarmonicAngle>(interactions).indices;
+    gmx::ArrayRef<const HarmonicAngle> angles = pickType<HarmonicAngle>(interactions).parameters;
     computeForces(indices, angles, x, &forces, *pbc);
 
-    Vector3DTest vector3DTest(1e-4);
-    vector3DTest.testVectors(forces, "Angle forces");
+    RefDataChecker vector3DTest(1e-4);
+    vector3DTest.testArrays<Vec3>(forces, "Angle forces");
 }
 
 TEST_F(ListedExampleData, CanReduceForces)
 {
     reduceListedForces(interactions, x, &forces, *pbc);
 
-    Vector3DTest vector3DTest(1e-2);
-    vector3DTest.testVectors(forces, "Reduced forces");
+    RefDataChecker vector3DTest(1e-2);
+    vector3DTest.testArrays<Vec3>(forces, "Reduced forces");
 }
 
 TEST_F(ListedExampleData, CanReduceEnergies)
@@ -174,7 +177,7 @@ TEST_F(ListedExampleData, CanReduceEnergies)
     auto energies    = reduceListedForces(interactions, x, &forces, *pbc);
     real totalEnergy = std::accumulate(begin(energies), end(energies), 0.0);
 
-    Vector3DTest vector3DTest(1e-4);
+    RefDataChecker vector3DTest(1e-4);
     vector3DTest.testReal(totalEnergy, "Reduced energy");
 }
 

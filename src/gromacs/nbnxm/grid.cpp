@@ -56,7 +56,7 @@
 #include "gromacs/math/vec.h"
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
 #include "gromacs/mdlib/updategroupscog.h"
-#include "gromacs/mdtypes/forcerec.h" // only for GET_CGINFO_*
+#include "gromacs/mdtypes/atominfo.h"
 #include "gromacs/nbnxm/atomdata.h"
 #include "gromacs/simd/simd.h"
 #include "gromacs/simd/vector_operations.h"
@@ -79,8 +79,7 @@ Grid::Geometry::Geometry(const PairlistType pairlistType) :
 }
 
 Grid::Grid(const PairlistType pairlistType, const bool& haveFep) :
-    geometry_(pairlistType),
-    haveFep_(haveFep)
+    geometry_(pairlistType), haveFep_(haveFep)
 {
 }
 
@@ -296,9 +295,9 @@ static constexpr int c_sortGridMaxSizeFactor = c_sortGridRatio + 1;
  * sort should have a size of at least n_per_h*c_sortGridRatio + n,
  * or easier, allocate at least n*c_sortGridMaxSizeFactor elements.
  */
-static void sort_atoms(int      dim,
-                       gmx_bool Backwards,
-                       int gmx_unused dd_zone,
+static void sort_atoms(int                            dim,
+                       gmx_bool                       Backwards,
+                       int gmx_unused                 dd_zone,
                        bool gmx_unused                relevantAtomsAreWithinGridBounds,
                        int*                           a,
                        int                            n,
@@ -714,7 +713,10 @@ static void print_bbsizes_simple(FILE* fp, const Grid& grid)
         ba[YY] += bb.upper.y - bb.lower.y;
         ba[ZZ] += bb.upper.z - bb.lower.z;
     }
-    dsvmul(1.0 / grid.numCells(), ba, ba);
+    if (grid.numCells() > 0)
+    {
+        dsvmul(1.0 / grid.numCells(), ba, ba);
+    }
 
     const Grid::Dimensions& dims = grid.dimensions();
     real                    avgCellSizeZ =
@@ -796,12 +798,12 @@ static void print_bbsizes_supersub(FILE* fp, const Grid& grid)
  *
  * Sorts atoms on LJ coefficients: !=0 first, ==0 at the end.
  */
-static void sort_cluster_on_flag(int                numAtomsInCluster,
-                                 int                atomStart,
-                                 int                atomEnd,
-                                 const int*         atinfo,
-                                 gmx::ArrayRef<int> order,
-                                 int*               flags)
+static void sort_cluster_on_flag(int                          numAtomsInCluster,
+                                 int                          atomStart,
+                                 int                          atomEnd,
+                                 gmx::ArrayRef<const int64_t> atomInfo,
+                                 gmx::ArrayRef<int>           order,
+                                 int*                         flags)
 {
     constexpr int c_maxNumAtomsInCluster = 8;
     int           sort1[c_maxNumAtomsInCluster];
@@ -816,15 +818,15 @@ static void sort_cluster_on_flag(int                numAtomsInCluster,
     for (int s = atomStart; s < atomEnd; s += numAtomsInCluster)
     {
         /* Make lists for this (sub-)cell on atoms with and without LJ */
-        int      n1       = 0;
-        int      n2       = 0;
-        gmx_bool haveQ    = FALSE;
-        int      a_lj_max = -1;
+        int  n1       = 0;
+        int  n2       = 0;
+        bool haveQ    = false;
+        int  a_lj_max = -1;
         for (int a = s; a < std::min(s + numAtomsInCluster, atomEnd); a++)
         {
-            haveQ = haveQ || GET_CGINFO_HAS_Q(atinfo[order[a]]);
+            haveQ = haveQ || bool(atomInfo[order[a]] & gmx::sc_atomInfo_HasCharge);
 
-            if (GET_CGINFO_HAS_VDW(atinfo[order[a]]))
+            if (atomInfo[order[a]] & (gmx::sc_atomInfo_HasVdw))
             {
                 sort1[n1++] = order[a];
                 a_lj_max    = a;
@@ -877,7 +879,7 @@ void Grid::fillCell(GridSetData*                   gridSetData,
                     nbnxn_atomdata_t*              nbat,
                     int                            atomStart,
                     int                            atomEnd,
-                    const int*                     atinfo,
+                    gmx::ArrayRef<const int64_t>   atomInfo,
                     gmx::ArrayRef<const gmx::RVec> x,
                     BoundingBox gmx_unused* bb_work_aligned)
 {
@@ -895,7 +897,7 @@ void Grid::fillCell(GridSetData*                   gridSetData,
         sort_cluster_on_flag(geometry_.numAtomsICluster,
                              atomStart,
                              atomEnd,
-                             atinfo,
+                             atomInfo,
                              atomIndices,
                              flags_.data() + atomToCluster(atomStart) - cellOffset_);
     }
@@ -910,7 +912,7 @@ void Grid::fillCell(GridSetData*                   gridSetData,
         fep_[cell] = 0;
         for (int at = atomStart; at < atomEnd; at++)
         {
-            if (atomIndices[at] >= 0 && GET_CGINFO_FEP(atinfo[atomIndices[at]]))
+            if (atomIndices[at] >= 0 && (atomInfo[atomIndices[at]] & gmx::sc_atomInfo_FreeEnergyPerturbation))
             {
                 fep_[cell] |= (1 << (at - atomStart));
             }
@@ -1023,7 +1025,7 @@ void Grid::fillCell(GridSetData*                   gridSetData,
 
 void Grid::sortColumnsCpuGeometry(GridSetData*                   gridSetData,
                                   int                            dd_zone,
-                                  const int*                     atinfo,
+                                  gmx::ArrayRef<const int64_t>   atomInfo,
                                   gmx::ArrayRef<const gmx::RVec> x,
                                   nbnxn_atomdata_t*              nbat,
                                   const gmx::Range<int>          columnRange,
@@ -1073,7 +1075,7 @@ void Grid::sortColumnsCpuGeometry(GridSetData*                   gridSetData,
             const int numAtomsLeftInColumn = std::max(numAtoms - (atomOffsetCell - atomOffset), 0);
             const int numAtomsCell         = std::min(numAtomsPerCell, numAtomsLeftInColumn);
 
-            fillCell(gridSetData, nbat, atomOffsetCell, atomOffsetCell + numAtomsCell, atinfo, x, nullptr);
+            fillCell(gridSetData, nbat, atomOffsetCell, atomOffsetCell + numAtomsCell, atomInfo, x, nullptr);
 
             /* This copy to bbcz is not really necessary.
              * But it allows to use the same grid search code
@@ -1098,7 +1100,7 @@ void Grid::sortColumnsCpuGeometry(GridSetData*                   gridSetData,
 /* Spatially sort the atoms within one grid column */
 void Grid::sortColumnsGpuGeometry(GridSetData*                   gridSetData,
                                   int                            dd_zone,
-                                  const int*                     atinfo,
+                                  gmx::ArrayRef<const int64_t>   atomInfo,
                                   gmx::ArrayRef<const gmx::RVec> x,
                                   nbnxn_atomdata_t*              nbat,
                                   const gmx::Range<int>          columnRange,
@@ -1222,7 +1224,7 @@ void Grid::sortColumnsGpuGeometry(GridSetData*                   gridSetData,
                     const int numAtomsX =
                             std::min(subdiv_x, numAtomsInColumn - (atomOffsetX - atomOffset));
 
-                    fillCell(gridSetData, nbat, atomOffsetX, atomOffsetX + numAtomsX, atinfo, x, bb_work_aligned);
+                    fillCell(gridSetData, nbat, atomOffsetX, atomOffsetX + numAtomsX, atomInfo, x, bb_work_aligned);
                 }
             }
         }
@@ -1368,7 +1370,7 @@ void Grid::setCellIndices(int                            ddZone,
                           GridSetData*                   gridSetData,
                           gmx::ArrayRef<GridWork>        gridWork,
                           const gmx::Range<int>          atomRange,
-                          const int*                     atinfo,
+                          gmx::ArrayRef<const int64_t>   atomInfo,
                           gmx::ArrayRef<const gmx::RVec> x,
                           const int                      numAtomsMoved,
                           nbnxn_atomdata_t*              nbat)
@@ -1488,12 +1490,12 @@ void Grid::setCellIndices(int                            ddZone,
             if (geometry_.isSimple)
             {
                 sortColumnsCpuGeometry(
-                        gridSetData, ddZone, atinfo, x, nbat, columnRange, gridWork[thread].sortBuffer);
+                        gridSetData, ddZone, atomInfo, x, nbat, columnRange, gridWork[thread].sortBuffer);
             }
             else
             {
                 sortColumnsGpuGeometry(
-                        gridSetData, ddZone, atinfo, x, nbat, columnRange, gridWork[thread].sortBuffer);
+                        gridSetData, ddZone, atomInfo, x, nbat, columnRange, gridWork[thread].sortBuffer);
             }
         }
         GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR

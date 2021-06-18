@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -77,6 +77,8 @@ public:
     bool computeEnergy = false;
     //! Whether (any) forces need to be computed this step, not only energies
     bool computeForces = false;
+    //! Whether only the MTS combined force buffers are needed and not the separate normal force buffer.
+    bool useOnlyMtsCombinedForceBuffer = false;
     //! Whether nonbonded forces need to be computed this step
     bool computeNonbondedForces = false;
     //! Whether listed forces need to be computed this step
@@ -97,6 +99,10 @@ public:
     bool useGpuXHalo = false;
     //! Whether GPU forces halo exchange is active this step
     bool useGpuFHalo = false;
+    //! Whether GPU PME work is compute this step (can be false also on fast steps with MTS)
+    bool haveGpuPmeOnThisRank = false;
+    //! Whether to combine the forces for multiple time stepping before the halo exchange
+    bool combineMtsForcesBeforeHaloExchange = false;
 };
 
 /*! \libinternal
@@ -128,6 +134,13 @@ public:
 
     //! Whether the current nstlist step-range Free energy work on the CPU.
     bool haveFreeEnergyWork = false;
+    //! Whether the CPU force buffer has contributions to local atoms that need to be reduced on the GPU (with DD).
+    // This depends on whether there are CPU-based force tasks
+    // or when DD is active the halo exchange has resulted in contributions
+    // from the non-local part.
+    bool haveLocalForceContribInCpuBuffer = false;
+    //! Whether the CPU force buffer has contributions to nonlocal atoms that need to be reduced on the GPU (with DD).
+    bool haveNonLocalForceContribInCpuBuffer = false;
 };
 
 /*! \libinternal
@@ -175,6 +188,8 @@ public:
     bool useGpuDirectCommunication = false;
     //! If there is an Ewald surface (dipole) term to compute
     bool haveEwaldSurfaceContribution = false;
+    //! Whether to use multiple time stepping
+    bool useMts = false;
 };
 
 class MdrunScheduleWorkload

@@ -53,6 +53,7 @@
 #include "gromacs/math/coordinatetransformation.h"
 #include "gromacs/math/multidimarray.h"
 #include "gromacs/mdtypes/imdmodule.h"
+#include "gromacs/selection/indexutil.h"
 #include "gromacs/utility/classhelpers.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/keyvaluetreebuilder.h"
@@ -198,7 +199,7 @@ public:
     void setSimulationTimeStep(double timeStep) { simulationTimeStep_ = timeStep; }
 
     //! Return the simulation time step
-    double simulationTimeStep() { return simulationTimeStep_; }
+    double simulationTimeStep() const { return simulationTimeStep_; }
 
 private:
     //! The reference density to fit to

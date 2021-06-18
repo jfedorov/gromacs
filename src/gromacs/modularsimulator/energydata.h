@@ -173,6 +173,11 @@ public:
      */
     gmx_enerdata_t* enerdata();
 
+    /*! \brief Get const pointer to energy structure
+     *
+     */
+    const gmx_enerdata_t* enerdata() const;
+
     /*! \brief Get pointer to kinetic energy structure
      *
      */
@@ -212,6 +217,10 @@ public:
     static void initializeEnergyHistory(StartingBehavior    startingBehavior,
                                         ObservablesHistory* observablesHistory,
                                         EnergyOutput*       energyOutput);
+
+    /*! \brief Request (local) kinetic energy update
+     */
+    void updateKineticEnergy();
 
     //! The element taking part in the simulator loop
     class Element;

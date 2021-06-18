@@ -59,9 +59,7 @@ namespace gmx
 PmeCoordinateReceiverGpu::Impl::Impl(const DeviceStream&    pmeStream,
                                      MPI_Comm               comm,
                                      gmx::ArrayRef<PpRanks> ppRanks) :
-    pmeStream_(pmeStream),
-    comm_(comm),
-    ppRanks_(ppRanks)
+    pmeStream_(pmeStream), comm_(comm), ppRanks_(ppRanks)
 {
     request_.resize(ppRanks.size());
     ppSync_.resize(ppRanks.size());
@@ -103,6 +101,7 @@ void PmeCoordinateReceiverGpu::Impl::receiveCoordinatesSynchronizerFromPpCudaDir
 
 #if GMX_MPI
     // Receive event from PP task
+    // NOLINTNEXTLINE(bugprone-sizeof-expression)
     MPI_Irecv(&ppSync_[recvCount_], sizeof(GpuEventSynchronizer*), MPI_BYTE, ppRank, 0, comm_, &request_[recvCount_]);
     recvCount_++;
 #else

@@ -57,6 +57,7 @@
 #include "gromacs/domdec/domdec.h"
 #include "gromacs/domdec/domdec_network.h"
 #include "gromacs/domdec/domdec_struct.h"
+#include "gromacs/domdec/localtopologychecker.h"
 #include "gromacs/domdec/mdsetup.h"
 #include "gromacs/domdec/partition.h"
 #include "gromacs/essentialdynamics/edsam.h"
@@ -209,7 +210,7 @@ void gmx::LegacySimulator::do_mimic()
     if (MASTER(cr))
     {
         MimicCommunicator::init();
-        auto nonConstGlobalTopology = const_cast<gmx_mtop_t*>(&top_global);
+        auto* nonConstGlobalTopology = const_cast<gmx_mtop_t*>(&top_global);
         MimicCommunicator::sendInitData(nonConstGlobalTopology, state_global->x);
         // TODO: Avoid changing inputrec (#3854)
         auto* nonConstInputrec   = const_cast<t_inputrec*>(inputrec);
@@ -224,12 +225,15 @@ void gmx::LegacySimulator::do_mimic()
 
     const SimulationGroups* groups = &top_global.groups;
     {
-        auto nonConstGlobalTopology                          = const_cast<gmx_mtop_t*>(&top_global);
+        auto* nonConstGlobalTopology                         = const_cast<gmx_mtop_t*>(&top_global);
         nonConstGlobalTopology->intermolecularExclusionGroup = genQmmmIndices(top_global);
     }
 
     initialize_lambdas(fplog,
-                       *ir,
+                       ir->efep,
+                       ir->bSimTemp,
+                       *ir->fepvals,
+                       ir->simtempvals->temperatures,
                        gmx::arrayRefFromArray(ir->opts.ref_t, ir->opts.ngtc),
                        MASTER(cr),
                        &state_global->fep_state,
@@ -322,7 +326,7 @@ void gmx::LegacySimulator::do_mimic()
         mdAlgorithmsSetupAtomData(cr, *ir, top_global, &top, fr, &f, mdAtoms, constr, vsite, shellfc);
     }
 
-    auto mdatoms = mdAtoms->mdatoms();
+    auto* mdatoms = mdAtoms->mdatoms();
 
     // NOTE: The global state is no longer used at this point.
     // But state_global is still used as temporary storage space for writing
@@ -338,7 +342,7 @@ void gmx::LegacySimulator::do_mimic()
 
     {
         int cglo_flags = CGLO_GSTAT;
-        if (DOMAINDECOMP(cr) && shouldCheckNumberOfBondedInteractions(*cr->dd))
+        if (DOMAINDECOMP(cr) && dd_localTopologyChecker(*cr->dd).shouldCheckNumberOfBondedInteractions())
         {
             cglo_flags |= CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS;
         }
@@ -368,8 +372,8 @@ void gmx::LegacySimulator::do_mimic()
                         cglo_flags);
         if (DOMAINDECOMP(cr))
         {
-            checkNumberOfBondedInteractions(
-                    mdlog, cr, top_global, &top, makeConstArrayRef(state->x), state->box);
+            dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
+                    &top, makeConstArrayRef(state->x), state->box);
         }
     }
 
@@ -627,7 +631,7 @@ void gmx::LegacySimulator::do_mimic()
             SimulationSignaller signaller(&signals, cr, ms, doInterSimSignal, doIntraSimSignal);
 
             int cglo_flags = CGLO_GSTAT | CGLO_ENERGY;
-            if (DOMAINDECOMP(cr) && shouldCheckNumberOfBondedInteractions(*cr->dd))
+            if (DOMAINDECOMP(cr) && dd_localTopologyChecker(*cr->dd).shouldCheckNumberOfBondedInteractions())
             {
                 cglo_flags |= CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS;
             }
@@ -655,8 +659,8 @@ void gmx::LegacySimulator::do_mimic()
                             cglo_flags);
             if (DOMAINDECOMP(cr))
             {
-                checkNumberOfBondedInteractions(
-                        mdlog, cr, top_global, &top, makeConstArrayRef(state->x), state->box);
+                dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
+                        &top, makeConstArrayRef(state->x), state->box);
             }
         }
 
@@ -712,8 +716,6 @@ void gmx::LegacySimulator::do_mimic()
                                                                 state->nhpres_xi,
                                                                 state->nhpres_vxi }),
                                              state->fep_state,
-                                             shake_vir,
-                                             force_vir,
                                              total_vir,
                                              pres,
                                              ekind,

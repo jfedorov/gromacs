@@ -47,14 +47,12 @@
 #include "gromacs/fileio/tngio.h"
 #include "gromacs/fileio/trrio.h"
 #include "gromacs/fileio/xtcio.h"
-#include "gromacs/fileio/xvgr.h"
 #include "gromacs/math/vec.h"
-#include "gromacs/mdlib/trajectory_writing.h"
+#include "gromacs/mdlib/energyoutput.h"
 #include "gromacs/mdrunutility/handlerestart.h"
 #include "gromacs/mdrunutility/multisim.h"
 #include "gromacs/mdtypes/awh_history.h"
 #include "gromacs/mdtypes/commrec.h"
-#include "gromacs/mdtypes/df_history.h"
 #include "gromacs/mdtypes/edsamhistory.h"
 #include "gromacs/mdtypes/energyhistory.h"
 #include "gromacs/mdtypes/imdoutputprovider.h"
@@ -357,7 +355,7 @@ static void write_checkpoint(const char*                     fn,
     swaphistory_t* swaphist    = observablesHistory->swapHistory.get();
     SwapType       eSwapCoords = (swaphist ? swaphist->eSwapCoords : SwapType::No);
 
-    CheckpointHeaderContents headerContents = { 0,
+    CheckpointHeaderContents headerContents = { CheckPointVersion::UnknownVersion0,
                                                 { 0 },
                                                 { 0 },
                                                 { 0 },
@@ -476,13 +474,20 @@ static void write_checkpoint(const char*                     fn,
     sfree(fntemp);
 
 #if GMX_FAHCORE
-    /*code for alternate checkpointing scheme.  moved from top of loop over
-       steps */
-    fcRequestCheckPoint();
-    if (fcCheckPointParallel(cr->nodeid, NULL, 0) == 0)
-    {
-        gmx_fatal(3, __FILE__, __LINE__, "Checkpoint error on step %d\n", step);
-    }
+    /* Always FAH checkpoint immediately after a GROMACS checkpoint.
+     *
+     * Note that it is critical that we save a FAH checkpoint directly
+     * after writing a GROMACS checkpoint. If the program dies, either
+     * by the machine powering off suddenly or the process being,
+     * killed, FAH can recover files that have only appended data by
+     * truncating them to the last recorded length. The GROMACS
+     * checkpoint does not just append data, it is fully rewritten each
+     * time so a crash between moving the new Gromacs checkpoint file in
+     * to place and writing a FAH checkpoint is not recoverable. Thus
+     * the time between these operations must be kept as short as
+     * possible.
+     */
+    fcCheckpoint();
 #endif /* end GMX_FAHCORE block */
 }
 
@@ -570,10 +575,9 @@ void mdoutf_write_to_trajectory_files(FILE*                           fplog,
         f_global = of->f_global;
         if (mdof_flags & MDOF_F)
         {
-            auto globalFRef =
-                    MASTER(cr) ? gmx::arrayRefFromArray(reinterpret_cast<gmx::RVec*>(of->f_global),
-                                                        f_local.size())
-                               : gmx::ArrayRef<gmx::RVec>();
+            auto globalFRef = MASTER(cr) ? gmx::arrayRefFromArray(
+                                      reinterpret_cast<gmx::RVec*>(of->f_global), of->natoms_global)
+                                         : gmx::ArrayRef<gmx::RVec>();
             dd_collect_vec(cr->dd,
                            state_local->ddp_count,
                            state_local->ddp_count_cg_gl,

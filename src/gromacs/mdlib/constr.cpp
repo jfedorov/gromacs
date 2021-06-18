@@ -104,6 +104,7 @@ public:
          pull_t*               pull_work,
          FILE*                 log_p,
          const t_commrec*      cr_p,
+         bool                  useUpdateGroups,
          const gmx_multisim_t* ms,
          t_nrnb*               nrnb,
          gmx_wallcycle*        wcycle_p,
@@ -766,7 +767,7 @@ bool Constraints::Impl::apply(bool                      bLog,
             set_pbc(&pbc, ir.pbcType, box);
             pull_constraint(pull_work,
                             masses_,
-                            &pbc,
+                            pbc,
                             cr,
                             ir.delta_t,
                             t,
@@ -1080,13 +1081,14 @@ Constraints::Constraints(const gmx_mtop_t&     mtop,
                          pull_t*               pull_work,
                          FILE*                 log,
                          const t_commrec*      cr,
+                         const bool            useUpdateGroups,
                          const gmx_multisim_t* ms,
                          t_nrnb*               nrnb,
                          gmx_wallcycle*        wcycle,
                          bool                  pbcHandlingRequired,
                          int                   numConstraints,
                          int                   numSettles) :
-    impl_(new Impl(mtop, ir, pull_work, log, cr, ms, nrnb, wcycle, pbcHandlingRequired, numConstraints, numSettles))
+    impl_(new Impl(mtop, ir, pull_work, log, cr, useUpdateGroups, ms, nrnb, wcycle, pbcHandlingRequired, numConstraints, numSettles))
 {
 }
 
@@ -1095,6 +1097,7 @@ Constraints::Impl::Impl(const gmx_mtop_t&     mtop_p,
                         pull_t*               pull_work,
                         FILE*                 log_p,
                         const t_commrec*      cr_p,
+                        const bool            useUpdateGroups,
                         const gmx_multisim_t* ms_p,
                         t_nrnb*               nrnb_p,
                         gmx_wallcycle*        wcycle_p,
@@ -1151,23 +1154,23 @@ Constraints::Impl::Impl(const gmx_mtop_t&     mtop_p,
             }
         }
 
+        // When there are multiple PP domains and update groups are
+        // not in use, the constraints might be split across the
+        // domains, needing particular handling.
+        const bool mayHaveSplitConstraints = DOMAINDECOMP(cr) && !useUpdateGroups;
+
         if (ir.eConstrAlg == ConstraintAlgorithm::Lincs)
         {
-            lincsd = init_lincs(log,
-                                mtop,
-                                nflexcon,
-                                at2con_mt,
-                                DOMAINDECOMP(cr) && ddHaveSplitConstraints(*cr->dd),
-                                ir.nLincsIter,
-                                ir.nProjOrder);
+            lincsd = init_lincs(
+                    log, mtop, nflexcon, at2con_mt, mayHaveSplitConstraints, ir.nLincsIter, ir.nProjOrder);
         }
 
         if (ir.eConstrAlg == ConstraintAlgorithm::Shake)
         {
-            if (DOMAINDECOMP(cr) && ddHaveSplitConstraints(*cr->dd))
+            if (mayHaveSplitConstraints)
             {
                 gmx_fatal(FARGS,
-                          "SHAKE is not supported with domain decomposition and constraint that "
+                          "SHAKE is not supported with domain decomposition and constraints that "
                           "cross domain boundaries, use LINCS");
             }
             if (nflexcon)
@@ -1191,6 +1194,15 @@ Constraints::Impl::Impl(const gmx_mtop_t&     mtop_p,
         please_cite(log, "Miyamoto92a");
 
         settled = std::make_unique<SettleData>(mtop);
+
+        // SETTLE with perturbed masses is not implemented. grompp now checks
+        // for this, but old .tpr files that did this might still exist.
+        if (haveFepPerturbedMassesInSettles(mtop))
+        {
+            gmx_fatal(FARGS,
+                      "SETTLE is not implemented for atoms whose mass is perturbed. "
+                      "You might\ninstead use normal constraints.");
+        }
 
         /* Make an atom to settle index for use in domain decomposition */
         for (size_t mt = 0; mt < mtop.moltype.size(); mt++)

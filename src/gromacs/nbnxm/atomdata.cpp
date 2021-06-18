@@ -432,17 +432,6 @@ nbnxn_atomdata_t::Params::Params(gmx::PinningPolicy pinningPolicy) :
 {
 }
 
-nbnxn_atomdata_t::nbnxn_atomdata_t(gmx::PinningPolicy pinningPolicy) :
-    params_(pinningPolicy),
-    numAtoms_(0),
-    natoms_local(0),
-    shift_vec({}, { pinningPolicy }),
-    x_({}, { pinningPolicy }),
-    simdMasks(),
-    bUseBufferFlags(FALSE)
-{
-}
-
 /* Initializes an nbnxn_atomdata_t::Params data structure */
 static void nbnxn_atomdata_params_init(const gmx::MDLogger&      mdlog,
                                        nbnxn_atomdata_t::Params* params,
@@ -515,7 +504,8 @@ static void nbnxn_atomdata_params_init(const gmx::MDLogger&      mdlog,
                 /* Compare 6*C6 and 12*C12 for geometric cobination rule */
                 bCombGeom =
                         bCombGeom
-                        && gmx_within_tol(c6 * c6, nbfp[(i * ntype + i) * 2] * nbfp[(j * ntype + j) * 2], tol)
+                        && gmx_within_tol(
+                                c6 * c6, nbfp[(i * ntype + i) * 2] * nbfp[(j * ntype + j) * 2], tol)
                         && gmx_within_tol(c12 * c12,
                                           nbfp[(i * ntype + i) * 2 + 1] * nbfp[(j * ntype + j) * 2 + 1],
                                           tol);
@@ -523,18 +513,18 @@ static void nbnxn_atomdata_params_init(const gmx::MDLogger&      mdlog,
                 /* Compare C6 and C12 for Lorentz-Berthelot combination rule */
                 c6 /= 6.0;
                 c12 /= 12.0;
-                bCombLB =
-                        bCombLB
-                        && ((c6 == 0 && c12 == 0
-                             && (params->nbfp_comb[i * 2 + 1] == 0 || params->nbfp_comb[j * 2 + 1] == 0))
-                            || (c6 > 0 && c12 > 0
-                                && gmx_within_tol(gmx::sixthroot(c12 / c6),
-                                                  0.5 * (params->nbfp_comb[i * 2] + params->nbfp_comb[j * 2]),
-                                                  tol)
-                                && gmx_within_tol(0.25 * c6 * c6 / c12,
-                                                  std::sqrt(params->nbfp_comb[i * 2 + 1]
-                                                            * params->nbfp_comb[j * 2 + 1]),
-                                                  tol)));
+                bCombLB = bCombLB
+                          && ((c6 == 0 && c12 == 0
+                               && (params->nbfp_comb[i * 2 + 1] == 0 || params->nbfp_comb[j * 2 + 1] == 0))
+                              || (c6 > 0 && c12 > 0
+                                  && gmx_within_tol(
+                                          gmx::sixthroot(c12 / c6),
+                                          0.5 * (params->nbfp_comb[i * 2] + params->nbfp_comb[j * 2]),
+                                          tol)
+                                  && gmx_within_tol(0.25 * c6 * c6 / c12,
+                                                    std::sqrt(params->nbfp_comb[i * 2 + 1]
+                                                              * params->nbfp_comb[j * 2 + 1]),
+                                                    tol)));
             }
             else
             {
@@ -626,17 +616,24 @@ static void nbnxn_atomdata_params_init(const gmx::MDLogger&      mdlog,
 }
 
 /* Initializes an nbnxn_atomdata_t data structure */
-void nbnxn_atomdata_init(const gmx::MDLogger&    mdlog,
-                         nbnxn_atomdata_t*       nbat,
-                         const Nbnxm::KernelType kernelType,
-                         int                     enbnxninitcombrule,
-                         int                     ntype,
-                         ArrayRef<const real>    nbfp,
-                         int                     n_energygroups,
-                         int                     nout)
+nbnxn_atomdata_t::nbnxn_atomdata_t(gmx::PinningPolicy      pinningPolicy,
+                                   const gmx::MDLogger&    mdlog,
+                                   const Nbnxm::KernelType kernelType,
+                                   int                     enbnxninitcombrule,
+                                   int                     ntype,
+                                   ArrayRef<const real>    nbfp,
+                                   int                     n_energygroups,
+                                   int                     nout) :
+    params_(pinningPolicy),
+    numAtoms_(0),
+    natoms_local(0),
+    shift_vec({}, { pinningPolicy }),
+    x_({}, { pinningPolicy }),
+    simdMasks(),
+    bUseBufferFlags(FALSE)
 {
     nbnxn_atomdata_params_init(
-            mdlog, &nbat->paramsDeprecated(), kernelType, enbnxninitcombrule, ntype, nbfp, n_energygroups);
+            mdlog, &paramsDeprecated(), kernelType, enbnxninitcombrule, ntype, nbfp, n_energygroups);
 
     const bool simple = Nbnxm::kernelTypeUsesSimplePairlist(kernelType);
     const bool bSIMD  = Nbnxm::kernelTypeIsSimd(kernelType);
@@ -648,38 +645,37 @@ void nbnxn_atomdata_init(const gmx::MDLogger&    mdlog,
             int pack_x = std::max(c_nbnxnCpuIClusterSize, Nbnxm::JClusterSizePerKernelType[kernelType]);
             switch (pack_x)
             {
-                case 4: nbat->XFormat = nbatX4; break;
-                case 8: nbat->XFormat = nbatX8; break;
+                case 4: XFormat = nbatX4; break;
+                case 8: XFormat = nbatX8; break;
                 default: gmx_incons("Unsupported packing width");
             }
         }
         else
         {
-            nbat->XFormat = nbatXYZ;
+            XFormat = nbatXYZ;
         }
 
-        nbat->FFormat = nbat->XFormat;
+        FFormat = XFormat;
     }
     else
     {
-        nbat->XFormat = nbatXYZQ;
-        nbat->FFormat = nbatXYZ;
+        XFormat = nbatXYZQ;
+        FFormat = nbatXYZ;
     }
 
-    nbat->shift_vec.resize(gmx::c_numShiftVectors);
+    shift_vec.resize(gmx::c_numShiftVectors);
 
-    nbat->xstride = (nbat->XFormat == nbatXYZQ ? STRIDE_XYZQ : DIM);
-    nbat->fstride = (nbat->FFormat == nbatXYZQ ? STRIDE_XYZQ : DIM);
+    xstride = (XFormat == nbatXYZQ ? STRIDE_XYZQ : DIM);
+    fstride = (FFormat == nbatXYZQ ? STRIDE_XYZQ : DIM);
 
     /* Initialize the output data structures */
     for (int i = 0; i < nout; i++)
     {
-        const auto& pinningPolicy = nbat->params().type.get_allocator().pinningPolicy();
-        nbat->out.emplace_back(
-                kernelType, nbat->params().nenergrp, 1 << nbat->params().neg_2log, pinningPolicy);
+        const auto& pinningPolicy = params().type.get_allocator().pinningPolicy();
+        out.emplace_back(kernelType, params().nenergrp, 1 << params().neg_2log, pinningPolicy);
     }
 
-    nbat->buffer_flags.clear();
+    buffer_flags.clear();
 }
 
 template<int packSize>
@@ -865,8 +861,13 @@ static void nbnxn_atomdata_mask_fep(nbnxn_atomdata_t* nbat, const Nbnxm::GridSet
 }
 
 /* Copies the energy group indices to a reordered and packed array */
-static void
-copy_egp_to_nbat_egps(const int* a, int na, int na_round, int na_c, int bit_shift, const int* in, int* innb)
+static void copy_egp_to_nbat_egps(const int*              a,
+                                  int                     na,
+                                  int                     na_round,
+                                  int                     na_c,
+                                  int                     bit_shift,
+                                  ArrayRef<const int64_t> atomInfo,
+                                  int*                    atomInfoNb)
 {
     int i = 0, j = 0;
     for (; i < na; i += na_c)
@@ -878,22 +879,22 @@ copy_egp_to_nbat_egps(const int* a, int na, int na_round, int na_c, int bit_shif
             int at = a[i + sa];
             if (at >= 0)
             {
-                comb |= (GET_CGINFO_GID(in[at]) << (sa * bit_shift));
+                comb |= (atomInfo[at] & sc_atomInfo_EnergyGroupIdMask) << (sa * bit_shift);
             }
         }
-        innb[j++] = comb;
+        atomInfoNb[j++] = comb;
     }
     /* Complete the partially filled last cell with fill */
     for (; i < na_round; i += na_c)
     {
-        innb[j++] = 0;
+        atomInfoNb[j++] = 0;
     }
 }
 
 /* Set the energy group indices for atoms in nbnxn_atomdata_t */
 static void nbnxn_atomdata_set_energygroups(nbnxn_atomdata_t::Params* params,
                                             const Nbnxm::GridSet&     gridSet,
-                                            ArrayRef<const int>       atomInfo)
+                                            ArrayRef<const int64_t>   atomInfo)
 {
     if (params->nenergrp == 1)
     {
@@ -915,18 +916,18 @@ static void nbnxn_atomdata_set_energygroups(nbnxn_atomdata_t::Params* params,
                                   numAtoms,
                                   c_nbnxnCpuIClusterSize,
                                   params->neg_2log,
-                                  atomInfo.data(),
+                                  atomInfo,
                                   params->energrp.data() + grid.atomToCluster(atomOffset));
         }
     }
 }
 
 /* Sets all required atom parameter data in nbnxn_atomdata_t */
-void nbnxn_atomdata_set(nbnxn_atomdata_t*     nbat,
-                        const Nbnxm::GridSet& gridSet,
-                        ArrayRef<const int>   atomTypes,
-                        ArrayRef<const real>  atomCharges,
-                        ArrayRef<const int>   atomInfo)
+void nbnxn_atomdata_set(nbnxn_atomdata_t*       nbat,
+                        const Nbnxm::GridSet&   gridSet,
+                        ArrayRef<const int>     atomTypes,
+                        ArrayRef<const real>    atomCharges,
+                        ArrayRef<const int64_t> atomInfo)
 {
     nbnxn_atomdata_t::Params& params = nbat->paramsDeprecated();
 
@@ -1057,8 +1058,8 @@ static void nbnxn_atomdata_clear_reals(gmx::ArrayRef<real> dest, int i0, int i1)
     }
 }
 
-gmx_unused static void nbnxn_atomdata_reduce_reals(real* gmx_restrict dest,
-                                                   gmx_bool           bDestSet,
+gmx_unused static void nbnxn_atomdata_reduce_reals(real* gmx_restrict        dest,
+                                                   gmx_bool                  bDestSet,
                                                    const real** gmx_restrict src,
                                                    int                       nsrc,
                                                    int                       i0,
@@ -1090,11 +1091,11 @@ gmx_unused static void nbnxn_atomdata_reduce_reals(real* gmx_restrict dest,
 }
 
 gmx_unused static void nbnxn_atomdata_reduce_reals_simd(real gmx_unused* gmx_restrict dest,
-                                                        gmx_bool gmx_unused bDestSet,
+                                                        gmx_bool gmx_unused           bDestSet,
                                                         const gmx_unused real** gmx_restrict src,
-                                                        int gmx_unused nsrc,
-                                                        int gmx_unused i0,
-                                                        int gmx_unused i1)
+                                                        int gmx_unused                       nsrc,
+                                                        int gmx_unused                       i0,
+                                                        int gmx_unused                       i1)
 {
 #if GMX_SIMD
     /* The SIMD width here is actually independent of that in the kernels,

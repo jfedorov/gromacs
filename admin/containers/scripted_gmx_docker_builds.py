@@ -107,14 +107,32 @@ _opencl_extra_packages = [
     'ocl-icd-libopencl1',
     'ocl-icd-opencl-dev',
     'opencl-headers',
-    # The following require
-    #             apt_keys=['http://repo.radeon.com/rocm/apt/debian/rocm.gpg.key'],
-    #             apt_repositories=['deb [arch=amd64] http://repo.radeon.com/rocm/apt/debian/ xenial main']
-    'libelf1',
-    'rocm-opencl',
-    'rocm-dev',
-    'clinfo'
 ]
+
+_rocm_extra_packages = [
+        # The following require
+        #             apt_keys=['http://repo.radeon.com/rocm/rocm.gpg.key'],
+        #             apt_repositories=['deb [arch=amd64] http://repo.radeon.com/rocm/apt/4.0.1/ xenial main']
+        'libelf1',
+        'rocm-opencl',
+        'rocm-dev',
+        'clinfo'
+]
+                     
+
+# Extra packages needed to build Intel Compute Runtime
+_intel_compute_runtime_extra_packages = ['pkg-config',
+                                         'libxml2',
+                                         'libxml2-dev',
+                                         'libigc',
+                                         'libigc-dev',
+                                         'libigdgmm11',
+                                         'libigdgmm-dev',
+                                         'libze-loader',
+                                         'libze-loader-dev',
+                                         'ocl-icd-libopencl1',
+                                         'ocl-icd-opencl-dev',
+                                         'opencl-headers']
 
 # Extra packages needed to build Python installations from source.
 _python_extra_packages = ['build-essential',
@@ -148,7 +166,6 @@ _docs_extra_packages = ['autoconf',
                         'help2man',
                         'imagemagick',
                         'libtool',
-                        'linkchecker',
                         'mscgen',
                         'm4',
                         'openssh-client',
@@ -156,7 +173,8 @@ _docs_extra_packages = ['autoconf',
                         'texlive-latex-base',
                         'texlive-latex-extra',
                         'texlive-fonts-recommended',
-                        'texlive-fonts-extra']
+                        'texlive-fonts-extra',
+                        'tex-gyre']
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='GROMACS CI image creation script',
@@ -210,6 +228,12 @@ def get_opencl_packages(args) -> typing.Iterable[str]:
     else:
         return []
 
+def get_rocm_packages(args) -> typing.Iterable[str]:
+    if (args.rocm is None):
+        return []
+    else:
+        return _rocm_extra_packages
+
 def get_compiler(args, compiler_build_stage: hpccm.Stage = None) -> bb_base:
     # Compiler
     if args.llvm is not None:
@@ -244,18 +268,38 @@ def get_compiler(args, compiler_build_stage: hpccm.Stage = None) -> bb_base:
     return compiler
 
 
-def get_mpi(args, compiler):
+def get_gdrcopy(args, compiler):
+    if args.cuda is not None:
+        if hasattr(compiler, 'toolchain'):
+            # Version last updated June 7, 2021
+            return hpccm.building_blocks.gdrcopy(toolchain=compiler.toolchain, version="2.2")
+        else:
+            raise RuntimeError('compiler is not an HPCCM compiler building block!')
+    else:
+        return None
+
+def get_ucx(args, compiler, gdrcopy):
+    if args.cuda is not None:
+        if hasattr(compiler, 'toolchain'):
+            use_gdrcopy = (gdrcopy is not None)
+            # Version last updated June 7, 2021
+            return hpccm.building_blocks.ucx(toolchain=compiler.toolchain, gdrcopy=use_gdrcopy, version="1.10.1", cuda=True)
+        else:
+            raise RuntimeError('compiler is not an HPCCM compiler building block!')
+    else:
+        return None
+
+def get_mpi(args, compiler, ucx):
     # If needed, add MPI to the image
     if args.mpi is not None:
         if args.mpi == 'openmpi':
-            use_cuda = False
-            if args.cuda is not None:
-                use_cuda = True
-
             if hasattr(compiler, 'toolchain'):
                 if args.oneapi is not None:
                     raise RuntimeError('oneAPI building OpenMPI is not supported')
-                return hpccm.building_blocks.openmpi(toolchain=compiler.toolchain, cuda=use_cuda, infiniband=False)
+                use_cuda = (args.cuda is not None)
+                use_ucx = (ucx is not None)
+                # Version last updated June 7, 2021
+                return hpccm.building_blocks.openmpi(toolchain=compiler.toolchain, version="4.1.1", cuda=use_cuda, ucx=use_ucx, infiniband=False)
             else:
                 raise RuntimeError('compiler is not an HPCCM compiler building block!')
 
@@ -287,6 +331,9 @@ def get_hipsycl(args):
     if args.llvm is None:
         raise RuntimeError('Can not build hipSYCL without llvm')
 
+    if args.rocm is None:
+        raise RuntimeError('hipSYCL requires the rocm packages')
+
     cmake_opts = [f'-DLLVM_DIR=/usr/lib/llvm-{args.llvm}/cmake',
                   f'-DCLANG_EXECUTABLE_PATH=/usr/bin/clang++-{args.llvm}',
                   '-DCMAKE_PREFIX_PATH=/opt/rocm/lib/cmake',
@@ -313,6 +360,24 @@ def get_hipsycl(args):
         prefix='/usr/local', recursive=True, commit=args.hipsycl,
         cmake_opts=['-DCMAKE_BUILD_TYPE=Release', *cmake_opts],
         postinstall=postinstall)
+
+def get_intel_compute_runtime(args):
+    # The only reason we need to build Compute Runtime ourselves is because Intel packages have no DG1 support
+    # Otherwise, we could have just installed DEB packages from GitHub or Intel PPA
+    if args.intel_compute_runtime is None:
+        return None
+
+    cmake_opts = ['-DCMAKE_BUILD_TYPE=Release',
+                  '-DSKIP_UNIT_TESTS=TRUE',
+                  '-DSUPPORT_GEN8=0', '-DSUPPORT_GEN9=1', '-DSUPPORT_GEN11=1', '-DSUPPORT_GEN12LP=1', '-DSUPPORT_DG1=1',
+                  '-DBUILD_WITH_L0=1']
+
+    return hpccm.building_blocks.generic_cmake(
+        repository='https://github.com/intel/compute-runtime.git',
+        directory='compute-runtime',
+        prefix='/usr/local', recursive=True, branch=args.intel_compute_runtime,
+        cmake_opts=cmake_opts,
+        postinstall=['ldconfig'])
 
 def add_tsan_compiler_build_stage(input_args, output_stages: typing.Mapping[str, hpccm.Stage]):
     """Isolate the expensive TSAN preparation stage.
@@ -450,6 +515,10 @@ def add_python_stages(building_blocks: typing.Mapping[str, bb_base],
     pyenv_stage = hpccm.Stage()
     pyenv_stage += hpccm.primitives.baseimage(image=base_image_tag(input_args), _as='pyenv')
     pyenv_stage += building_blocks['compiler']
+    if building_blocks['gdrcopy'] is not None:
+        pyenv_stage += building_blocks['gdrcopy']
+    if building_blocks['ucx'] is not None:
+        pyenv_stage += building_blocks['ucx']
     pyenv_stage += building_blocks['mpi']
     pyenv_stage += hpccm.building_blocks.packages(ospackages=_python_extra_packages)
 
@@ -458,6 +527,10 @@ def add_python_stages(building_blocks: typing.Mapping[str, bb_base],
         stage = hpccm.Stage()
         stage += hpccm.primitives.baseimage(image=base_image_tag(input_args), _as=stage_name)
         stage += building_blocks['compiler']
+        if building_blocks['gdrcopy'] is not None:
+            stage += building_blocks['gdrcopy']
+        if building_blocks['ucx'] is not None:
+            stage += building_blocks['ucx']
         stage += building_blocks['mpi']
         stage += hpccm.building_blocks.packages(ospackages=_python_extra_packages)
 
@@ -500,6 +573,8 @@ def add_documentation_dependencies(input_args,
     """Add appropriate layers according to doxygen input arguments."""
     if input_args.doxygen is None:
         return
+    # Always clone the same version of linkchecker (latest release at June 1, 2021)
+    output_stages['main'] += hpccm.building_blocks.pip(pip='pip3', packages=['git+https://github.com/linkchecker/linkchecker.git@v10.0.1'])
     output_stages['main'] += hpccm.primitives.shell(
         commands=['sed -i \'/\"XPS\"/d;/\"PDF\"/d;/\"PS\"/d;/\"EPS\"/d;/disable ghostscript format types/d\' /etc/ImageMagick-6/policy.xml'])
     if input_args.doxygen == '1.8.5':
@@ -560,7 +635,9 @@ def build_stages(args) -> typing.Iterable[hpccm.Stage]:
 
     # These are the most expensive and most reusable layers, so we put them first.
     building_blocks['compiler'] = get_compiler(args, compiler_build_stage=stages.get('compiler_build'))
-    building_blocks['mpi'] = get_mpi(args, building_blocks['compiler'])
+    building_blocks['gdrcopy'] = get_gdrcopy(args, building_blocks['compiler'])
+    building_blocks['ucx'] = get_ucx(args, building_blocks['compiler'], building_blocks['gdrcopy'])
+    building_blocks['mpi'] = get_mpi(args, building_blocks['compiler'], building_blocks['ucx'])
     for i, cmake in enumerate(args.cmake):
         building_blocks['cmake' + str(i)] = hpccm.building_blocks.cmake(
             eula=True,
@@ -568,19 +645,24 @@ def build_stages(args) -> typing.Iterable[hpccm.Stage]:
             version=cmake)
 
     # Install additional packages early in the build to optimize Docker build layer cache.
-    os_packages = list(get_llvm_packages(args)) + get_opencl_packages(args)
+    os_packages = list(get_llvm_packages(args)) + get_opencl_packages(args) + get_rocm_packages(args)
     if args.doxygen is not None:
         os_packages += _docs_extra_packages
     if args.oneapi is not None:
         os_packages += ['lsb-release']
     if args.hipsycl is not None:
         os_packages += ['libboost-fiber-dev']
-    building_blocks['extra_packages'] = hpccm.building_blocks.packages(
+    if args.intel_compute_runtime is not None:
+        os_packages += _intel_compute_runtime_extra_packages
+    building_blocks['extra_packages'] = []
+    if args.rocm is not None:
+        building_blocks['extra_packages'] += hpccm.building_blocks.packages(
+            apt_keys=['http://repo.radeon.com/rocm/rocm.gpg.key'],
+            apt_repositories=[f'deb [arch=amd64] http://repo.radeon.com/rocm/apt/{args.rocm}/ xenial main']
+        )
+    building_blocks['extra_packages'] += hpccm.building_blocks.packages(
         ospackages=os_packages,
-        apt_ppas=['ppa:intel-opencl/intel-opencl'],
-        apt_keys=['http://repo.radeon.com/rocm/apt/debian/rocm.gpg.key'],
-        apt_repositories=['deb [arch=amd64] http://repo.radeon.com/rocm/apt/debian/ xenial main']
-    )
+        apt_ppas=['ppa:intel-opencl/intel-opencl'])
 
     if args.cuda is not None and args.llvm is not None:
         # Hack to tell clang what version of CUDA we're using
@@ -599,6 +681,8 @@ def build_stages(args) -> typing.Iterable[hpccm.Stage]:
     building_blocks['clfft'] = get_clfft(args)
 
     building_blocks['hipSYCL'] = get_hipsycl(args)
+
+    building_blocks['intel-compute-runtime'] = get_intel_compute_runtime(args)
 
     # Add Python environments to MPI images, only, so we don't have to worry
     # about whether to install mpi4py.

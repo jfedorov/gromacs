@@ -89,7 +89,7 @@ namespace Nbnxm
  * there is a bit of fluctuations in the generated block counts, we use
  * a target of 44 instead of the ideal value of 48.
  */
-static unsigned int gpu_min_ci_balanced_factor = 44;
+static const unsigned int gpu_min_ci_balanced_factor = 44;
 
 void gpu_init_platform_specific(NbnxmGpu* /* nb */)
 {
@@ -114,13 +114,6 @@ void* gpu_get_xq(NbnxmGpu* nb)
     assert(nb);
 
     return static_cast<void*>(nb->atdat->xq);
-}
-
-DeviceBuffer<gmx::RVec> gpu_get_f(NbnxmGpu* nb)
-{
-    assert(nb);
-
-    return reinterpret_cast<DeviceBuffer<gmx::RVec>>(nb->atdat->f);
 }
 
 DeviceBuffer<gmx::RVec> gpu_get_fshift(NbnxmGpu* nb)

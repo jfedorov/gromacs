@@ -51,10 +51,12 @@
 #include "gromacs/mdlib/mdatoms.h"
 #include "gromacs/mdlib/mdoutf.h"
 #include "gromacs/mdlib/stat.h"
+#include "gromacs/mdlib/tgroup.h"
 #include "gromacs/mdlib/update.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/enerdata.h"
 #include "gromacs/mdtypes/energyhistory.h"
+#include "gromacs/mdtypes/group.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/observableshistory.h"
@@ -264,8 +266,6 @@ void EnergyData::doStep(Step step, Time time, bool isEnergyCalculationStep, bool
                                {},
                                {} }),
             freeEnergyPerturbationData_ ? freeEnergyPerturbationData_->currentFEPState() : 0,
-            shakeVirial_,
-            forceVirial_,
             totalVirial_,
             pressure_,
             ekind_,
@@ -362,6 +362,11 @@ real* EnergyData::muTot()
 }
 
 gmx_enerdata_t* EnergyData::enerdata()
+{
+    return enerd_;
+}
+
+const gmx_enerdata_t* EnergyData::enerdata() const
 {
     return enerd_;
 }
@@ -507,6 +512,24 @@ void EnergyData::setParrinelloRahmanBoxVelocities(std::function<const rvec*()>&&
     GMX_RELEASE_ASSERT(!parrinelloRahmanBoxVelocities_,
                        "Received a second callback to the Parrinello-Rahman velocities");
     parrinelloRahmanBoxVelocities_ = parrinelloRahmanBoxVelocities;
+}
+
+void EnergyData::updateKineticEnergy()
+{
+    // The legacy sum_ekin function does not offer named types, so define variables for readability
+    // dEkin/dlambda is not handled here
+    real* dEkinDLambda = nullptr;
+    // Whether we use the full step kinetic energy (vs the average of half step KEs)
+    const bool useFullStepKineticEnergy = (inputrec_->eI == IntegrationAlgorithm::VV);
+    /* Whether we're ignoring the NHC scaling factor, only used if useFullStepKineticEnergy
+     * is true. (This parameter is confusing, as it is named `bScaleEkin`, but prompts the
+     * function to ignore scaling. There is no use case within modular simulator to ignore
+     * these, so we set this to false.) */
+    const bool ignoreScalingFactor = false;
+
+    enerd_->term[F_TEMP] = sum_ekin(
+            &(inputrec_->opts), ekind_, dEkinDLambda, useFullStepKineticEnergy, ignoreScalingFactor);
+    enerd_->term[F_EKIN] = trace(ekind_->ekin);
 }
 
 EnergyData::Element* EnergyData::element()

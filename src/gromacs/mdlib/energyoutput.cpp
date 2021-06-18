@@ -90,23 +90,28 @@
 
 //! Labels for energy file quantities
 //! \{
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static const char* conrmsd_nm[] = { "Constr. rmsd", "Constr.2 rmsd" };
 
-static std::array<const char*, 3> boxs_nm = { "Box-X", "Box-Y", "Box-Z" };
+static constexpr std::array<const char*, 3> boxs_nm = { "Box-X", "Box-Y", "Box-Z" };
 
-static std::array<const char*, 6> tricl_boxs_nm = { "Box-XX", "Box-YY", "Box-ZZ",
-                                                    "Box-YX", "Box-ZX", "Box-ZY" };
+static constexpr std::array<const char*, 6> tricl_boxs_nm = { "Box-XX", "Box-YY", "Box-ZZ",
+                                                              "Box-YX", "Box-ZX", "Box-ZY" };
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static const char* vol_nm[] = { "Volume" };
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static const char* dens_nm[] = { "Density" };
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static const char* pv_nm[] = { "pV" };
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static const char* enthalpy_nm[] = { "Enthalpy" };
 
-static std::array<const char*, 6> boxvel_nm = { "Box-Vel-XX", "Box-Vel-YY", "Box-Vel-ZZ",
-                                                "Box-Vel-YX", "Box-Vel-ZX", "Box-Vel-ZY" };
+static constexpr std::array<const char*, 6> boxvel_nm = { "Box-Vel-XX", "Box-Vel-YY", "Box-Vel-ZZ",
+                                                          "Box-Vel-YX", "Box-Vel-ZX", "Box-Vel-ZY" };
 
 const char* enumValueToString(NonBondedEnergyTerms enumValue)
 {
@@ -127,7 +132,6 @@ namespace gmx
  * be written out to the .edr file.
  *
  * \todo Use more std containers.
- * \todo Remove GMX_CONSTRAINTVIR
  * \todo Write free-energy output also to energy file (after adding more tests)
  */
 EnergyOutput::EnergyOutput(ener_file*                fp_ene,
@@ -143,12 +147,6 @@ EnergyOutput::EnergyOutput(ener_file*                fp_ene,
     const char*        ener_nm[F_NRE];
     static const char* vir_nm[]   = { "Vir-XX", "Vir-XY", "Vir-XZ", "Vir-YX", "Vir-YY",
                                     "Vir-YZ", "Vir-ZX", "Vir-ZY", "Vir-ZZ" };
-    static const char* sv_nm[]    = { "ShakeVir-XX", "ShakeVir-XY", "ShakeVir-XZ",
-                                   "ShakeVir-YX", "ShakeVir-YY", "ShakeVir-YZ",
-                                   "ShakeVir-ZX", "ShakeVir-ZY", "ShakeVir-ZZ" };
-    static const char* fv_nm[]    = { "ForceVir-XX", "ForceVir-XY", "ForceVir-XZ",
-                                   "ForceVir-YX", "ForceVir-YY", "ForceVir-YZ",
-                                   "ForceVir-ZX", "ForceVir-ZY", "ForceVir-ZZ" };
     static const char* pres_nm[]  = { "Pres-XX", "Pres-XY", "Pres-XZ", "Pres-YX", "Pres-YY",
                                      "Pres-YZ", "Pres-ZX", "Pres-ZY", "Pres-ZZ" };
     static const char* surft_nm[] = { "#Surf*SurfTen" };
@@ -181,7 +179,6 @@ EnergyOutput::EnergyOutput(ener_file*                fp_ene,
     ncon         = gmx_mtop_ftype_count(mtop, F_CONSTR);
     nset         = gmx_mtop_ftype_count(mtop, F_SETTLE);
     bool bConstr = (ncon > 0 || nset > 0) && !isRerun;
-    bConstrVir_  = false;
     nCrmsd_      = 0;
     if (bConstr)
     {
@@ -189,7 +186,6 @@ EnergyOutput::EnergyOutput(ener_file*                fp_ene,
         {
             nCrmsd_ = 1;
         }
-        bConstrVir_ = (getenv("GMX_CONSTRAINTVIR") != nullptr);
     }
     else
     {
@@ -223,7 +219,6 @@ EnergyOutput::EnergyOutput(ener_file*                fp_ene,
 
     bEner_[F_LJ]   = !bBHAM;
     bEner_[F_BHAM] = bBHAM;
-    bEner_[F_EQM]  = inputrec.bQMMM;
     bEner_[F_RF_EXCL] = (EEL_RF(inputrec.coulombtype) && inputrec.cutoff_scheme == CutoffScheme::Group);
     bEner_[F_COUL_RECIP]   = EEL_FULL(inputrec.coulombtype);
     bEner_[F_LJ_RECIP]     = EVDW_PME(inputrec.vdwtype);
@@ -259,11 +254,16 @@ EnergyOutput::EnergyOutput(ener_file*                fp_ene,
     bEner_[F_ORIRESDEV]  = (gmx_mtop_ftype_count(mtop, F_ORIRES) > 0);
     bEner_[F_COM_PULL]   = ((inputrec.bPull && pull_have_potential(*pull_work)) || inputrec.bRot);
 
+    // Check MDModules for any energy output
     MDModulesEnergyOutputToDensityFittingRequestChecker mdModulesAddOutputToDensityFittingFieldRequest;
     mdModulesNotifiers.simulationSetupNotifier_.notify(&mdModulesAddOutputToDensityFittingFieldRequest);
 
     bEner_[F_DENSITYFITTING] = mdModulesAddOutputToDensityFittingFieldRequest.energyOutputToDensityFitting_;
 
+    MDModulesEnergyOutputToQMMMRequestChecker mdModulesAddOutputToQMMMFieldRequest;
+    mdModulesNotifiers.simulationSetupNotifier_.notify(&mdModulesAddOutputToQMMMFieldRequest);
+
+    bEner_[F_EQM] = mdModulesAddOutputToQMMMFieldRequest.energyOutputToQMMM_;
 
     // Counting the energy terms that will be printed and saving their names
     f_nre_ = 0;
@@ -313,11 +313,6 @@ EnergyOutput::EnergyOutput(ener_file*                fp_ene,
             ipv_       = get_ebin_space(ebin_, 1, pv_nm, unit_energy);
             ienthalpy_ = get_ebin_space(ebin_, 1, enthalpy_nm, unit_energy);
         }
-    }
-    if (bConstrVir_)
-    {
-        isvir_ = get_ebin_space(ebin_, asize(sv_nm), sv_nm, unit_energy);
-        ifvir_ = get_ebin_space(ebin_, asize(fv_nm), fv_nm, unit_energy);
     }
     if (bPres_)
     {
@@ -548,9 +543,7 @@ EnergyOutput::EnergyOutput(ener_file*                fp_ene,
         /* Currently dh histograms are only written with dynamics */
         if (EI_DYNAMICS(inputrec.eI))
         {
-            snew(dhc_, 1);
-
-            mde_delta_h_coll_init(dhc_, inputrec);
+            dhc_ = std::make_unique<t_mde_delta_h_coll>(inputrec);
         }
         fp_dhdl_ = nullptr;
         dE_.resize(inputrec.fepvals->n_lambda);
@@ -574,7 +567,6 @@ EnergyOutput::EnergyOutput(ener_file*                fp_ene,
 EnergyOutput::~EnergyOutput()
 {
     done_ebin(ebin_);
-    done_mde_delta_h_coll(dhc_);
 }
 
 } // namespace gmx
@@ -850,8 +842,6 @@ void EnergyOutput::addDataAtEnergyStep(bool                    bDoDHDL,
                                        const matrix            box,
                                        PTCouplingArrays        ptCouplingArrays,
                                        int                     fep_state,
-                                       const tensor            svir,
-                                       const tensor            fvir,
                                        const tensor            vir,
                                        const tensor            pres,
                                        const gmx_ekindata_t*   ekind,
@@ -913,11 +903,6 @@ void EnergyOutput::addDataAtEnergyStep(bool                    bDoDHDL,
             enthalpy = pv + enerd->term[F_ETOT];
             add_ebin(ebin_, ienthalpy_, 1, &enthalpy, bSum);
         }
-    }
-    if (bConstrVir_)
-    {
-        add_ebin(ebin_, isvir_, 9, svir[0], bSum);
-        add_ebin(ebin_, ifvir_, 9, fvir[0], bSum);
     }
     if (bPres_)
     {
@@ -1123,7 +1108,7 @@ void EnergyOutput::addDataAtEnergyStep(bool                    bDoDHDL,
             }
             store_energy = enerd->term[F_ETOT];
             /* store_dh is dE */
-            mde_delta_h_coll_add_dh(dhc_,
+            mde_delta_h_coll_add_dh(dhc_.get(),
                                     static_cast<double>(fep_state),
                                     store_energy,
                                     pv,
@@ -1189,18 +1174,20 @@ void EnergyOutput::printStepToEnergyFile(ener_file* fp_ene,
         nr[i] = 0;
     }
 
-    if (bOR && fcd->orires->nr > 0)
+    if (bOR && fcd->orires)
     {
         t_oriresdata& orires = *fcd->orires;
         diagonalize_orires_tensors(&orires);
-        nr[enxOR]     = orires.nr;
-        block[enxOR]  = orires.otav;
+        nr[enxOR]     = orires.numRestraints;
+        block[enxOR]  = orires.orientationsTimeAndEnsembleAv.data();
         id[enxOR]     = enxOR;
-        nr[enxORI]    = (orires.oinsl != orires.otav) ? orires.nr : 0;
-        block[enxORI] = orires.oinsl;
+        nr[enxORI]    = (orires.orientations.data() != orires.orientationsTimeAndEnsembleAv.data())
+                                ? orires.numRestraints
+                                : 0;
+        block[enxORI] = orires.orientations.data();
         id[enxORI]    = enxORI;
-        nr[enxORT]    = orires.nex * 12;
-        block[enxORT] = orires.eig;
+        nr[enxORT]    = ssize(orires.eigenOutput);
+        block[enxORT] = orires.eigenOutput.data();
         id[enxORT]    = enxORT;
     }
 
@@ -1260,13 +1247,13 @@ void EnergyOutput::printStepToEnergyFile(ener_file* fp_ene,
         /* Free energy perturbation blocks */
         if (dhc_)
         {
-            mde_delta_h_coll_handle_block(dhc_, &fr, fr.nblock);
+            mde_delta_h_coll_handle_block(dhc_.get(), &fr, fr.nblock);
         }
 
         /* we can now free & reset the data in the blocks */
         if (dhc_)
         {
-            mde_delta_h_coll_reset(dhc_);
+            mde_delta_h_coll_reset(dhc_.get());
         }
 
         /* AWH bias blocks. */
@@ -1286,9 +1273,9 @@ void EnergyOutput::printStepToEnergyFile(ener_file* fp_ene,
     free_enxframe(&fr);
     if (log)
     {
-        if (bOR && fcd->orires->nr > 0)
+        if (bOR && fcd->orires)
         {
-            print_orires_log(log, fcd->orires);
+            print_orires_log(log, fcd->orires.get());
         }
 
         fprintf(log, "   Energies (%s)\n", unit_energy);
@@ -1350,15 +1337,6 @@ void EnergyOutput::printAverages(FILE* log, const SimulationGroups* groups)
         if (bDynBox_)
         {
             pr_ebin(log, ebin_, ib_, bTricl_ ? tricl_boxs_nm.size() : boxs_nm.size(), 5, eprAVER, true);
-            fprintf(log, "\n");
-        }
-        if (bConstrVir_)
-        {
-            fprintf(log, "   Constraint Virial (%s)\n", unit_energy);
-            pr_ebin(log, ebin_, isvir_, 9, 3, eprAVER, false);
-            fprintf(log, "\n");
-            fprintf(log, "   Force Virial (%s)\n", unit_energy);
-            pr_ebin(log, ebin_, ifvir_, 9, 3, eprAVER, false);
             fprintf(log, "\n");
         }
         if (bPres_)
@@ -1448,7 +1426,7 @@ void EnergyOutput::fillEnergyHistory(energyhistory_t* enerhist) const
     }
     if (dhc_)
     {
-        mde_delta_h_coll_update_energyhistory(dhc_, enerhist);
+        mde_delta_h_coll_update_energyhistory(dhc_.get(), enerhist);
     }
 }
 
@@ -1480,7 +1458,7 @@ void EnergyOutput::restoreFromEnergyHistory(const energyhistory_t& enerhist)
     }
     if (dhc_)
     {
-        mde_delta_h_coll_restore_energyhistory(dhc_, enerhist.deltaHForeignLambdas.get());
+        mde_delta_h_coll_restore_energyhistory(dhc_.get(), enerhist.deltaHForeignLambdas.get());
     }
 }
 

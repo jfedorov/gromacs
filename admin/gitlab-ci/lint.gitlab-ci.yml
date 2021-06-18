@@ -5,10 +5,10 @@ clang-tidy:configure-push:
     - .gromacs:base:configure
     - .use-clang:base
     - .rules:basic-push
-  image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-18.04-llvm-9
+  image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-18.04-llvm-11-tsan
   variables:
     CMAKE: /usr/local/cmake-3.16.3/bin/cmake
-    COMPILER_MAJOR_VERSION: 9
+    COMPILER_MAJOR_VERSION: 11
     BUILD_DIR: build-clang-tidy
     CMAKE_EXTRA_OPTIONS: -DCLANG_TIDY=clang-tidy-$COMPILER_MAJOR_VERSION -DGMX_CLANG_TIDY=ON -DGMX_COMPILER_WARNINGS=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
@@ -17,12 +17,25 @@ clang-tidy:configure-schedule:
     - .gromacs:base:configure
     - .use-clang:base
     - .rules:nightly-not-for-release
-  image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-18.04-llvm-9
+  image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-18.04-llvm-11-tsan
   variables:
     CMAKE: /usr/local/cmake-3.16.3/bin/cmake
-    COMPILER_MAJOR_VERSION: 9
+    COMPILER_MAJOR_VERSION: 11
     BUILD_DIR: build-clang-tidy
     CMAKE_EXTRA_OPTIONS: -DCLANG_TIDY=clang-tidy-$COMPILER_MAJOR_VERSION -DGMX_CLANG_TIDY=ON -DGMX_COMPILER_WARNINGS=ON
+
+clang-tidy:configure-schedule-cuda:
+  extends:
+    - .gromacs:base:configure
+    - .use-clang:base
+    - .use-cuda
+    - .rules:nightly-not-for-release
+  image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-20.04-llvm-11-cuda-11.2.2-hipsycl-9867a7b-rocm-4.0.1
+  variables:
+    CMAKE: cmake
+    COMPILER_MAJOR_VERSION: 11
+    BUILD_DIR: build-clang-tidy
+    CMAKE_EXTRA_OPTIONS: -DCLANG_TIDY=clang-tidy-$COMPILER_MAJOR_VERSION -DGMX_CLANG_TIDY=ON -DGMX_COMPILER_WARNINGS=ON -DGMX_CLANG_CUDA=ON
 
 clang-tidy:build:
   extends:
@@ -31,11 +44,25 @@ clang-tidy:build:
     - .variables:default
     - .rules:nightly-not-for-release
   stage: source-check
-  image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-18.04-llvm-9
+  image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-18.04-llvm-11-tsan
   needs:
     - job: clang-tidy:configure-schedule
   variables:
     CMAKE: /usr/local/cmake-3.16.3/bin/cmake
+    BUILD_DIR: build-clang-tidy
+
+clang-tidy:build-cuda:
+  extends:
+    - .gromacs:base:build
+    - .use-ccache
+    - .variables:default
+    - .rules:nightly-not-for-release
+  stage: source-check
+  image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-20.04-llvm-11-cuda-11.2.2-hipsycl-9867a7b-rocm-4.0.1
+  needs:
+    - job: clang-tidy:configure-schedule-cuda
+  variables:
+    CMAKE: cmake
     BUILD_DIR: build-clang-tidy
 
 clang-tidy:test:
@@ -44,12 +71,12 @@ clang-tidy:test:
     - .variables:default
     - .rules:basic-push
   stage: source-check
-  image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-18.04-llvm-9
+  image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-18.04-llvm-11-tsan
   needs:
     - job: clang-tidy:configure-push
   variables:
     CMAKE: /usr/local/cmake-3.16.3/bin/cmake
-    COMPILER_MAJOR_VERSION: 9
+    COMPILER_MAJOR_VERSION: 11
     BUILD_DIR: build-clang-tidy
     EXTRA_INSTALLS: clang-tidy-$COMPILER_MAJOR_VERSION
     KUBERNETES_CPU_LIMIT: 4
@@ -67,7 +94,7 @@ clang-tidy:test:
     - echo "Revision used for branch point is $REV"
     - git show -s $REV
     - RUN_CLANG_TIDY=run-clang-tidy-$COMPILER_MAJOR_VERSION bash admin/clang-tidy.sh check --parallel=$KUBERNETES_CPU_LIMIT --warnings=clang-tidy.log --rev=$REV -B=$BUILD_DIR
-    - grep -i "found code issues" clang-tidy.log | tee code-lint.txt || true
+    - grep -i "found code issues|warnings" clang-tidy.log | tee code-lint.txt || true
     - if [ -s code-lint.txt ] ; then echo "clang-tidy.sh found issues"; exit 1; fi
   artifacts:
     when: on_failure
@@ -81,9 +108,9 @@ clang-format:
     - .rules:basic-push
   cache: {}
   stage: pre-build
-  image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-18.04-llvm-7-docs
+  image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-18.04-llvm-11-tsan
   variables:
-    COMPILER_MAJOR_VERSION: 7
+    COMPILER_MAJOR_VERSION: 11
     KUBERNETES_CPU_LIMIT: 1
     KUBERNETES_CPU_REQUEST: 1
     KUBERNETES_MEMORY_REQUEST: 2Gi
@@ -112,13 +139,12 @@ copyright-check:
     - .rules:basic-push
   cache: {}
   stage: pre-build
-  image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-18.04-llvm-7-docs
+  image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-18.04-llvm-11-tsan
   variables:
     KUBERNETES_CPU_LIMIT: 1
     KUBERNETES_CPU_REQUEST: 1
     KUBERNETES_MEMORY_REQUEST: 2Gi
   script:
-    # TODO (issue #3272) `master` is not appropriate for use on release-xxxx branches, how should we handle that?
     - REV=$(git fetch -q https://gitlab.com/gromacs/gromacs.git master && git show -s --pretty=format:"%h" `git merge-base FETCH_HEAD HEAD`)
     - HEAD_REV=$(git show -s --pretty=format:"%h" HEAD)
     - if [[ "$REV" == "$HEAD_REV" ]] ; then

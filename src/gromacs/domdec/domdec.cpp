@@ -55,13 +55,17 @@
 
 #include "gromacs/domdec/builder.h"
 #include "gromacs/domdec/collect.h"
+#include "gromacs/domdec/computemultibodycutoffs.h"
 #include "gromacs/domdec/dlb.h"
 #include "gromacs/domdec/dlbtiming.h"
 #include "gromacs/domdec/domdec_network.h"
 #include "gromacs/domdec/ga2la.h"
 #include "gromacs/domdec/gpuhaloexchange.h"
+#include "gromacs/domdec/localtopologychecker.h"
 #include "gromacs/domdec/options.h"
 #include "gromacs/domdec/partition.h"
+#include "gromacs/ewald/pme.h"
+#include "gromacs/domdec/reversetopology.h"
 #include "gromacs/gmxlib/network.h"
 #include "gromacs/gmxlib/nrnb.h"
 #include "gromacs/gpu_utils/device_stream_manager.h"
@@ -73,9 +77,12 @@
 #include "gromacs/mdlib/constr.h"
 #include "gromacs/mdlib/constraintrange.h"
 #include "gromacs/mdlib/updategroups.h"
+#include "gromacs/mdlib/vcm.h"
 #include "gromacs/mdlib/vsite.h"
+#include "gromacs/mdrun/mdmodules.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/mdtypes/forceoutput.h"
+#include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/mdrunoptions.h"
 #include "gromacs/mdtypes/state.h"
@@ -97,6 +104,7 @@
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/gmxmpi.h"
 #include "gromacs/utility/logger.h"
+#include "gromacs/utility/mdmodulesnotifiers.h"
 #include "gromacs/utility/real.h"
 #include "gromacs/utility/smalloc.h"
 #include "gromacs/utility/strconvert.h"
@@ -116,9 +124,11 @@
 #include "utility.h"
 
 // TODO remove this when moving domdec into gmx namespace
+using gmx::ArrayRef;
 using gmx::DdRankOrder;
 using gmx::DlbOption;
 using gmx::DomdecOptions;
+using gmx::RangePartitioning;
 
 static const char* enumValueToString(DlbState enumValue)
 {
@@ -127,14 +137,6 @@ static const char* enumValueToString(DlbState enumValue)
     };
     return dlbStateNames[enumValue];
 }
-
-/* The size per atom group of the cggl_flag buffer in gmx_domdec_comm_t */
-#define DD_CGIBS 2
-
-/* The flags for the cggl_flag buffer in gmx_domdec_comm_t */
-#define DD_FLAG_NRCG 65535
-#define DD_FLAG_FW(d) (1 << (16 + (d)*2))
-#define DD_FLAG_BW(d) (1 << (16 + (d)*2 + 1))
 
 /* The DD zone order */
 static const ivec dd_zo[DD_MAXZONE] = { { 0, 0, 0 }, { 1, 0, 0 }, { 1, 1, 0 }, { 0, 1, 0 },
@@ -206,12 +208,6 @@ int ddglatnr(const gmx_domdec_t* dd, int i)
     return atnr;
 }
 
-gmx::ArrayRef<const gmx::RangePartitioning> getUpdateGroupingsPerMoleculeType(const gmx_domdec_t& dd)
-{
-    GMX_RELEASE_ASSERT(dd.comm, "Need a valid dd.comm");
-    return dd.comm->systemInfo.updateGroupingsPerMoleculeType;
-}
-
 void dd_store_state(const gmx_domdec_t& dd, t_state* state)
 {
     if (state->ddp_count != dd.ddp_count)
@@ -219,8 +215,8 @@ void dd_store_state(const gmx_domdec_t& dd, t_state* state)
         gmx_incons("The MD state does not match the domain decomposition state");
     }
 
-    state->cg_gl.resize(dd.ncg_home);
-    for (int i = 0; i < dd.ncg_home; i++)
+    state->cg_gl.resize(dd.numHomeAtoms);
+    for (int i = 0; i < dd.numHomeAtoms; i++)
     {
         state->cg_gl[i] = dd.globalAtomGroupIndices[i];
     }
@@ -982,11 +978,6 @@ int dd_pme_maxshift_y(const gmx_domdec_t& dd)
     }
 }
 
-bool ddHaveSplitConstraints(const gmx_domdec_t& dd)
-{
-    return dd.comm->systemInfo.haveSplitConstraints;
-}
-
 bool ddUsesUpdateGroups(const gmx_domdec_t& dd)
 {
     return dd.comm->systemInfo.useUpdateGroups;
@@ -1285,7 +1276,7 @@ static void setup_neighbor_relations(gmx_domdec_t* dd)
 static void make_pp_communicator(const gmx::MDLogger& mdlog,
                                  gmx_domdec_t*        dd,
                                  t_commrec gmx_unused* cr,
-                                 bool gmx_unused reorder)
+                                 bool gmx_unused       reorder)
 {
 #if GMX_MPI
     gmx_domdec_comm_t*  comm      = dd->comm;
@@ -1422,10 +1413,10 @@ static void receive_ddindex2simnodeid(gmx_domdec_t* dd, t_commrec* cr)
 static CartesianRankSetup split_communicator(const gmx::MDLogger& mdlog,
                                              t_commrec*           cr,
                                              const DdRankOrder    ddRankOrder,
-                                             bool gmx_unused    reorder,
-                                             const DDRankSetup& ddRankSetup,
-                                             ivec               ddCellIndex,
-                                             std::vector<int>*  pmeRanks)
+                                             bool gmx_unused      reorder,
+                                             const DDRankSetup&   ddRankSetup,
+                                             ivec                 ddCellIndex,
+                                             std::vector<int>*    pmeRanks)
 {
     CartesianRankSetup cartSetup;
 
@@ -1916,32 +1907,16 @@ static gmx_domdec_comm_t* init_dd_comm()
     return comm;
 }
 
-/* Returns whether mtop contains constraints and/or vsites */
-static bool systemHasConstraintsOrVsites(const gmx_mtop_t& mtop)
+static void setupUpdateGroups(const gmx::MDLogger&              mdlog,
+                              const gmx_mtop_t&                 mtop,
+                              ArrayRef<const RangePartitioning> updateGroupingsPerMoleculeType,
+                              const bool                        useUpdateGroups,
+                              const real                        maxUpdateGroupRadius,
+                              DDSystemInfo*                     systemInfo)
 {
-    return std::any_of(IListRange(mtop).begin(), IListRange(mtop).end(), [](const auto ilist) {
-        return !extractILists(ilist.list(), IF_CONSTRAINT | IF_VSITE).empty();
-    });
-}
-
-static void setupUpdateGroups(const gmx::MDLogger& mdlog,
-                              const gmx_mtop_t&    mtop,
-                              const t_inputrec&    inputrec,
-                              const real           cutoffMargin,
-                              DDSystemInfo*        systemInfo)
-{
-    /* When we have constraints and/or vsites, it is beneficial to use
-     * update groups (when possible) to allow independent update of groups.
-     */
-    if (!systemHasConstraintsOrVsites(mtop))
-    {
-        /* No constraints or vsites, atoms can be updated independently */
-        return;
-    }
-
-    systemInfo->updateGroupingsPerMoleculeType = gmx::makeUpdateGroups(mtop);
-    systemInfo->useUpdateGroups = (!systemInfo->updateGroupingsPerMoleculeType.empty()
-                                   && getenv("GMX_NO_UPDATEGROUPS") == nullptr);
+    systemInfo->updateGroupingsPerMoleculeType = updateGroupingsPerMoleculeType;
+    systemInfo->useUpdateGroups                = useUpdateGroups;
+    systemInfo->maxUpdateGroupRadius           = maxUpdateGroupRadius;
 
     if (systemInfo->useUpdateGroups)
     {
@@ -1952,32 +1927,13 @@ static void setupUpdateGroups(const gmx::MDLogger& mdlog,
                                * systemInfo->updateGroupingsPerMoleculeType[molblock.type].numBlocks();
         }
 
-        systemInfo->maxUpdateGroupRadius = computeMaxUpdateGroupRadius(
-                mtop, systemInfo->updateGroupingsPerMoleculeType, maxReferenceTemperature(inputrec));
-
-        /* To use update groups, the large domain-to-domain cutoff distance
-         * should be compatible with the box size.
-         */
-        systemInfo->useUpdateGroups = (atomToAtomIntoDomainToDomainCutoff(*systemInfo, 0) < cutoffMargin);
-
-        if (systemInfo->useUpdateGroups)
-        {
-            GMX_LOG(mdlog.info)
-                    .appendTextFormatted(
-                            "Using update groups, nr %d, average size %.1f atoms, max. radius %.3f "
-                            "nm\n",
-                            numUpdateGroups,
-                            mtop.natoms / static_cast<double>(numUpdateGroups),
-                            systemInfo->maxUpdateGroupRadius);
-        }
-        else
-        {
-            GMX_LOG(mdlog.info)
-                    .appendTextFormatted(
-                            "The combination of rlist and box size prohibits the use of update "
-                            "groups\n");
-            systemInfo->updateGroupingsPerMoleculeType.clear();
-        }
+        GMX_LOG(mdlog.info)
+                .appendTextFormatted(
+                        "Using update groups, nr %d, average size %.1f atoms, max. radius %.3f "
+                        "nm\n",
+                        numUpdateGroups,
+                        mtop.natoms / static_cast<double>(numUpdateGroups),
+                        systemInfo->maxUpdateGroupRadius);
     }
 }
 
@@ -2021,26 +1977,24 @@ static bool moleculesAreAlwaysWhole(const gmx_mtop_t&                           
 }
 
 /*! \brief Generate the simulation system information */
-static DDSystemInfo getSystemInfo(const gmx::MDLogger&           mdlog,
-                                  DDRole                         ddRole,
-                                  MPI_Comm                       communicator,
-                                  const DomdecOptions&           options,
-                                  const gmx_mtop_t&              mtop,
-                                  const t_inputrec&              ir,
-                                  const matrix                   box,
-                                  gmx::ArrayRef<const gmx::RVec> xGlobal)
+static DDSystemInfo getSystemInfo(const gmx::MDLogger&              mdlog,
+                                  DDRole                            ddRole,
+                                  MPI_Comm                          communicator,
+                                  const DomdecOptions&              options,
+                                  const gmx_mtop_t&                 mtop,
+                                  const t_inputrec&                 ir,
+                                  const matrix                      box,
+                                  ArrayRef<const RangePartitioning> updateGroupingPerMoleculeType,
+                                  const bool                        useUpdateGroups,
+                                  const real                        maxUpdateGroupRadius,
+                                  gmx::ArrayRef<const gmx::RVec>    xGlobal)
 {
     const real tenPercentMargin = 1.1;
 
     DDSystemInfo systemInfo;
 
-    /* We need to decide on update groups early, as this affects communication distances */
-    systemInfo.useUpdateGroups = false;
-    if (ir.cutoff_scheme == CutoffScheme::Verlet)
-    {
-        real cutoffMargin = std::sqrt(max_cutoff2(ir.pbcType, box)) - ir.rlist;
-        setupUpdateGroups(mdlog, mtop, ir, cutoffMargin, &systemInfo);
-    }
+    setupUpdateGroups(
+            mdlog, mtop, updateGroupingPerMoleculeType, useUpdateGroups, maxUpdateGroupRadius, &systemInfo);
 
     systemInfo.moleculesAreAlwaysWhole = moleculesAreAlwaysWhole(
             mtop, systemInfo.useUpdateGroups, systemInfo.updateGroupingsPerMoleculeType);
@@ -2051,14 +2005,14 @@ static DDSystemInfo getSystemInfo(const gmx::MDLogger&           mdlog,
 
     if (systemInfo.useUpdateGroups)
     {
-        systemInfo.haveSplitConstraints = false;
-        systemInfo.haveSplitSettles     = false;
+        systemInfo.mayHaveSplitConstraints = false;
+        systemInfo.mayHaveSplitSettles     = false;
     }
     else
     {
-        systemInfo.haveSplitConstraints = (gmx_mtop_ftype_count(mtop, F_CONSTR) > 0
-                                           || gmx_mtop_ftype_count(mtop, F_CONSTRNC) > 0);
-        systemInfo.haveSplitSettles     = (gmx_mtop_ftype_count(mtop, F_SETTLE) > 0);
+        systemInfo.mayHaveSplitConstraints = (gmx_mtop_ftype_count(mtop, F_CONSTR) > 0
+                                              || gmx_mtop_ftype_count(mtop, F_CONSTRNC) > 0);
+        systemInfo.mayHaveSplitSettles     = (gmx_mtop_ftype_count(mtop, F_SETTLE) > 0);
     }
 
     if (ir.rlist == 0)
@@ -2137,11 +2091,7 @@ static DDSystemInfo getSystemInfo(const gmx::MDLogger&           mdlog,
 
             if (ddRole == DDRole::Master)
             {
-                const DDBondedChecking ddBondedChecking = options.checkBondedInteractions
-                                                                  ? DDBondedChecking::All
-                                                                  : DDBondedChecking::ExcludeZeroLimit;
-
-                dd_bonded_cg_distance(mdlog, mtop, ir, xGlobal, box, ddBondedChecking, &r_2b, &r_mb);
+                dd_bonded_cg_distance(mdlog, mtop, ir, xGlobal, box, options.ddBondedChecking, &r_2b, &r_mb);
             }
             gmx_bcast(sizeof(r_2b), &r_2b, communicator);
             gmx_bcast(sizeof(r_mb), &r_mb, communicator);
@@ -2184,7 +2134,7 @@ static DDSystemInfo getSystemInfo(const gmx::MDLogger&           mdlog,
     }
 
     systemInfo.constraintCommunicationRange = 0;
-    if (systemInfo.haveSplitConstraints && options.constraintCommunicationRange <= 0)
+    if (systemInfo.mayHaveSplitConstraints && options.constraintCommunicationRange <= 0)
     {
         /* There is a cell size limit due to the constraints (P-LINCS) */
         systemInfo.constraintCommunicationRange = gmx::constr_r_max(mdlog, &mtop, &ir);
@@ -2229,7 +2179,7 @@ static void checkDDGridSetup(const DDGridSetup&   ddGridSetup,
 {
     if (options.numCells[XX] <= 0 && (ddGridSetup.numDomains[XX] == 0))
     {
-        const bool  bC = (systemInfo.haveSplitConstraints
+        const bool  bC = (systemInfo.mayHaveSplitConstraints
                          && systemInfo.constraintCommunicationRange > systemInfo.minCutoffForMultiBody);
         std::string message =
                 gmx::formatString("Change the number of ranks or mdrun option %s%s%s",
@@ -2495,30 +2445,6 @@ static void set_dd_limits(const gmx::MDLogger& mdlog,
     }
 }
 
-void dd_init_bondeds(FILE*                           fplog,
-                     gmx_domdec_t*                   dd,
-                     const gmx_mtop_t&               mtop,
-                     const gmx::VirtualSitesHandler* vsite,
-                     const t_inputrec&               inputrec,
-                     const DDBondedChecking          ddBondedChecking,
-                     gmx::ArrayRef<cginfo_mb_t>      cginfo_mb)
-{
-    dd_make_reverse_top(fplog, dd, mtop, vsite, inputrec, ddBondedChecking);
-
-    gmx_domdec_comm_t* comm = dd->comm;
-
-    if (comm->systemInfo.filterBondedCommunication)
-    {
-        /* Communicate atoms beyond the cut-off for bonded interactions */
-        comm->bondedLinks = makeBondedLinks(mtop, cginfo_mb);
-    }
-    else
-    {
-        /* Only communicate atoms based on cut-off */
-        comm->bondedLinks = nullptr;
-    }
-}
-
 static void writeSettings(gmx::TextWriter*   log,
                           gmx_domdec_t*      dd,
                           const gmx_mtop_t&  mtop,
@@ -2581,7 +2507,7 @@ static void writeSettings(gmx::TextWriter*   log,
             (countInterUpdategroupVsites(mtop, comm->systemInfo.updateGroupingsPerMoleculeType) != 0);
 
     if (comm->systemInfo.haveInterDomainBondeds || haveInterDomainVsites
-        || comm->systemInfo.haveSplitConstraints || comm->systemInfo.haveSplitSettles)
+        || comm->systemInfo.mayHaveSplitConstraints || comm->systemInfo.mayHaveSplitSettles)
     {
         std::string decompUnits;
         if (comm->systemInfo.useUpdateGroups)
@@ -2635,7 +2561,7 @@ static void writeSettings(gmx::TextWriter*   log,
         {
             log->writeLineFormatted("%40s  %-7s %6.3f nm", "virtual site constructions", "(-rcon)", limit);
         }
-        if (comm->systemInfo.haveSplitConstraints || comm->systemInfo.haveSplitSettles)
+        if (comm->systemInfo.mayHaveSplitConstraints || comm->systemInfo.mayHaveSplitSettles)
         {
             std::string separation =
                     gmx::formatString("atoms separated by up to %d constraints", 1 + ir.nProjOrder);
@@ -2901,14 +2827,20 @@ class DomainDecompositionBuilder::Impl
 {
 public:
     //! Constructor
-    Impl(const MDLogger&      mdlog,
-         t_commrec*           cr,
-         const DomdecOptions& options,
-         const MdrunOptions&  mdrunOptions,
-         const gmx_mtop_t&    mtop,
-         const t_inputrec&    ir,
-         const matrix         box,
-         ArrayRef<const RVec> xGlobal);
+    Impl(const MDLogger&                   mdlog,
+         t_commrec*                        cr,
+         const DomdecOptions&              options,
+         const MdrunOptions&               mdrunOptions,
+         const gmx_mtop_t&                 mtop,
+         const t_inputrec&                 ir,
+         const MDModulesNotifiers&         notifiers,
+         const matrix                      box,
+         ArrayRef<const RangePartitioning> updateGroupingPerMoleculeType,
+         bool                              useUpdateGroups,
+         real                              maxUpdateGroupRadius,
+         ArrayRef<const RVec>              xGlobal,
+         bool                              useGpuForNonbonded,
+         bool                              useGpuForPme);
 
     //! Build the resulting DD manager
     gmx_domdec_t* build(LocalAtomSetManager* atomSets);
@@ -2925,6 +2857,8 @@ public:
     const gmx_mtop_t& mtop_;
     //! User input values from the tpr file
     const t_inputrec& ir_;
+    //! MdModules object
+    const MDModulesNotifiers& notifiers_;
     //! }
 
     //! Internal objects used in constructing DD
@@ -2948,19 +2882,21 @@ public:
     //! }
 };
 
-DomainDecompositionBuilder::Impl::Impl(const MDLogger&      mdlog,
-                                       t_commrec*           cr,
-                                       const DomdecOptions& options,
-                                       const MdrunOptions&  mdrunOptions,
-                                       const gmx_mtop_t&    mtop,
-                                       const t_inputrec&    ir,
-                                       const matrix         box,
-                                       ArrayRef<const RVec> xGlobal) :
-    mdlog_(mdlog),
-    cr_(cr),
-    options_(options),
-    mtop_(mtop),
-    ir_(ir)
+DomainDecompositionBuilder::Impl::Impl(const MDLogger&                   mdlog,
+                                       t_commrec*                        cr,
+                                       const DomdecOptions&              options,
+                                       const MdrunOptions&               mdrunOptions,
+                                       const gmx_mtop_t&                 mtop,
+                                       const t_inputrec&                 ir,
+                                       const MDModulesNotifiers&         notifiers,
+                                       const matrix                      box,
+                                       ArrayRef<const RangePartitioning> updateGroupingPerMoleculeType,
+                                       const bool                        useUpdateGroups,
+                                       const real                        maxUpdateGroupRadius,
+                                       ArrayRef<const RVec>              xGlobal,
+                                       bool                              useGpuForNonbonded,
+                                       bool                              useGpuForPme) :
+    mdlog_(mdlog), cr_(cr), options_(options), mtop_(mtop), ir_(ir), notifiers_(notifiers)
 {
     GMX_LOG(mdlog_.info).appendTextFormatted("\nInitializing Domain Decomposition on %d ranks", cr_->sizeOfDefaultCommunicator);
 
@@ -2979,12 +2915,25 @@ DomainDecompositionBuilder::Impl::Impl(const MDLogger&      mdlog,
                                 mtop_,
                                 ir_,
                                 box,
+                                updateGroupingPerMoleculeType,
+                                useUpdateGroups,
+                                maxUpdateGroupRadius,
                                 xGlobal);
 
     const int  numRanksRequested         = cr_->sizeOfDefaultCommunicator;
     const bool checkForLargePrimeFactors = (options_.numCells[0] <= 0);
-    checkForValidRankCountRequests(
-            numRanksRequested, EEL_PME(ir_.coulombtype), options_.numPmeRanks, checkForLargePrimeFactors);
+
+
+    /* Checks for ability to use PME-only ranks */
+    auto separatePmeRanksPermitted = checkForSeparatePmeRanks(
+            notifiers_, options_, numRanksRequested, useGpuForNonbonded, useGpuForPme);
+
+    /* Checks for validity of requested Ranks setup */
+    checkForValidRankCountRequests(numRanksRequested,
+                                   EEL_PME(ir_.coulombtype) | EVDW_PME(ir_.vdwtype),
+                                   options_.numPmeRanks,
+                                   separatePmeRanksPermitted,
+                                   checkForLargePrimeFactors);
 
     // DD grid setup uses a more different cell size limit for
     // automated setup than the one in systemInfo_. The latter is used
@@ -3005,6 +2954,7 @@ DomainDecompositionBuilder::Impl::Impl(const MDLogger&      mdlog,
                                   gridSetupCellsizeLimit,
                                   mtop_,
                                   ir_,
+                                  separatePmeRanksPermitted,
                                   box,
                                   xGlobal,
                                   &ddbox_);
@@ -3064,18 +3014,40 @@ gmx_domdec_t* DomainDecompositionBuilder::Impl::build(LocalAtomSetManager* atomS
 
     dd->atomSets = atomSets;
 
+    dd->localTopologyChecker = std::make_unique<LocalTopologyChecker>(
+            mdlog_, cr_, mtop_, dd->comm->systemInfo.useUpdateGroups);
+
     return dd;
 }
 
-DomainDecompositionBuilder::DomainDecompositionBuilder(const MDLogger&      mdlog,
-                                                       t_commrec*           cr,
-                                                       const DomdecOptions& options,
-                                                       const MdrunOptions&  mdrunOptions,
-                                                       const gmx_mtop_t&    mtop,
-                                                       const t_inputrec&    ir,
-                                                       const matrix         box,
-                                                       ArrayRef<const RVec> xGlobal) :
-    impl_(new Impl(mdlog, cr, options, mdrunOptions, mtop, ir, box, xGlobal))
+DomainDecompositionBuilder::DomainDecompositionBuilder(const MDLogger&           mdlog,
+                                                       t_commrec*                cr,
+                                                       const DomdecOptions&      options,
+                                                       const MdrunOptions&       mdrunOptions,
+                                                       const gmx_mtop_t&         mtop,
+                                                       const t_inputrec&         ir,
+                                                       const MDModulesNotifiers& notifiers,
+                                                       const matrix              box,
+                                                       ArrayRef<const RangePartitioning> updateGroupingPerMoleculeType,
+                                                       const bool           useUpdateGroups,
+                                                       const real           maxUpdateGroupRadius,
+                                                       ArrayRef<const RVec> xGlobal,
+                                                       const bool           useGpuForNonbonded,
+                                                       const bool           useGpuForPme) :
+    impl_(new Impl(mdlog,
+                   cr,
+                   options,
+                   mdrunOptions,
+                   mtop,
+                   ir,
+                   notifiers,
+                   box,
+                   updateGroupingPerMoleculeType,
+                   useUpdateGroups,
+                   maxUpdateGroupRadius,
+                   xGlobal,
+                   useGpuForNonbonded,
+                   useGpuForPme))
 {
 }
 
@@ -3238,4 +3210,33 @@ void communicateGpuHaloForces(const t_commrec& cr, bool accumulateForces)
             cr.dd->gpuHaloExchange[d][pulse]->communicateHaloForces(accumulateForces);
         }
     }
+}
+
+const gmx::LocalTopologyChecker& dd_localTopologyChecker(const gmx_domdec_t& dd)
+{
+    return *dd.localTopologyChecker;
+}
+
+gmx::LocalTopologyChecker* dd_localTopologyChecker(gmx_domdec_t* dd)
+{
+    return dd->localTopologyChecker.get();
+}
+
+void dd_init_local_state(const gmx_domdec_t& dd, const t_state* state_global, t_state* state_local)
+{
+    std::array<int, 5> buf;
+
+    if (DDMASTER(dd))
+    {
+        buf[0] = state_global->flags;
+        buf[1] = state_global->ngtc;
+        buf[2] = state_global->nnhpres;
+        buf[3] = state_global->nhchainlength;
+        buf[4] = state_global->dfhist ? state_global->dfhist->nlambda : 0;
+    }
+    dd_bcast(&dd, buf.size() * sizeof(int), buf.data());
+
+    init_gtc_state(state_local, buf[1], buf[2], buf[3]);
+    init_dfhist_state(state_local, buf[4]);
+    state_local->flags = buf[0];
 }

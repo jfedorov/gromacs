@@ -62,7 +62,9 @@
 #include "gromacs/domdec/domdec_struct.h"
 #include "gromacs/domdec/gpuhaloexchange.h"
 #include "gromacs/domdec/localatomsetmanager.h"
+#include "gromacs/domdec/makebondedlinks.h"
 #include "gromacs/domdec/partition.h"
+#include "gromacs/domdec/reversetopology.h"
 #include "gromacs/ewald/ewald_utils.h"
 #include "gromacs/ewald/pme.h"
 #include "gromacs/ewald/pme_gpu_program.h"
@@ -82,7 +84,7 @@
 #include "gromacs/hardware/printhardware.h"
 #include "gromacs/imd/imd.h"
 #include "gromacs/listed_forces/disre.h"
-#include "gromacs/listed_forces/gpubonded.h"
+#include "gromacs/listed_forces/listed_forces_gpu.h"
 #include "gromacs/listed_forces/listed_forces.h"
 #include "gromacs/listed_forces/orires.h"
 #include "gromacs/math/functions.h"
@@ -161,7 +163,7 @@
 #include "gromacs/utility/keyvaluetree.h"
 #include "gromacs/utility/logger.h"
 #include "gromacs/utility/loggerbuilder.h"
-#include "gromacs/utility/messagestringcollector.h"
+#include "gromacs/utility/message_string_collector.h"
 #include "gromacs/utility/mdmodulesnotifiers.h"
 #include "gromacs/utility/physicalnodecommunicator.h"
 #include "gromacs/utility/pleasecite.h"
@@ -1162,9 +1164,19 @@ int Mdrunner::mdrunner()
     mdModules_->subscribeToSimulationSetupNotifications();
     const auto& setupNotifier = mdModules_->notifiers().simulationSetupNotifier_;
 
+    // Notify MdModules of existing logger
+    setupNotifier.notify(mdlog);
+
+    // Notify MdModules of internal parameters, saved into KVT
     if (inputrec->internalParameters != nullptr)
     {
         setupNotifier.notify(*inputrec->internalParameters);
+    }
+
+    // Let MdModules know the .tpr filename
+    {
+        gmx::MdRunInputFilename mdRunInputFilename = { ftp2fn(efTPR, filenames.size(), filenames.data()) };
+        setupNotifier.notify(mdRunInputFilename);
     }
 
     if (fplog != nullptr)
@@ -1235,61 +1247,6 @@ int Mdrunner::mdrunner()
                   "these are not compatible with mdrun -rerun");
     }
 
-    /* Object for collecting reasons for not using PME-only ranks */
-    SeparatePmeRanksPermitted separatePmeRanksPermitted;
-
-    /* Permit MDModules to notify whether they want to use PME-only ranks */
-    setupNotifier.notify(&separatePmeRanksPermitted);
-
-    /* If simulation is not using PME then disable PME-only ranks */
-    if (!(EEL_PME(inputrec->coulombtype) || EVDW_PME(inputrec->vdwtype)))
-    {
-        separatePmeRanksPermitted.disablePmeRanks(
-                "PME-only ranks are requested, but the system does not use PME "
-                "for electrostatics or LJ");
-    }
-
-    /* With NB GPUs we don't automatically use PME-only CPU ranks. PME ranks can
-     * improve performance with many threads per GPU, since our OpenMP
-     * scaling is bad, but it's difficult to automate the setup.
-     */
-    if (useGpuForNonbonded && domdecOptions.numPmeRanks < 0)
-    {
-        separatePmeRanksPermitted.disablePmeRanks(
-                "PME-only CPU ranks are not automatically used when "
-                "non-bonded interactions are computed on GPUs");
-    }
-
-    /* If GPU is used for PME then only 1 PME rank is permitted */
-    if (useGpuForPme && (domdecOptions.numPmeRanks < 0 || domdecOptions.numPmeRanks > 1))
-    {
-        separatePmeRanksPermitted.disablePmeRanks(
-                "PME GPU decomposition is not supported. Only one separate PME-only GPU rank "
-                "can be used.");
-    }
-
-    /* Disable PME-only ranks if some parts of the code requested so and it's up to GROMACS to decide */
-    if (!separatePmeRanksPermitted.permitSeparatePmeRanks() && domdecOptions.numPmeRanks < 0)
-    {
-        domdecOptions.numPmeRanks = 0;
-        GMX_LOG(mdlog.info)
-                .asParagraph()
-                .appendText("Simulation will not use PME-only ranks because: "
-                            + separatePmeRanksPermitted.reasonsWhyDisabled());
-    }
-
-    /* If some parts of the code could not use PME-only ranks and
-     * user explicitly used mdrun -npme option then throw an error */
-    if (!separatePmeRanksPermitted.permitSeparatePmeRanks() && domdecOptions.numPmeRanks > 0)
-    {
-        gmx_fatal_collective(FARGS,
-                             cr->mpiDefaultCommunicator,
-                             MASTER(cr),
-                             "Requested -npme %d option is not viable because: %s",
-                             domdecOptions.numPmeRanks,
-                             separatePmeRanksPermitted.reasonsWhyDisabled().c_str());
-    }
-
     /* NMR restraints must be initialized before load_checkpoint,
      * since with time averaging the history is added to t_state.
      * For proper consistency check we therefore need to extend
@@ -1313,9 +1270,11 @@ int Mdrunner::mdrunner()
                 globalState.get(),
                 replExParams.exchangeInterval > 0);
 
-    t_oriresdata* oriresdata;
-    snew(oriresdata, 1);
-    init_orires(fplog, mtop, inputrec.get(), cr, ms, globalState.get(), oriresdata);
+    std::unique_ptr<t_oriresdata> oriresData;
+    if (gmx_mtop_ftype_count(mtop, F_ORIRES) > 0)
+    {
+        oriresData = std::make_unique<t_oriresdata>(fplog, mtop, *inputrec, cr, ms, globalState.get());
+    }
 
     auto deform = prepareBoxDeformation(globalState != nullptr ? globalState->box : box,
                                         MASTER(cr) ? DDRole::Master : DDRole::Agent,
@@ -1438,6 +1397,19 @@ int Mdrunner::mdrunner()
                           useGpuForNonbonded || (emulateGpuNonbonded == EmulateGpuNonbonded::Yes),
                           *hwinfo_->cpuInfo);
 
+    // We need to decide on update groups early, as this affects
+    // inter-domain communication distances.
+    auto       updateGroupingsPerMoleculeType = makeUpdateGroupingsPerMoleculeType(mtop);
+    const real maxUpdateGroupRadius           = computeMaxUpdateGroupRadius(
+            mtop, updateGroupingsPerMoleculeType, maxReferenceTemperature(*inputrec));
+    const real   cutoffMargin = std::sqrt(max_cutoff2(inputrec->pbcType, box)) - inputrec->rlist;
+    UpdateGroups updateGroups = makeUpdateGroups(mdlog,
+                                                 std::move(updateGroupingsPerMoleculeType),
+                                                 maxUpdateGroupRadius,
+                                                 useDomainDecomposition,
+                                                 systemHasConstraintsOrVsites(mtop),
+                                                 cutoffMargin);
+
     // This builder is necessary while we have multi-part construction
     // of DD. Before DD is constructed, we use the existence of
     // the builder object to indicate that further construction of DD
@@ -1452,8 +1424,14 @@ int Mdrunner::mdrunner()
                 mdrunOptions,
                 mtop,
                 *inputrec,
+                mdModules_->notifiers(),
                 box,
-                positionsFromStatePointer(globalState.get()));
+                updateGroups.updateGroupingPerMoleculeType(),
+                updateGroups.useUpdateGroups(),
+                updateGroups.maxUpdateGroupRadius(),
+                positionsFromStatePointer(globalState.get()),
+                useGpuForNonbonded,
+                useGpuForPme);
     }
     else
     {
@@ -1530,11 +1508,10 @@ int Mdrunner::mdrunner()
     // update is done so late.
     try
     {
-        const bool useUpdateGroups = cr->dd ? ddUsesUpdateGroups(*cr->dd) : false;
         const bool haveFrozenAtoms = inputrecFrozenAtoms(inputrec.get());
 
         useGpuForUpdate = decideWhetherToUseGpuForUpdate(useDomainDecomposition,
-                                                         useUpdateGroups,
+                                                         updateGroups.useUpdateGroups(),
                                                          pmeRunMode,
                                                          domdecOptions.numPmeRanks > 0,
                                                          useGpuForNonbonded,
@@ -1544,7 +1521,6 @@ int Mdrunner::mdrunner()
                                                          mtop,
                                                          doEssentialDynamics,
                                                          gmx_mtop_ftype_count(mtop, F_ORIRES) > 0,
-                                                         replExParams.exchangeInterval > 0,
                                                          haveFrozenAtoms,
                                                          doRerun,
                                                          devFlags,
@@ -1740,7 +1716,6 @@ int Mdrunner::mdrunner()
     const bool               thisRankHasPmeGpuTask = gpuTaskAssignments.thisRankHasPmeGpuTask();
     std::unique_ptr<MDAtoms> mdAtoms;
     std::unique_ptr<VirtualSitesHandler> vsite;
-    std::unique_ptr<GpuBonded>           gpuBonded;
 
     t_nrnb nrnb;
     if (thisRankHasDuty(cr, DUTY_PP))
@@ -1755,6 +1730,7 @@ int Mdrunner::mdrunner()
         fr->forceProviders = mdModules_->initForceProviders();
         init_forcerec(fplog,
                       mdlog,
+                      runScheduleWork.simulationWork,
                       fr.get(),
                       *inputrec,
                       mtop,
@@ -1766,7 +1742,7 @@ int Mdrunner::mdrunner()
                       pforce);
         // Dirty hack, for fixing disres and orires should be made mdmodules
         fr->fcdata->disres = disresdata;
-        fr->fcdata->orires = oriresdata;
+        fr->fcdata->orires.swap(oriresData);
 
         // Save a handle to device stream manager to use elsewhere in the code
         // TODO: Forcerec is not a correct place to store it.
@@ -1805,13 +1781,12 @@ int Mdrunner::mdrunner()
             GMX_RELEASE_ASSERT(deviceStreamManager != nullptr,
                                "GPU device stream manager should be valid in order to use GPU "
                                "version of bonded forces.");
-            gpuBonded = std::make_unique<GpuBonded>(
+            fr->listedForcesGpu = std::make_unique<ListedForcesGpu>(
                     mtop.ffparams,
                     fr->ic->epsfac * fr->fudgeQQ,
                     deviceStreamManager->context(),
                     deviceStreamManager->bondedStream(havePPDomainDecomposition(cr)),
                     wcycle.get());
-            fr->gpuBonded = gpuBonded.get();
         }
 
         /* Initialize the mdAtoms structure.
@@ -1830,7 +1805,8 @@ int Mdrunner::mdrunner()
         }
 
         /* Initialize the virtual site communication */
-        vsite = makeVirtualSitesHandler(mtop, cr, fr->pbcType);
+        vsite = makeVirtualSitesHandler(
+                mtop, cr, fr->pbcType, updateGroups.updateGroupingPerMoleculeType());
 
         calc_shifts(box, fr->shift_vec);
 
@@ -1853,6 +1829,11 @@ int Mdrunner::mdrunner()
                  */
                 constructVirtualSitesGlobal(mtop, globalState->x);
             }
+        }
+        // Make the DD reverse topology, now that any vsites that are present are available
+        if (DOMAINDECOMP(cr))
+        {
+            dd_make_reverse_top(fplog, cr->dd, mtop, vsite.get(), *inputrec, domdecOptions.ddBondedChecking);
         }
 
         if (EEL_PME(fr->ic->eeltype) || EVDW_PME(fr->ic->vdwtype))
@@ -1930,10 +1911,10 @@ int Mdrunner::mdrunner()
                 const DeviceContext* deviceContext = runScheduleWork.simulationWork.useGpuPme
                                                              ? &deviceStreamManager->context()
                                                              : nullptr;
-                const DeviceStream* pmeStream =
+                const DeviceStream*  pmeStream =
                         runScheduleWork.simulationWork.useGpuPme
-                                ? &deviceStreamManager->stream(DeviceStreamType::Pme)
-                                : nullptr;
+                                 ? &deviceStreamManager->stream(DeviceStreamType::Pme)
+                                 : nullptr;
 
                 pmedata = gmx_pme_init(cr,
                                        getNumPmeDomains(cr->dd),
@@ -2027,8 +2008,17 @@ int Mdrunner::mdrunner()
         }
 
         /* Let makeConstraints know whether we have essential dynamics constraints. */
-        auto constr = makeConstraints(
-                mtop, *inputrec, pull_work, doEssentialDynamics, fplog, cr, ms, &nrnb, wcycle.get(), fr->bMolPBC);
+        auto constr = makeConstraints(mtop,
+                                      *inputrec,
+                                      pull_work,
+                                      doEssentialDynamics,
+                                      fplog,
+                                      cr,
+                                      updateGroups.useUpdateGroups(),
+                                      ms,
+                                      &nrnb,
+                                      wcycle.get(),
+                                      fr->bMolPBC);
 
         /* Energy terms and groups */
         gmx_enerdata_t enerd(mtop.groups.groups[SimulationAtomGroupType::EnergyOutput].size(),
@@ -2062,17 +2052,10 @@ int Mdrunner::mdrunner()
         if (DOMAINDECOMP(cr))
         {
             GMX_RELEASE_ASSERT(fr, "fr was NULL while cr->duty was DUTY_PP");
-            /* This call is not included in init_domain_decomposition mainly
-             * because fr->cginfo_mb is set later.
+            /* This call is not included in init_domain_decomposition
+             * because fr->atomInfoForEachMoleculeBlock is set later.
              */
-            dd_init_bondeds(fplog,
-                            cr->dd,
-                            mtop,
-                            vsite.get(),
-                            *inputrec,
-                            domdecOptions.checkBondedInteractions ? DDBondedChecking::All
-                                                                  : DDBondedChecking::ExcludeZeroLimit,
-                            fr->cginfo_mb);
+            makeBondedLinks(cr->dd, mtop, fr->atomInfoForEachMoleculeBlock);
         }
 
         if (runScheduleWork.simulationWork.useGpuBufferOps)
@@ -2193,11 +2176,9 @@ int Mdrunner::mdrunner()
     mdAtoms.reset(nullptr);
     globalState.reset(nullptr);
     mdModules_.reset(nullptr); // destruct force providers here as they might also use the GPU
-    gpuBonded.reset(nullptr);
-    fr.reset(nullptr); // destruct forcerec before gpu
+    fr.reset(nullptr);         // destruct forcerec before gpu
     // TODO convert to C++ so we can get rid of these frees
     sfree(disresdata);
-    sfree(oriresdata);
 
     if (!hwinfo_->deviceInfoList.empty())
     {

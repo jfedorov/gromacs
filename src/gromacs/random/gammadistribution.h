@@ -141,8 +141,7 @@ public:
          * \param beta   Second parameter of gamma distribution
          */
         explicit param_type(result_type alpha = 1.0, result_type beta = 1.0) :
-            alpha_(alpha),
-            beta_(beta)
+            alpha_(alpha), beta_(beta)
         {
         }
 
@@ -167,7 +166,6 @@ public:
         bool operator!=(const param_type& x) const { return !operator==(x); }
     };
 
-public:
     /*! \brief Construct new distribution with given floating-point parameters.
      *
      * \param alpha  First parameter of gamma distribution

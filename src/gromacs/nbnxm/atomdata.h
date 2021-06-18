@@ -52,7 +52,6 @@
 #include "gromacs/gpu_utils/hostallocator.h"
 #include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/locality.h"
-#include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/bitmask.h"
 #include "gromacs/utility/real.h"
 
@@ -232,9 +231,24 @@ struct nbnxn_atomdata_t
 
     /*! \brief Constructor
      *
-     * \param[in] pinningPolicy  Sets the pinning policy for all data that might be transferred to a GPU
+     * \param[in] pinningPolicy      Sets the pinning policy for all data that might be transferred
+     *                               to a GPU
+     * \param[in] mdlog              The logger
+     * \param[in] kernelType         Nonbonded NxN kernel type
+     * \param[in] enbnxninitcombrule LJ combination rule
+     * \param[in] ntype              Number of atom types
+     * \param[in] nbfp               Non-bonded force parameters
+     * \param[in] n_energygroups     Number of energy groups
+     * \param[in] nout               Number of output data structures
      */
-    nbnxn_atomdata_t(gmx::PinningPolicy pinningPolicy);
+    nbnxn_atomdata_t(gmx::PinningPolicy        pinningPolicy,
+                     const gmx::MDLogger&      mdlog,
+                     Nbnxm::KernelType         kernelType,
+                     int                       enbnxninitcombrule,
+                     int                       ntype,
+                     gmx::ArrayRef<const real> nbfp,
+                     int                       n_energygroups,
+                     int                       nout);
 
     //! Returns a const reference to the parameters
     const Params& params() const { return params_; }
@@ -271,7 +285,7 @@ public:
     //! The format of f, enum
     int FFormat;
     //! Do we need to update shift_vec every step?
-    gmx_bool bDynamicBox;
+    bool bDynamicBox;
     //! Shift vectors, copied from t_forcerec
     gmx::HostVector<gmx::RVec> shift_vec;
     //! stride for a coordinate in x (usually 3 or 4)
@@ -293,7 +307,7 @@ public:
     //! Reduction related data
     //! \{
     //! Use the flags or operate on all atoms
-    gmx_bool bUseBufferFlags;
+    bool bUseBufferFlags;
     //! Flags for buffer zeroing+reduc.
     std::vector<gmx_bitmask_t> buffer_flags;
     //! \}
@@ -313,33 +327,15 @@ enum
     enbnxninitcombruleNONE
 };
 
-/*! \brief Initialize the non-bonded atom data structure.
- *
- * The enum for nbatXFormat is in the file defining nbnxn_atomdata_t.
- * Copy the ntypes*ntypes*2 sized nbfp non-bonded parameter list
- * to the atom data structure.
- * enbnxninitcombrule sets what combination rule data gets stored in nbat.
- */
-void nbnxn_atomdata_init(const gmx::MDLogger&      mdlog,
-                         nbnxn_atomdata_t*         nbat,
-                         Nbnxm::KernelType         kernelType,
-                         int                       enbnxninitcombrule,
-                         int                       ntype,
-                         gmx::ArrayRef<const real> nbfp,
-                         int                       n_energygroups,
-                         int                       nout);
-
 //! Sets the atomdata after pair search
-void nbnxn_atomdata_set(nbnxn_atomdata_t*         nbat,
-                        const Nbnxm::GridSet&     gridSet,
-                        gmx::ArrayRef<const int>  atomTypes,
-                        gmx::ArrayRef<const real> atomCharges,
-                        gmx::ArrayRef<const int>  atomInfo);
+void nbnxn_atomdata_set(nbnxn_atomdata_t*            nbat,
+                        const Nbnxm::GridSet&        gridSet,
+                        gmx::ArrayRef<const int>     atomTypes,
+                        gmx::ArrayRef<const real>    atomCharges,
+                        gmx::ArrayRef<const int64_t> atomInfo);
 
 //! Copy the shift vectors to nbat
-void nbnxn_atomdata_copy_shiftvec(gmx_bool                 dynamic_box,
-                                  gmx::ArrayRef<gmx::RVec> shift_vec,
-                                  nbnxn_atomdata_t*        nbat);
+void nbnxn_atomdata_copy_shiftvec(bool dynamic_box, gmx::ArrayRef<gmx::RVec> shift_vec, nbnxn_atomdata_t* nbat);
 
 /*! \brief Transform coordinates to xbat layout
  *

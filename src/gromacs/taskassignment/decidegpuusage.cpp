@@ -57,7 +57,7 @@
 #include "gromacs/hardware/detecthardware.h"
 #include "gromacs/hardware/hardwaretopology.h"
 #include "gromacs/hardware/hw_info.h"
-#include "gromacs/listed_forces/gpubonded.h"
+#include "gromacs/listed_forces/listed_forces_gpu.h"
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
 #include "gromacs/mdlib/update_constrain_gpu.h"
 #include "gromacs/mdtypes/commrec.h"
@@ -96,11 +96,14 @@ const char* const g_specifyEverythingFormatString =
         // OpenCL standard, but the only current relevant case for GROMACS
         // is AMD OpenCL, which offers this variable.
         "GPU_DEVICE_ORDINAL"
-#    elif GMX_GPU_SYCL
-        // As with OpenCL, there are no portable way to do it.
-        // Intel reference: https://github.com/intel/llvm/blob/sycl/sycl/doc/EnvironmentVariables.md
-        // While SYCL_DEVICE_FILTER is a better option, as of 2021.1-beta10 it is not yet supported.
-        "SYCL_DEVICE_ALLOWLIST"
+#    elif GMX_GPU_SYCL && GMX_SYCL_DPCPP
+        // https://github.com/intel/llvm/blob/sycl/sycl/doc/EnvironmentVariables.md
+        "SYCL_DEVICE_FILTER"
+#    elif GMX_GPU_SYCL && GMX_SYCL_HIPSYCL
+        // Not true if we use hipSYCL over CUDA or IntelLLVM, but in that case the user probably
+        // knows what they are doing.
+        // https://rocmdocs.amd.com/en/latest/Other_Solutions/Other-Solutions.html#hip-environment-variables
+        "HIP_VISIBLE_DEVICES"
 #    else
 #        error "Unreachable branch"
 #    endif
@@ -476,7 +479,7 @@ bool decideWhetherToUseGpusForBonded(bool              useGpuForNonbonded,
 
     std::string errorMessage;
 
-    if (!buildSupportsGpuBondeds(&errorMessage))
+    if (!buildSupportsListedForcesGpu(&errorMessage))
     {
         if (bondedTarget == TaskTarget::Gpu)
         {
@@ -486,7 +489,7 @@ bool decideWhetherToUseGpusForBonded(bool              useGpuForNonbonded,
         return false;
     }
 
-    if (!inputSupportsGpuBondeds(inputrec, mtop, &errorMessage))
+    if (!inputSupportsListedForcesGpu(inputrec, mtop, &errorMessage))
     {
         if (bondedTarget == TaskTarget::Gpu)
         {
@@ -543,7 +546,6 @@ bool decideWhetherToUseGpuForUpdate(const bool                     isDomainDecom
                                     const gmx_mtop_t&              mtop,
                                     const bool                     useEssentialDynamics,
                                     const bool                     doOrientationRestraints,
-                                    const bool                     useReplicaExchange,
                                     const bool                     haveFrozenAtoms,
                                     const bool                     doRerun,
                                     const DevelopmentFeatureFlags& devFlags,
@@ -573,11 +575,6 @@ bool decideWhetherToUseGpuForUpdate(const bool                     isDomainDecom
                     "small molecules, and box sizes close to half the pair-list cutoff are not "
                     "supported.\n ";
         }
-
-        if (pmeUsesCpu)
-        {
-            errorMessage += "With domain decomposition, PME must run fully on the GPU.\n";
-        }
     }
 
     if (havePmeOnlyRank)
@@ -606,7 +603,6 @@ bool decideWhetherToUseGpuForUpdate(const bool                     isDomainDecom
         errorMessage +=
                 "Either PME or short-ranged non-bonded interaction tasks must run on the GPU.\n";
     }
-
     if (!gpusWereDetected)
     {
         errorMessage += "Compatible GPUs must have been found.\n";
@@ -662,10 +658,6 @@ bool decideWhetherToUseGpuForUpdate(const bool                     isDomainDecom
     {
         errorMessage += "Shells are not supported.\n";
     }
-    if (useReplicaExchange)
-    {
-        errorMessage += "Replica exchange simulations are not supported.\n";
-    }
     if (inputrec.eSwapCoords != SwapType::No)
     {
         errorMessage += "Swapping the coordinates is not supported.\n";
@@ -686,6 +678,10 @@ bool decideWhetherToUseGpuForUpdate(const bool                     isDomainDecom
         errorMessage +=
                 "The number of coupled constraints is higher than supported in the GPU LINCS "
                 "code.\n";
+    }
+    if (hasAnyConstraints && !UpdateConstrainGpu::areConstraintsSupported())
+    {
+        errorMessage += "Chosen GPU implementation does not support constraints.\n";
     }
     if (haveFrozenAtoms)
     {

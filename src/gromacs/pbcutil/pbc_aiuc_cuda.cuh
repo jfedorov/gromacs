@@ -82,7 +82,7 @@ static inline __device__ int int3ToShiftIndex(int3 iv)
  * \todo This routine uses CUDA float4 types for input coordinates and
  *       returns in rvec data-type. Other than that, it does essentially
  *       the same thing as the version below, as well as SIMD and CPU
- *       versions. This routine is used in gpubonded module.
+ *       versions. This routine is used in GPU listed forces module.
  *       To avoid code duplication, these implementations should be
  *       unified. See Issue #2863:
  *       https://gitlab.com/gromacs/gromacs/-/issues/2863
@@ -94,7 +94,8 @@ static inline __device__ int int3ToShiftIndex(int3 iv)
  */
 template<bool returnShift>
 static __forceinline__ __device__ int
-                       pbcDxAiuc(const PbcAiuc& pbcAiuc, const float4 r1, const float4 r2, float3& dr)
+// NOLINTNEXTLINE(google-runtime-references)
+pbcDxAiuc(const PbcAiuc& pbcAiuc, const float4 r1, const float4 r2, float3& dr)
 {
     dr.x = r1.x - r2.x;
     dr.y = r1.y - r2.y;
