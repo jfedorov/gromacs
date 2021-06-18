@@ -53,6 +53,10 @@
 #include "nbnxm_sycl_kernel_utils.h"
 #include "nbnxm_sycl_types.h"
 
+//! \brief Class name for NBNXM kernel
+template<bool doPruneNBL, bool doCalcEnergies, enum Nbnxm::ElecType elecType, enum Nbnxm::VdwType vdwType>
+class NbnxmKernel;
+
 namespace Nbnxm
 {
 
@@ -475,7 +479,26 @@ static inline void reduceForceIAndFShift(cl::sycl::accessor<float, 1, mode::read
            storing the reduction result above. */
         if (tidxj < 3)
         {
-            atomicFetchAdd(a_fShift, 3 * shift + tidxj, fShiftBuf);
+            if constexpr (c_clSize == 4)
+            {
+                /* Intel Xe (Gen12LP) and earlier GPUs implement floating-point atomics via
+                 * a compare-and-swap (CAS) loop. It has particularly poor performance when
+                 * updating the same memory location from the same work-group.
+                 * Such optimization might be slightly beneficial for NVIDIA and AMD as well,
+                 * but it is unlikely to make a big difference and thus was not evaluated.
+                 */
+                auto sg = itemIdx.get_sub_group();
+                fShiftBuf += sycl_2020::shift_left(sg, fShiftBuf, 1);
+                fShiftBuf += sycl_2020::shift_left(sg, fShiftBuf, 2);
+                if (tidxi == 0)
+                {
+                    atomicFetchAdd(a_fShift, 3 * shift + tidxj, fShiftBuf);
+                }
+            }
+            else
+            {
+                atomicFetchAdd(a_fShift, 3 * shift + tidxj, fShiftBuf);
+            }
         }
     }
 }
@@ -592,6 +615,7 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
     // Currently this is ideally suited for 32-wide subgroup size but slightly less so for others,
     // e.g. subGroupSize > prunedClusterPairSize on AMD GCN / CDNA.
     // Hence, the two are decoupled.
+    // When changing this code, please update requiredSubGroupSizeForNbnxm in src/gromacs/hardware/device_management_sycl.cpp.
     constexpr int prunedClusterPairSize = c_clSize * c_splitClSize;
 #if defined(HIPSYCL_PLATFORM_ROCM) // SYCL-TODO AMD RDNA/RDNA2 has 32-wide exec; how can we check for that?
     gmx_unused constexpr int subGroupSize = c_clSize * c_clSize;
@@ -997,15 +1021,10 @@ auto nbnxmKernel(cl::sycl::handler&                                   cgh,
     };
 }
 
-// SYCL 1.2.1 requires providing a unique type for a kernel. Should not be needed for SYCL2020.
-template<bool doPruneNBL, bool doCalcEnergies, enum ElecType elecType, enum VdwType vdwType>
-class NbnxmKernelName;
-
 template<bool doPruneNBL, bool doCalcEnergies, enum ElecType elecType, enum VdwType vdwType, class... Args>
 cl::sycl::event launchNbnxmKernel(const DeviceStream& deviceStream, const int numSci, Args&&... args)
 {
-    // Should not be needed for SYCL2020.
-    using kernelNameType = NbnxmKernelName<doPruneNBL, doCalcEnergies, elecType, vdwType>;
+    using kernelNameType = NbnxmKernel<doPruneNBL, doCalcEnergies, elecType, vdwType>;
 
     /* Kernel launch config:
      * - The thread block dimensions match the size of i-clusters, j-clusters,

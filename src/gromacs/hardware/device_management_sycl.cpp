@@ -106,21 +106,18 @@ static DeviceStatus isDeviceCompatible(const cl::sycl::device& syclDevice)
         return DeviceStatus::Incompatible;
     }
 
-#if GMX_SYCL_HIPSYCL
-    /* At the time of writing:
-     * 1. SYCL NB kernels currently don't support sub_group size of 32 or 64, which are the only
-     * ones available on NVIDIA and AMD hardware, respectively. That's not a fundamental limitation,
-     * but requires porting more OpenCL code, see #3934.
-     * 2. hipSYCL does not support cl::sycl::info::device::sub_group_sizes,
-     * see https://github.com/illuhad/hipSYCL/pull/449
-     */
-    const std::vector<size_t> supportedSubGroupSizes{ warpSize };
-#else
     const std::vector<size_t> supportedSubGroupSizes =
             syclDevice.get_info<cl::sycl::info::device::sub_group_sizes>();
+
+    // Ensure any changes stay in sync with subGroupSize in src/gromacs/nbnxm/sycl/nbnxm_sycl_kernel.cpp
+    constexpr size_t requiredSubGroupSizeForNbnxm =
+#if defined(HIPSYCL_PLATFORM_ROCM)
+            GMX_GPU_NB_CLUSTER_SIZE * GMX_GPU_NB_CLUSTER_SIZE;
+#else
+            GMX_GPU_NB_CLUSTER_SIZE * GMX_GPU_NB_CLUSTER_SIZE / 2;
 #endif
-    const size_t requiredSubGroupSizeForNBNXM = 8;
-    if (std::find(supportedSubGroupSizes.begin(), supportedSubGroupSizes.end(), requiredSubGroupSizeForNBNXM)
+
+    if (std::find(supportedSubGroupSizes.begin(), supportedSubGroupSizes.end(), requiredSubGroupSizeForNbnxm)
         == supportedSubGroupSizes.end())
     {
         return DeviceStatus::IncompatibleClusterSize;
@@ -145,6 +142,9 @@ static DeviceStatus isDeviceCompatible(const cl::sycl::device& syclDevice)
     }
 }
 
+// Declaring the class here to avoid long unreadable name in the profiler report
+//! \brief Class name for test kernel
+class DummyKernel;
 
 /*!
  * \brief Checks that device \c deviceInfo is sane (ie can run a kernel).
@@ -168,7 +168,7 @@ static bool isDeviceFunctional(const cl::sycl::device& syclDevice, std::string* 
         queue.submit([&](cl::sycl::handler& cgh) {
                  auto d_buffer = buffer.get_access<cl::sycl::access::mode::discard_write>(cgh);
                  cl::sycl::range<1> range{ numThreads };
-                 cgh.parallel_for<class DummyKernel>(range, [=](cl::sycl::id<1> threadId) {
+                 cgh.parallel_for<DummyKernel>(range, [=](cl::sycl::id<1> threadId) {
                      d_buffer[threadId] = threadId.get(0);
                  });
              }).wait_and_throw();

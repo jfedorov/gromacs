@@ -202,18 +202,11 @@ static DevelopmentFeatureFlags manageDevelopmentFeatures(const gmx::MDLogger& md
 {
     DevelopmentFeatureFlags devFlags;
 
-    // Some builds of GCC 5 give false positive warnings that these
-    // getenv results are ignored when clearly they are used.
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-result"
-
     devFlags.enableGpuBufferOps = (GMX_GPU_CUDA || GMX_GPU_SYCL) && useGpuForNonbonded
                                   && (getenv("GMX_USE_GPU_BUFFER_OPS") != nullptr);
-    devFlags.enableGpuHaloExchange = GMX_GPU_CUDA && getenv("GMX_GPU_DD_COMMS") != nullptr;
+    devFlags.enableGpuHaloExchange = GMX_MPI && GMX_GPU_CUDA && getenv("GMX_GPU_DD_COMMS") != nullptr;
     devFlags.forceGpuUpdateDefault = (getenv("GMX_FORCE_UPDATE_DEFAULT_GPU") != nullptr) || GMX_FAHCORE;
-    devFlags.enableGpuPmePPComm = GMX_GPU_CUDA && getenv("GMX_GPU_PME_PP_COMMS") != nullptr;
-
-#pragma GCC diagnostic pop
+    devFlags.enableGpuPmePPComm = GMX_MPI && GMX_GPU_CUDA && getenv("GMX_GPU_PME_PP_COMMS") != nullptr;
 
     // Direct GPU comm path is being used with CUDA_AWARE_MPI
     // make sure underlying MPI implementation is CUDA-aware
@@ -1611,7 +1604,6 @@ int Mdrunner::mdrunner()
     const bool               thisRankHasPmeGpuTask = gpuTaskAssignments.thisRankHasPmeGpuTask();
     std::unique_ptr<MDAtoms> mdAtoms;
     std::unique_ptr<VirtualSitesHandler> vsite;
-    std::unique_ptr<ListedForcesGpu>     listedForcesGpu;
 
     t_nrnb nrnb;
     if (thisRankHasDuty(cr, DUTY_PP))
@@ -1677,13 +1669,12 @@ int Mdrunner::mdrunner()
             GMX_RELEASE_ASSERT(deviceStreamManager != nullptr,
                                "GPU device stream manager should be valid in order to use GPU "
                                "version of bonded forces.");
-            listedForcesGpu = std::make_unique<ListedForcesGpu>(
+            fr->listedForcesGpu = std::make_unique<ListedForcesGpu>(
                     mtop.ffparams,
                     fr->ic->epsfac * fr->fudgeQQ,
                     deviceStreamManager->context(),
                     deviceStreamManager->bondedStream(havePPDomainDecomposition(cr)),
                     wcycle.get());
-            fr->listedForcesGpu = listedForcesGpu.get();
         }
 
         /* Initialize the mdAtoms structure.
@@ -2073,8 +2064,7 @@ int Mdrunner::mdrunner()
     mdAtoms.reset(nullptr);
     globalState.reset(nullptr);
     mdModules_.reset(nullptr); // destruct force providers here as they might also use the GPU
-    listedForcesGpu.reset(nullptr);
-    fr.reset(nullptr); // destruct forcerec before gpu
+    fr.reset(nullptr);         // destruct forcerec before gpu
     // TODO convert to C++ so we can get rid of these frees
     sfree(disresdata);
 
