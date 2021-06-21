@@ -310,7 +310,6 @@ std::unique_ptr<nonbonded_verlet_t> createNbnxmGPU(const size_t               nu
                                                    std::shared_ptr<gmx::DeviceStreamManager> deviceStreamManager)
 {
     const auto pinPolicy = gmx::PinningPolicy::PinnedIfSupported;
-    // Note: the options and Nbnxm combination rule enums values should match
     const int combinationRule = static_cast<int>(options.ljCombinationRule);
 
     Nbnxm::KernelSetup kernelSetup;
