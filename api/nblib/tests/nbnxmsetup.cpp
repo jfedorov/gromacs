@@ -194,6 +194,19 @@ TEST(NbnxmSetupTest, CanCreateNbnxmCPU)
 }
 
 #ifdef GMX_GPU_CUDA
+TEST(NbnxmSetupTest, CanCreateDeviceStreamManager)
+{
+    const auto& testDeviceList = gmx::test::getTestHardwareEnvironment()->getTestDeviceList();
+    for (const auto& testDevice : testDeviceList)
+    {
+        const DeviceInformation& deviceInfo = testDevice->deviceInfo();
+        setActiveDevice(deviceInfo);
+        NBKernelOptions         nbKernelOptions;
+        gmx::SimulationWorkload simulationWork = createSimulationWorkloadGpu(nbKernelOptions);
+        EXPECT_NO_THROW(createDeviceStreamManager(deviceInfo, simulationWork));
+    }
+}
+
 TEST(NbnxmSetupTest, CanCreateNbnxmGPU)
 {
     const auto& testDeviceList = gmx::test::getTestHardwareEnvironment()->getTestDeviceList();
@@ -201,9 +214,8 @@ TEST(NbnxmSetupTest, CanCreateNbnxmGPU)
     {
         const DeviceInformation& deviceInfo = testDevice->deviceInfo();
         setActiveDevice(deviceInfo);
-        size_t          numParticles = 1;
-        NBKernelOptions nbKernelOptions;
-        nbKernelOptions.nbnxmSimd                   = SimdKernels::SimdNo;
+        size_t                  numParticles = 1;
+        NBKernelOptions         nbKernelOptions;
         std::vector<real>       nonbondedParameters = { 1, 1 };
         gmx::SimulationWorkload simulationWork      = createSimulationWorkloadGpu(nbKernelOptions);
         interaction_const_t     interactionConst    = createInteractionConst(nbKernelOptions);
