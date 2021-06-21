@@ -104,7 +104,7 @@ gmx::StepWorkload createStepWorkload(const NBKernelOptions& options);
 //! Create a SimulationWorkload object for use with createDeviceStreamManager
 gmx::SimulationWorkload createSimulationWorkloadGpu(const NBKernelOptions& options);
 
-std::shared_ptr<gmx::DeviceStreamManager> createDeviceStreamManager(const DeviceInformation& deviceInfor,
+std::shared_ptr<gmx::DeviceStreamManager> createDeviceStreamManager(const DeviceInformation& deviceInfo,
                                                                     const gmx::SimulationWorkload& simulationWorkload);
 
 //! Computes the Ewald splitting coefficient for Coulomb
