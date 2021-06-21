@@ -77,7 +77,7 @@ std::unordered_map<std::string, FloatingPointTolerance> energyToleranceForSystem
 
 /*! \brief Database of pressure tolerances on the various systems. */
 std::unordered_map<std::string, FloatingPointTolerance> pressureToleranceForSystem_g = {
-    { { "spc216", relativeToleranceAsFloatingPoint(1, 1e-4) } }
+    { { "spc216", relativeToleranceAsFloatingPoint(1, 2e-4) } }
 };
 
 const std::unordered_map<std::string, std::vector<std::pair<std::string, std::string>>> c_mdpPullParams = {
