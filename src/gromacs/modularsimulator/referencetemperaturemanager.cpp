@@ -1,8 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2010-2017, The GROMACS development team.
- * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
+ * Copyright (c) 2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -34,47 +33,42 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 /*! \internal \file
- * \brief
- * main() for unit tests that use \ref module_testutils.
+ * \brief Defines the a helper struct managing reference temperature changes
  *
- * \author Teemu Murtola <teemu.murtola@gmail.com>
- * \ingroup module_testutils
+ * \author Pascal Merz <pascal.merz@me.com>
+ * \ingroup module_modularsimulator
  */
+
 #include "gmxpre.h"
 
-#include <gtest/gtest.h>
+#include "referencetemperaturemanager.h"
 
-#include "testutils/testinit.h"
+#include "gromacs/mdtypes/inputrec.h"
+#include "gromacs/utility/gmxassert.h"
 
-#ifndef TEST_DATA_PATH
-//! Path to test input data directory (needs to be set by the build system).
-#    define TEST_DATA_PATH nullptr
-#endif
-
-#ifndef TEST_TEMP_PATH
-//! Path to test output temporary directory (needs to be set by the build system).
-#    define TEST_TEMP_PATH nullptr
-#endif
-
-#ifndef TEST_USES_MPI
-//! Whether the test expects/supports running with multiple MPI ranks.
-#    define TEST_USES_MPI false
-#endif
-
-#ifndef TEST_USES_HARDWARE_DETECTION
-//! Whether the test expects/supports running with knowledge of the hardware.
-#    define TEST_USES_HARDWARE_DETECTION false
-#endif
-
-/*! \brief
- * Initializes unit testing for \ref module_testutils.
- */
-int main(int argc, char* argv[])
+namespace gmx
 {
-    // Calls ::testing::InitGoogleMock()
-    ::gmx::test::initTestUtils(
-            TEST_DATA_PATH, TEST_TEMP_PATH, TEST_USES_MPI, TEST_USES_HARDWARE_DETECTION, &argc, &argv);
-    int errcode = RUN_ALL_TESTS();
-    ::gmx::test::finalizeTestUtils();
-    return errcode;
+
+ReferenceTemperatureManager::ReferenceTemperatureManager(t_inputrec* inputrec) : inputrec_(inputrec)
+{
 }
+
+void ReferenceTemperatureManager::registerUpdateCallback(ReferenceTemperatureCallback referenceTemperatureCallback)
+{
+    callbacks_.emplace_back(std::move(referenceTemperatureCallback));
+}
+
+void ReferenceTemperatureManager::setReferenceTemperature(ArrayRef<const real> newReferenceTemperatures,
+                                                          ReferenceTemperatureChangeAlgorithm algorithm)
+{
+    GMX_RELEASE_ASSERT(newReferenceTemperatures.ssize() == inputrec_->opts.ngtc,
+                       "Expected one new reference temperature per temperature group.");
+
+    std::copy(newReferenceTemperatures.begin(), newReferenceTemperatures.end(), inputrec_->opts.ref_t);
+    for (const auto& callback : callbacks_)
+    {
+        callback(constArrayRefFromArray(inputrec_->opts.ref_t, inputrec_->opts.ngtc), algorithm);
+    }
+}
+
+} // namespace gmx
