@@ -56,12 +56,6 @@
 struct PmeGpuCudaKernelParams : PmeGpuKernelParamsBase
 {
     // Place CUDA-specific stuff here
-    /*! \brief Whether pipelining with PP communications is active */
-    bool usePipeline;
-    /*! \brief Start atom for this stage of pipeline */
-    int pipelineAtomStart;
-    /*! \brief End atom for this stage of pipeline */
-    int pipelineAtomEnd;
 };
 
 #endif

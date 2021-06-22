@@ -197,7 +197,6 @@ void pme_gpu_launch_spread(gmx_pme_t*                     pme,
                            const bool                     useGpuDirectComm,
                            gmx::PmeCoordinateReceiverGpu* pmeCoordinateReceiverGpu)
 {
-
     GMX_ASSERT(pme_gpu_active(pme), "This should be a GPU run of PME but it is not enabled.");
     GMX_ASSERT(!GMX_GPU_CUDA || xReadyOnDevice || !pme->bPPnode,
                "Need a valid xReadyOnDevice on PP+PME ranks with CUDA.");
@@ -217,7 +216,6 @@ void pme_gpu_launch_spread(gmx_pme_t*                     pme,
     /* Spread the coefficients on a grid */
     const bool computeSplines = true;
     const bool spreadCharges  = true;
-
     wallcycle_start_nocount(wcycle, WallCycleCounter::LaunchGpu);
     wallcycle_sub_start_nocount(wcycle, WallCycleSubCounter::LaunchGpuPme);
     pme_gpu_spread(
