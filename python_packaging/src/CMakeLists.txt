@@ -1,7 +1,7 @@
 #
 # This file is part of the GROMACS molecular simulation package.
 #
-# Copyright (c) 2019, by the GROMACS development team, led by
+# Copyright (c) 2019,2021, by the GROMACS development team, led by
 # Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
 # and including many others, as listed in the AUTHORS file in the
 # top-level source directory and at http://www.gromacs.org.
@@ -53,7 +53,7 @@ set(CMAKE_OSX_ARCHITECTURES x86_64 CACHE STRING
     "OS X should build Python package for 64-bit architecture"
     FORCE)
 
-project(gmxapi VERSION 0.1.0)
+project(gmxapi VERSION 0.1.1)
 
 # Check if Python package is being built directly or via add_subdirectory
 set(GMXAPI_MASTER_PROJECT OFF)
@@ -74,7 +74,7 @@ if(POLICY CMP0074) #3.12
 endif()
 
 if(GMXAPI_MASTER_PROJECT)
-    find_package(gmxapi 0.0.8 REQUIRED
+    find_package(gmxapi 0.1.1 REQUIRED
                  HINTS "$ENV{GROMACS_DIR}"
                  )
 endif()
