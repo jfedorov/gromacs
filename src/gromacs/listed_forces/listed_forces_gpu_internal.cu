@@ -1192,7 +1192,10 @@ namespace gmx
 {
 
 template<bool calcVir, bool calcEner>
-__global__ void exec_kernel_gpu(BondedCudaKernelParameters kernelParams, float4* gm_xq, float3* gm_f, float3* gm_fShift)
+__global__ void launchGeneralGpuBondedKernel(BondedCudaKernelParameters kernelParams,
+                                             float4*                    gm_xq,
+                                             float3*                    gm_f,
+                                             float3*                    gm_fShift)
 {
     assert(blockDim.y == 1 && blockDim.z == 1);
     const int tid          = blockIdx.x * blockDim.x + threadIdx.x;
@@ -1221,13 +1224,10 @@ __global__ void exec_kernel_gpu(BondedCudaKernelParameters kernelParams, float4*
     {
         if (tid >= kernelParams.fTypeRangeStart[j] && tid <= kernelParams.fTypeRangeEnd[j])
         {
-            const int      numBonds        = kernelParams.numFTypeBonds[j];
-            int            fTypeTid        = tid - kernelParams.fTypeRangeStart[j];
-            const t_iatom* iatoms          = kernelParams.d_iatoms[j];
-            const auto     cmapData        = kernelParams.d_cmapData;
-            const int      cmapGridSpacing = kernelParams.d_cmapGridSpacing;
-            const int      cmapGridSize    = kernelParams.dc_cmapGridSize;
-            fType                          = kernelParams.fTypesOnGpu[j];
+            const int      numBonds = kernelParams.numFTypeBonds[j];
+            int            fTypeTid = tid - kernelParams.fTypeRangeStart[j];
+            const t_iatom* iatoms   = kernelParams.d_iatoms[j];
+            fType                   = kernelParams.fTypesOnGpu[j];
             if (calcEner)
             {
                 threadComputedPotential = true;
@@ -1302,20 +1302,6 @@ __global__ void exec_kernel_gpu(BondedCudaKernelParameters kernelParams, float4*
                                                  sm_fShiftLoc,
                                                  kernelParams.pbcAiuc);
                     break;
-                case F_CMAP:
-                    cmap_gpu<calcVir, calcEner>(fTypeTid,
-                                                &vtot_loc,
-                                                numBonds,
-                                                iatoms,
-                                                kernelParams.d_forceParams,
-                                                cmapGridSpacing,
-                                                cmapData,
-                                                cmapGridSize,
-                                                gm_xq,
-                                                gm_f,
-                                                sm_fShiftLoc,
-                                                kernelParams.pbcAiuc);
-                    break;
                 case F_LJ14:
                     pairs_gpu<calcVir, calcEner>(fTypeTid,
                                                  numBonds,
@@ -1386,6 +1372,119 @@ __global__ void exec_kernel_gpu(BondedCudaKernelParameters kernelParams, float4*
     }
 }
 
+template<bool calcVir, bool calcEner>
+__global__ void launchCmapGpuBondedKernel(BondedCudaKernelParameters kernelParams,
+                                          float4*                    gm_xq,
+                                          float3*                    gm_f,
+                                          float3*                    gm_fShift)
+{
+    assert(blockDim.y == 1 && blockDim.z == 1);
+    const int tid          = blockIdx.x * blockDim.x + threadIdx.x;
+    float     vtot_loc     = 0;
+    float     vtotVdw_loc  = 0;
+    float     vtotElec_loc = 0;
+
+    extern __shared__ char sm_dynamicShmem[];
+    char*                  sm_nextSlotPtr = sm_dynamicShmem;
+    float3*                sm_fShiftLoc   = reinterpret_cast<float3*>(sm_nextSlotPtr);
+    sm_nextSlotPtr += c_numShiftVectors * sizeof(float3);
+
+    if (calcVir)
+    {
+        if (threadIdx.x < c_numShiftVectors)
+        {
+            sm_fShiftLoc[threadIdx.x] = make_float3(0.0F, 0.0F, 0.0F);
+        }
+        __syncthreads();
+    }
+
+    int       fType;
+    bool      threadComputedPotential = false;
+    const int cmapIndex               = 7;
+    if (tid >= kernelParams.fTypeRangeStart[cmapIndex] && tid <= kernelParams.fTypeRangeEnd[cmapIndex])
+    {
+        const int      numBonds        = kernelParams.numFTypeBonds[cmapIndex];
+        int            fTypeTid        = tid - kernelParams.fTypeRangeStart[cmapIndex];
+        const t_iatom* iatoms          = kernelParams.d_iatoms[cmapIndex];
+        const auto     cmapData        = kernelParams.d_cmapData;
+        const int      cmapGridSpacing = kernelParams.d_cmapGridSpacing;
+        const int      cmapGridSize    = kernelParams.dc_cmapGridSize;
+        fType                          = kernelParams.fTypesOnGpu[cmapIndex];
+        if (calcEner)
+        {
+            threadComputedPotential = true;
+        }
+
+        switch (fType)
+        {
+            case F_CMAP:
+                cmap_gpu<calcVir, calcEner>(fTypeTid,
+                                            &vtot_loc,
+                                            numBonds,
+                                            iatoms,
+                                            kernelParams.d_forceParams,
+                                            cmapGridSpacing,
+                                            cmapData,
+                                            cmapGridSize,
+                                            gm_xq,
+                                            gm_f,
+                                            sm_fShiftLoc,
+                                            kernelParams.pbcAiuc);
+                break;
+        }
+    }
+    if (threadComputedPotential)
+    {
+        float* vtotVdw  = kernelParams.d_vTot + F_LJ14;
+        float* vtotElec = kernelParams.d_vTot + F_COUL14;
+
+        // Stage atomic accumulation through shared memory:
+        // each warp will accumulate its own partial sum
+        // and then a single thread per warp will accumulate this to the global sum
+
+        int numWarps = blockDim.x / warpSize;
+        int warpId   = threadIdx.x / warpSize;
+
+        // Shared memory variables to hold block-local partial sum
+        float* sm_vTot = reinterpret_cast<float*>(sm_nextSlotPtr);
+        sm_nextSlotPtr += numWarps * sizeof(float);
+        float* sm_vTotVdw = reinterpret_cast<float*>(sm_nextSlotPtr);
+        sm_nextSlotPtr += numWarps * sizeof(float);
+        float* sm_vTotElec = reinterpret_cast<float*>(sm_nextSlotPtr);
+
+        if (threadIdx.x % warpSize == 0)
+        {
+            // One thread per warp initializes to zero
+            sm_vTot[warpId]     = 0.;
+            sm_vTotVdw[warpId]  = 0.;
+            sm_vTotElec[warpId] = 0.;
+        }
+        __syncwarp(); // All threads in warp must wait for initialization
+
+        // Perform warp-local accumulation in shared memory
+        atomicAdd(sm_vTot + warpId, vtot_loc);
+        atomicAdd(sm_vTotVdw + warpId, vtotVdw_loc);
+        atomicAdd(sm_vTotElec + warpId, vtotElec_loc);
+
+        __syncwarp(); // Ensure all threads in warp have completed
+        if (threadIdx.x % warpSize == 0)
+        { // One thread per warp accumulates partial sum into global sum
+            atomicAdd(kernelParams.d_vTot + fType, sm_vTot[warpId]);
+            atomicAdd(vtotVdw, sm_vTotVdw[warpId]);
+            atomicAdd(vtotElec, sm_vTotElec[warpId]);
+        }
+    }
+    /* Accumulate shift vectors from shared memory to global memory on the first c_numShiftVectors thr  eads of the block. */
+    if (calcVir)
+    {
+        __syncthreads();
+        if (threadIdx.x < c_numShiftVectors)
+        {
+            atomicAdd(gm_fShift[threadIdx.x], sm_fShiftLoc[threadIdx.x]);
+        }
+    }
+}
+
 
 /*-------------------------------- End CUDA kernels-----------------------------*/
 
@@ -1406,7 +1505,38 @@ void ListedForcesGpu::Impl::launchKernel()
         return;
     }
 
-    auto kernelPtr = exec_kernel_gpu<calcVir, calcEner>;
+    auto kernelPtr = launchGeneralGpuBondedKernel<calcVir, calcEner>;
+
+    const auto kernelArgs = prepareGpuKernelArguments(
+            kernelPtr, kernelLaunchConfig_, &kernelParams_, &d_xq_, &d_f_, &d_fShift_);
+
+    launchGpuKernel(kernelPtr,
+                    kernelLaunchConfig_,
+                    deviceStream_,
+                    nullptr,
+                    "exec_kernel_gpu<calcVir, calcEner>",
+                    kernelArgs);
+
+    wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LaunchGpuBonded);
+    wallcycle_stop(wcycle_, WallCycleCounter::LaunchGpu);
+}
+
+template<bool calcVir, bool calcEner>
+void ListedForcesGpu::Impl::launchCmapKernel()
+{
+    GMX_ASSERT(haveInteractions_, "Cannot launch GPU CMAP kernel unless GPU is scheduled to run it");
+
+    wallcycle_start_nocount(wcycle_, WallCycleCounter::LaunchGpu);
+    wallcycle_sub_start(wcycle_, WallCycleSubCounter::LaunchGpuBonded);
+
+    int fTypeRangeEnd = kernelParams_.fTypeRangeEnd[numFTypesOnGpu - 1];
+
+    if (fTypeRangeEnd < 0)
+    {
+        return;
+    }
+
+    auto kernelPtr = launchCmapGpuBondedKernel<calcVir, calcEner>;
 
     const auto kernelArgs = prepareGpuKernelArguments(
             kernelPtr, kernelLaunchConfig_, &kernelParams_, &d_xq_, &d_f_, &d_fShift_);
@@ -1428,14 +1558,17 @@ void ListedForcesGpu::launchKernel(const gmx::StepWorkload& stepWork)
     {
         // When we need the energy, we also need the virial
         impl_->launchKernel<true, true>();
+        impl_->launchCmapKernel<true, true>();
     }
     else if (stepWork.computeVirial)
     {
         impl_->launchKernel<true, false>();
+        impl_->launchCmapKernel<true, false>();
     }
     else
     {
         impl_->launchKernel<false, false>();
+        impl_->launchCmapKernel<false, false>();
     }
 }
 

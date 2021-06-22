@@ -158,6 +158,9 @@ public:
     /*! \brief Launches bonded kernel on a GPU */
     template<bool calcVir, bool calcEner>
     void launchKernel();
+    /*! \brief Launches cmap kernel on a GPU */
+    template<bool calcVir, bool calcEner>
+    void launchCmapKernel();
     /*! \brief Returns whether there are bonded interactions
      * assigned to the GPU */
     bool haveInteractions() const;
