@@ -75,7 +75,7 @@ PmeCoordinateReceiverGpu::PmeCoordinateReceiverGpu(MPI_Comm /* comm */,
 PmeCoordinateReceiverGpu::~PmeCoordinateReceiverGpu() = default;
 
 /*!\brief init PME-PP GPU communication stub */
-void PmeCoordinateReceiverGpu::sendCoordinateBufferAddressToPpRanks(DeviceBuffer<RVec> /* d_x */)
+void PmeCoordinateReceiverGpu::reinitCoordinateReceiver(DeviceBuffer<RVec> /* d_x */)
 {
     GMX_ASSERT(!impl_,
                "A CPU stub for PME-PP GPU communication initialization was called instead of the "
@@ -116,12 +116,12 @@ DeviceStream* PmeCoordinateReceiverGpu::ppCommStream(int /* senderIndex */)
     return nullptr;
 }
 
-int PmeCoordinateReceiverGpu::ppCommNumAtoms(int /* senderIndex */)
+std::tuple<int, int> PmeCoordinateReceiverGpu::ppCommAtomRange(int /* senderIndex */)
 {
     GMX_ASSERT(!impl_,
                "A CPU stub for PME-PP GPU communication was called instead of the correct "
                "implementation.");
-    return 0;
+    return std::make_tuple(0, 0);
 }
 
 int PmeCoordinateReceiverGpu::ppCommNumSenderRanks()

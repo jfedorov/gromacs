@@ -229,6 +229,13 @@ struct PmeGpuKernelParamsBase
     HIDE_FROM_OPENCL_COMPILER(DeviceTexture) fractShiftsTableTexture;
     /*! \brief Texture object for accessing grid.d_gridlineIndicesTable */
     HIDE_FROM_OPENCL_COMPILER(DeviceTexture) gridlineIndicesTableTexture;
+
+    /*! \brief Whether pipelining with PP communications is active */
+    bool usePipeline = false;
+    /*! \brief Start atom for this stage of pipeline */
+    int pipelineAtomStart = 0;
+    /*! \brief End atom for this stage of pipeline */
+    int pipelineAtomEnd = 0;
 };
 
 #endif

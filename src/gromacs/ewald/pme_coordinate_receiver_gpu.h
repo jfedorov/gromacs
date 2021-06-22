@@ -71,11 +71,12 @@ public:
     PmeCoordinateReceiverGpu(MPI_Comm comm, const DeviceContext& deviceContext, gmx::ArrayRef<PpRanks> ppRanks);
     ~PmeCoordinateReceiverGpu();
 
-    /*! \brief
+     /*! \brief
+     * Re-initialize: set atom ranges and, for thread-MPI case,
      * send coordinates buffer address to PP rank
      * \param[in] d_x   coordinates buffer in GPU memory
      */
-    void sendCoordinateBufferAddressToPpRanks(DeviceBuffer<RVec> d_x);
+    void reinitCoordinateReceiver(DeviceBuffer<RVec> d_x);
 
 
     /*! \brief
@@ -110,11 +111,10 @@ public:
     DeviceStream* ppCommStream(int senderIndex);
 
     /*! \brief
-     * Return number of atoms involved in communication associated with specific PP rank sender
+     * Returns range of atoms involved in communication associated with specific PP rank sender
      * index \param[in] senderIndex    Index of sender PP rank.
      */
-    int ppCommNumAtoms(int senderIndex);
-
+    std::tuple<int, int> ppCommAtomRange(int senderIndex);
 
     /*! \brief
      * Return number of PP ranks involved in PME-PP communication

@@ -77,18 +77,24 @@ PmeCoordinateReceiverGpu::Impl::Impl(MPI_Comm               comm,
 
 PmeCoordinateReceiverGpu::Impl::~Impl() = default;
 
-void PmeCoordinateReceiverGpu::Impl::sendCoordinateBufferAddressToPpRanks(DeviceBuffer<RVec> d_x)
+void PmeCoordinateReceiverGpu::Impl::reinitCoordinateReceiver(DeviceBuffer<RVec> d_x)
 {
-    // Need to send address to PP rank only for thread-MPI as PP rank pushes data using cudamemcpy
-    if (GMX_THREAD_MPI)
+    atomStart_.resize(ppRanks_.size());
+    atomEnd_.resize(ppRanks_.size());
+    int ind_start = 0;
+    int ind_end   = 0;
+    int i         = 0;
+    for (const auto& receiver : ppRanks_)
     {
-        int ind_start = 0;
-        int ind_end   = 0;
-        for (const auto& receiver : ppRanks_)
-        {
-            ind_start = ind_end;
-            ind_end   = ind_start + receiver.numAtoms;
+        ind_start = ind_end;
+        ind_end   = ind_start + receiver.numAtoms;
 
+        atomStart_[i] = ind_start;
+        atomEnd_[i]   = ind_end;
+
+        // Need to send address to PP rank only for thread-MPI as PP rank pushes data using cudamemcpy
+        if (GMX_THREAD_MPI)
+        {
             // Data will be transferred directly from GPU.
             void* sendBuf = reinterpret_cast<void*>(&d_x[ind_start]);
 #if GMX_MPI
@@ -97,6 +103,7 @@ void PmeCoordinateReceiverGpu::Impl::sendCoordinateBufferAddressToPpRanks(Device
             GMX_UNUSED_VALUE(sendBuf);
 #endif
         }
+        i++;
     }
 }
 
@@ -151,11 +158,14 @@ int PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesFromPpRanks(int pipe
 #    else
     // MPI_Waitany is not available in thread-MPI. However, the
     // MPI_Wait here is not associated with data but is host-side
-    // scheduling code to receive a CUDA event, and will be executed in
-    // advance of the actual data transfer. Therefore we can receive
-    // in order of pipeline stage, still allowing the scheduled
-    // GPU-direct comms to initiate out-of-order in their respective
-    // streams
+    // scheduling code to receive a CUDA event, and will be executed
+    // in advance of the actual data transfer. Therefore we can
+    // receive in order of pipeline stage, still allowing the
+    // scheduled GPU-direct comms to initiate out-of-order in their
+    // respective streams. For cases with CPU force computations, the
+    // scheduling is less asynchronous (done on a per-step basis), so
+    // host-side improvements should be investigated as tracked in
+    // issue #4047
     senderRank = pipelineStage;
     MPI_Wait(&request_[senderRank], MPI_STATUS_IGNORE);
     ppSync_[senderRank]->enqueueWaitEvent(deviceStream);
@@ -169,9 +179,9 @@ DeviceStream* PmeCoordinateReceiverGpu::Impl::ppCommStream(int senderIndex)
     return ppCommStream_[senderIndex];
 }
 
-int PmeCoordinateReceiverGpu::Impl::ppCommNumAtoms(int senderIndex)
+std::tuple<int, int> PmeCoordinateReceiverGpu::Impl::ppCommAtomRange(int senderIndex)
 {
-    return ppRanks_[senderIndex].numAtoms;
+    return std::make_tuple(atomStart_[senderIndex], atomEnd_[senderIndex]);
 }
 
 int PmeCoordinateReceiverGpu::Impl::ppCommNumSenderRanks()
@@ -188,9 +198,9 @@ PmeCoordinateReceiverGpu::PmeCoordinateReceiverGpu(MPI_Comm               comm,
 
 PmeCoordinateReceiverGpu::~PmeCoordinateReceiverGpu() = default;
 
-void PmeCoordinateReceiverGpu::sendCoordinateBufferAddressToPpRanks(DeviceBuffer<RVec> d_x)
+void PmeCoordinateReceiverGpu::reinitCoordinateReceiver(DeviceBuffer<RVec> d_x)
 {
-    impl_->sendCoordinateBufferAddressToPpRanks(d_x);
+    impl_->reinitCoordinateReceiver(d_x);
 }
 
 void PmeCoordinateReceiverGpu::receiveCoordinatesSynchronizerFromPpCudaDirect(int ppRank)
@@ -217,9 +227,9 @@ DeviceStream* PmeCoordinateReceiverGpu::ppCommStream(int senderIndex)
     return impl_->ppCommStream(senderIndex);
 }
 
-int PmeCoordinateReceiverGpu::ppCommNumAtoms(int senderIndex)
+std::tuple<int, int> PmeCoordinateReceiverGpu::ppCommAtomRange(int senderIndex)
 {
-    return impl_->ppCommNumAtoms(senderIndex);
+    return impl_->ppCommAtomRange(senderIndex);
 }
 
 int PmeCoordinateReceiverGpu::ppCommNumSenderRanks()
