@@ -684,7 +684,8 @@ __device__ void idihs_gpu(const int       i,
 }
 
 /*! \brief Map indices into the periodic grid */
-__device__ static int cmap_setup_grid_index(int ip, int grid_spacing, int* ipm1, int* ipp1, int* ipp2)
+__device__ __forceinline__ static int
+cmap_setup_grid_index(int ip, int grid_spacing, int* ipm1, int* ipp1, int* ipp2)
 {
     int im1, ip1, ip2;
 
@@ -722,19 +723,19 @@ __device__ static int cmap_setup_grid_index(int ip, int grid_spacing, int* ipm1,
     return ip;
 }
 
-__device__ static float3 processCmapForceComponent(const float a,
-                                                   const float b,
-                                                   const float df,
-                                                   const float gaa,
-                                                   const float fga,
-                                                   const float gbb,
-                                                   const float hgb)
+__device__ __forceinline__ static float3 processCmapForceComponent(const float a,
+                                                                   const float b,
+                                                                   const float df,
+                                                                   const float gaa,
+                                                                   const float fga,
+                                                                   const float gbb,
+                                                                   const float hgb)
 {
     float3 result{ gaa * a, fga * a - hgb * b, gbb * b }; // mapping x <-> f, y <-> g, z <-> h
     return result * df;
 }
 
-__device__ static float4 applyCmapForceComponent(const float3 forceComponent)
+__device__ __forceinline__ static float4 applyCmapForceComponent(const float3 forceComponent)
 {
     // forceComponent mapping is x <-> f, y <-> g, z <-> h
     float4 forces;
@@ -746,27 +747,27 @@ __device__ static float4 applyCmapForceComponent(const float3 forceComponent)
 }
 
 template<bool calcVir>
-__device__ static void accumulateCmapForces(float3        gm_f[],
-                                            const float4  gm_xq[],
-                                            float3        sm_fShiftLoc[],
-                                            const PbcAiuc pbcAiuc,
-                                            float3        r_ij,
-                                            float3        r_kj,
-                                            float3        r_kl,
-                                            float3        a,
-                                            float3        b,
-                                            float3        h,
-                                            float         ra2r,
-                                            float         rb2r,
-                                            float         rgr,
-                                            float         rg,
-                                            int           ai,
-                                            int           aj,
-                                            int           ak,
-                                            int           al,
-                                            float         df,
-                                            int           t1,
-                                            int           t2)
+__device__ __forceinline__ static void accumulateCmapForces(float3        gm_f[],
+                                                            const float4  gm_xq[],
+                                                            float3        sm_fShiftLoc[],
+                                                            const PbcAiuc pbcAiuc,
+                                                            float3        r_ij,
+                                                            float3        r_kj,
+                                                            float3        r_kl,
+                                                            float3        a,
+                                                            float3        b,
+                                                            float3        h,
+                                                            float         ra2r,
+                                                            float         rb2r,
+                                                            float         rgr,
+                                                            float         rg,
+                                                            int           ai,
+                                                            int           aj,
+                                                            int           ak,
+                                                            int           al,
+                                                            float         df,
+                                                            int           t1,
+                                                            int           t2)
 {
     const float fg  = iprod(r_ij, r_kj);
     const float hg  = iprod(r_kl, r_kj);
