@@ -96,7 +96,7 @@ struct BondedCudaKernelParameters
     //! Force parameters (on GPU)
     t_iparams* d_forceParams;
     //! CMAP grid spacing (on GPU)
-    int d_cmapGridSpacing;
+    int dc_cmapGridSpacing;
     //! CMAP grid size.
     int dc_cmapGridSize;
     //! CMAP parameters (on GPU). Note, this is a flat array instead of vec of vec

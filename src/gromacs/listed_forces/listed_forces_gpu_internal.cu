@@ -79,7 +79,7 @@
 namespace
 {
 /*! \brief Mysterious CMAP coefficient matrix */
-__device__ const int cmap_coeff_matrix[] = {
+__device__ __constant__ int cmap_coeff_matrix[] = {
     1,  0,  -3, 2,  0,  0, 0,  0,  -3, 0,  9,  -6, 2, 0,  -6, 4,  0,  0,  0, 0,  0, 0, 0,  0,
     3,  0,  -9, 6,  -2, 0, 6,  -4, 0,  0,  0,  0,  0, 0,  0,  0,  0,  0,  9, -6, 0, 0, -6, 4,
     0,  0,  3,  -2, 0,  0, 0,  0,  0,  0,  -9, 6,  0, 0,  6,  -4, 0,  0,  0, 0,  1, 0, -3, 2,
@@ -810,17 +810,6 @@ __device__ static void accumulateCmapForces(float3        gm_f[],
     }
 }
 
-/*! \brief
-Magic lookup table for cmap indices
-
-This maps the entries in the CMAP tables to the atoms in the
-interactions
-*/
-__device__ static const int loopIndex[4][4] = { { 0, 4, 8, 12 },
-                                                { 1, 5, 9, 13 },
-                                                { 2, 6, 10, 14 },
-                                                { 3, 7, 11, 15 } };
-
 template<bool calcVir, bool calcEner>
 __device__ void cmap_gpu(const int                  i,
                          float*                     vtot_loc,
@@ -967,26 +956,26 @@ __device__ void cmap_gpu(const int                  i,
 
         float xphi2 = phi2 + CUDART_PI_F; /* 1 */
         /* Range mangling */
-        if (xphi1 < 0)
+        if (xphi1 < 0.0F)
         {
-            xphi1 = xphi1 + 2 * CUDART_PI_F;
+            xphi1 = xphi1 + 2.0F * CUDART_PI_F;
         }
-        else if (xphi1 >= 2 * CUDART_PI_F)
+        else if (xphi1 >= 2.0F * CUDART_PI_F)
         {
-            xphi1 = xphi1 - 2 * CUDART_PI_F;
+            xphi1 = xphi1 - 2.0F * CUDART_PI_F;
         }
 
-        if (xphi2 < 0)
+        if (xphi2 < 0.0F)
         {
-            xphi2 = xphi2 + 2 * CUDART_PI_F;
+            xphi2 = xphi2 + 2.0F * CUDART_PI_F;
         }
-        else if (xphi2 >= 2 * CUDART_PI_F)
+        else if (xphi2 >= 2.0F * CUDART_PI_F)
         {
-            xphi2 = xphi2 - 2 * CUDART_PI_F;
+            xphi2 = xphi2 - 2.0F * CUDART_PI_F;
         }
 
         /* Number of grid points */
-        float dx = 2 * CUDART_PI_F / cmapGridSpacing;
+        float dx = 2.0F * CUDART_PI_F / cmapGridSpacing;
 
         /* Where on the grid are we */
         int iphi1 = static_cast<int>(xphi1 / dx);
@@ -1000,55 +989,33 @@ __device__ void cmap_gpu(const int                  i,
         const int pos3 = ip1p1 * cmapGridSpacing + ip2p1;
         const int pos4 = iphi1 * cmapGridSpacing + ip2p1;
 
-        float4 ty, ty1, ty2, ty12, tx[4];
-        ty.x = cmapd[pos1 * 4];
-        ty.y = cmapd[pos2 * 4];
-        ty.z = cmapd[pos3 * 4];
-        ty.w = cmapd[pos4 * 4];
-
-        ty1.x = cmapd[pos1 * 4 + 1];
-        ty1.y = cmapd[pos2 * 4 + 1];
-        ty1.z = cmapd[pos3 * 4 + 1];
-        ty1.w = cmapd[pos4 * 4 + 1];
-
-        ty2.x = cmapd[pos1 * 4 + 2];
-        ty2.y = cmapd[pos2 * 4 + 2];
-        ty2.z = cmapd[pos3 * 4 + 2];
-        ty2.w = cmapd[pos4 * 4 + 2];
-
-        ty12.x = cmapd[pos1 * 4 + 3];
-        ty12.y = cmapd[pos2 * 4 + 3];
-        ty12.z = cmapd[pos3 * 4 + 3];
-        ty12.w = cmapd[pos4 * 4 + 3];
+        const float4 ty =
+                make_float4(cmapd[pos1 * 4], cmapd[pos2 * 4], cmapd[pos3 * 4], cmapd[pos4 * 4]);
+        const float4 ty1 = make_float4(
+                cmapd[pos1 * 4 + 1], cmapd[pos2 * 4 + 1], cmapd[pos3 * 4 + 1], cmapd[pos4 * 4 + 1]);
+        const float4 ty2 = make_float4(
+                cmapd[pos1 * 4 + 2], cmapd[pos2 * 4 + 2], cmapd[pos3 * 4 + 2], cmapd[pos4 * 4 + 2]);
+        const float4 ty12 = make_float4(
+                cmapd[pos1 * 4 + 3], cmapd[pos2 * 4 + 3], cmapd[pos3 * 4 + 3], cmapd[pos4 * 4 + 3]);
 
         /* Switch to degrees */
         dx    = 360.0F / cmapGridSpacing;
         xphi1 = xphi1 * CUDA_RAD2DEG_F;
         xphi2 = xphi2 * CUDA_RAD2DEG_F;
 
+        const float4 tx[4] = { ty, ty1 * dx, ty2 * dx, ty12 * dx * dx };
 
-        tx[0] = ty;
-        tx[1] = ty1 * dx;
-        tx[2] = ty2 * dx;
-        tx[3] = ty12 * dx * dx;
-        // for (int i = 0; i < 4; i++) /* 16 */
-        // {
-        //     tx[i]      = ty[i];
-        //     tx[i + 4]  = ty1[i] * dx;
-        //     tx[i + 8]  = ty2[i] * dx;
-        //     tx[i + 12] = ty12[i] * dx * dx;
-        // }
-
-        float tc[16] = { 0.0F };
-        for (int idx = 0; idx < 16; idx++) /* 1056 */
+        float4 tc[4]  = { 0.0F };
+        int    iIndex = 0;
+        for (int idx = 0; idx < 4; idx++) /* 1056 */
         {
             int kIndex = 0;
             for (int k = 0; k < 4; k++)
             {
-                tc[idx] += cmap_coeff_matrix[kIndex++ * 16 + idx] * tx[k].x;
-                tc[idx] += cmap_coeff_matrix[kIndex++ * 16 + idx] * tx[k].y;
-                tc[idx] += cmap_coeff_matrix[kIndex++ * 16 + idx] * tx[k].z;
-                tc[idx] += cmap_coeff_matrix[kIndex++ * 16 + idx] * tx[k].w;
+                tc[idx].x += cmap_coeff_matrix[kIndex++ * 16 + iIndex++] * tx[k].x;
+                tc[idx].y += cmap_coeff_matrix[kIndex++ * 16 + iIndex++] * tx[k].y;
+                tc[idx].z += cmap_coeff_matrix[kIndex++ * 16 + iIndex++] * tx[k].z;
+                tc[idx].w += cmap_coeff_matrix[kIndex++ * 16 + iIndex++] * tx[k].w;
             }
         }
 
@@ -1061,13 +1028,9 @@ __device__ void cmap_gpu(const int                  i,
 
         for (int i = 3; i >= 0; i--)
         {
-            int l1 = loopIndex[i][3];
-            int l2 = loopIndex[i][2];
-            int l3 = loopIndex[i][1];
-
-            e = tt * e + ((tc[i * 4 + 3] * tu + tc[i * 4 + 2]) * tu + tc[i * 4 + 1]) * tu + tc[i * 4];
-            df1 = tu * df1 + (3.0F * tc[l1] * tt + 2.0 * tc[l2]) * tt + tc[l3];
-            df2 = tt * df2 + (3.0F * tc[i * 4 + 3] * tu + 2.0F * tc[i * 4 + 2]) * tu + tc[i * 4 + 1];
+            e   = tt * e + ((tc[i].w * tu + tc[i].z) * tu + tc[i].y) * tu + tc[i].x;
+            df1 = tu * df1 + (3.0F * tc[i].w * tt + 2.0F * tc[i].z) * tt + tc[i].y;
+            df2 = tt * df2 + (3.0F * tc[i].w * tu + 2.0F * tc[i].z) * tu + tc[i].y;
         }
 
         const float fac = CUDA_RAD2DEG_F / dx;
@@ -1407,7 +1370,7 @@ __global__ void launchCmapGpuBondedKernel(BondedCudaKernelParameters kernelParam
         int            fTypeTid        = tid - kernelParams.fTypeRangeStart[cmapIndex];
         const t_iatom* iatoms          = kernelParams.d_iatoms[cmapIndex];
         const auto     cmapData        = kernelParams.d_cmapData;
-        const int      cmapGridSpacing = kernelParams.d_cmapGridSpacing;
+        const int      cmapGridSpacing = kernelParams.dc_cmapGridSpacing;
         const int      cmapGridSize    = kernelParams.dc_cmapGridSize;
         fType                          = kernelParams.fTypesOnGpu[cmapIndex];
         if (calcEner)

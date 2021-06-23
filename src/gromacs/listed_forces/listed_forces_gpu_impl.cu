@@ -127,7 +127,7 @@ ListedForcesGpu::Impl::Impl(const gmx_ffparams_t& ffparams,
     kernelParams_.electrostaticsScaleFactor = electrostaticsScaleFactor;
     kernelParams_.d_forceParams             = d_forceParams_;
     kernelParams_.dc_cmapGridSize           = cmapGridSize;
-    kernelParams_.d_cmapGridSpacing         = ffparams.cmap_grid.grid_spacing;
+    kernelParams_.dc_cmapGridSpacing        = ffparams.cmap_grid.grid_spacing;
     kernelParams_.d_cmapData                = d_cmapData_;
     kernelParams_.d_vTot                    = d_vTot_;
     for (int i = 0; i < numFTypesOnGpu; i++)
