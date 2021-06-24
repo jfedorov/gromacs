@@ -685,7 +685,7 @@ __device__ void idihs_gpu(const int       i,
 
 /*! \brief Map indices into the periodic grid */
 __device__ __forceinline__ static int
-cmap_setup_grid_index(int ip, int grid_spacing, int* ipm1, int* ipp1, int* ipp2)
+cmap_setup_grid_index(int ip, const int grid_spacing, int* ipm1, int* ipp1, int* ipp2)
 {
     int im1, ip1, ip2;
 
@@ -723,7 +723,7 @@ cmap_setup_grid_index(int ip, int grid_spacing, int* ipm1, int* ipp1, int* ipp2)
     return ip;
 }
 
-__device__ __forceinline__ static float3 processCmapForceComponent(const float a,
+__device__ __forceinline__ static float4 processCmapForceComponent(const float a,
                                                                    const float b,
                                                                    const float df,
                                                                    const float gaa,
@@ -731,19 +731,9 @@ __device__ __forceinline__ static float3 processCmapForceComponent(const float a
                                                                    const float gbb,
                                                                    const float hgb)
 {
-    float3 result{ gaa * a, fga * a - hgb * b, gbb * b }; // mapping x <-> f, y <-> g, z <-> h
-    return result * df;
-}
-
-__device__ __forceinline__ static float4 applyCmapForceComponent(const float3 forceComponent)
-{
-    // forceComponent mapping is x <-> f, y <-> g, z <-> h
-    float4 forces;
-    forces.x = forceComponent.x;
-    forces.y = -forceComponent.x - forceComponent.y;
-    forces.z = forceComponent.z + forceComponent.y;
-    forces.w = -forceComponent.z;
-    return forces;
+    float3 result = make_float3(gaa * a, fga * a - hgb * b, gbb * b); // mapping x <-> f, y <-> g, z <-> h
+    result *= df;
+    return make_float4(result.x, -result.x - result.y, result.z + result.y, -result.z);
 }
 
 template<bool calcVir>
@@ -751,23 +741,22 @@ __device__ __forceinline__ static void accumulateCmapForces(float3        gm_f[]
                                                             const float4  gm_xq[],
                                                             float3        sm_fShiftLoc[],
                                                             const PbcAiuc pbcAiuc,
-                                                            float3        r_ij,
-                                                            float3        r_kj,
-                                                            float3        r_kl,
-                                                            float3        a,
-                                                            float3        b,
-                                                            float3        h,
-                                                            float         ra2r,
-                                                            float         rb2r,
-                                                            float         rgr,
-                                                            float         rg,
-                                                            int           ai,
-                                                            int           aj,
-                                                            int           ak,
-                                                            int           al,
-                                                            float         df,
-                                                            int           t1,
-                                                            int           t2)
+                                                            const float3  r_ij,
+                                                            const float3  r_kj,
+                                                            const float3  r_kl,
+                                                            const float3  a,
+                                                            const float3  b,
+                                                            const float   ra2r,
+                                                            const float   rb2r,
+                                                            const float   rgr,
+                                                            const float   rg,
+                                                            const int     ai,
+                                                            const int     aj,
+                                                            const int     ak,
+                                                            const int     al,
+                                                            const float   df,
+                                                            const int     t1,
+                                                            const int     t2)
 {
     const float fg  = iprod(r_ij, r_kj);
     const float hg  = iprod(r_kl, r_kj);
@@ -776,24 +765,13 @@ __device__ __forceinline__ static void accumulateCmapForces(float3        gm_f[]
     const float gaa = -ra2r * rg;
     const float gbb = rb2r * rg;
 
-    float3 f_i, f_j, f_k, f_l;
-    float4 forceX = applyCmapForceComponent(processCmapForceComponent(a.x, b.x, df, gaa, fga, gbb, hgb));
-    float4 forceY = applyCmapForceComponent(processCmapForceComponent(a.y, b.y, df, gaa, fga, gbb, hgb));
-    float4 forceZ = applyCmapForceComponent(processCmapForceComponent(a.z, b.z, df, gaa, fga, gbb, hgb));
-    f_i.x         = forceX.x;
-    f_j.x         = forceX.y;
-    f_k.x         = forceX.z;
-    f_l.x         = forceX.w;
-
-    f_i.y = forceY.x;
-    f_j.y = forceY.y;
-    f_k.y = forceY.z;
-    f_l.y = forceY.w;
-
-    f_i.z = forceZ.x;
-    f_j.z = forceZ.y;
-    f_k.z = forceZ.z;
-    f_l.z = forceZ.w;
+    const float4 forceX = processCmapForceComponent(a.x, b.x, df, gaa, fga, gbb, hgb);
+    const float4 forceY = processCmapForceComponent(a.y, b.y, df, gaa, fga, gbb, hgb);
+    const float4 forceZ = processCmapForceComponent(a.z, b.z, df, gaa, fga, gbb, hgb);
+    const float3 f_i    = make_float3(forceX.x, forceY.x, forceZ.x);
+    const float3 f_j    = make_float3(forceX.y, forceY.y, forceZ.y);
+    const float3 f_k    = make_float3(forceX.z, forceY.z, forceZ.z);
+    const float3 f_l    = make_float3(forceX.w, forceY.w, forceZ.w);
 
     atomicAdd(&gm_f[ai], f_i);
     atomicAdd(&gm_f[aj], f_j); /* - f[i] - g[i] */
@@ -803,7 +781,8 @@ __device__ __forceinline__ static void accumulateCmapForces(float3        gm_f[]
     /* Shift forces */
     if (calcVir)
     {
-        int t3 = pbcDxAiuc<calcVir>(pbcAiuc, gm_xq[al], gm_xq[aj], h);
+        float3 hLocal;
+        int    t3 = pbcDxAiuc<calcVir>(pbcAiuc, gm_xq[al], gm_xq[aj], hLocal);
         atomicAdd(&sm_fShiftLoc[t1], f_i);
         atomicAdd(&sm_fShiftLoc[gmx::c_centralShiftIndex], f_j);
         atomicAdd(&sm_fShiftLoc[t2], f_k);
@@ -856,8 +835,8 @@ __device__ void cmap_gpu(const int                  i,
 
         const float cos_phi1 = cos(phi1);
 
-        float3 a1 = cprod(r1_ij, r1_kj);
-        float3 b1 = cprod(r1_kl, r1_kj);
+        const float3 a1 = cprod(r1_ij, r1_kj);
+        const float3 b1 = cprod(r1_kl, r1_kj);
 
         const int ki = pbcDxAiuc<calcVir>(pbcAiuc, gm_xq[a1i], gm_xq[a1k], h1);
 
@@ -1054,7 +1033,6 @@ __device__ void cmap_gpu(const int                  i,
                                       r1_kl,
                                       a1,
                                       b1,
-                                      h1,
                                       ra2r1,
                                       rb2r1,
                                       rgr1,
@@ -1077,7 +1055,6 @@ __device__ void cmap_gpu(const int                  i,
                                       r2_kl,
                                       a2,
                                       b2,
-                                      h2,
                                       ra2r2,
                                       rb2r2,
                                       rgr2,
