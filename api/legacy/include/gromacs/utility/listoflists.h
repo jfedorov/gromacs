@@ -43,6 +43,7 @@
 #ifndef GMX_UTILITY_LISTOFLISTS_H
 #define GMX_UTILITY_LISTOFLISTS_H
 
+#include <type_traits>
 #include <vector>
 
 #include "gromacs/utility/arrayref.h"
@@ -77,8 +78,7 @@ namespace gmx
 template<typename T>
 class ListOfLists
 {
-    // TODO: Use std::is_arithmetic_v when CUDA 11 is a requirement.
-    static_assert(std::is_arithmetic<T>::value, "This class is limited to arithmetic types");
+    static_assert(std::is_arithmetic_v<T>, "This class is limited to arithmetic types");
 
 public:
     //! Constructs an empty list of lists
