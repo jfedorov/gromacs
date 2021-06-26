@@ -166,6 +166,43 @@ struct PmeGpuSpecific
     int complexGridSize[NUMFEPSTATES] = { 0, 0 };
     /*! \brief The kernelParams.grid.fourierGrid float (not float2!) element count (reserved) */
     int complexGridCapacity[NUMFEPSTATES] = { 0, 0 };
+
+    /*! \brief Buffer size used to transfer PME grid overlap region in X-dimension*/
+    int overlapXSizeLeft = 0;
+    /*! \brief Buffer capacity used to transfer PME grid overlap region in X-dimension*/
+    int overlapXCapacityLeft = 0;
+    /*! \brief Buffer size used to transfer PME grid overlap region in X-dimension*/
+    int overlapXSizeRight = 0;
+    /*! \brief Buffer capacity used to transfer PME grid overlap region in X-dimension*/
+    int overlapXCapacityRight = 0;
+    /*! \brief Buffer capacity used to send PME grid overlap region in Y-dimension*/
+    int overlapYSendSizeLeft = 0;
+    /*! \brief Buffer capacity used to send PME grid overlap region in Y-dimension*/
+    int overlapYSendCapacityLeft = 0;
+    /*! \brief Buffer size used to recv PME grid overlap region in Y-dimension*/
+    int overlapYRecvSizeLeft = 0;
+    /*! \brief Buffer capacity used to recv PME grid overlap region in Y-dimension*/
+    int overlapYRecvCapacityLeft = 0;
+    /*! \brief Buffer capacity used to send PME grid overlap region in Y-dimension*/
+    int overlapYSendSizeRight = 0;
+    /*! \brief Buffer capacity used to send PME grid overlap region in Y-dimension*/
+    int overlapYSendCapacityRight = 0;
+    /*! \brief Buffer size used to recv PME grid overlap region in Y-dimension*/
+    int overlapYRecvSizeRight = 0;
+    /*! \brief Buffer capacity used to recv PME grid overlap region in Y-dimension*/
+    int overlapYRecvCapacityRight = 0;
+    /*! \brief Buffer used to transfer PME grid overlap region in X-dimension*/
+    DeviceBuffer<float> d_recvGridLeftx = nullptr;
+    /*! \brief Buffer used to transfer PME grid overlap region in X-dimension*/
+    DeviceBuffer<float> d_recvGridRightx = nullptr;
+    /*! \brief Buffer used to send PME grid overlap region in Y-dimension*/
+    DeviceBuffer<float> d_sendGridLefty = nullptr;
+    /*! \brief Buffer used to recv PME grid overlap region in Y-dimension*/
+    DeviceBuffer<float> d_recvGridLefty = nullptr;
+    /*! \brief Buffer used to send PME grid overlap region in Y-dimension*/
+    DeviceBuffer<float> d_sendGridRighty = nullptr;
+    /*! \brief Buffer used to recv PME grid overlap region in Y-dimension*/
+    DeviceBuffer<float> d_recvGridRighty = nullptr;
 };
 
 #endif

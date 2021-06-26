@@ -185,7 +185,9 @@ void gmx_pme_reinit(gmx_pme_t**       pmedata,
                     const t_inputrec* ir,
                     const ivec        grid_size,
                     real              ewaldcoeff_q,
-                    real              ewaldcoeff_lj);
+                    real              ewaldcoeff_lj,
+                    real              rlist,
+                    real              spacing);
 
 /*! \brief Destroys the PME data structure.*/
 void gmx_pme_destroy(gmx_pme_t* pme);

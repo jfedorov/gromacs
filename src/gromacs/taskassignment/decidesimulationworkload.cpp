@@ -59,7 +59,8 @@ SimulationWorkload createSimulationWorkload(const t_inputrec& inputrec,
                                             PmeRunMode                     pmeRunMode,
                                             bool                           useGpuForBonded,
                                             bool                           useGpuForUpdate,
-                                            bool                           useGpuDirectHalo)
+                                            bool                           useGpuDirectHalo,
+                                            bool                           useGpuPmePpComm)
 {
     SimulationWorkload simulationWorkload;
     simulationWorkload.computeNonbonded = !disableNonbondedCalculation;
@@ -71,14 +72,13 @@ SimulationWorkload createSimulationWorkload(const t_inputrec& inputrec,
     simulationWorkload.useGpuNonbonded = useGpuForNonbonded;
     simulationWorkload.useCpuPme       = (pmeRunMode == PmeRunMode::CPU);
     simulationWorkload.useGpuPme = (pmeRunMode == PmeRunMode::GPU || pmeRunMode == PmeRunMode::Mixed);
-    simulationWorkload.useGpuPmeFft    = (pmeRunMode == PmeRunMode::Mixed);
+    simulationWorkload.useGpuPmeFft    = (pmeRunMode == PmeRunMode::GPU);
     simulationWorkload.useGpuBonded    = useGpuForBonded;
     simulationWorkload.useGpuUpdate    = useGpuForUpdate;
     simulationWorkload.useGpuBufferOps = (devFlags.enableGpuBufferOps || useGpuForUpdate)
                                          && !simulationWorkload.computeNonbondedAtMtsLevel1;
-    simulationWorkload.useGpuHaloExchange = useGpuDirectHalo;
-    simulationWorkload.useGpuPmePpCommunication =
-            devFlags.enableGpuPmePPComm && (pmeRunMode == PmeRunMode::GPU);
+    simulationWorkload.useGpuHaloExchange       = useGpuDirectHalo;
+    simulationWorkload.useGpuPmePpCommunication = useGpuPmePpComm;
     simulationWorkload.useGpuDirectCommunication =
             devFlags.enableGpuHaloExchange || devFlags.enableGpuPmePPComm;
     simulationWorkload.haveEwaldSurfaceContribution = haveEwaldSurfaceContribution(inputrec);

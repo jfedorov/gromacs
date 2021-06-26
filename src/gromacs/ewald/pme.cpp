@@ -191,7 +191,6 @@ static bool pme_gpu_check_restrictions(const gmx_pme_t* pme, std::string* error)
     gmx::MessageStringCollector errorReasons;
     // Before changing the prefix string, make sure that it is not searched for in regression tests.
     errorReasons.startContext("PME GPU does not support:");
-    errorReasons.appendIf((pme->nnodes != 1), "PME decomposition.");
     errorReasons.appendIf((pme->pme_order != 4), "interpolation orders other than 4.");
     errorReasons.appendIf(pme->doLJ, "Lennard-Jones PME.");
     errorReasons.appendIf(GMX_DOUBLE, "Double precision build of GROMACS.");
@@ -674,6 +673,8 @@ gmx_pme_t* gmx_pme_init(const t_commrec*     cr,
     pme->pme_order     = ir->pme_order;
     pme->ewaldcoeff_q  = ewaldcoeff_q;
     pme->ewaldcoeff_lj = ewaldcoeff_lj;
+    pme->rlist         = ir->rlist;
+    pme->spacing       = ir->fourier_spacing;
 
     /* Always constant electrostatics coefficients */
     pme->epsilon_r = ir->epsilon_r;
@@ -896,7 +897,9 @@ void gmx_pme_reinit(struct gmx_pme_t** pmedata,
                     const t_inputrec*  ir,
                     const ivec         grid_size,
                     real               ewaldcoeff_q,
-                    real               ewaldcoeff_lj)
+                    real               ewaldcoeff_lj,
+                    real               rlist,
+                    real               spacing)
 {
     // Create a copy of t_inputrec fields that are used in gmx_pme_init().
     // TODO: This would be better as just copying a sub-structure that contains
@@ -912,6 +915,8 @@ void gmx_pme_reinit(struct gmx_pme_t** pmedata,
     irc.nkx                    = grid_size[XX];
     irc.nky                    = grid_size[YY];
     irc.nkz                    = grid_size[ZZ];
+    irc.rlist                  = rlist;
+    irc.fourier_spacing        = spacing;
 
     try
     {

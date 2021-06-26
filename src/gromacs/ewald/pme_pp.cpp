@@ -413,7 +413,12 @@ void gmx_pme_send_finish(const t_commrec* cr)
             nullptr, cr, flags, {}, {}, {}, {}, {}, {}, nullptr, gmx::ArrayRef<gmx::RVec>(), 0, 0, 0, 0, -1, false, false, false, nullptr);
 }
 
-void gmx_pme_send_switchgrid(const t_commrec* cr, ivec grid_size, real ewaldcoeff_q, real ewaldcoeff_lj)
+void gmx_pme_send_switchgrid(const t_commrec* cr,
+                             ivec             grid_size,
+                             real             ewaldcoeff_q,
+                             real             ewaldcoeff_lj,
+                             real             rlist,
+                             real             spacing)
 {
 #if GMX_MPI
     gmx_pme_comm_n_box_t cnb;
@@ -425,6 +430,8 @@ void gmx_pme_send_switchgrid(const t_commrec* cr, ivec grid_size, real ewaldcoef
         copy_ivec(grid_size, cnb.grid_size);
         cnb.ewaldcoeff_q  = ewaldcoeff_q;
         cnb.ewaldcoeff_lj = ewaldcoeff_lj;
+        cnb.rlist         = rlist;
+        cnb.spacing       = spacing;
 
         /* We send this, uncommon, message blocking to simplify the code */
         MPI_Send(&cnb, sizeof(cnb), MPI_BYTE, cr->dd->pme_nodeid, eCommType_CNB, cr->mpi_comm_mysim);

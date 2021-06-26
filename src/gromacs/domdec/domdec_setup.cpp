@@ -744,7 +744,7 @@ gmx::SeparatePmeRanksPermitted checkForSeparatePmeRanks(const gmx::MDModulesNoti
                                                         const DomdecOptions&           options,
                                                         int  numRanksRequested,
                                                         bool useGpuForNonbonded,
-                                                        bool useGpuForPme)
+                                                        bool pmeDecompositionSupported)
 {
     gmx::SeparatePmeRanksPermitted separatePmeRanksPermitted;
 
@@ -762,11 +762,12 @@ gmx::SeparatePmeRanksPermitted checkForSeparatePmeRanks(const gmx::MDModulesNoti
                 "non-bonded interactions are computed on GPUs");
     }
 
-    /* If GPU is used for PME then only 1 PME rank is permitted */
-    if (useGpuForPme && (options.numPmeRanks < 0 || options.numPmeRanks > 1))
+    /* If more than one PME ranks requested, check if PME decomposition is supported */
+    if (!pmeDecompositionSupported && (options.numPmeRanks < 0 || options.numPmeRanks > 1))
     {
         separatePmeRanksPermitted.disablePmeRanks(
-                "PME GPU decomposition is not supported, only one separate PME-only GPU rank "
+                "PME GPU decomposition is not supported for current build configuration, only one "
+                "separate PME-only GPU rank "
                 "can be used");
     }
 

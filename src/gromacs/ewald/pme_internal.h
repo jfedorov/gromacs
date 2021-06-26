@@ -335,6 +335,8 @@ struct gmx_pme_t
     real ewaldcoeff_q;  /* Ewald splitting coefficient for Coulomb */
     real ewaldcoeff_lj; /* Ewald splitting coefficient for r^-6 */
     real epsilon_r;
+    real rlist;   /* rlist value */
+    real spacing; /* fourier grid spacing */
 
 
     enum PmeRunMode runMode; /* Which codepath is the PME runner taking - CPU, GPU, mixed;

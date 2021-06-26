@@ -2840,7 +2840,7 @@ public:
          real                              maxUpdateGroupRadius,
          ArrayRef<const RVec>              xGlobal,
          bool                              useGpuForNonbonded,
-         bool                              useGpuForPme);
+         bool                              pmeDecompositionSupported);
 
     //! Build the resulting DD manager
     gmx_domdec_t* build(LocalAtomSetManager* atomSets);
@@ -2895,7 +2895,7 @@ DomainDecompositionBuilder::Impl::Impl(const MDLogger&                   mdlog,
                                        const real                        maxUpdateGroupRadius,
                                        ArrayRef<const RVec>              xGlobal,
                                        bool                              useGpuForNonbonded,
-                                       bool                              useGpuForPme) :
+                                       bool pmeDecompositionSupported) :
     mdlog_(mdlog), cr_(cr), options_(options), mtop_(mtop), ir_(ir), notifiers_(notifiers)
 {
     GMX_LOG(mdlog_.info).appendTextFormatted("\nInitializing Domain Decomposition on %d ranks", cr_->sizeOfDefaultCommunicator);
@@ -2926,7 +2926,7 @@ DomainDecompositionBuilder::Impl::Impl(const MDLogger&                   mdlog,
 
     /* Checks for ability to use PME-only ranks */
     auto separatePmeRanksPermitted = checkForSeparatePmeRanks(
-            notifiers_, options_, numRanksRequested, useGpuForNonbonded, useGpuForPme);
+            notifiers_, options_, numRanksRequested, useGpuForNonbonded, pmeDecompositionSupported);
 
     /* Checks for validity of requested Ranks setup */
     checkForValidRankCountRequests(numRanksRequested,
@@ -3033,7 +3033,7 @@ DomainDecompositionBuilder::DomainDecompositionBuilder(const MDLogger&          
                                                        const real           maxUpdateGroupRadius,
                                                        ArrayRef<const RVec> xGlobal,
                                                        const bool           useGpuForNonbonded,
-                                                       const bool           useGpuForPme) :
+                                                       const bool pmeDecompositionSupported) :
     impl_(new Impl(mdlog,
                    cr,
                    options,
@@ -3047,7 +3047,7 @@ DomainDecompositionBuilder::DomainDecompositionBuilder(const MDLogger&          
                    maxUpdateGroupRadius,
                    xGlobal,
                    useGpuForNonbonded,
-                   useGpuForPme))
+                   pmeDecompositionSupported))
 {
 }
 

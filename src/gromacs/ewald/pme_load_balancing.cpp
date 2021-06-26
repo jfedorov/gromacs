@@ -880,15 +880,23 @@ static void pme_load_balance(pme_load_balancing_t*          pme_lb,
             /* Generate a new PME data structure,
              * copying part of the old pointers.
              */
-            gmx_pme_reinit(
-                    &set->pmedata, cr, pme_lb->setup[0].pmedata, &ir, set->grid, set->ewaldcoeff_q, set->ewaldcoeff_lj);
+            gmx_pme_reinit(&set->pmedata,
+                           cr,
+                           pme_lb->setup[0].pmedata,
+                           &ir,
+                           set->grid,
+                           set->ewaldcoeff_q,
+                           set->ewaldcoeff_lj,
+                           set->rlistOuter,
+                           set->spacing);
         }
         *pmedata = set->pmedata;
     }
     else
     {
         /* Tell our PME-only rank to switch grid */
-        gmx_pme_send_switchgrid(cr, set->grid, set->ewaldcoeff_q, set->ewaldcoeff_lj);
+        gmx_pme_send_switchgrid(
+                cr, set->grid, set->ewaldcoeff_q, set->ewaldcoeff_lj, set->rlistOuter, set->spacing);
     }
 
     if (debug)

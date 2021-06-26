@@ -1598,7 +1598,7 @@ void do_force(FILE*                               fplog,
 
             if (stepWork.useGpuXBufferOps)
             {
-                if (!stepWork.haveGpuPmeOnThisRank && !stepWork.useGpuXHalo)
+                if (thisRankHasDuty(cr, DUTY_PP) && !stepWork.useGpuXHalo)
                 {
                     stateGpu->copyCoordinatesToGpu(x.unpaddedArrayRef(), AtomLocality::NonLocal);
                 }

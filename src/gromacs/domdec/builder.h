@@ -91,7 +91,7 @@ public:
                                real                              maxUpdateGroupRadius,
                                ArrayRef<const RVec>              xGlobal,
                                bool                              useGpuForNonbonded,
-                               bool                              useGpuForPme);
+                               bool                              pmeDecompositionSupported);
     //! Destructor
     ~DomainDecompositionBuilder();
     //! Build the resulting DD manager
