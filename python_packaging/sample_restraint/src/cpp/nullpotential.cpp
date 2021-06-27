@@ -19,7 +19,7 @@
 namespace plugin
 {
 
-null_input_param_type makeNullParams(std::vector<int> sites)
+null_input_param_type makeNullParams(std::vector<int>&& sites)
 {
     return null_input_param_type{ std::move(sites), 0 };
 }
@@ -30,9 +30,9 @@ std::vector<int> sites(const null_input_param_type& input)
 }
 
 gmx::PotentialPointData evaluate(
-        [[maybe_unused]] gmx::Vector r1,
-        [[maybe_unused]] gmx::Vector r2,
-        [[maybe_unused]] double t,
+        gmx::Vector /*r1*/,
+        gmx::Vector /*r2*/,
+        double /*t*/,
         null_input_param_type* input)
 {
     ++input->count_;
@@ -56,7 +56,7 @@ std::vector<int> NullRestraint::sites() const
 
 NullRestraint::NullRestraint(std::vector<int>                            sites,
                              const NullRestraint::input_param_type&      params,
-                             [[maybe_unused]] std::shared_ptr<Resources> resources) : // NOLINT(performance-unnecessary-value-param)
+                             std::shared_ptr<Resources> /*resources*/) :
     data_{ std::move(sites), params.count_ }
 {
 }

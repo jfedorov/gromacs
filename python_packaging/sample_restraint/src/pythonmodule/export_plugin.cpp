@@ -296,7 +296,7 @@ public:
             siteIndices_.emplace_back(py::cast<int>(site));
         }
 
-        params_ = plugin::makeNullParams(siteIndices_);
+        params_ = plugin::makeNullParams(std::vector<int>(siteIndices_));
 
         // Note that if we want to grab a reference to the Context or its communicator, we can get
         // it here through element.workspec._context. We need a more general API solution, but this

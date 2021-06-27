@@ -36,13 +36,13 @@ struct null_input_param_type
 };
 
 //! Creation function for NullRestraint input and state data.
-null_input_param_type makeNullParams(std::vector<int> sites);
+null_input_param_type makeNullParams(std::vector<int>&& sites);
 
 //! Support the IRestraintPotential protocol.
 std::vector<int> sites(const null_input_param_type& input);
 
 //! Implement the NullRestraint force-provider.
-gmx::PotentialPointData evaluate([[maybe_unused]] gmx::Vector r1, gmx::Vector r2, double t, null_input_param_type* input);
+gmx::PotentialPointData evaluate(gmx::Vector r1, gmx::Vector r2, double t, null_input_param_type* input);
 
 //! Get the number of times evaluate has been called.
 int count(const null_input_param_type& input);
@@ -54,7 +54,7 @@ public:
 
     NullRestraint(std::vector<int>                            sites,
                   const input_param_type&                     params,
-                  [[maybe_unused]] std::shared_ptr<Resources> resources);
+                  std::shared_ptr<Resources> resources);
 
     ~NullRestraint() override = default;
     std::vector<int> sites() const override;
