@@ -751,14 +751,14 @@ gmx::SeparatePmeRanksPermitted checkForSeparatePmeRanks(const gmx::MDModulesNoti
     /* Permit MDModules to notify whether they want to use PME-only ranks */
     notifiers.simulationSetupNotifier_.notify(&separatePmeRanksPermitted);
 
-    /* With NB GPUs we don't automatically use PME-only CPU ranks. PME ranks can
-     * improve performance with many threads per GPU, since our OpenMP
+    /* With NB GPUs we don't automatically use PME-only ranks. PME-only CPU ranks can
+     * improve performance with many ranks per GPU, since our OpenMP
      * scaling is bad, but it's difficult to automate the setup.
      */
     if (useGpuForNonbonded && options.numPmeRanks < 0)
     {
         separatePmeRanksPermitted.disablePmeRanks(
-                "PME-only CPU ranks are not automatically used when "
+                "PME-only ranks are not automatically used when "
                 "non-bonded interactions are computed on GPUs");
     }
 
