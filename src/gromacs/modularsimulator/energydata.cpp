@@ -132,7 +132,7 @@ void EnergyData::Element::scheduleTask(Step step, Time time, const RegisterRunFu
     }
     auto writeEnergy                 = energyWritingStep_ == step;
     auto isEnergyCalculationStep     = energyCalculationStep_ == step;
-    auto isFreeEnergyCalculationStep = freeEnergyCalculationStep_ == step;
+    auto isFreeEnergyCalculationStep = do_per_step(step, energyData_->inputrec_->fepvals->nstdhdl);
     if (isEnergyCalculationStep || writeEnergy)
     {
         registerRunFunction([this, step, time, isEnergyCalculationStep, isFreeEnergyCalculationStep]() {
@@ -226,10 +226,6 @@ std::optional<SignallerCallback> EnergyData::Element::registerEnergyCallback(Ene
     if (event == EnergySignallerEvent::EnergyCalculationStep && isMasterRank_)
     {
         return [this](Step step, Time /*unused*/) { energyCalculationStep_ = step; };
-    }
-    if (event == EnergySignallerEvent::FreeEnergyCalculationStep && isMasterRank_)
-    {
-        return [this](Step step, Time /*unused*/) { freeEnergyCalculationStep_ = step; };
     }
     return std::nullopt;
 }
@@ -538,11 +534,7 @@ EnergyData::Element* EnergyData::element()
 }
 
 EnergyData::Element::Element(EnergyData* energyData, bool isMasterRank) :
-    energyData_(energyData),
-    isMasterRank_(isMasterRank),
-    energyWritingStep_(-1),
-    energyCalculationStep_(-1),
-    freeEnergyCalculationStep_(-1)
+    energyData_(energyData), isMasterRank_(isMasterRank), energyWritingStep_(-1), energyCalculationStep_(-1)
 {
 }
 

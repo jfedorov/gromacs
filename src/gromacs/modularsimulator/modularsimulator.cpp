@@ -157,7 +157,7 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
         builder->add<ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet>>();
         // Here, we have x / v / f at the full time step
         builder->add<StatePropagatorData::Element>();
-        if (legacySimulatorData_->inputrec->bExpanded)
+        if (legacySimulatorData_->inputrec->bExpanded || legacySimulatorData_->inputrec->bSimTemp)
         {
             builder->add<ExpandedEnsembleElement>();
         }
@@ -252,7 +252,7 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
         }
         // We have a full state at time t here
         builder->add<StatePropagatorData::Element>();
-        if (legacySimulatorData_->inputrec->bExpanded)
+        if (legacySimulatorData_->inputrec->bExpanded || legacySimulatorData_->inputrec->bSimTemp)
         {
             builder->add<ExpandedEnsembleElement>();
         }
@@ -453,10 +453,6 @@ bool ModularSimulator::isInputCompatible(bool                             exitOn
             isInputCompatible
             && conditionalAssert(!doSimulatedAnnealing(inputrec),
                                  "Simulated annealing is not supported by the modular simulator.");
-    isInputCompatible =
-            isInputCompatible
-            && conditionalAssert(!inputrec->bSimTemp,
-                                 "Simulated tempering is not supported by the modular simulator.");
     isInputCompatible =
             isInputCompatible
             && conditionalAssert(!doEssentialDynamics,

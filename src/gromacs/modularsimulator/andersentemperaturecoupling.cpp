@@ -59,6 +59,7 @@
 
 #include "compositesimulatorelement.h"
 #include "constraintelement.h"
+#include "referencetemperaturemanager.h"
 #include "simulatoralgorithm.h"
 #include "statepropagatordata.h"
 
@@ -140,10 +141,12 @@ int AndersenTemperatureCoupling::frequency() const
 }
 
 void AndersenTemperatureCoupling::updateReferenceTemperature(ArrayRef<const real> gmx_unused temperatures,
-                                                             ReferenceTemperatureChangeAlgorithm gmx_unused algorithm)
+                                                             ReferenceTemperatureChangeAlgorithm gmx_used_in_debug algorithm)
 {
-    // Currently, we don't know about any temperature change algorithms, so we assert this never gets called
-    GMX_ASSERT(false, "AndersenTemperatureCoupling: Unknown ReferenceTemperatureChangeAlgorithm.");
+    // Check that we know the reference temperature change algorithm
+    GMX_ASSERT(algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedTempering,
+               "AndersenTemperatureCoupling: Unknown ReferenceTemperatureChangeAlgorithm.");
+    // Since we have an ArrayRef on the updated ref_t in inputrec, we don't need to do anything with the new temperatures.
 }
 
 void               AndersenTemperatureCoupling::elementSetup() {}

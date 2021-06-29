@@ -59,6 +59,7 @@
 #include "gromacs/utility/strconvert.h"
 
 #include "modularsimulator.h"
+#include "referencetemperaturemanager.h"
 #include "simulatoralgorithm.h"
 
 namespace gmx
@@ -462,11 +463,11 @@ public:
     //! Adapt masses
     real updateReferenceTemperatureAndIntegral(int             temperatureGroup,
                                                real gmx_unused newTemperature,
-                                               ReferenceTemperatureChangeAlgorithm gmx_unused algorithm,
+                                               ReferenceTemperatureChangeAlgorithm gmx_used_in_debug algorithm,
                                                const TemperatureCouplingData& temperatureCouplingData) override
     {
-        // Currently, we don't know about any temperature change algorithms, so we assert this never gets called
-        GMX_ASSERT(false,
+        // Check that we know the reference temperature change algorithm
+        GMX_ASSERT(algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedTempering,
                    "NoseHooverTemperatureCoupling: Unknown ReferenceTemperatureChangeAlgorithm.");
         const bool newTemperatureIsValid =
                 (newTemperature > 0 && temperatureCouplingData.couplingTime[temperatureGroup] > 0
@@ -650,8 +651,8 @@ void VelocityScalingTemperatureCoupling::updateReferenceTemperature(ArrayRef<con
                 temperatureCouplingImpl_->updateReferenceTemperatureAndIntegral(
                         temperatureGroup, temperatures[temperatureGroup], algorithm, thermostatData);
     }
-    // Currently, we don't know about any temperature change algorithms, so we assert this never gets called
-    GMX_ASSERT(false,
+    // Check that we know the reference temperature change algorithm
+    GMX_ASSERT(algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedTempering,
                "VelocityScalingTemperatureCoupling: Unknown ReferenceTemperatureChangeAlgorithm.");
     std::copy(temperatures.begin(), temperatures.end(), referenceTemperature_.begin());
 }

@@ -70,13 +70,15 @@ class ExpandedEnsembleElement final : public ISimulatorElement, public ICheckpoi
 {
 public:
     //! Constructor
-    explicit ExpandedEnsembleElement(bool                              isMasterRank,
+    explicit ExpandedEnsembleElement(bool                              doSimulatedTempering,
+                                     bool                              isMasterRank,
                                      Step                              initialStep,
                                      int                               frequency,
                                      const EnergyData*                 energyData,
                                      const FreeEnergyPerturbationData* freeEnergyPerturbationData,
                                      FILE*                             fplog,
-                                     const t_inputrec*                 inputrec);
+                                     const t_inputrec*                 inputrec,
+                                     std::optional<ReferenceTemperatureCallback> setReferenceTemperature);
 
     //! Attempt lambda MC step and write log
     void scheduleTask(Step step, Time time, const RegisterRunFunction& registerRunFunction) override;
@@ -116,13 +118,18 @@ private:
 
     //! Helper object allowing to set new FEP state
     FepStateSetting* fepStateSetting_;
-
+    //! Callback to set new reference temperature (simulated tempering only)
+    ReferenceTemperatureCallback setReferenceTemperature_;
+    //! Whether we're changing the reference temperature
+    const bool doSimulatedTempering_;
     //! Whether this runs on master
     const bool isMasterRank_;
     //! The initial Step
     const Step initialStep_;
     //! The frequency of lambda MC steps
     const int frequency_;
+    //! Working array used for simulated tempering temperature update
+    std::vector<real> newTemperatures_;
 
     //! ILoggingSignallerClient implementation
     std::optional<SignallerCallback> registerLoggingCallback() override;

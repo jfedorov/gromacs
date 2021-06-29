@@ -56,10 +56,11 @@
 #include "gromacs/mdtypes/enerdata.h"
 
 #include "energydata.h"
-#include "velocityscalingtemperaturecoupling.h"
 #include "nosehooverchains.h"
+#include "referencetemperaturemanager.h"
 #include "simulatoralgorithm.h"
 #include "trotterhelperfunctions.h"
+#include "velocityscalingtemperaturecoupling.h"
 
 namespace gmx
 {
@@ -213,10 +214,11 @@ rvec* MttkData::boxVelocities()
 }
 
 void MttkData::updateReferenceTemperature(real temperature,
-                                          ReferenceTemperatureChangeAlgorithm gmx_unused algorithm)
+                                          ReferenceTemperatureChangeAlgorithm gmx_used_in_debug algorithm)
 {
-    // Currently, we don't know about any temperature change algorithms, so we assert this never gets called
-    GMX_ASSERT(false, "MttkData: Unknown ReferenceTemperatureChangeAlgorithm.");
+    // Check that we know the reference temperature change algorithm
+    GMX_ASSERT(algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedTempering,
+               "MttkData: Unknown ReferenceTemperatureChangeAlgorithm.");
     invMass_ *= temperature / referenceTemperature_;
     referenceTemperature_ = temperature;
 }

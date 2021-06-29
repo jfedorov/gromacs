@@ -58,6 +58,7 @@
 
 #include "energydata.h"
 #include "mttk.h"
+#include "referencetemperaturemanager.h"
 #include "simulatoralgorithm.h"
 #include "trotterhelperfunctions.h"
 #include "velocityscalingtemperaturecoupling.h"
@@ -329,10 +330,11 @@ inline bool NoseHooverGroup::isAtFullCouplingTimeStep() const
 }
 
 void NoseHooverChainsData::updateReferenceTemperature(ArrayRef<const real> temperatures,
-                                                      ReferenceTemperatureChangeAlgorithm gmx_unused algorithm)
+                                                      ReferenceTemperatureChangeAlgorithm gmx_used_in_debug algorithm)
 {
-    // Currently, we don't know about any temperature change algorithms, so we assert this never gets called
-    GMX_ASSERT(false, "NoseHooverChainsData: Unknown ReferenceTemperatureChangeAlgorithm.");
+    // Check that we know the reference temperature change algorithm
+    GMX_ASSERT(algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedTempering,
+               "NoseHooverChainsData: Unknown ReferenceTemperatureChangeAlgorithm.");
     for (auto temperatureGroup = 0; temperatureGroup < numTemperatureGroups_; ++temperatureGroup)
     {
         noseHooverGroups_[temperatureGroup].updateReferenceTemperature(temperatures[temperatureGroup]);

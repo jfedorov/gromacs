@@ -438,8 +438,6 @@ private:
     Step energyWritingStep_;
     //! The next communicated energy calculation step
     Step energyCalculationStep_;
-    //! The next communicated free energy calculation step
-    Step freeEnergyCalculationStep_;
 };
 
 } // namespace gmx

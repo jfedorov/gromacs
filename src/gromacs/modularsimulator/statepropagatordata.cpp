@@ -69,6 +69,7 @@
 
 #include "freeenergyperturbationdata.h"
 #include "modularsimulator.h"
+#include "referencetemperaturemanager.h"
 #include "simulatoralgorithm.h"
 
 namespace gmx
@@ -99,11 +100,12 @@ public:
      * \param temperatures  New reference temperatures
      * \param algorithm     The algorithm which initiated the temperature update
      */
-    void updateReferenceTemperature(ArrayRef<const real>                           temperatures,
-                                    ReferenceTemperatureChangeAlgorithm gmx_unused algorithm)
+    void updateReferenceTemperature(ArrayRef<const real> temperatures,
+                                    ReferenceTemperatureChangeAlgorithm gmx_used_in_debug algorithm)
     {
-        // Currently, we don't know about any temperature change algorithms, so we assert this never gets called
-        GMX_ASSERT(false, "StatePropagatorData: Unknown ReferenceTemperatureChangeAlgorithm.");
+        // Check that we know the reference temperature change algorithm
+        GMX_ASSERT(algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedTempering,
+                   "StatePropagatorData: Unknown ReferenceTemperatureChangeAlgorithm.");
         for (int temperatureGroup = 0; temperatureGroup < numTemperatureGroups_; ++temperatureGroup)
         {
             velocityScalingFactors_[temperatureGroup] =
