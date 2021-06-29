@@ -143,6 +143,18 @@ class PullIntegrationTest :
 {
 };
 
+//! Adds integrator and nonbonded parameter setup
+void addBasicMdpValues(MdpFieldValues* mdpFieldValues)
+{
+    (*mdpFieldValues)["nsteps"]        = "20";
+    (*mdpFieldValues)["nstcomm"]       = "10";
+    (*mdpFieldValues)["nstlist"]       = "10";
+    (*mdpFieldValues)["nstcalcenergy"] = "5";
+    (*mdpFieldValues)["nstenergy"]     = "5";
+    (*mdpFieldValues)["coulombtype"]   = "Reaction-field";
+    (*mdpFieldValues)["vdwtype"]       = "Cut-off";
+}
+
 TEST_P(PullIntegrationTest, WithinTolerances)
 {
     auto params         = GetParam();
@@ -162,14 +174,8 @@ TEST_P(PullIntegrationTest, WithinTolerances)
                 reportNumbersOfPpRanksSupported(simulationName).c_str());
         return;
     }
-    auto mdpFieldValues       = prepareMdpFieldValues(simulationName.c_str(), "md", "no", "no");
-    mdpFieldValues["nsteps"]  = "20";
-    mdpFieldValues["nstcomm"] = "10";
-    mdpFieldValues["nstlist"] = "10";
-    mdpFieldValues["nstcalcenergy"] = "5";
-    mdpFieldValues["nstenergy"]     = "5";
-    mdpFieldValues["coulombtype"]   = "Reaction-field";
-    mdpFieldValues["vdwtype"]       = "Cut-off";
+    auto mdpFieldValues = prepareMdpFieldValues(simulationName.c_str(), "md", "no", "no");
+    addBasicMdpValues(&mdpFieldValues);
 
     // Add the pull parameters
     mdpFieldValues["pull"]    = "yes";
