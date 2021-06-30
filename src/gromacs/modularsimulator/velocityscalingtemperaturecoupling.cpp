@@ -461,29 +461,34 @@ public:
     }
 
     //! Adapt masses
-    real updateReferenceTemperatureAndIntegral(int             temperatureGroup,
-                                               real gmx_unused newTemperature,
+    real updateReferenceTemperatureAndIntegral(int  temperatureGroup,
+                                               real newTemperature,
                                                ReferenceTemperatureChangeAlgorithm gmx_used_in_debug algorithm,
                                                const TemperatureCouplingData& temperatureCouplingData) override
     {
         // Check that we know the reference temperature change algorithm
-        GMX_ASSERT(algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedTempering,
+        GMX_ASSERT(algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedTempering
+                           || algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedAnnealing,
                    "NoseHooverTemperatureCoupling: Unknown ReferenceTemperatureChangeAlgorithm.");
-        const bool newTemperatureIsValid =
-                (newTemperature > 0 && temperatureCouplingData.couplingTime[temperatureGroup] > 0
-                 && temperatureCouplingData.numDegreesOfFreedom[temperatureGroup] > 0);
-        const bool oldTemperatureIsValid =
-                (temperatureCouplingData.referenceTemperature[temperatureGroup] > 0
-                 && temperatureCouplingData.couplingTime[temperatureGroup] > 0
-                 && temperatureCouplingData.numDegreesOfFreedom[temperatureGroup] > 0);
-        GMX_RELEASE_ASSERT(newTemperatureIsValid == oldTemperatureIsValid,
-                           "Cannot turn temperature coupling on / off during simulation run.");
-        if (oldTemperatureIsValid && newTemperatureIsValid)
+        if (algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedAnnealing)
         {
-            invXiMass_[temperatureGroup] *=
-                    (temperatureCouplingData.referenceTemperature[temperatureGroup] / newTemperature);
-            xiVelocities_[temperatureGroup] *= std::sqrt(
-                    newTemperature / temperatureCouplingData.referenceTemperature[temperatureGroup]);
+            // Not changing the reference temperature for simulated annealing for compatibility with the legacy simulator
+            const bool newTemperatureIsValid =
+                    (newTemperature > 0 && temperatureCouplingData.couplingTime[temperatureGroup] > 0
+                     && temperatureCouplingData.numDegreesOfFreedom[temperatureGroup] > 0);
+            const bool oldTemperatureIsValid =
+                    (temperatureCouplingData.referenceTemperature[temperatureGroup] > 0
+                     && temperatureCouplingData.couplingTime[temperatureGroup] > 0
+                     && temperatureCouplingData.numDegreesOfFreedom[temperatureGroup] > 0);
+            GMX_RELEASE_ASSERT(newTemperatureIsValid == oldTemperatureIsValid,
+                               "Cannot turn temperature coupling on / off during simulation run.");
+            if (oldTemperatureIsValid && newTemperatureIsValid)
+            {
+                invXiMass_[temperatureGroup] *=
+                        (temperatureCouplingData.referenceTemperature[temperatureGroup] / newTemperature);
+                xiVelocities_[temperatureGroup] *= std::sqrt(
+                        newTemperature / temperatureCouplingData.referenceTemperature[temperatureGroup]);
+            }
         }
         return integral(temperatureGroup,
                         temperatureCouplingData.numDegreesOfFreedom[temperatureGroup],
@@ -652,7 +657,8 @@ void VelocityScalingTemperatureCoupling::updateReferenceTemperature(ArrayRef<con
                         temperatureGroup, temperatures[temperatureGroup], algorithm, thermostatData);
     }
     // Check that we know the reference temperature change algorithm
-    GMX_ASSERT(algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedTempering,
+    GMX_ASSERT(algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedTempering
+                       || algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedAnnealing,
                "VelocityScalingTemperatureCoupling: Unknown ReferenceTemperatureChangeAlgorithm.");
     std::copy(temperatures.begin(), temperatures.end(), referenceTemperature_.begin());
 }

@@ -72,6 +72,7 @@ enum class MdpParameterDatabase
     Default,
     Pull,
     Awh,
+    SimulatedAnnealing,
     Count
 };
 

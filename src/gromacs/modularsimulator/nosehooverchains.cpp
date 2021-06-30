@@ -333,14 +333,19 @@ void NoseHooverChainsData::updateReferenceTemperature(ArrayRef<const real> tempe
                                                       ReferenceTemperatureChangeAlgorithm gmx_used_in_debug algorithm)
 {
     // Check that we know the reference temperature change algorithm
-    GMX_ASSERT(algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedTempering,
+    GMX_ASSERT(algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedTempering
+                       || algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedAnnealing,
                "NoseHooverChainsData: Unknown ReferenceTemperatureChangeAlgorithm.");
-    for (auto temperatureGroup = 0; temperatureGroup < numTemperatureGroups_; ++temperatureGroup)
+    if (algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedAnnealing)
     {
-        noseHooverGroups_[temperatureGroup].updateReferenceTemperature(temperatures[temperatureGroup]);
-        if (noseHooverGroups_[temperatureGroup].isAtFullCouplingTimeStep())
+        // Not changing the reference temperature for simulated annealing for compatibility with the legacy simulator
+        for (auto temperatureGroup = 0; temperatureGroup < numTemperatureGroups_; ++temperatureGroup)
         {
-            noseHooverGroups_[temperatureGroup].calculateIntegral();
+            noseHooverGroups_[temperatureGroup].updateReferenceTemperature(temperatures[temperatureGroup]);
+            if (noseHooverGroups_[temperatureGroup].isAtFullCouplingTimeStep())
+            {
+                noseHooverGroups_[temperatureGroup].calculateIntegral();
+            }
         }
     }
 }

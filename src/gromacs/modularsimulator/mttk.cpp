@@ -217,9 +217,14 @@ void MttkData::updateReferenceTemperature(real temperature,
                                           ReferenceTemperatureChangeAlgorithm gmx_used_in_debug algorithm)
 {
     // Check that we know the reference temperature change algorithm
-    GMX_ASSERT(algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedTempering,
+    GMX_ASSERT(algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedTempering
+                       || algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedAnnealing,
                "MttkData: Unknown ReferenceTemperatureChangeAlgorithm.");
-    invMass_ *= temperature / referenceTemperature_;
+    if (algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedAnnealing)
+    {
+        // Not changing the masses for simulated annealing for compatibility with the legacy simulator
+        invMass_ *= temperature / referenceTemperature_;
+    }
     referenceTemperature_ = temperature;
 }
 

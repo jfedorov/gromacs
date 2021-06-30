@@ -308,6 +308,25 @@ INSTANTIATE_TEST_CASE_P(
                         ::testing::Values("no", "Parrinello-Rahman", "berendsen", "c-rescale"),
                         ::testing::Values(MdpParameterDatabase::Default)),
                 ::testing::Values("GMX_USE_MODULAR_SIMULATOR")));
+INSTANTIATE_TEST_CASE_P(
+        SimulatorsAreEquivalentDefaultModularSimulatedAnnealing,
+        SimulatorComparisonTest,
+        ::testing::Combine(::testing::Combine(::testing::Values("spc-and-methanol"),
+                                              ::testing::Values("md-vv"),
+                                              ::testing::Values("v-rescale", "nose-hoover"),
+                                              ::testing::Values("no", "c-rescale", "mttk"),
+                                              ::testing::Values(MdpParameterDatabase::SimulatedAnnealing)),
+                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR")));
+INSTANTIATE_TEST_CASE_P(
+        SimulatorsAreEquivalentDefaultLegacySimulatedAnnealing,
+        SimulatorComparisonTest,
+        ::testing::Combine(
+                ::testing::Combine(::testing::Values("spc-and-methanol"),
+                                   ::testing::Values("md"),
+                                   ::testing::Values("no", "v-rescale", "nose-hoover"),
+                                   ::testing::Values("no", "parrinello-rahman", "c-rescale"),
+                                   ::testing::Values(MdpParameterDatabase::SimulatedAnnealing)),
+                ::testing::Values("GMX_USE_MODULAR_SIMULATOR")));
 #else
 INSTANTIATE_TEST_CASE_P(
         DISABLED_SimulatorsAreEquivalentDefaultModular,
@@ -334,6 +353,25 @@ INSTANTIATE_TEST_CASE_P(
                         ::testing::Values("no", "v-rescale", "berendsen", "nose-hoover"),
                         ::testing::Values("no", "Parrinello-Rahman", "berendsen", "c-rescale"),
                         ::testing::Values(MdpParameterDatabase::Default)),
+                ::testing::Values("GMX_USE_MODULAR_SIMULATOR")));
+INSTANTIATE_TEST_CASE_P(
+        DISABLED_SimulatorsAreEquivalentDefaultModularSimulatedAnnealing,
+        SimulatorComparisonTest,
+        ::testing::Combine(::testing::Combine(::testing::Values("spc-and-methanol"),
+                                              ::testing::Values("md-vv"),
+                                              ::testing::Values("v-rescale", "nose-hoover"),
+                                              ::testing::Values("no", "c-rescale", "mttk"),
+                                              ::testing::Values(MdpParameterDatabase::SimulatedAnnealing)),
+                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR")));
+INSTANTIATE_TEST_CASE_P(
+        DISABLED_SimulatorsAreEquivalentDefaultLegacySimulatedAnnealing,
+        SimulatorComparisonTest,
+        ::testing::Combine(
+                ::testing::Combine(::testing::Values("spc-and-methanol"),
+                                   ::testing::Values("md"),
+                                   ::testing::Values("no", "v-rescale", "nose-hoover"),
+                                   ::testing::Values("no", "parrinello-rahman", "c-rescale"),
+                                   ::testing::Values(MdpParameterDatabase::SimulatedAnnealing)),
                 ::testing::Values("GMX_USE_MODULAR_SIMULATOR")));
 #endif
 

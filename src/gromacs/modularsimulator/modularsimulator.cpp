@@ -85,6 +85,7 @@
 #include "nosehooverchains.h"
 #include "parrinellorahmanbarostat.h"
 #include "simulatoralgorithm.h"
+#include "simulatedannealing.h"
 #include "statepropagatordata.h"
 #include "velocityscalingtemperaturecoupling.h"
 
@@ -113,6 +114,10 @@ void ModularSimulator::addIntegrationElements(ModularSimulatorAlgorithmBuilder* 
     const bool isTrotter = inputrecNvtTrotter(legacySimulatorData_->inputrec)
                            || inputrecNptTrotter(legacySimulatorData_->inputrec)
                            || inputrecNphTrotter(legacySimulatorData_->inputrec);
+    if (doSimulatedAnnealing(legacySimulatorData_->inputrec))
+    {
+        builder->add<SimulatedAnnealingElement>();
+    }
     if (legacySimulatorData_->inputrec->eI == IntegrationAlgorithm::MD)
     {
         // The leap frog integration algorithm
@@ -449,10 +454,6 @@ bool ModularSimulator::isInputCompatible(bool                             exitOn
             isInputCompatible
             && conditionalAssert(numEnsembleRestraintSystems <= 1,
                                  "Ensemble restraints are not supported by the modular simulator.");
-    isInputCompatible =
-            isInputCompatible
-            && conditionalAssert(!doSimulatedAnnealing(inputrec),
-                                 "Simulated annealing is not supported by the modular simulator.");
     isInputCompatible =
             isInputCompatible
             && conditionalAssert(!doEssentialDynamics,

@@ -104,27 +104,33 @@ public:
                                     ReferenceTemperatureChangeAlgorithm gmx_used_in_debug algorithm)
     {
         // Check that we know the reference temperature change algorithm
-        GMX_ASSERT(algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedTempering,
+        GMX_ASSERT(algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedTempering
+                           || algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedAnnealing,
                    "StatePropagatorData: Unknown ReferenceTemperatureChangeAlgorithm.");
-        for (int temperatureGroup = 0; temperatureGroup < numTemperatureGroups_; ++temperatureGroup)
+        if (algorithm != ReferenceTemperatureChangeAlgorithm::SimulatedAnnealing)
         {
-            velocityScalingFactors_[temperatureGroup] =
-                    std::sqrt(temperatures[temperatureGroup] / referenceTemperature_[temperatureGroup]);
-        }
+            // Not scaling the velocities for simulated annealing for compatibility with the legacy simulator
+            for (int temperatureGroup = 0; temperatureGroup < numTemperatureGroups_; ++temperatureGroup)
+            {
+                velocityScalingFactors_[temperatureGroup] = std::sqrt(
+                        temperatures[temperatureGroup] / referenceTemperature_[temperatureGroup]);
+            }
 
-        auto velocities = statePropagatorData_->velocitiesView().unpaddedArrayRef();
-        int  nth        = gmx_omp_nthreads_get(ModuleMultiThread::Update);
+            auto velocities = statePropagatorData_->velocitiesView().unpaddedArrayRef();
+            int  nth        = gmx_omp_nthreads_get(ModuleMultiThread::Update);
 #pragma omp parallel for num_threads(nth) schedule(static) default(none) \
         shared(nth, velocityScalingFactors_, velocities)
-        for (int threadIndex = 0; threadIndex < nth; threadIndex++)
-        {
-            int startAtom = 0;
-            int endAtom   = 0;
-            getThreadAtomRange(nth, threadIndex, statePropagatorData_->localNAtoms_, &startAtom, &endAtom);
-            for (int atomIdx = startAtom; atomIdx < endAtom; ++atomIdx)
+            for (int threadIndex = 0; threadIndex < nth; threadIndex++)
             {
-                const int temperatureGroup = (mdatoms_->cTC != nullptr) ? mdatoms_->cTC[atomIdx] : 0;
-                velocities[atomIdx] *= velocityScalingFactors_[temperatureGroup];
+                int startAtom = 0;
+                int endAtom   = 0;
+                getThreadAtomRange(
+                        nth, threadIndex, statePropagatorData_->localNAtoms_, &startAtom, &endAtom);
+                for (int atomIdx = startAtom; atomIdx < endAtom; ++atomIdx)
+                {
+                    const int temperatureGroup = (mdatoms_->cTC != nullptr) ? mdatoms_->cTC[atomIdx] : 0;
+                    velocities[atomIdx] *= velocityScalingFactors_[temperatureGroup];
+                }
             }
         }
         std::copy(temperatures.begin(), temperatures.end(), referenceTemperature_.begin());

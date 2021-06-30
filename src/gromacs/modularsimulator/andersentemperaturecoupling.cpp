@@ -144,7 +144,8 @@ void AndersenTemperatureCoupling::updateReferenceTemperature(ArrayRef<const real
                                                              ReferenceTemperatureChangeAlgorithm gmx_used_in_debug algorithm)
 {
     // Check that we know the reference temperature change algorithm
-    GMX_ASSERT(algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedTempering,
+    GMX_ASSERT(algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedTempering
+                       || algorithm == ReferenceTemperatureChangeAlgorithm::SimulatedAnnealing,
                "AndersenTemperatureCoupling: Unknown ReferenceTemperatureChangeAlgorithm.");
     // Since we have an ArrayRef on the updated ref_t in inputrec, we don't need to do anything with the new temperatures.
 }
