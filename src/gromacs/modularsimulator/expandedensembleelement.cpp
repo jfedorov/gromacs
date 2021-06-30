@@ -204,10 +204,10 @@ ExpandedEnsembleElement::ExpandedEnsembleElement(bool                           
 ISimulatorElement* ExpandedEnsembleElement::getElementPointerImpl(
         LegacySimulatorData*                    legacySimulatorData,
         ModularSimulatorAlgorithmBuilderHelper* builderHelper,
-        StatePropagatorData* gmx_unused         statePropagatorData,
-        EnergyData*                             energyData,
-        FreeEnergyPerturbationData*             freeEnergyPerturbationData,
-        GlobalCommunicationHelper* gmx_unused   globalCommunicationHelper)
+        StatePropagatorData gmx_unused* statePropagatorData,
+        EnergyData*                     energyData,
+        FreeEnergyPerturbationData*     freeEnergyPerturbationData,
+        GlobalCommunicationHelper gmx_unused* globalCommunicationHelper)
 {
     return builderHelper->storeElement(std::make_unique<ExpandedEnsembleElement>(
             MASTER(legacySimulatorData->cr),
