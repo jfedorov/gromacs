@@ -1596,7 +1596,7 @@ static void applyTransformationPullCoordForce(pull_coord_work_t*               p
                "We should have as many variable coords as the coord index of the transformation "
                "coordinate");
 
-    pcrd->scalarForce = transformationCoordForce;
+    pcrd->scalarForce = transformationCoordForce; //TODO don't override the force here. pass it onto the derivative instead
     for (auto& variableCoord : variableCoords)
     {
         if (variableCoord.params.eGeom == PullGroupGeometry::Transformation)

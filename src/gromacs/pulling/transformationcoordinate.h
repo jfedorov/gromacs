@@ -69,8 +69,10 @@ double getTransformationPullCoordinateValue(pull_coord_work_t*                co
 
 /*! \brief Calculates and returns the force from transformation pull coordinate on a dependent coordinate
  *
- * Note: this requires that getTransformationPullCoordinateValue() has been called
+ * Note #1: this requires that getTransformationPullCoordinateValue() has been called
  * before with the current coordinates.
+ *
+ * Note #2: this method will not compute inner derivates. That is taken care of in the regular pull code
  *
  * \param[in] coord  The (transformation) coordinate to compute the value for
  * \param[in] variablePcrdIndex Pull coordinate index of a variable.

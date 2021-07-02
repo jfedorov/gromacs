@@ -104,8 +104,11 @@ double computeForceFromTransformationPullCoord(pull_coord_work_t* coord, const i
                "The variable index should be in range of the transformation coordinate");
 
     // epsilon for numerical differentiation.
-    const double epsilon                 = c_pullTransformationCoordinateDifferentationEpsilon;
     const double transformationPcrdValue = coord->spatialData.value;
+    //set the value of the finite difference.
+    //Since transformation pull coordinates may be of very different scales, this is more robust than
+    //using an absolut value
+    const double epsilon                 = c_pullTransformationCoordinateDifferentationEpsilon * transformationPcrdValue;
     // Perform numerical differentiation of 1st order
     const double valueBackup = coord->transformationVariables[variablePcrdIndex];
     coord->transformationVariables[variablePcrdIndex] += epsilon;
