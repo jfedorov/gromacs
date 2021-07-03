@@ -74,8 +74,8 @@ double getTransformationPullCoordinateValue(pull_coord_work_t*                co
  * \param[in] transformationCoordForce  The force working on coord \p pcrd
  */
 void applyTransformationPullCoordForce(pull_coord_work_t*               pcrd,
-                                              gmx::ArrayRef<pull_coord_work_t> variableCoords,
-                                              const double transformationCoordForce);
+                                       gmx::ArrayRef<pull_coord_work_t> variableCoords,
+                                       double                           transformationCoordForce);
 
 } // namespace gmx
 

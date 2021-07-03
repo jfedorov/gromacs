@@ -2524,4 +2524,3 @@ bool pull_have_constraint(const pull_params_t& pullParameters)
     }
     return false;
 }
-
