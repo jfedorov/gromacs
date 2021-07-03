@@ -118,7 +118,9 @@ static double computeDerivativeForTransformationPullCoord(pull_coord_work_t* coo
     // set the value of the finite difference.
     // Since transformation pull coordinates may be of very different scales, this is more robust
     // than using an absolut value
-    const double epsilon = c_pullTransformationCoordinateDifferentationEpsilon * transformationPcrdValue;
+    double epsilon =
+            std::abs(c_pullTransformationCoordinateDifferentationEpsilon * transformationPcrdValue);
+    epsilon = std::max(epsilon, 1e-14); // avoid division by zero
     // Perform numerical differentiation of 1st order
     const double valueBackup = coord->transformationVariables[variablePcrdIndex];
     coord->transformationVariables[variablePcrdIndex] += epsilon;
@@ -175,7 +177,9 @@ static void distributeTransformationPullCoordForce(pull_coord_work_t*           
                         variableCoord.params.coordIndex,
                         variablePcrdForce);
             }
-            // TODO for non-transformation, just set scalarForce
+            // Note that we add to the force here, in case multiple biases act on the same pull
+            // coord (although that is not recommended it should still work)
+            variableCoord.scalarForce += variablePcrdForce;
             if (variableCoord.params.eGeom == PullGroupGeometry::Transformation)
             {
                 /*
@@ -185,15 +189,10 @@ static void distributeTransformationPullCoordForce(pull_coord_work_t*           
                  *
                  * Note that this only works properly if the lower ranked transformation pull coordinate has it's scalarForce set to zero
                  */
-                applyTransformationPullCoordForce(&variableCoord,
-                                                  variableCoords.subArray(0, variableCoord.params.coordIndex),
-                                                  variablePcrdForce);
-            }
-            else
-            {
-                // Note that we add to the force here, in case multiple biases act on the same pull
-                // coord (although that is not recommended it should still work)
-                variableCoord.scalarForce += variablePcrdForce;
+                distributeTransformationPullCoordForce(
+                        &variableCoord,
+                        variableCoords.subArray(0, variableCoord.params.coordIndex),
+                        variablePcrdForce);
             }
         }
     }
