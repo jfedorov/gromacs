@@ -67,17 +67,15 @@ constexpr double c_pullTransformationCoordinateDifferentationEpsilon = 1e-9;
 double getTransformationPullCoordinateValue(pull_coord_work_t*                coord,
                                             ArrayRef<const pull_coord_work_t> variableCoords);
 
-/*! \brief Calculates and returns the force from transformation pull coordinate on a dependent coordinate
+/*! \brief Applies a force of a transformation pull coordinate and distributes it to pull coordinates of lower rank
  *
- * Note #1: this requires that getTransformationPullCoordinateValue() has been called
- * before with the current coordinates.
- *
- * Note #2: this method will not compute inner derivates. That is taken care of in the regular pull code
- *
- * \param[in] coord  The (transformation) coordinate to compute the value for
- * \param[in] variablePcrdIndex Pull coordinate index of a variable.
+ * \param[in,out] pcrd            The transformation pull coordinate to act on
+ * \param[in,out] variableCoords  List of variable coords up to the coord index of \p pcrd
+ * \param[in] transformationCoordForce  The force working on coord \p pcrd
  */
-double computeForceFromTransformationPullCoord(pull_coord_work_t* coord, int variablePcrdIndex);
+void applyTransformationPullCoordForce(pull_coord_work_t*               pcrd,
+                                              gmx::ArrayRef<pull_coord_work_t> variableCoords,
+                                              const double transformationCoordForce);
 
 } // namespace gmx
 
