@@ -54,9 +54,6 @@ namespace gmx
 template<typename>
 class ArrayRef;
 
-//! computeForceFromTransformationPullCoord() computes the derivative using a finite difference with this value of epsilon
-constexpr double c_pullTransformationCoordinateDifferentationEpsilon = 1e-9;
-
 /*! \brief Calculates pull->coord[coord_ind].spatialData.value for a transformation pull coordinate
  *
  * This requires the values of the pull coordinates of lower indices to be set

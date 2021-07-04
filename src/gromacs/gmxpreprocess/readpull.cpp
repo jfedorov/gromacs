@@ -317,6 +317,13 @@ static void init_pull_coord(t_pull_coord*        pcrd,
                     "'transformation'",
                     coord_index_for_output)));
         }
+        if (pcrd->dx == 0)
+        {
+            GMX_THROW(gmx::InvalidInputError(gmx::formatString(
+                    "pull-coord%d-dx cannot be set to zero for pull coordinate of geometry "
+                    "'transformation'",
+                    coord_index_for_output)));
+        }
         /* make sure that the kappa of all previous pull coords is 0*/
         int previousCoordOutputIndex = 0;
         for (const auto& previousPcrd : pull.coord)
@@ -422,6 +429,8 @@ std::vector<std::string> read_pullparams(std::vector<t_inpfile>* inp, pull_param
         sprintf(buf, "pull-coord%d-expression", coordNum);
         setStringEntry(inp, buf, expression, "");
         pullCoord.expression = expression;
+        sprintf(buf, "pull-coord%d-dx", coordNum);
+        pullCoord.dx = get_ereal(inp, buf, 1e-9, wi);
         sprintf(buf, "pull-coord%d-geometry", coordNum);
         pullCoord.eGeom = getEnum<PullGroupGeometry>(inp, buf, wi);
         sprintf(buf, "pull-coord%d-groups", coordNum);
@@ -447,11 +456,13 @@ std::vector<std::string> read_pullparams(std::vector<t_inpfile>* inp, pull_param
                        &idum);
         if (nscan != pullCoord.ngroup)
         {
-            auto message =
-                    gmx::formatString("%s should contain %d pull group indices with geometry %s",
-                                      buf,
-                                      pullCoord.ngroup,
-                                      enumValueToString(pullCoord.eGeom));
+            auto message = gmx::formatString(
+                    "%s should contain %d pull group indices with geometry %s."
+                    "Found %d groups.",
+                    buf,
+                    pullCoord.ngroup,
+                    enumValueToString(pullCoord.eGeom),
+                    nscan);
             set_warning_line(wi, nullptr, -1);
             warning_error(wi, message);
         }

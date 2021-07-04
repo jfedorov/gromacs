@@ -115,17 +115,12 @@ static double computeDerivativeForTransformationPullCoord(pull_coord_work_t* coo
 
     // epsilon for numerical differentiation.
     const double transformationPcrdValue = coord->spatialData.value;
-    // set the value of the finite difference.
-    // Since transformation pull coordinates may be of very different scales, this is more robust
-    // than using an absolut value
-    double epsilon =
-            std::abs(c_pullTransformationCoordinateDifferentationEpsilon * transformationPcrdValue);
-    epsilon = std::max(epsilon, 1e-14); // avoid division by zero
     // Perform numerical differentiation of 1st order
     const double valueBackup = coord->transformationVariables[variablePcrdIndex];
-    coord->transformationVariables[variablePcrdIndex] += epsilon;
+    double       dx          = coord->params.dx;
+    coord->transformationVariables[variablePcrdIndex] += dx;
     double transformationPcrdValueEps = getTransformationPullCoordinateValue(coord);
-    double derivative = (transformationPcrdValueEps - transformationPcrdValue) / epsilon;
+    double derivative                 = (transformationPcrdValueEps - transformationPcrdValue) / dx;
     // reset pull coordinate value
     coord->transformationVariables[variablePcrdIndex] = valueBackup;
     return derivative;

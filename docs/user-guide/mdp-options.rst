@@ -1808,6 +1808,15 @@ pull-coord2-vec, pull-coord2-k, and so on.
    The mathematical expression are evaluated using muParser.
    Only relevant if :mdp:`pull-coord1-geometry` is set to :mdp-value:`transformation`.
 
+.. mdp:: pull-coord1-dx
+
+   (1e-9)
+   Size of finite difference to use in numerical derivation of the pull coordinate
+   with respect to other pull coordinates.
+   The current implementation uses a simple first order finite difference method to perform derivation so that
+   f'(x) = (f(x+dx)-f(x))/dx
+   Only relevant if :mdp:`pull-coord1-geometry` is set to :mdp-value:`transformation`.
+
 .. mdp:: pull-coord1-groups
 
    The group indices on which this pull coordinate will operate.
