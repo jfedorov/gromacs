@@ -82,6 +82,8 @@ struct t_pull_coord
     PullGroupGeometry eGeom = PullGroupGeometry::Distance;
     //! Mathematical expression evaluated by the pull code for transformation coordinates.
     std::string expression;
+    //! The finite difference to use in numerical derivation of mathematical expressions
+    double dx = 1e-9;
     //! The number of groups, depends on eGeom
     int ngroup = 0;
     /*! \brief The pull groups:
