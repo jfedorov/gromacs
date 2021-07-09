@@ -1571,62 +1571,6 @@ static void apply_default_pull_coord_force(pull_t*                   pull,
                        as_rvec_array(forceWithVirial->force_.data()));
 }
 
-/*! \brief Applies a force of a transformation pull coordinate and distributes it to pull coordinates of lower rank
- *
- * \param[in,out] pcrd            The transformation pull coordinate to act on
- * \param[in,out] variableCoords  List of variable coords up to the coord index of \p pcrd
- * \param[in] transformationCoordForce  The force working on coord \p pcrd
- * \param[in] masses           Atom masses
- * \param[in] forceWithVirial  Atom force and virial object
- */
-static void applyTransformationPullCoordForce(pull_coord_work_t*               pcrd,
-                                              gmx::ArrayRef<pull_coord_work_t> variableCoords,
-                                              const double              transformationCoordForce,
-                                              gmx::ArrayRef<const real> masses,
-                                              gmx::ForceWithVirial*     forceWithVirial)
-{
-    if (std::abs(transformationCoordForce) < 1e-9)
-    {
-        // the force is effectively 0. Don't proceed and distribute it recursively
-        return;
-    }
-    GMX_ASSERT(pcrd->params.eGeom == PullGroupGeometry::Transformation,
-               "We shouldn't end up here when not using a transformation pull coordinate.");
-    GMX_ASSERT(ssize(variableCoords) == pcrd->params.coordIndex,
-               "We should have as many variable coords as the coord index of the transformation "
-               "coordinate");
-
-    pcrd->scalarForce = transformationCoordForce;
-    for (auto& variableCoord : variableCoords)
-    {
-        if (variableCoord.params.eGeom == PullGroupGeometry::Transformation)
-        {
-            /*
-             * We can have a transformation pull coordinate depend on another sub-transformation pull coordinate
-             * as long as it has force constant set to 0.
-             * The real non-transformation pull coordinates will have the force distributed directly from
-             * the highest ranked transformation coordinate with a force constant != 0 by numerical
-             * differentiation. This check avoids redistributing the force twice in those cases.
-             */
-            return;
-        }
-        const double variablePcrdForce =
-                gmx::computeForceFromTransformationPullCoord(pcrd, variableCoord.params.coordIndex);
-        /* Since we loop over all pull coordinates with smaller index, there can be ones
-         * that are not referenced by the transformation coordinate. Avoid apply forces
-         * on those by skipping application of zero force.
-         */
-        if (variablePcrdForce != 0)
-        {
-            applyTransformationPullCoordForce(&variableCoord,
-                                              variableCoords.subArray(0, variableCoord.params.coordIndex),
-                                              variablePcrdForce,
-                                              masses,
-                                              forceWithVirial);
-        }
-    }
-}
-
 /* Pull takes care of adding the forces of the external potential.
  * The external potential module  has to make sure that the corresponding
  * potential energy is added either to the pull term or to a term
@@ -1656,12 +1600,10 @@ void apply_external_pull_coord_force(struct pull_t*        pull,
 
         if (pcrd->params.eGeom == PullGroupGeometry::Transformation)
         {
-            applyTransformationPullCoordForce(
+            gmx::applyTransformationPullCoordForce(
                     pcrd,
                     gmx::ArrayRef<pull_coord_work_t>(pull->coord).subArray(0, pcrd->params.coordIndex),
-                    coord_force,
-                    masses,
-                    forceWithVirial);
+                    coord_force);
         }
         else
         {
@@ -1739,12 +1681,10 @@ real pull_potential(struct pull_t*        pull,
 
             if (pcrd.params.eGeom == PullGroupGeometry::Transformation)
             {
-                applyTransformationPullCoordForce(
+                gmx::applyTransformationPullCoordForce(
                         &pcrd,
                         gmx::ArrayRef<pull_coord_work_t>(pull->coord).subArray(0, pcrd.params.coordIndex),
-                        pcrd.scalarForce,
-                        masses,
-                        force);
+                        pcrd.scalarForce);
             }
             else
             {
