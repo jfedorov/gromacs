@@ -345,23 +345,6 @@ static void init_pull_coord(t_pull_coord*        pcrd,
                                           coord_index_for_output,
                                           previousCoordOutputIndex)));
             }
-            if (previousPcrd.k > 0)
-            {
-                /* This use case should be revisited in the future, as
-                 * we might want to allow this but there is currently
-                 * no way to make sure it actually works.
-                 */
-                GMX_THROW(gmx::InvalidInputError(gmx::formatString(
-                        "pull-coord%d-k must be set to zero "
-                        "since pull-coord%d-geometry=transformation.\n Met"
-                        "Transformation coordinates and their variables must occur first. "
-                        "Change the order of the pull coordinates if "
-                        "pull-coord%d does not depend on pull-coord%d",
-                        previousCoordOutputIndex,
-                        coord_index_for_output,
-                        previousCoordOutputIndex,
-                        coord_index_for_output)));
-            }
         }
     }
 
