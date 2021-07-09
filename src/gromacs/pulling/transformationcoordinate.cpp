@@ -98,34 +98,107 @@ double getTransformationPullCoordinateValue(pull_coord_work_t*                co
     return getTransformationPullCoordinateValue(coord);
 }
 
-double computeForceFromTransformationPullCoord(pull_coord_work_t* coord, const int variablePcrdIndex)
+/*! \brief Calculates and returns the derivative of a transformation pull coordinate from a dependent coordinate
+ *
+ * Note #1: this requires that getTransformationPullCoordinateValue() has been called
+ * before with the current coordinates.
+ *
+ * Note #2: this method will not compute inner derivates. That is taken care of in the regular pull code
+ *
+ * \param[in] coord  The (transformation) coordinate to compute the value for
+ * \param[in] variablePcrdIndex Pull coordinate index of a variable.
+ */
+static double computeDerivativeForTransformationPullCoord(pull_coord_work_t* coord, const int variablePcrdIndex)
 {
     GMX_ASSERT(variablePcrdIndex >= 0 && variablePcrdIndex < coord->params.coordIndex,
                "The variable index should be in range of the transformation coordinate");
 
     // epsilon for numerical differentiation.
-    const double epsilon                 = c_pullTransformationCoordinateDifferentationEpsilon;
     const double transformationPcrdValue = coord->spatialData.value;
     // Perform numerical differentiation of 1st order
     const double valueBackup = coord->transformationVariables[variablePcrdIndex];
-    coord->transformationVariables[variablePcrdIndex] += epsilon;
+    double       dx          = coord->params.dx;
+    coord->transformationVariables[variablePcrdIndex] += dx;
     double transformationPcrdValueEps = getTransformationPullCoordinateValue(coord);
-    double derivative = (transformationPcrdValueEps - transformationPcrdValue) / epsilon;
+    double derivative                 = (transformationPcrdValueEps - transformationPcrdValue) / dx;
     // reset pull coordinate value
     coord->transformationVariables[variablePcrdIndex] = valueBackup;
-    double result                                     = coord->scalarForce * derivative;
-    if (debug)
+    return derivative;
+}
+
+/**
+ * Distributes the force from a transformation pull coordiante to the dependent pull coordinates
+ * by computing the inner derivatives
+ * @param pcrd the transformation pull coord
+ * @param variableCoords the dependent pull coordinates
+ * @param transformationCoordForce the force to distribute
+ */
+static void distributeTransformationPullCoordForce(pull_coord_work_t*               pcrd,
+                                                   gmx::ArrayRef<pull_coord_work_t> variableCoords,
+                                                   const double transformationCoordForce)
+{
+    if (std::abs(transformationCoordForce) < 1e-9)
     {
-        fprintf(debug,
-                "Distributing force %4.4f for transformation coordinate %d to coordinate %d with "
-                "force "
-                "%4.4f\n",
-                coord->scalarForce,
-                coord->params.coordIndex,
-                variablePcrdIndex,
-                result);
+        // the force is effectively 0. Don't proceed and distribute it recursively
+        return;
     }
-    return result;
+    GMX_ASSERT(pcrd->params.eGeom == PullGroupGeometry::Transformation,
+               "We shouldn't end up here when not using a transformation pull coordinate.");
+    GMX_ASSERT(ssize(variableCoords) == pcrd->params.coordIndex,
+               "We should have as many variable coords as the coord index of the transformation "
+               "coordinate");
+
+    // pcrd->scalarForce += transformationCoordForce;
+    for (auto& variableCoord : variableCoords)
+    {
+        const double derivative =
+                computeDerivativeForTransformationPullCoord(pcrd, variableCoord.params.coordIndex);
+        const double variablePcrdForce = transformationCoordForce * derivative;
+        /* Since we loop over all pull coordinates with smaller index, there can be ones
+         * that are not referenced by the transformation coordinate. Avoid apply forces
+         * on those by skipping application of zero force.
+         */
+        if (variablePcrdForce != 0)
+        {
+            if (debug)
+            {
+                fprintf(debug,
+                        "Distributing force %4.4f for transformation coordinate %d to coordinate "
+                        "%d with "
+                        "force "
+                        "%4.4f\n",
+                        transformationCoordForce,
+                        pcrd->params.coordIndex,
+                        variableCoord.params.coordIndex,
+                        variablePcrdForce);
+            }
+            // Note that we add to the force here, in case multiple biases act on the same pull
+            // coord (although that is not recommended it should still work)
+            variableCoord.scalarForce += variablePcrdForce;
+            if (variableCoord.params.eGeom == PullGroupGeometry::Transformation)
+            {
+                /*
+                 * We can have a transformation pull coordinate depend on another transformation pull coordinate
+                 * which in turn leads to inner derivatives between pull coordinates.
+                 * Here we redistribute the force via the inner product
+                 *
+                 * Note that this only works properly if the lower ranked transformation pull coordinate has it's scalarForce set to zero
+                 */
+                distributeTransformationPullCoordForce(
+                        &variableCoord,
+                        variableCoords.subArray(0, variableCoord.params.coordIndex),
+                        variablePcrdForce);
+            }
+        }
+    }
+}
+
+void applyTransformationPullCoordForce(pull_coord_work_t*               pcrd,
+                                       gmx::ArrayRef<pull_coord_work_t> variableCoords,
+                                       const double                     transformationCoordForce)
+{
+    pcrd->scalarForce = transformationCoordForce;
+    distributeTransformationPullCoordForce(pcrd, variableCoords, transformationCoordForce);
 }
 
 } // namespace gmx
