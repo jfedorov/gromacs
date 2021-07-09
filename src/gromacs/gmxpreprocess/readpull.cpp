@@ -462,13 +462,21 @@ std::vector<std::string> read_pullparams(std::vector<t_inpfile>* inp, pull_param
                        &pullCoord.group[4],
                        &pullCoord.group[5],
                        &idum);
+        if (nscan < 0)
+        {
+            // If the groups are not defined we can get a negative value here.
+            // It makes more sense to change it to 0
+            nscan = 0;
+        }
         if (nscan != pullCoord.ngroup)
         {
-            auto message =
-                    gmx::formatString("%s should contain %d pull group indices with geometry %s",
-                                      buf,
-                                      pullCoord.ngroup,
-                                      enumValueToString(pullCoord.eGeom));
+            auto message = gmx::formatString(
+                    "%s should contain %d pull group indices with geometry %s."
+                    " Found %d groups.",
+                    buf,
+                    pullCoord.ngroup,
+                    enumValueToString(pullCoord.eGeom),
+                    nscan);
             set_warning_line(wi, nullptr, -1);
             warning_error(wi, message);
         }
