@@ -593,7 +593,7 @@ GpuHaloExchange::Impl::Impl(gmx_domdec_t*        dd,
 
     allocateDeviceBuffer(&d_fShift_, 1, deviceContext_);
 
-    haloStream_ = std::make_unique<DeviceStream>(deviceContext_, DeviceStreamPriority::Normal, false);
+    haloStream_ = std::make_unique<DeviceStream>(deviceContext_, DeviceStreamPriority::High, false);
 }
 
 GpuHaloExchange::Impl::~Impl()
