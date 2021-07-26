@@ -628,4 +628,10 @@ INSTANTIATE_TEST_SUITE_P(
                            ::testing::Values("no", "c-rescale", "parrinello-rahman")));
 
 } // namespace
+
+void registerMpiTests(int /*numRanks*/)
+{
+    // No need to dynamically register tests
+}
+
 } // namespace gmx::test

@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2016,2017,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2016,2017,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -44,37 +44,90 @@
 
 #include "threadaffinitytest.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
-using gmx::test::ThreadAffinityTestHelper;
-
-TEST(ThreadAffinityMultiRankTest, PinsWholeNode)
+//! MPI test case class
+class PinsWholeNode : public MpiTest
 {
-    GMX_MPI_TEST(4);
+public:
+    //! Body of the test
+    void TestBody() override;
+    //! Whether this test case can run with the current number of MPI ranks
+    static bool canRun(int numRanks);
+    //! The MPI rank count
+    int numRanks_ = getNumberOfTestMpiRanks();
+};
+
+bool PinsWholeNode::canRun(int /*numRanks*/)
+{
+    return true;
+}
+
+void PinsWholeNode::TestBody()
+{
+    GMX_MPI_TEST(numRanks_);
     ThreadAffinityTestHelper helper;
-    helper.setLogicalProcessorCount(4);
+    helper.setLogicalProcessorCount(numRanks_);
     helper.expectPinningMessage(false, 1);
     helper.expectAffinitySet(gmx_node_rank());
     helper.setAffinity(1);
 }
 
-TEST(ThreadAffinityMultiRankTest, PinsWithOffsetAndStride)
+//! MPI test case class
+class PinsWithOffsetAndStride : public MpiTest
 {
-    GMX_MPI_TEST(4);
+public:
+    //! Body of the test
+    void TestBody() override;
+    //! Whether this test case can run with the current number of MPI ranks
+    static bool canRun(int numRanks);
+    //! The MPI rank count
+    int numRanks_ = getNumberOfTestMpiRanks();
+};
+
+bool PinsWithOffsetAndStride::canRun(int /*numRanks*/)
+{
+    return true;
+}
+
+void PinsWithOffsetAndStride::TestBody()
+{
+    GMX_MPI_TEST(numRanks_);
     ThreadAffinityTestHelper helper;
     helper.setAffinityOption(ThreadAffinity::On);
     helper.setOffsetAndStride(1, 2);
-    helper.setLogicalProcessorCount(8);
+    helper.setLogicalProcessorCount(2 * numRanks_);
     helper.expectWarningMatchingRegex("Applying core pinning offset 1");
     helper.expectPinningMessage(true, 2);
     helper.expectAffinitySet(1 + 2 * gmx_node_rank());
     helper.setAffinity(1);
 }
 
-TEST(ThreadAffinityMultiRankTest, PinsTwoNodes)
+//! MPI test case class
+class PinsTwoNodes : public MpiTest
 {
-    GMX_MPI_TEST(4);
+public:
+    //! Body of the test
+    void TestBody() override;
+    //! Whether this test case can run with the current number of MPI ranks
+    static bool canRun(int numRanks);
+    //! The MPI rank count
+    int numRanks_ = getNumberOfTestMpiRanks();
+};
+
+bool PinsTwoNodes::canRun(int numRanks)
+{
+    return numRanks % 2 == 0;
+}
+
+void PinsTwoNodes::TestBody()
+{
+    GMX_MPI_TEST(numRanks_);
     ThreadAffinityTestHelper helper;
     helper.setPhysicalNodeId(gmx_node_rank() / 2);
     helper.setLogicalProcessorCount(2);
@@ -83,46 +136,99 @@ TEST(ThreadAffinityMultiRankTest, PinsTwoNodes)
     helper.setAffinity(1);
 }
 
-TEST(ThreadAffinityMultiRankTest, DoesNothingWhenDisabled)
+//! MPI test case class
+class DoesNothingWhenDisabled : public MpiTest
 {
-    GMX_MPI_TEST(4);
+public:
+    //! Body of the test
+    void TestBody() override;
+    //! Whether this test case can run with the current number of MPI ranks
+    static bool canRun(int numRanks);
+    //! The MPI rank count
+    int numRanks_ = getNumberOfTestMpiRanks();
+};
+
+bool DoesNothingWhenDisabled::canRun(int /*numRanks*/)
+{
+    return true;
+}
+
+void DoesNothingWhenDisabled::TestBody()
+{
+    GMX_MPI_TEST(numRanks_);
     ThreadAffinityTestHelper helper;
     helper.setAffinityOption(ThreadAffinity::Off);
-    helper.setLogicalProcessorCount(4);
+    helper.setLogicalProcessorCount(numRanks_);
     helper.setAffinity(1);
 }
 
-TEST(ThreadAffinityMultiRankTest, HandlesTooManyThreadsWithAuto)
+//! MPI test case class
+class HandlesTooManyThreadsWithAuto : public MpiTest
 {
-    GMX_MPI_TEST(4);
-    ThreadAffinityTestHelper helper;
-    helper.setLogicalProcessorCount(6);
-    helper.expectWarningMatchingRegex("Oversubscribing the CPU");
-    helper.setAffinity(2);
+public:
+    //! Body of the test
+    void TestBody() override;
+    //! Whether this test case can run with the current number of MPI ranks
+    static bool canRun(int numRanks);
+    //! The MPI rank count
+    int numRanks_ = getNumberOfTestMpiRanks();
+};
+
+bool HandlesTooManyThreadsWithAuto::canRun(int /*numRanks*/)
+{
+    return true;
 }
 
-TEST(ThreadAffinityMultiRankTest, HandlesTooManyThreadsWithForce)
+void HandlesTooManyThreadsWithAuto::TestBody()
 {
-    GMX_MPI_TEST(4);
+    GMX_MPI_TEST(numRanks_);
     ThreadAffinityTestHelper helper;
+    const int                threadsPerRank = 2;
+    helper.setLogicalProcessorCount(threadsPerRank * numRanks_ - 1);
+    helper.expectWarningMatchingRegex("Oversubscribing the CPU");
+    helper.setAffinity(threadsPerRank);
+}
+
+//! MPI test case class
+class HandlesTooManyThreadsWithForce : public MpiTest
+{
+public:
+    //! Body of the test
+    void TestBody() override;
+    //! Whether this test case can run with the current number of MPI ranks
+    static bool canRun(int numRanks);
+    //! The MPI rank count
+    int numRanks_ = getNumberOfTestMpiRanks();
+};
+
+bool HandlesTooManyThreadsWithForce::canRun(int /*numRanks*/)
+{
+    return true;
+}
+
+void HandlesTooManyThreadsWithForce::TestBody()
+{
+    GMX_MPI_TEST(numRanks_);
+    ThreadAffinityTestHelper helper;
+    const int                threadsPerRank = 2;
     helper.setAffinityOption(ThreadAffinity::On);
-    helper.setLogicalProcessorCount(6);
+    helper.setLogicalProcessorCount(threadsPerRank * numRanks_ - 1);
     helper.expectWarningMatchingRegex("Oversubscribing the CPU");
-    helper.setAffinity(2);
+    helper.setAffinity(threadsPerRank);
 }
 
-class ThreadAffinityHeterogeneousNodesTest : public ::testing::Test
+class ThreadAffinityHeterogeneousNodesTest : public MpiTest
 {
 public:
     static int  currentNode() { return gmx_node_rank() / 2; }
     static int  indexInNode() { return gmx_node_rank() % 2; }
     static bool isMaster() { return gmx_node_rank() == 0; }
 
-    static void setupNodes(ThreadAffinityTestHelper* helper, std::array<int, 2> cores)
+    static void setupNodes(ThreadAffinityTestHelper* helper, int coresOnNodeZero, int coresOnOtherNodes)
     {
         const int node = currentNode();
         helper->setPhysicalNodeId(node);
-        helper->setLogicalProcessorCount(cores[node]);
+        helper->setLogicalProcessorCount(node == 0 ? coresOnNodeZero : coresOnOtherNodes);
     }
     static void expectNodeAffinitySet(ThreadAffinityTestHelper* helper, int node, int core)
     {
@@ -133,12 +239,29 @@ public:
     }
 };
 
-TEST_F(ThreadAffinityHeterogeneousNodesTest, PinsOnMasterOnly)
+//! MPI test case class
+class PinsOnMasterOnly : public ThreadAffinityHeterogeneousNodesTest
 {
-    GMX_MPI_TEST(4);
+public:
+    //! Body of the test
+    void TestBody() override;
+    //! Whether this test case can run with the current number of MPI ranks
+    static bool canRun(int numRanks);
+    //! The MPI rank count
+    int numRanks_ = getNumberOfTestMpiRanks();
+};
+
+bool PinsOnMasterOnly::canRun(int numRanks)
+{
+    return (numRanks > 2) && (numRanks % 2 == 0);
+}
+
+void PinsOnMasterOnly::TestBody()
+{
+    GMX_MPI_TEST(numRanks_);
     ThreadAffinityTestHelper helper;
     helper.setAffinityOption(ThreadAffinity::On);
-    setupNodes(&helper, { { 2, 1 } });
+    setupNodes(&helper, 2, 1);
     helper.expectWarningMatchingRegexIf("Oversubscribing the CPU", isMaster() || currentNode() == 1);
     if (currentNode() == 0)
     {
@@ -148,27 +271,61 @@ TEST_F(ThreadAffinityHeterogeneousNodesTest, PinsOnMasterOnly)
     helper.setAffinity(1);
 }
 
-TEST_F(ThreadAffinityHeterogeneousNodesTest, PinsOnNonMasterOnly)
+//! MPI test case class
+class PinsOnNonMasterOnly : public ThreadAffinityHeterogeneousNodesTest
 {
-    GMX_MPI_TEST(4);
+public:
+    //! Body of the test
+    void TestBody() override;
+    //! Whether this test case can run with the current number of MPI ranks
+    static bool canRun(int numRanks);
+    //! The MPI rank count
+    int numRanks_ = getNumberOfTestMpiRanks();
+};
+
+bool PinsOnNonMasterOnly::canRun(int numRanks)
+{
+    return (numRanks > 2) && (numRanks % 2 == 0);
+}
+
+void PinsOnNonMasterOnly::TestBody()
+{
+    GMX_MPI_TEST(numRanks_);
     ThreadAffinityTestHelper helper;
     helper.setAffinityOption(ThreadAffinity::On);
-    setupNodes(&helper, { { 1, 2 } });
+    setupNodes(&helper, 1, 2);
     helper.expectWarningMatchingRegexIf("Oversubscribing the CPU", currentNode() == 0);
-    if (currentNode() == 1)
+    if (currentNode() >= 1)
     {
         helper.expectPinningMessage(false, 1);
+        expectNodeAffinitySet(&helper, currentNode(), indexInNode());
     }
-    expectNodeAffinitySet(&helper, 1, indexInNode());
     helper.setAffinity(1);
 }
 
-TEST_F(ThreadAffinityHeterogeneousNodesTest, HandlesUnknownHardwareOnNonMaster)
+//! MPI test case class
+class HandlesUnknownHardwareOnNonMaster : public ThreadAffinityHeterogeneousNodesTest
 {
-    GMX_MPI_TEST(4);
+public:
+    //! Body of the test
+    void TestBody() override;
+    //! Whether this test case can run with the current number of MPI ranks
+    static bool canRun(int numRanks);
+    //! The MPI rank count
+    int numRanks_ = getNumberOfTestMpiRanks();
+};
+
+bool HandlesUnknownHardwareOnNonMaster::canRun(int numRanks)
+{
+    return (numRanks > 2) && (numRanks % 2 == 0);
+}
+
+void HandlesUnknownHardwareOnNonMaster::TestBody()
+{
+    GMX_MPI_TEST(numRanks_);
     ThreadAffinityTestHelper helper;
     helper.setAffinityOption(ThreadAffinity::On);
-    setupNodes(&helper, { { 2, 0 } });
+    setupNodes(&helper, 2, 0);
     helper.expectWarningMatchingRegexIf("No information on available cores",
                                         isMaster() || currentNode() == 1);
     if (currentNode() == 0)
@@ -179,11 +336,28 @@ TEST_F(ThreadAffinityHeterogeneousNodesTest, HandlesUnknownHardwareOnNonMaster)
     helper.setAffinity(1);
 }
 
-TEST_F(ThreadAffinityHeterogeneousNodesTest, PinsAutomaticallyOnMasterOnly)
+//! MPI test case class
+class PinsAutomaticallyOnMasterOnly : public ThreadAffinityHeterogeneousNodesTest
 {
-    GMX_MPI_TEST(4);
+public:
+    //! Body of the test
+    void TestBody() override;
+    //! Whether this test case can run with the current number of MPI ranks
+    static bool canRun(int numRanks);
+    //! The MPI rank count
+    int numRanks_ = getNumberOfTestMpiRanks();
+};
+
+bool PinsAutomaticallyOnMasterOnly::canRun(int numRanks)
+{
+    return (numRanks > 2) && (numRanks % 2 == 0);
+}
+
+void PinsAutomaticallyOnMasterOnly::TestBody()
+{
+    GMX_MPI_TEST(numRanks_);
     ThreadAffinityTestHelper helper;
-    setupNodes(&helper, { { 2, 1 } });
+    setupNodes(&helper, 2, 1);
     helper.expectWarningMatchingRegexIf("Oversubscribing the CPU", isMaster() || currentNode() == 1);
     if (currentNode() == 0)
     {
@@ -193,29 +367,63 @@ TEST_F(ThreadAffinityHeterogeneousNodesTest, PinsAutomaticallyOnMasterOnly)
     helper.setAffinity(1);
 }
 
-TEST_F(ThreadAffinityHeterogeneousNodesTest, PinsAutomaticallyOnNonMasterOnly)
+//! MPI test case class
+class PinsAutomaticallyOnNonMasterOnly : public ThreadAffinityHeterogeneousNodesTest
 {
-    GMX_MPI_TEST(4);
+public:
+    //! Body of the test
+    void TestBody() override;
+    //! Whether this test case can run with the current number of MPI ranks
+    static bool canRun(int numRanks);
+    //! The MPI rank count
+    int numRanks_ = getNumberOfTestMpiRanks();
+};
+
+bool PinsAutomaticallyOnNonMasterOnly::canRun(int numRanks)
+{
+    return (numRanks > 2) && (numRanks % 2 == 0);
+}
+
+void PinsAutomaticallyOnNonMasterOnly::TestBody()
+{
+    GMX_MPI_TEST(numRanks_);
     ThreadAffinityTestHelper helper;
-    setupNodes(&helper, { { 1, 2 } });
+    setupNodes(&helper, 1, 2);
     helper.expectWarningMatchingRegexIf("Oversubscribing the CPU", currentNode() == 0);
-    if (currentNode() == 1)
+    if (currentNode() >= 1)
     {
         helper.expectPinningMessage(false, 1);
+        expectNodeAffinitySet(&helper, currentNode(), indexInNode());
     }
-    expectNodeAffinitySet(&helper, 1, indexInNode());
     helper.setAffinity(1);
 }
 
-TEST_F(ThreadAffinityHeterogeneousNodesTest, HandlesInvalidOffsetOnNonMasterOnly)
+//! MPI test case class
+class HandlesInvalidOffsetOnNonMasterOnly : public ThreadAffinityHeterogeneousNodesTest
 {
-    GMX_MPI_TEST(4);
+public:
+    //! Body of the test
+    void TestBody() override;
+    //! Whether this test case can run with the current number of MPI ranks
+    static bool canRun(int numRanks);
+    //! The MPI rank count
+    int numRanks_ = getNumberOfTestMpiRanks();
+};
+
+bool HandlesInvalidOffsetOnNonMasterOnly::canRun(int numRanks)
+{
+    return (numRanks > 2) && (numRanks % 2 == 0);
+}
+
+void HandlesInvalidOffsetOnNonMasterOnly::TestBody()
+{
+    GMX_MPI_TEST(numRanks_);
     ThreadAffinityTestHelper helper;
     helper.setAffinityOption(ThreadAffinity::On);
     helper.setOffsetAndStride(2, 0);
-    setupNodes(&helper, { { 4, 2 } });
+    setupNodes(&helper, 4, 2);
     helper.expectWarningMatchingRegex("Applying core pinning offset 2");
-    helper.expectWarningMatchingRegexIf("Requested offset too large", isMaster() || currentNode() == 1);
+    helper.expectWarningMatchingRegexIf("Requested offset too large", isMaster() || currentNode() >= 1);
     if (currentNode() == 0)
     {
         helper.expectPinningMessage(false, 1);
@@ -224,13 +432,30 @@ TEST_F(ThreadAffinityHeterogeneousNodesTest, HandlesInvalidOffsetOnNonMasterOnly
     helper.setAffinity(1);
 }
 
-TEST_F(ThreadAffinityHeterogeneousNodesTest, HandlesInvalidStrideOnNonMasterOnly)
+//! MPI test case class
+class HandlesInvalidStrideOnNonMasterOnly : public ThreadAffinityHeterogeneousNodesTest
 {
-    GMX_MPI_TEST(4);
+public:
+    //! Body of the test
+    void TestBody() override;
+    //! Whether this test case can run with the current number of MPI ranks
+    static bool canRun(int numRanks);
+    //! The MPI rank count
+    int numRanks_ = getNumberOfTestMpiRanks();
+};
+
+bool HandlesInvalidStrideOnNonMasterOnly::canRun(int numRanks)
+{
+    return (numRanks > 2) && (numRanks % 2 == 0);
+}
+
+void HandlesInvalidStrideOnNonMasterOnly::TestBody()
+{
+    GMX_MPI_TEST(numRanks_);
     ThreadAffinityTestHelper helper;
     helper.setAffinityOption(ThreadAffinity::On);
     helper.setOffsetAndStride(0, 2);
-    setupNodes(&helper, { { 4, 2 } });
+    setupNodes(&helper, 4, 2);
     helper.expectWarningMatchingRegexIf("Requested stride too large", isMaster() || currentNode() == 1);
     if (currentNode() == 0)
     {
@@ -241,3 +466,39 @@ TEST_F(ThreadAffinityHeterogeneousNodesTest, HandlesInvalidStrideOnNonMasterOnly
 }
 
 } // namespace
+
+void registerMpiTests(int numRanks)
+{
+    // ThreadAffinityMultiRankTest cases
+    MpiTest::tryToRegisterTest<MpiTest, PinsWholeNode>(
+            numRanks, "ThreadAffinityMultiRankTest", "PinsWholeNode");
+    MpiTest::tryToRegisterTest<MpiTest, PinsWithOffsetAndStride>(
+            numRanks, "ThreadAffinityMultiRankTest", "PinsWithOffsetAndStride");
+    MpiTest::tryToRegisterTest<MpiTest, PinsTwoNodes>(
+            numRanks, "ThreadAffinityMultiRankTest", "PinsTwoNodes");
+    MpiTest::tryToRegisterTest<MpiTest, DoesNothingWhenDisabled>(
+            numRanks, "ThreadAffinityMultiRankTest", "DoesNothingWhenDisabled");
+    MpiTest::tryToRegisterTest<MpiTest, HandlesTooManyThreadsWithAuto>(
+            numRanks, "ThreadAffinityMultiRankTest", "HandlesTooManyThreadsWithAuto");
+    MpiTest::tryToRegisterTest<MpiTest, HandlesTooManyThreadsWithForce>(
+            numRanks, "ThreadAffinityMultiRankTest", "HandlesTooManyThreadsWithForce");
+
+    // ThreadAffinityHeterogeneousNodesTest cases
+    MpiTest::tryToRegisterTest<ThreadAffinityHeterogeneousNodesTest, PinsOnMasterOnly>(
+            numRanks, "ThreadAffinityHeterogeneousNodesTest", "PinsOnMasterOnly");
+    MpiTest::tryToRegisterTest<ThreadAffinityHeterogeneousNodesTest, PinsOnNonMasterOnly>(
+            numRanks, "ThreadAffinityHeterogeneousNodesTest", "PinsOnNonMasterOnly");
+    MpiTest::tryToRegisterTest<ThreadAffinityHeterogeneousNodesTest, HandlesUnknownHardwareOnNonMaster>(
+            numRanks, "ThreadAffinityHeterogeneousNodesTest", "HandlesUnknownHardwareOnNonMaster");
+    MpiTest::tryToRegisterTest<ThreadAffinityHeterogeneousNodesTest, PinsAutomaticallyOnMasterOnly>(
+            numRanks, "ThreadAffinityHeterogeneousNodesTest", "PinsAutomaticallyOnMasterOnly");
+    MpiTest::tryToRegisterTest<ThreadAffinityHeterogeneousNodesTest, PinsAutomaticallyOnNonMasterOnly>(
+            numRanks, "ThreadAffinityHeterogeneousNodesTest", "PinsAutomaticallyOnNonMasterOnly");
+    MpiTest::tryToRegisterTest<ThreadAffinityHeterogeneousNodesTest, HandlesInvalidOffsetOnNonMasterOnly>(
+            numRanks, "ThreadAffinityHeterogeneousNodesTest", "HandlesInvalidOffsetOnNonMasterOnly");
+    MpiTest::tryToRegisterTest<ThreadAffinityHeterogeneousNodesTest, HandlesInvalidStrideOnNonMasterOnly>(
+            numRanks, "ThreadAffinityHeterogeneousNodesTest", "HandlesInvalidStrideOnNonMasterOnly");
+}
+
+} // namespace test
+} // namespace gmx

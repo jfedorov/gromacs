@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2018,2019, by the GROMACS development team, led by
+ * Copyright (c) 2018,2019,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -44,21 +44,57 @@
 
 namespace gmx
 {
+namespace test
+{
 namespace
 {
 
-TEST(PhysicalNodeCommunicatorTest, CanConstruct)
+class PhysicalNodeCommunicatorTest : public MpiTest
 {
-    GMX_MPI_TEST(4);
+public:
+    //! Whether this test case can run with the current number of MPI ranks
+    static bool canRun(int /*numRanks*/) { return true; }
+    //! The MPI rank count
+    int numRanks_ = getNumberOfTestMpiRanks();
+};
+
+class CanConstruct : public PhysicalNodeCommunicatorTest
+{
+public:
+    //! Body of the test
+    void TestBody() override;
+};
+
+void CanConstruct::TestBody()
+{
+    GMX_MPI_TEST(numRanks_);
     PhysicalNodeCommunicator comm(MPI_COMM_WORLD, 0);
 }
 
-TEST(PhysicalNodeCommunicatorTest, CanCallBarrier)
+class CanCallBarrier : public PhysicalNodeCommunicatorTest
 {
-    GMX_MPI_TEST(4);
+public:
+    //! Body of the test
+    void TestBody() override;
+};
+
+void CanCallBarrier::TestBody()
+{
+    GMX_MPI_TEST(numRanks_);
     PhysicalNodeCommunicator comm(MPI_COMM_WORLD, 0);
     comm.barrier();
 }
 
 } // namespace
+
+void registerMpiTests(int numRanks)
+{
+    // PhysicalNodeCommunicatorTest cases
+    MpiTest::tryToRegisterTest<PhysicalNodeCommunicatorTest, CanConstruct>(
+            numRanks, "PhysicalNodeCommunicatorTest", "CanConstruct");
+    MpiTest::tryToRegisterTest<PhysicalNodeCommunicatorTest, CanCallBarrier>(
+            numRanks, "PhysicalNodeCommunicatorTest", "CanCallBarrier");
+}
+
+} // namespace test
 } // namespace gmx

@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2020, by the GROMACS development team, led by
+ * Copyright (c) 2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -77,6 +77,9 @@ namespace test
 {
 namespace
 {
+
+//! Required number of MPI ranks to run the tests
+static constexpr int sc_requiredRankCount = 4;
 
 /*! \brief Get encoded numerical value for sending rank, atom number and spatial 3D index
  *
@@ -182,7 +185,7 @@ void gpuHalo(gmx_domdec_t* dd, matrix box, HostVector<RVec>* h_x, int numAtomsTo
 #endif
 }
 
-/*! \brief Define 1D rank topology with 4 MPI tasks
+/*! \brief Define 1D rank topology with sc_requiredRankCount MPI tasks
  *
  * \param [in] dd  Domain decomposition object
  */
@@ -191,11 +194,11 @@ void define1dRankTopology(gmx_domdec_t* dd)
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    dd->neighbor[0][0] = (rank + 1) % 4;
-    dd->neighbor[0][1] = (rank == 0) ? 3 : rank - 1;
+    dd->neighbor[0][0] = (rank + 1) % sc_requiredRankCount;
+    dd->neighbor[0][1] = (rank == 0) ? (sc_requiredRankCount - 1) : rank - 1;
 }
 
-/*! \brief Define 2D rank topology with 4 MPI tasks
+/*! \brief Define 2D rank topology with sc_requiredRankCount MPI tasks
  *
  *    -----
  *   | 2 3 |
@@ -507,9 +510,25 @@ void checkResults2dHaloWith2PulsesInDim1(const RVec* x, const gmx_domdec_t* dd, 
     }
 }
 
-TEST(HaloExchangeTest, Coordinates1dHaloWith1Pulse)
+//! MPI test case class
+class HaloExchangeTest : public MpiTest
 {
-    GMX_MPI_TEST(4);
+public:
+    //! Whether this test case can run with the current number of MPI ranks
+    static bool canRun(int numRanks) { return numRanks == sc_requiredRankCount; }
+};
+
+//! MPI test case class
+class Coordinates1dHaloWith1Pulse : public HaloExchangeTest
+{
+public:
+    //! Body of the test
+    void TestBody() override;
+};
+
+void Coordinates1dHaloWith1Pulse::TestBody()
+{
+    GMX_MPI_TEST(sc_requiredRankCount);
 
     // Set up atom data
     const int        numHomeAtoms  = 10;
@@ -563,9 +582,17 @@ TEST(HaloExchangeTest, Coordinates1dHaloWith1Pulse)
     }
 }
 
-TEST(HaloExchangeTest, Coordinates1dHaloWith2Pulses)
+//! MPI test case class
+class Coordinates1dHaloWith2Pulses : public HaloExchangeTest
 {
-    GMX_MPI_TEST(4);
+public:
+    //! Body of the test
+    void TestBody() override;
+};
+
+void Coordinates1dHaloWith2Pulses::TestBody()
+{
+    GMX_MPI_TEST(sc_requiredRankCount);
 
     // Set up atom data
     const int        numHomeAtoms  = 10;
@@ -619,10 +646,17 @@ TEST(HaloExchangeTest, Coordinates1dHaloWith2Pulses)
     }
 }
 
-
-TEST(HaloExchangeTest, Coordinates2dHaloWith1PulseInEachDim)
+//! MPI test case class
+class Coordinates2dHaloWith1PulseInEachDim : public HaloExchangeTest
 {
-    GMX_MPI_TEST(4);
+public:
+    //! Body of the test
+    void TestBody() override;
+};
+
+void Coordinates2dHaloWith1PulseInEachDim::TestBody()
+{
+    GMX_MPI_TEST(sc_requiredRankCount);
 
     // Set up atom data
     const int        numHomeAtoms  = 10;
@@ -676,9 +710,17 @@ TEST(HaloExchangeTest, Coordinates2dHaloWith1PulseInEachDim)
     }
 }
 
-TEST(HaloExchangeTest, Coordinates2dHaloWith2PulsesInDim1)
+//! MPI test case class
+class Coordinates2dHaloWith2PulsesInDim1 : public HaloExchangeTest
 {
-    GMX_MPI_TEST(4);
+public:
+    //! Body of the test
+    void TestBody() override;
+};
+
+void Coordinates2dHaloWith2PulsesInDim1::TestBody()
+{
+    GMX_MPI_TEST(sc_requiredRankCount);
 
     // Set up atom data
     const int        numHomeAtoms  = 10;
@@ -733,5 +775,18 @@ TEST(HaloExchangeTest, Coordinates2dHaloWith2PulsesInDim1)
 }
 
 } // namespace
+
+void registerMpiTests(int numRanks)
+{
+    MpiTest::tryToRegisterTest<HaloExchangeTest, Coordinates1dHaloWith1Pulse>(
+            numRanks, "HaloExchangeTest", "Coordinates1dHaloWith1Pulse");
+    MpiTest::tryToRegisterTest<HaloExchangeTest, Coordinates1dHaloWith2Pulses>(
+            numRanks, "HaloExchangeTest", "Coordinates1dHaloWith2Pulses");
+    MpiTest::tryToRegisterTest<HaloExchangeTest, Coordinates2dHaloWith1PulseInEachDim>(
+            numRanks, "HaloExchangeTest", "Coordinates2dHaloWith1PulseInEachDim");
+    MpiTest::tryToRegisterTest<HaloExchangeTest, Coordinates2dHaloWith2PulsesInDim1>(
+            numRanks, "HaloExchangeTest", "Coordinates2dHaloWith2PulsesInDim1");
+}
+
 } // namespace test
 } // namespace gmx

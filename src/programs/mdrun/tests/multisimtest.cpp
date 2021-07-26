@@ -60,6 +60,7 @@
 #include "gromacs/utility/stringutil.h"
 
 #include "testutils/cmdlinetest.h"
+#include "testutils/mpitest.h"
 
 #include "moduletest.h"
 #include "terminationhelper.h"
@@ -239,6 +240,11 @@ void MultiSimTest::runMaxhTest()
 
     helper.runFirstMdrun(runner.cptFileName_);
     helper.runSecondMdrun();
+}
+
+void registerMpiTests(int /*numRanks*/)
+{
+    // No need to dynamically register tests
 }
 
 } // namespace test

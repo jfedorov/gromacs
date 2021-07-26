@@ -48,7 +48,7 @@
 #include <functional>
 #include <type_traits>
 
-#include "gromacs/utility/basenetwork.h"
+#include <gtest/gtest.h>
 
 namespace gmx
 {
@@ -64,6 +64,76 @@ namespace test
  * \ingroup module_testutils
  */
 int getNumberOfTestMpiRanks();
+
+/*! \brief Function declared in a module's test code to use the
+ * advanced GoogleTest API to register tests only when the MPI rank
+ * count is suitable.
+ *
+ * As only one such function can be declared in the test binary, if
+ * more than one test source file within a module wishes to
+ * programmatically declare tests, it is the responsibility of the
+ * module to arrange the definition of this function to suit the
+ * module. For example, it could call respective functions that
+ * register MPI tests for that source file.
+ *
+ * \param[in] numRanks  The number of ranks chosen at run time, either
+ *                      via -ntmpi (for GMX_THREAD_MPI) or via mpirun
+ *                      (for GMX_LIB_MPI). */
+void registerMpiTests(int numRanks);
+
+/*! \brief Test fixture for MPI-aware tests
+ *
+ * Test cases that are sensitive to the number of MPI ranks must be
+ * registered dynamically based on the rank count available at run
+ * time. This test-fixture class defines a static template method that
+ * will do that registration based on the result of calling a method
+ * found in the class of the test case like
+ *
+ *   static bool canRun(int numRanks);
+ *
+ * Each test binary that implements such test cases must derive those
+ * test-case classes from this fixture class, implement canRun, and
+ * override the TestBody method that is called behind the scenes by
+ * GoogleTest. It must also implement a function
+ *
+ *   void registerMpiTests(int numRanks);
+ *
+ * that should call the tryToRegisterTest method for each such test
+ * case class, passing the number of ranks as well as the name of the
+ * test suite as well as type and name of the test-case class. Note
+ * that this function must be defined in the ::gmx::test namespace.
+ */
+class MpiTest : public testing::Test
+{
+public:
+    /*! \brief Register a test case if the rank count is suitable
+     *
+     * Note that per the GoogleTest docs:
+     * * all tests that share the same test suite name must return
+     *   the same fixture type (here, TestFixture)
+     * * it is important that the return type of the lambda is a
+     *   pointer to the type of the fixture (here, TestFixture*).
+     *
+     * \tparam    TestFixture    The class of the test fixture (e.g. MpiTest)
+     * \tparam    TestCase       The class of the test case
+     * \param[in] numRanks  The number of MPI ranks in use
+     * \param[in] testSuiteName  The name of the test suite or fixture
+     * \param[in] testCaseName   The name of the test case
+     */
+    template<typename TestFixture, typename TestCase>
+    static void tryToRegisterTest(int numRanks, const char* testSuiteName, const char* testCaseName)
+    {
+        if (!TestCase::canRun(numRanks))
+        {
+            return;
+        }
+        testing::RegisterTest(
+                testSuiteName, testCaseName, nullptr, nullptr, __FILE__, __LINE__, [=]() -> TestFixture* {
+                    return new TestCase();
+                });
+    }
+};
+
 //! \cond internal
 /*! \brief
  * Helper function for GMX_MPI_TEST().

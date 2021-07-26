@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -38,6 +38,8 @@
 #include "workflow.h"
 #include "workflow_impl.h"
 #include "testingconfiguration.h"
+
+#include "testutils/mpitest.h"
 
 namespace gmxapi
 {
@@ -83,3 +85,13 @@ TEST_F(GmxApiTest, CreateApiWorkflow)
 } // end namespace testing
 
 } // end namespace gmxapi
+
+namespace gmx::test
+{
+
+void registerMpiTests(int /*numRanks*/)
+{
+    // No need to dynamically register tests
+}
+
+} // namespace gmx::test

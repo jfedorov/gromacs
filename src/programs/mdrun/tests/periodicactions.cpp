@@ -50,6 +50,7 @@
 #include "gromacs/utility/strconvert.h"
 #include "gromacs/utility/stringutil.h"
 
+#include "testutils/mpitest.h"
 #include "testutils/simulationdatabase.h"
 #include "testutils/testasserts.h"
 
@@ -492,5 +493,11 @@ INSTANTIATE_TEST_SUITE_P(DISABLED_PropagatorsWithConstraints,
 #endif
 
 } // namespace
+
+void registerMpiTests(int /*numRanks*/)
+{
+    // No need to dynamically register tests
+}
+
 } // namespace test
 } // namespace gmx

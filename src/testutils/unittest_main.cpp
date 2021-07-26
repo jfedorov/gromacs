@@ -44,6 +44,7 @@
 
 #include <gtest/gtest.h>
 
+#include "testutils/mpitest.h"
 #include "testutils/testinit.h"
 
 #ifndef TEST_DATA_PATH
@@ -74,6 +75,10 @@ int main(int argc, char* argv[])
     // Calls ::testing::InitGoogleMock()
     ::gmx::test::initTestUtils(
             TEST_DATA_PATH, TEST_TEMP_PATH, TEST_USES_MPI, TEST_USES_HARDWARE_DETECTION, &argc, &argv);
+    // Don't register test dynamically when the test does not use MPI
+#if TEST_USES_MPI
+    ::gmx::test::registerMpiTests(::gmx::test::getNumberOfTestMpiRanks());
+#endif
     int errcode = RUN_ALL_TESTS();
     ::gmx::test::finalizeTestUtils();
     return errcode;

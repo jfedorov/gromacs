@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2016,2019, by the GROMACS development team, led by
+ * Copyright (c) 2016,2019,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -45,37 +45,62 @@
 
 #include "config.h"
 
+#include <vector>
+
 #include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
 #include "gromacs/utility/basenetwork.h"
 #include "gromacs/utility/gmxmpi.h"
 
+namespace gmx
+{
+namespace test
+{
 namespace
 {
 
-class MpiSelfTest : public ::testing::Test
+class MpiSelfTest : public MpiTest
 {
 public:
-    MpiSelfTest() : reached{ 0, 0 } {}
-
-    int reached[2];
+    MpiSelfTest() : reached_(numRanks_, 0) {}
+    //! Whether this test case can run with the current number of MPI ranks
+    static bool canRun(int /*numRanks*/) { return true; }
+    //! The MPI rank count
+    int numRanks_ = getNumberOfTestMpiRanks();
+    //! Whether each rank participated
+    std::vector<int> reached_;
 };
 
-TEST_F(MpiSelfTest, Runs)
+class Runs : public MpiSelfTest
 {
-    GMX_MPI_TEST(2);
+public:
+    //! Body of the test
+    void TestBody() override;
+};
+
+void Runs::TestBody()
+{
+    GMX_MPI_TEST(numRanks_);
 #if GMX_THREAD_MPI
-    reached[gmx_node_rank()] = 1;
+    reached_[gmx_node_rank()] = 1;
     MPI_Barrier(MPI_COMM_WORLD);
 #else
     int value = 1;
-    MPI_Gather(&value, 1, MPI_INT, reached, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    MPI_Gather(&value, 1, MPI_INT, reached_.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
 #endif
     if (gmx_node_rank() == 0)
     {
-        EXPECT_EQ(1, reached[0]);
-        EXPECT_EQ(1, reached[1]);
+        EXPECT_THAT(reached_, testing::Each(1));
     }
 }
 
 } // namespace
+
+void registerMpiTests(int numRanks)
+{
+    MpiTest::tryToRegisterTest<MpiSelfTest, Runs>(numRanks, "MpiSelfTest", "Runs");
+}
+
+} // namespace test
+} // namespace gmx
