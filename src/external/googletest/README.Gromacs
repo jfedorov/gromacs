@@ -7,3 +7,13 @@ No files were omitted or changed, consistent with the live-at-head
 philosophy followed by GoogleTest.
 
 This README.Gromacs file is new, of course.
+
+A clang-static-analyzer suppression is added to
+googletest/include/gtest/gtest-matchers.h.
+
+Some warning-generation flags are removed from
+googletest/cmake/internal_utils.cmake because these are not always
+supported by compilers.
+
+A clang-tidy suppression has been added to
+googletest/include/gtest/internal/gtest-internal.h.

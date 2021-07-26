@@ -227,7 +227,7 @@ private:
 public:
     PmeGatherTest() = default;
     //! Sets the input atom data references and programs once
-    static void SetUpTestCase()
+    static void SetUpTestSuite()
     {
         size_t start = 0;
         for (auto atomCount : atomCounts)

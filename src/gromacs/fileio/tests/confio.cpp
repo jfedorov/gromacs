@@ -132,7 +132,7 @@ public:
     }
 
 private:
-    std::string getFileSuffix(const char* type)
+    static std::string getFileSuffix(const char* type)
     {
         return std::string(type) + "." + ftp2ext(GetParam());
     }

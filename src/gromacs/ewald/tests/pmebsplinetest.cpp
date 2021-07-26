@@ -78,7 +78,7 @@ class PmeBSplineModuliTest : public ::testing::TestWithParam<BSplineModuliInputP
 public:
     PmeBSplineModuliTest() = default;
     //! The whole logic being tested is contained here
-    void runTest()
+    static void runTest()
     {
         /* Getting the input */
         const BSplineModuliInputParameters parameters = GetParam();

@@ -76,7 +76,7 @@ public:
     PmeSolveTest() = default;
 
     //! Sets the programs once
-    static void SetUpTestCase() { s_pmeTestHardwareContexts = createPmeTestHardwareContextList(); }
+    static void SetUpTestSuite() { s_pmeTestHardwareContexts = createPmeTestHardwareContextList(); }
 
     //! The test
     void runTest()

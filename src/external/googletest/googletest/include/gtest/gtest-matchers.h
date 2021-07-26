@@ -300,6 +300,7 @@ class MatcherBase : private MatcherDescriberInterface {
 
   MatcherBase(const MatcherBase& other)
       : vtable_(other.vtable_), buffer_(other.buffer_) {
+    // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks
     if (IsShared()) buffer_.shared->Ref();
   }
 
