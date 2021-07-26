@@ -373,13 +373,13 @@ TEST_P(PmeGatherTest, ReproducesOutputs)
 }
 
 //! Instantiation of the PME gathering test
-INSTANTIATE_TEST_CASE_P(SaneInput,
-                        PmeGatherTest,
-                        ::testing::Combine(::testing::ValuesIn(c_sampleBoxes),
-                                           ::testing::ValuesIn(pmeOrders),
-                                           ::testing::ValuesIn(c_sampleGridSizes),
-                                           ::testing::ValuesIn(c_sampleGrids),
-                                           ::testing::ValuesIn(atomCounts)));
+INSTANTIATE_TEST_SUITE_P(SaneInput,
+                         PmeGatherTest,
+                         ::testing::Combine(::testing::ValuesIn(c_sampleBoxes),
+                                            ::testing::ValuesIn(pmeOrders),
+                                            ::testing::ValuesIn(c_sampleGridSizes),
+                                            ::testing::ValuesIn(c_sampleGrids),
+                                            ::testing::ValuesIn(atomCounts)));
 
 } // namespace
 } // namespace test

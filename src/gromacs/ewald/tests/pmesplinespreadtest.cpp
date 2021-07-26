@@ -372,30 +372,30 @@ auto c_inputPmeOrders = ::testing::Range(3, 5 + 1);
 auto c_inputGridSizes = ::testing::ValuesIn(c_sampleGridSizes);
 
 /*! \brief Instantiation of the test with valid input and 1 atom */
-INSTANTIATE_TEST_CASE_P(SaneInput1,
-                        PmeSplineAndSpreadTest,
-                        ::testing::Combine(c_inputBoxes,
-                                           c_inputPmeOrders,
-                                           c_inputGridSizes,
-                                           ::testing::Values(c_sampleCoordinates1),
-                                           ::testing::Values(c_sampleCharges1)));
+INSTANTIATE_TEST_SUITE_P(SaneInput1,
+                         PmeSplineAndSpreadTest,
+                         ::testing::Combine(c_inputBoxes,
+                                            c_inputPmeOrders,
+                                            c_inputGridSizes,
+                                            ::testing::Values(c_sampleCoordinates1),
+                                            ::testing::Values(c_sampleCharges1)));
 
 /*! \brief Instantiation of the test with valid input and 2 atoms */
-INSTANTIATE_TEST_CASE_P(SaneInput2,
-                        PmeSplineAndSpreadTest,
-                        ::testing::Combine(c_inputBoxes,
-                                           c_inputPmeOrders,
-                                           c_inputGridSizes,
-                                           ::testing::Values(c_sampleCoordinates2),
-                                           ::testing::Values(c_sampleCharges2)));
+INSTANTIATE_TEST_SUITE_P(SaneInput2,
+                         PmeSplineAndSpreadTest,
+                         ::testing::Combine(c_inputBoxes,
+                                            c_inputPmeOrders,
+                                            c_inputGridSizes,
+                                            ::testing::Values(c_sampleCoordinates2),
+                                            ::testing::Values(c_sampleCharges2)));
 /*! \brief Instantiation of the test with valid input and 13 atoms */
-INSTANTIATE_TEST_CASE_P(SaneInput13,
-                        PmeSplineAndSpreadTest,
-                        ::testing::Combine(c_inputBoxes,
-                                           c_inputPmeOrders,
-                                           c_inputGridSizes,
-                                           ::testing::Values(c_sampleCoordinates13),
-                                           ::testing::Values(c_sampleCharges13)));
+INSTANTIATE_TEST_SUITE_P(SaneInput13,
+                         PmeSplineAndSpreadTest,
+                         ::testing::Combine(c_inputBoxes,
+                                            c_inputPmeOrders,
+                                            c_inputGridSizes,
+                                            ::testing::Values(c_sampleCoordinates13),
+                                            ::testing::Values(c_sampleCharges13)));
 } // namespace
 } // namespace test
 } // namespace gmx
