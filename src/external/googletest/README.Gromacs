@@ -8,8 +8,9 @@ philosophy followed by GoogleTest.
 
 This README.Gromacs file is new, of course.
 
-A clang-static-analyzer suppression is added to
-googletest/include/gtest/gtest-matchers.h.
+Some clang-static-analyzer NOLINT suppressions are added to
+googletest/include/gtest/gtest-matchers.h and
+googlemock/include/gmock/gmock-matchers.h.
 
 Some warning-generation flags are removed from
 googletest/cmake/internal_utils.cmake because these are not always

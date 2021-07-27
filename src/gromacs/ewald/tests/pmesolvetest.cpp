@@ -79,7 +79,7 @@ public:
     static void SetUpTestSuite() { s_pmeTestHardwareContexts = createPmeTestHardwareContextList(); }
 
     //! The test
-    void runTest()
+    static void runTest()
     {
         /* Getting the input */
         Matrix3x3                    box;

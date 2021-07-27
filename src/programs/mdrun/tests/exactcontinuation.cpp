@@ -524,6 +524,8 @@ INSTANTIATE_TEST_SUITE_P(Awh,
                                             ::testing::Values("no"),
                                             ::testing::Values(MdpParameterDatabase::Awh)));
 
+#else
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(MdrunNoAppendContinuationIsExactTest);
 #endif
 
 } // namespace

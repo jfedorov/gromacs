@@ -258,7 +258,7 @@ public:
     }
 
     //! The test
-    void runTest()
+    static void runTest()
     {
         /* Getting the input */
         Matrix3x3                 box;

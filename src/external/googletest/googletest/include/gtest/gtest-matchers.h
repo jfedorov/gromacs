@@ -404,7 +404,8 @@ class MatcherBase : private MatcherDescriberInterface {
   };
 
   void Destroy() {
-    if (IsShared() && buffer_.shared->Unref()) {
+      // NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)
+      if (IsShared() && buffer_.shared->Unref()) {
       vtable_->shared_destroy(buffer_.shared);
     }
   }

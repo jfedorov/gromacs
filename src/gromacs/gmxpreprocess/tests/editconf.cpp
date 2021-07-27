@@ -122,6 +122,8 @@ INSTANTIATE_TEST_SUITE_P(
         EditconfTest,
         ::testing::Combine(::testing::Values("fragment1.pdb", "fragment1.gro", "fragment1.g96"),
                            ::testing::Values(efPDB, efGRO, efG96)));
+#else
+GTEST_ALLOW_UNINSTANTIATED_PARAMETERIZED_TEST(EditconfTest);
 #endif
 
 } // namespace

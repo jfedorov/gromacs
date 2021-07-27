@@ -1574,7 +1574,7 @@ class PredicateFormatterFromMatcher {
     }
     ss << "\n  Actual: " << listener.str();
     return AssertionFailure() << ss.str();
-  }
+  } // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks
 
  private:
   const M matcher_;
