@@ -1542,6 +1542,7 @@ class PredicateFormatterFromMatcher {
   // Google Test's EXPECT_PRED_FORMAT1() macro.
   template <typename T>
   AssertionResult operator()(const char* value_text, const T& x) const {
+#ifndef __clang_analyzer__
     // We convert matcher_ to a Matcher<const T&> *now* instead of
     // when the PredicateFormatterFromMatcher object was constructed,
     // as matcher_ may be polymorphic (e.g. NotNull()) and we won't
@@ -1574,7 +1575,10 @@ class PredicateFormatterFromMatcher {
     }
     ss << "\n  Actual: " << listener.str();
     return AssertionFailure() << ss.str();
-  } // NOLINT(clang-analyzer-cplusplus.NewDeleteLeaks
+#else
+    return AssertionSucess();
+#endif
+  }
 
  private:
   const M matcher_;

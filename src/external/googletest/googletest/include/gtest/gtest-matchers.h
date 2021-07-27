@@ -300,8 +300,9 @@ class MatcherBase : private MatcherDescriberInterface {
 
   MatcherBase(const MatcherBase& other)
       : vtable_(other.vtable_), buffer_(other.buffer_) {
-    // NOLINTNEXTLINE(clang-analyzer-cplusplus.NewDeleteLeaks
+#ifndef __clang_analyzer__
     if (IsShared()) buffer_.shared->Ref();
+#endif
   }
 
   MatcherBase& operator=(const MatcherBase& other) {
@@ -404,10 +405,11 @@ class MatcherBase : private MatcherDescriberInterface {
   };
 
   void Destroy() {
-      // NOLINTNEXTLINE(clang-analyzer-core.CallAndMessage)
+#ifndef __clang_analyzer__
       if (IsShared() && buffer_.shared->Unref()) {
       vtable_->shared_destroy(buffer_.shared);
     }
+#endif
   }
 
   template <typename M>
