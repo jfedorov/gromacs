@@ -1576,7 +1576,7 @@ class PredicateFormatterFromMatcher {
     ss << "\n  Actual: " << listener.str();
     return AssertionFailure() << ss.str();
 #else
-    return AssertionSucess();
+    return AssertionSuccess();
 #endif
   }
 
