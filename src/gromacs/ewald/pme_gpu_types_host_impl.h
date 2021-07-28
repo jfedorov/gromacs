@@ -203,6 +203,8 @@ struct PmeGpuSpecific
     DeviceBuffer<float> d_sendGridRighty = nullptr;
     /*! \brief Buffer used to recv PME grid overlap region in Y-dimension*/
     DeviceBuffer<float> d_recvGridRighty = nullptr;
+    /*! \brief The kernelParams.grid.fourierGrid2 float (not float2!) element count (reserved) */
+    int complexGridCapacity2[NUMFEPSTATES] = { 0, 0 };
 };
 
 #endif

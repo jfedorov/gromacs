@@ -202,15 +202,18 @@ void Gpu3dFft::perform3dFft(gmx_fft_direction dir, CommandEvent* timingEvent)
                      "clFFT execution failure");
 }
 
-Gpu3dFft::Gpu3dFft(ivec                 realGridSize,
+Gpu3dFft::Gpu3dFft(const PmeGpu*        /* pmeGpu */,
+                   ivec                 realGridSize,
                    ivec                 realGridSizePadded,
+                   ivec                 /*complexGridSize*/,
                    ivec                 complexGridSizePadded,
                    const bool           useDecomposition,
                    const bool           performOutOfPlaceFFT,
                    const DeviceContext& context,
                    const DeviceStream&  pmeStream,
                    DeviceBuffer<float>  realGrid,
-                   DeviceBuffer<float>  complexGrid) :
+                   DeviceBuffer<float>  complexGrid,
+                   DeviceBuffer<float>  /*complexGrid2*/) :
     impl_(std::make_unique<Impl>(realGridSize,
                                  realGridSizePadded,
                                  complexGridSizePadded,

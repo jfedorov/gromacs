@@ -58,15 +58,18 @@ class Gpu3dFft::Impl
 {
 };
 
-Gpu3dFft::Gpu3dFft(ivec /*realGridSize*/,
+Gpu3dFft::Gpu3dFft(const PmeGpu* /* pmeGpu */,
+                   ivec /*realGridSize*/,
                    ivec /*realGridSizePadded*/,
+                   ivec /*complexGridSize*/,
                    ivec /*complexGridSizePadded*/,
                    const bool /*useDecomposition*/,
                    const bool /*performOutOfPlaceFFT*/,
                    const DeviceContext& /*context*/,
                    const DeviceStream& /*pmeStream*/,
                    DeviceBuffer<float> /*realGrid*/,
-                   DeviceBuffer<float> /*complexGrid*/)
+                   DeviceBuffer<float> /*complexGrid*/,
+                   DeviceBuffer<float>  /*complexGrid2*/)
 {
     GMX_THROW(NotImplementedError("GPU 3DFFT is not implemented in SYCL"));
 }

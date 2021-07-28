@@ -416,8 +416,13 @@ void pmePerformSolve(const gmx_pme_t*  pme,
             switch (method)
             {
                 case PmeSolveAlgorithm::Coulomb:
-                    pme_gpu_solve(pme->gpu, gridIndex, h_grid, gridOrdering, computeEnergyAndVirial);
-                    break;
+                {
+                    const int nodeId = 0;
+                    const int nNodes = 1;
+                    pme_gpu_solve(
+                            pme->gpu, gridIndex, h_grid, gridOrdering, computeEnergyAndVirial, nodeId, nNodes);
+                }
+                break;
 
                 default: GMX_THROW(InternalError("Test not implemented for this mode"));
             }

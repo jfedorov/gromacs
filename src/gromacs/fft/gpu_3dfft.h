@@ -52,6 +52,7 @@
 
 class DeviceContext;
 class DeviceStream;
+class PmeGpu;
 
 namespace gmx
 {
@@ -76,15 +77,18 @@ public:
      * \param[in]  realGrid               Device buffer of floats for the real grid
      * \param[in]  complexGrid            Device buffer of complex floats for the complex grid
      */
-    Gpu3dFft(ivec                 realGridSize,
+    Gpu3dFft(const PmeGpu*        pmeGpu,
+             ivec                 realGridSize,
              ivec                 realGridSizePadded,
+             ivec                 complexGridSize,
              ivec                 complexGridSizePadded,
              bool                 useDecomposition,
              bool                 performOutOfPlaceFFT,
              const DeviceContext& context,
              const DeviceStream&  pmeStream,
              DeviceBuffer<float>  realGrid,
-             DeviceBuffer<float>  complexGrid);
+             DeviceBuffer<float>  complexGrid,
+             DeviceBuffer<float>  complexGrid2);
 
     /*! \brief Destroys the FFT plans. */
     ~Gpu3dFft();
