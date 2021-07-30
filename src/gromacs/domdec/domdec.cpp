@@ -4,7 +4,7 @@
  * Copyright (c) 2005,2006,2007,2008,2009 by the GROMACS development team.
  * Copyright (c) 2010,2011,2012,2013,2014 by the GROMACS development team.
  * Copyright (c) 2015,2016,2017,2018,2019 by the GROMACS development team.
- * Copyright (c) 2020, by the GROMACS development team, led by
+ * Copyright (c) 2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -723,7 +723,14 @@ static int ddcoord2simnodeid(const t_commrec* cr, int x, int y, int z)
         {
             if (cr->dd->comm->ddRankSetup.usePmeOnlyRanks)
             {
-                nodeid = ddindex + gmx_ddcoord2pmeindex(cr, x, y, z);
+                if (cr->dd->comm->cartesianRankSetup.bPP_PME)
+                {
+                    nodeid = ddindex;
+                }
+                else
+                {
+                    nodeid = ddindex + gmx_ddcoord2pmeindex(cr, x, y, z);
+                }
             }
             else
             {
@@ -1563,6 +1570,7 @@ static CartesianRankSetup split_communicator(const gmx::MDLogger& mdlog,
         switch (ddRankOrder)
         {
             case DdRankOrder::pp_pme:
+                cartSetup.bPP_PME = true;
                 GMX_LOG(mdlog.info).appendText("Order of the ranks: PP first, PME last");
                 break;
             case DdRankOrder::interleave:
