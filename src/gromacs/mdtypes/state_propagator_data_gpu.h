@@ -225,6 +225,13 @@ public:
      */
     void waitCoordinatesReadyOnHost(AtomLocality atomLocality);
 
+    /*! \brief Invalidate the host-side coordinates buffer
+     *
+     *  Sets the state of the host-side coordinates buffer to invalid.
+     *  Should be called, when the coordinates update is issued on the device side
+     */
+    void invalidateHostCoordinatesBuffer();
+
 
     /*! \brief Get the velocities buffer on the GPU.
      *

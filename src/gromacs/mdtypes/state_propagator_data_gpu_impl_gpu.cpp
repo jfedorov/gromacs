@@ -311,12 +311,13 @@ DeviceBuffer<RVec> StatePropagatorDataGpu::Impl::getCoordinates()
 void StatePropagatorDataGpu::Impl::copyCoordinatesToGpu(const gmx::ArrayRef<const gmx::RVec> h_x,
                                                         AtomLocality atomLocality)
 {
+    GMX_ASSERT(xHostState_ == HostBufferState::Valid,
+               "Host-side coordinates should be valid before H2D copy.");
     GMX_ASSERT(atomLocality < AtomLocality::All,
                formatString("Wrong atom locality. Only Local and NonLocal are allowed for "
                             "coordinate transfers, passed value is \"%s\"",
                             enumValueToString(atomLocality))
                        .c_str());
-
     const DeviceStream* deviceStream = xCopyStreams_[atomLocality];
     GMX_ASSERT(deviceStream != nullptr,
                "No stream is valid for copying positions with given atom locality.");
@@ -390,6 +391,8 @@ void StatePropagatorDataGpu::Impl::copyCoordinatesFromGpu(gmx::ArrayRef<gmx::RVe
     GMX_ASSERT(deviceStream != nullptr,
                "No stream is valid for copying positions with given atom locality.");
 
+    xHostState_ = HostBufferState::InTransit;
+
     wallcycle_start_nocount(wcycle_, WallCycleCounter::LaunchGpu);
     wallcycle_sub_start(wcycle_, WallCycleSubCounter::LaunchStatePropagatorData);
 
@@ -403,9 +406,20 @@ void StatePropagatorDataGpu::Impl::copyCoordinatesFromGpu(gmx::ArrayRef<gmx::RVe
 
 void StatePropagatorDataGpu::Impl::waitCoordinatesReadyOnHost(AtomLocality atomLocality)
 {
-    wallcycle_start(wcycle_, WallCycleCounter::WaitGpuStatePropagatorData);
-    xReadyOnHost_[atomLocality].waitForEvent();
-    wallcycle_stop(wcycle_, WallCycleCounter::WaitGpuStatePropagatorData);
+    GMX_ASSERT(xHostState_ != HostBufferState::Invalid,
+               "Trying to wait for the coordinates before the D2H copy was issued");
+
+    if (xHostState_ == HostBufferState::InTransit)
+    {
+        wallcycle_start(wcycle_, WallCycleCounter::WaitGpuStatePropagatorData);
+        xReadyOnHost_[atomLocality].waitForEvent();
+        wallcycle_stop(wcycle_, WallCycleCounter::WaitGpuStatePropagatorData);
+    }
+}
+
+void StatePropagatorDataGpu::Impl::invalidateHostCoordinatesBuffer()
+{
+    xHostState_ = HostBufferState::Invalid;
 }
 
 
@@ -637,6 +651,11 @@ void StatePropagatorDataGpu::copyCoordinatesFromGpu(gmx::ArrayRef<RVec> h_x, Ato
 void StatePropagatorDataGpu::waitCoordinatesReadyOnHost(AtomLocality atomLocality)
 {
     return impl_->waitCoordinatesReadyOnHost(atomLocality);
+}
+
+void StatePropagatorDataGpu::invalidateHostCoordinatesBuffer()
+{
+    return impl_->invalidateHostCoordinatesBuffer();
 }
 
 

@@ -60,6 +60,14 @@ struct gmx_wallcycle;
 namespace gmx
 {
 
+enum class HostBufferState : int
+{
+    Valid,
+    InTransit,
+    Invalid,
+    Count
+};
+
 class StatePropagatorDataGpu::Impl
 {
 public:
@@ -208,6 +216,13 @@ public:
      *  \param[in] atomLocality  Locality of the particles to wait for.
      */
     void waitCoordinatesReadyOnHost(AtomLocality atomLocality);
+
+    /*! \brief Invalidate the host-side coordinates buffer
+     *
+     *  Sets the state of the host-side coordinates buffer to invalid.
+     *  Should be called, when the coordinates update is issued on the device side
+     */
+    void invalidateHostCoordinatesBuffer();
 
 
     /*! \brief Get the velocities buffer on the GPU.
@@ -366,6 +381,8 @@ private:
     int d_xSize_ = -1;
     //! Allocation size for the positions buffer
     int d_xCapacity_ = -1;
+    //! State of the host-side positions buffer
+    HostBufferState xHostState_ = HostBufferState::Valid;
 
     //! Device velocities buffer
     DeviceBuffer<RVec> d_v_;

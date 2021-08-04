@@ -149,6 +149,13 @@ void StatePropagatorDataGpu::copyCoordinatesFromGpu(gmx::ArrayRef<gmx::RVec> /* 
                "GPU implementation.");
 }
 
+void invalidateHostCoordinatesBuffer()
+{
+    GMX_ASSERT(!impl_,
+               "A CPU stub method from GPU state propagator data was called instead of one from "
+               "GPU implementation.");
+}
+
 
 DeviceBuffer<RVec> StatePropagatorDataGpu::getVelocities()
 {
