@@ -64,7 +64,7 @@
 class GpuEventSynchronizer
 {
 public:
-    GpuEventSynchronizer()
+    GpuEventSynchronizer() : marked_(false)
     {
         cudaError_t gmx_used_in_debug stat = cudaEventCreateWithFlags(&event_, cudaEventDisableTiming);
         GMX_RELEASE_ASSERT(stat == cudaSuccess,
@@ -88,16 +88,20 @@ public:
      */
     inline void markEvent(const DeviceStream& deviceStream)
     {
+        GMX_RELEASE_ASSERT(!marked_, "marking twice");
         cudaError_t gmx_used_in_debug stat = cudaEventRecord(event_, deviceStream.stream());
         GMX_ASSERT(stat == cudaSuccess,
                    ("cudaEventRecord failed. " + gmx::getDeviceErrorString(stat)).c_str());
+        marked_ = true;
     }
     /*! \brief Synchronizes the host thread on the marked event. */
     inline void waitForEvent()
     {
+        GMX_RELEASE_ASSERT(marked_, "wait before marking / consuming twice");
         cudaError_t gmx_used_in_debug stat = cudaEventSynchronize(event_);
         GMX_ASSERT(stat == cudaSuccess,
                    ("cudaEventSynchronize failed. " + gmx::getDeviceErrorString(stat)).c_str());
+        marked_ = false;
     }
     /*! \brief Checks the completion of the underlying event and resets the object if it was. */
     inline bool isReady()
@@ -110,15 +114,18 @@ public:
     /*! \brief Enqueues a wait for the recorded event in stream \p stream */
     inline void enqueueWaitEvent(const DeviceStream& deviceStream)
     {
+        GMX_RELEASE_ASSERT(marked_, "enqueueWait before marking / consuming twice");
         cudaError_t gmx_used_in_debug stat = cudaStreamWaitEvent(deviceStream.stream(), event_, 0);
         GMX_ASSERT(stat == cudaSuccess,
                    ("cudaStreamWaitEvent failed. " + gmx::getDeviceErrorString(stat)).c_str());
+        marked_ = false;
     }
     //! Reset the event (not needed in CUDA)
-    inline void reset() {}
+    inline void reset() { marked_ = false; }
 
 private:
     cudaEvent_t event_;
+    bool        marked_;
 };
 
 #endif
