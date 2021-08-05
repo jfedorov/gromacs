@@ -415,6 +415,7 @@ void StatePropagatorDataGpu::Impl::waitCoordinatesReadyOnHost(AtomLocality atomL
         xReadyOnHost_[atomLocality].waitForEvent();
         wallcycle_stop(wcycle_, WallCycleCounter::WaitGpuStatePropagatorData);
     }
+    xHostState_ = HostBufferState::Valid;
 }
 
 void StatePropagatorDataGpu::Impl::invalidateHostCoordinatesBuffer()
