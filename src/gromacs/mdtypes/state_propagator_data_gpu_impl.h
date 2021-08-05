@@ -60,11 +60,30 @@ struct gmx_wallcycle;
 namespace gmx
 {
 
+/*! \brief The states of the host-side buffer
+ *
+ * Used to keep track of the data when executing asynchronously.
+ * When the buffer update is requested on the device, the host-side buffer
+ * is invalidated. When the device to host copy is requested, the host-side
+ * buffer is set to InTransit state. The buffer becomes valid, when one ensures
+ * that the device event on copy completeness is waited for.
+ *
+ * Allowed transitions are:
+ *
+ * Valid --> Invalid --> InTransit
+ *   ^                       |
+ *   └-----------------------┘
+ *
+ */
 enum class HostBufferState : int
 {
+    //! The data on the host-side is valid.
     Valid,
+    //! The device to host copy was issued, but may not be completed yet.
     InTransit,
+    //! The buffer was or being updated on the device and this is not yet reflected on the host side.
     Invalid,
+    //! Number of states
     Count
 };
 
