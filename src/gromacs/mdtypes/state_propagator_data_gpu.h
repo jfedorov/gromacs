@@ -229,8 +229,10 @@ public:
      *
      *  Sets the state of the host-side coordinates buffer to invalid.
      *  Should be called, when the coordinates update is issued on the device side
+     *
+     *  \param[in] atomLocality  Locality of the particles to invalidate buffer for.
      */
-    void invalidateHostCoordinatesBuffer();
+    void invalidateHostCoordinatesBuffer(AtomLocality atomLocality);
 
 
     /*! \brief Get the velocities buffer on the GPU.

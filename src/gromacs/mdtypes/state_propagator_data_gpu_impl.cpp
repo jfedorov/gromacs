@@ -149,7 +149,7 @@ void StatePropagatorDataGpu::copyCoordinatesFromGpu(gmx::ArrayRef<gmx::RVec> /* 
                "GPU implementation.");
 }
 
-void StatePropagatorDataGpu::invalidateHostCoordinatesBuffer()
+void StatePropagatorDataGpu::invalidateHostCoordinatesBuffer(AtomLocality /* atomLocality */)
 {
     GMX_ASSERT(!impl_,
                "A CPU stub method from GPU state propagator data was called instead of one from "

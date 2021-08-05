@@ -84,7 +84,9 @@ enum class HostBufferState : int
     //! The buffer was or being updated on the device and this is not yet reflected on the host side.
     Invalid,
     //! Number of states
-    Count
+    Count,
+    //! Default
+    Default = Valid
 };
 
 class StatePropagatorDataGpu::Impl
@@ -240,8 +242,10 @@ public:
      *
      *  Sets the state of the host-side coordinates buffer to invalid.
      *  Should be called, when the coordinates update is issued on the device side
+     *
+     *  \param[in] atomLocality  Locality of the particles to invalidate buffer for.
      */
-    void invalidateHostCoordinatesBuffer();
+    void invalidateHostCoordinatesBuffer(AtomLocality atomLocality);
 
 
     /*! \brief Get the velocities buffer on the GPU.
@@ -401,7 +405,7 @@ private:
     //! Allocation size for the positions buffer
     int d_xCapacity_ = -1;
     //! State of the host-side positions buffer
-    HostBufferState xHostState_ = HostBufferState::Valid;
+    EnumerationArray<AtomLocality, HostBufferState> xHostState_;
 
     //! Device velocities buffer
     DeviceBuffer<RVec> d_v_;

@@ -1579,6 +1579,7 @@ void do_force(FILE*                               fplog,
                 // The following must be called after local setCoordinates (which records an event
                 // when the coordinate data has been copied to the device).
                 communicateGpuHaloCoordinates(*cr, box, localXReadyOnDevice);
+                stateGpu->invalidateHostCoordinatesBuffer(AtomLocality::NonLocal);
 
                 if (domainWork.haveCpuBondedWork || domainWork.haveFreeEnergyWork)
                 {
