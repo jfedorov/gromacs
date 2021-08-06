@@ -64,7 +64,10 @@
 class GpuEventSynchronizer
 {
 public:
-    GpuEventSynchronizer() : marked_(false)
+    GpuEventSynchronizer() : 
+        marked_(false)
+        , maxConsumptionCount_(2)
+        , minConsumptionCount_(0)
     {
         cudaError_t gmx_used_in_debug stat = cudaEventCreateWithFlags(&event_, cudaEventDisableTiming);
         GMX_RELEASE_ASSERT(stat == cudaSuccess,
@@ -88,20 +91,24 @@ public:
      */
     inline void markEvent(const DeviceStream& deviceStream)
     {
-        GMX_RELEASE_ASSERT(!marked_, "marking twice");
+        //GMX_RELEASE_ASSERT(!marked_, "marking twice");
+        GMX_RELEASE_ASSERT(consumptionCount_ >= minConsumptionCount_, ("event not consumed fully, consumptionCount_ = " + std::to_string(consumptionCount_)).c_str());
         cudaError_t gmx_used_in_debug stat = cudaEventRecord(event_, deviceStream.stream());
         GMX_ASSERT(stat == cudaSuccess,
                    ("cudaEventRecord failed. " + gmx::getDeviceErrorString(stat)).c_str());
         marked_ = true;
+        consumptionCount_ = 0;
     }
     /*! \brief Synchronizes the host thread on the marked event. */
     inline void waitForEvent()
     {
-        GMX_RELEASE_ASSERT(marked_, "wait before marking / consuming twice");
+        //GMX_RELEASE_ASSERT(marked_, "wait before marking / consuming twice");
+        GMX_RELEASE_ASSERT(consumptionCount_ < maxConsumptionCount_, "enqueueWait before marking / consuming twice");
         cudaError_t gmx_used_in_debug stat = cudaEventSynchronize(event_);
         GMX_ASSERT(stat == cudaSuccess,
                    ("cudaEventSynchronize failed. " + gmx::getDeviceErrorString(stat)).c_str());
         marked_ = false;
+        consumptionCount_++;
     }
     /*! \brief Checks the completion of the underlying event and resets the object if it was. */
     inline bool isReady()
@@ -114,18 +121,28 @@ public:
     /*! \brief Enqueues a wait for the recorded event in stream \p stream */
     inline void enqueueWaitEvent(const DeviceStream& deviceStream)
     {
-        GMX_RELEASE_ASSERT(marked_, "enqueueWait before marking / consuming twice");
+        //GMX_RELEASE_ASSERT(marked_, "enqueueWait before marking / consuming twice");
+        std::string s = "enqueueWait before marking / consuming twice" + std::to_string(consumptionCount_) + ">=" + std::to_string(maxConsumptionCount_);
+        GMX_RELEASE_ASSERT(consumptionCount_ < maxConsumptionCount_, s.c_str());
         cudaError_t gmx_used_in_debug stat = cudaStreamWaitEvent(deviceStream.stream(), event_, 0);
         GMX_ASSERT(stat == cudaSuccess,
                    ("cudaStreamWaitEvent failed. " + gmx::getDeviceErrorString(stat)).c_str());
         marked_ = false;
+        consumptionCount_++;
     }
     //! Reset the event (not needed in CUDA)
-    inline void reset() { marked_ = false; }
+    inline void reset() 
+    {
+        marked_ = false;
+        consumptionCount_ = 0;
+    }
 
 private:
     cudaEvent_t event_;
     bool        marked_;
+    int         consumptionCount_ = 0;
+    int         maxConsumptionCount_ = 1;
+    int         minConsumptionCount_ = 1;
 };
 
 #endif
