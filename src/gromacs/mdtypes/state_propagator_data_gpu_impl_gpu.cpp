@@ -357,6 +357,11 @@ StatePropagatorDataGpu::Impl::getCoordinatesReadyOnDeviceEvent(AtomLocality atom
     }
     else
     {
+        if (stepWork.doNeighborSearch)
+        {
+            // reset the event of the last update prior to search
+            xUpdatedOnDevice_.reset();
+        }
         return &xReadyOnDevice_[atomLocality];
     }
 }
