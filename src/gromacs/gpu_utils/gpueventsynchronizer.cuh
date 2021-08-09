@@ -67,11 +67,15 @@ public:
     GpuEventSynchronizer() : 
         marked_(false)
         , maxConsumptionCount_(2)
-        , minConsumptionCount_(0)
+        , minConsumptionCount_(1)
     {
         cudaError_t gmx_used_in_debug stat = cudaEventCreateWithFlags(&event_, cudaEventDisableTiming);
         GMX_RELEASE_ASSERT(stat == cudaSuccess,
                            ("cudaEventCreate failed. " + gmx::getDeviceErrorString(stat)).c_str());
+
+        // initialize the first to the require minimum count so we do not trigger an assertion
+        // at the first markEvent()
+        consumptionCount_ = minConsumptionCount_;
     }
     ~GpuEventSynchronizer()
     {
@@ -116,13 +120,17 @@ public:
         cudaError_t gmx_used_in_debug stat = cudaEventQuery(event_);
         GMX_ASSERT((stat == cudaSuccess) || (stat == cudaErrorNotReady),
                    ("cudaEventQuery failed. " + gmx::getDeviceErrorString(stat)).c_str());
+        if (stat == cudaSuccess)
+        {
+            consumptionCount_++;
+        }
         return (stat == cudaSuccess);
     }
     /*! \brief Enqueues a wait for the recorded event in stream \p stream */
     inline void enqueueWaitEvent(const DeviceStream& deviceStream)
     {
         //GMX_RELEASE_ASSERT(marked_, "enqueueWait before marking / consuming twice");
-        std::string s = "enqueueWait before marking / consuming twice" + std::to_string(consumptionCount_) + ">=" + std::to_string(maxConsumptionCount_);
+        std::string s = "enqueueWait before marking / consuming twice: " + std::to_string(consumptionCount_) + ">=" + std::to_string(maxConsumptionCount_);
         GMX_RELEASE_ASSERT(consumptionCount_ < maxConsumptionCount_, s.c_str());
         cudaError_t gmx_used_in_debug stat = cudaStreamWaitEvent(deviceStream.stream(), event_, 0);
         GMX_ASSERT(stat == cudaSuccess,
@@ -134,13 +142,13 @@ public:
     inline void reset() 
     {
         marked_ = false;
-        consumptionCount_ = 0;
+        consumptionCount_ = minConsumptionCount_;
     }
 
 private:
     cudaEvent_t event_;
     bool        marked_;
-    int         consumptionCount_ = 0;
+    int         consumptionCount_;
     int         maxConsumptionCount_ = 1;
     int         minConsumptionCount_ = 1;
 };
