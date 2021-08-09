@@ -64,11 +64,11 @@
 class GpuEventSynchronizer
 {
 public:
-    GpuEventSynchronizer() : 
-        marked_(false)
-        , maxConsumptionCount_(2)
-        , minConsumptionCount_(1)
+    GpuEventSynchronizer(int minConsumptionCount, int maxConsumptionCount) :
+        minConsumptionCount_(minConsumptionCount), 
+        maxConsumptionCount_(maxConsumptionCount)
     {
+        GMX_ASSERT(minConsumptionCount <= maxConsumptionCount, "minConsumptionCount > maxConsumptionCount");
         cudaError_t gmx_used_in_debug stat = cudaEventCreateWithFlags(&event_, cudaEventDisableTiming);
         GMX_RELEASE_ASSERT(stat == cudaSuccess,
                            ("cudaEventCreate failed. " + gmx::getDeviceErrorString(stat)).c_str());
@@ -77,6 +77,8 @@ public:
         // at the first markEvent()
         consumptionCount_ = minConsumptionCount_;
     }
+
+    GpuEventSynchronizer() : GpuEventSynchronizer(1, 1) {}
     ~GpuEventSynchronizer()
     {
         cudaError_t gmx_used_in_debug stat = cudaEventDestroy(event_);
@@ -100,7 +102,7 @@ public:
         cudaError_t gmx_used_in_debug stat = cudaEventRecord(event_, deviceStream.stream());
         GMX_ASSERT(stat == cudaSuccess,
                    ("cudaEventRecord failed. " + gmx::getDeviceErrorString(stat)).c_str());
-        marked_ = true;
+        //marked_ = true;
         consumptionCount_ = 0;
     }
     /*! \brief Synchronizes the host thread on the marked event. */
@@ -111,7 +113,7 @@ public:
         cudaError_t gmx_used_in_debug stat = cudaEventSynchronize(event_);
         GMX_ASSERT(stat == cudaSuccess,
                    ("cudaEventSynchronize failed. " + gmx::getDeviceErrorString(stat)).c_str());
-        marked_ = false;
+        //marked_ = false;
         consumptionCount_++;
     }
     /*! \brief Checks the completion of the underlying event and resets the object if it was. */
@@ -135,22 +137,22 @@ public:
         cudaError_t gmx_used_in_debug stat = cudaStreamWaitEvent(deviceStream.stream(), event_, 0);
         GMX_ASSERT(stat == cudaSuccess,
                    ("cudaStreamWaitEvent failed. " + gmx::getDeviceErrorString(stat)).c_str());
-        marked_ = false;
+        //marked_ = false;
         consumptionCount_++;
     }
     //! Reset the event (not needed in CUDA)
     inline void reset() 
     {
-        marked_ = false;
+        //marked_ = false;
         consumptionCount_ = minConsumptionCount_;
     }
 
 private:
     cudaEvent_t event_;
-    bool        marked_;
+    //bool        marked_;
     int         consumptionCount_;
-    int         maxConsumptionCount_ = 1;
-    int         minConsumptionCount_ = 1;
+    int         minConsumptionCount_;
+    int         maxConsumptionCount_;
 };
 
 #endif
