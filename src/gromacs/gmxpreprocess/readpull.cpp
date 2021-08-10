@@ -40,6 +40,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
+#include <regex>
 
 #include "gromacs/domdec/localatomsetmanager.h"
 #include "gromacs/fileio/readinp.h"
@@ -329,12 +330,19 @@ static void init_pull_coord(t_pull_coord*        pcrd,
         for (const auto& previousPcrd : pull.coord)
         {
             previousCoordOutputIndex++;
+            // See if the previous variable is used by the transformatino coord
+            // Note that a simple std::string::find won't work since we don't want x1 to match x11 etc.
+            std::string previousPcrdName = gmx::formatString("x%d(\\D|$)", previousCoordOutputIndex);
+            std::regex  rx(previousPcrdName);
 
-            std::string previousPcrdName = gmx::formatString("x%d", previousCoordOutputIndex);
-            if (pcrd->expression.find(previousPcrdName) == std::string::npos)
+            std::ptrdiff_t number_of_matches = std::distance(
+                    std::sregex_iterator(pcrd->expression.begin(), pcrd->expression.end(), rx),
+                    std::sregex_iterator());
+
+            if (number_of_matches == 0)
             {
                 // This previous coordinate is not used in this transformation, do not check it
-                break;
+                continue;
             }
 
             if (previousPcrd.eType == PullingAlgorithm::Constraint)
@@ -593,7 +601,9 @@ void checkPullCoords(gmx::ArrayRef<const t_pull_group> pullGroups, gmx::ArrayRef
 
         if (pcrd.eGeom == PullGroupGeometry::Transformation)
         {
-            GMX_RELEASE_ASSERT(pcrd.ngroup == 0, "Transformation coordinates don't use groups");
+            GMX_RELEASE_ASSERT(pcrd.ngroup == 0,
+                               "Transformation coordinates don't use groups and "
+                               "should have 'ngroup' set to zero");
             continue;
         }
         if (pcrd.group[0] < 0 || pcrd.group[0] >= int(pullGroups.size()) || pcrd.group[1] < 0
