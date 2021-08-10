@@ -82,17 +82,20 @@ int64_t findNumEnergyGroups(gmx::ArrayRef<int64_t> particleInteractionFlags);
 //! Helper to translate between the different enumeration values.
 Nbnxm::KernelType translateBenchmarkEnum(const SimdKernels& kernel);
 
-/*! \brief Checks the kernel setup
+/*! \brief Checks the kernel Simd setup in CPU case
  *
  * Throws an exception when the kernel is not available.
  */
-void checkKernelSetup(SimdKernels nbnxmSimd);
+void checkKernelSetupSimd(SimdKernels nbnxmSimd);
 
-//! Creates and returns the kernel setup
-Nbnxm::KernelSetup createKernelSetupCPU(const NBKernelOptions& options);
+//! Creates and returns the kernel setup for CPU
+Nbnxm::KernelSetup createKernelSetupCPU(const SimdKernels nbnxmSimd, const bool useTabulatedEwaldCorr);
+
+//! Creates and returns the kernel setup for GPU
+Nbnxm::KernelSetup createKernelSetupGPU(const SimdKernels nbnxmSimd, const bool useTabulatedEwaldCorr);
 
 //! Create Particle info array to mark those that undergo VdV interaction
-std::vector<int64_t> createParticleInfoAllVdv(size_t numParticles);
+std::vector<int64_t> createParticleInfoAllVdw(size_t numParticles);
 
 //! Create the non-bonded parameter vector in GROMACS format
 std::vector<real> createNonBondedParameters(const std::vector<ParticleType>& particleTypes,
@@ -100,6 +103,12 @@ std::vector<real> createNonBondedParameters(const std::vector<ParticleType>& par
 
 //! Create a step work object
 gmx::StepWorkload createStepWorkload(const NBKernelOptions& options);
+
+//! Create a SimulationWorkload object for use with createDeviceStreamManager
+gmx::SimulationWorkload createSimulationWorkloadGpu(const NBKernelOptions& options);
+
+std::shared_ptr<gmx::DeviceStreamManager> createDeviceStreamManager(const DeviceInformation& deviceInfo,
+                                                                    const gmx::SimulationWorkload& simulationWorkload);
 
 //! Computes the Ewald splitting coefficient for Coulomb
 real ewaldCoeff(real ewald_rtol, real pairlistCutoff);
@@ -112,6 +121,13 @@ std::unique_ptr<nonbonded_verlet_t> createNbnxmCPU(size_t                    num
                                                    const NBKernelOptions&    options,
                                                    int                       numEnergyGroups,
                                                    gmx::ArrayRef<const real> nonbondedParameters);
+
+//! Create nonbonded_verlet_gpu object
+std::unique_ptr<nonbonded_verlet_t> createNbnxmGPU(size_t                     numParticleTypes,
+                                                   const NBKernelOptions&     options,
+                                                   const std::vector<real>&   nonbondedParameters,
+                                                   const interaction_const_t& interactionConst,
+                                                   std::shared_ptr<gmx::DeviceStreamManager> deviceStreamManager);
 
 //! Set number of OpenMP threads in the GROMACS backend
 void setGmxNonBondedNThreads(int numThreads);

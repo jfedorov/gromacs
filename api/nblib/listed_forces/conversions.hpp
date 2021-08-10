@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2020,2021, by the GROMACS development team, led by
+ * Copyright (c) 2020, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -58,7 +58,7 @@ namespace nblib
 
 /*! this trait maps nblib InteractionTypes to the corresponding gmx enum
  *
- * @tparam InteractionType
+ * \tparam InteractionType
  */
 template<class InteractionType>
 struct ListedIndex
@@ -91,7 +91,42 @@ struct ListedIndex<G96BondType> : std::integral_constant<int, F_G96BONDS>
 };
 
 template<>
+struct ListedIndex<PairLJType> : std::integral_constant<int, F_LJ14>
+{
+};
+
+template<>
 struct ListedIndex<HarmonicAngle> : std::integral_constant<int, F_ANGLES>
+{
+};
+
+template<>
+struct ListedIndex<G96Angle> : std::integral_constant<int, F_G96ANGLES>
+{
+};
+
+template<>
+struct ListedIndex<LinearAngle> : std::integral_constant<int, F_LINEAR_ANGLES>
+{
+};
+
+template<>
+struct ListedIndex<RestrictedAngle> : std::integral_constant<int, F_RESTRANGLES>
+{
+};
+
+template<>
+struct ListedIndex<QuarticAngle> : std::integral_constant<int, F_QUARTIC_ANGLES>
+{
+};
+
+template<>
+struct ListedIndex<CrossBondBond> : std::integral_constant<int, F_CROSS_BOND_BONDS>
+{
+};
+
+template<>
+struct ListedIndex<CrossBondAngle> : std::integral_constant<int, F_CROSS_BOND_ANGLES>
 {
 };
 
@@ -119,50 +154,313 @@ namespace detail
 {
 
 template<class InteractionData>
-void transferParameters([[maybe_unused]] const InteractionData& interactionData,
-                        [[maybe_unused]] gmx_ffparams_t&        gmx_params)
+inline void transferParameters([[maybe_unused]] const InteractionData& interactionDataA,
+                               [[maybe_unused]] const InteractionData& interactionDataB,
+                               [[maybe_unused]] gmx_ffparams_t&        gmx_params)
 {
 }
 
-template<>
-void transferParameters(const ListedTypeData<HarmonicBondType>& interactions, gmx_ffparams_t& gmx_params)
+template<class InteractionData>
+inline void transferParameters([[maybe_unused]] const InteractionData& interactionData,
+                               [[maybe_unused]] gmx_ffparams_t&        gmx_params)
 {
-    for (const auto& hbond : interactions.parameters)
+    transferParameters(interactionData, interactionData, gmx_params);
+}
+
+//! \brief Harmonic bond parameter conversion function
+template<>
+inline void transferParameters(const ListedTypeData<HarmonicBondType>& interactionsA,
+                               const ListedTypeData<HarmonicBondType>& interactionsB,
+                               gmx_ffparams_t& gmx_params)
+{
+    if (interactionsA.parameters.size() != interactionsB.parameters.size() && interactionsA.indices.size() != interactionsB.indices.size())
+    {
+        throw InputException("Harmonic bond interactions array mismatch for A & B");
+    }
+
+    for (size_t i = 0; i < interactionsA.parameters.size(); i++)
     {
         t_iparams param;
-        param.harmonic.krA = hbond.forceConstant();
-        param.harmonic.rA  = hbond.equilConstant();
+        param.harmonic.krA = interactionsA.parameters[i].forceConstant();
+        param.harmonic.rA  = interactionsA.parameters[i].equilConstant();
+        param.harmonic.krB = interactionsB.parameters[i].forceConstant();
+        param.harmonic.rB  = interactionsB.parameters[i].equilConstant();
         gmx_params.iparams.push_back(param);
     }
 }
 
+//! \brief G96 bond parameter conversion function
 template<>
-void transferParameters(const ListedTypeData<HarmonicAngle>& interactions, gmx_ffparams_t& gmx_params)
+inline void transferParameters(const ListedTypeData<G96BondType>& interactionsA,
+                               const ListedTypeData<G96BondType>& interactionsB,
+                               gmx_ffparams_t& gmx_params)
+{
+    if (interactionsA.parameters.size() != interactionsB.parameters.size() && interactionsA.indices.size() != interactionsB.indices.size())
+    {
+        throw InputException("G96 bond interactions array mismatch for A & B");
+    }
+
+    for (size_t i = 0; i < interactionsA.parameters.size(); i++)
+    {
+        t_iparams param;
+        param.harmonic.krA = interactionsA.parameters[i].forceConstant();
+        param.harmonic.rA  = interactionsA.parameters[i].equilConstant();
+        param.harmonic.krB = interactionsB.parameters[i].forceConstant();
+        param.harmonic.rB  = interactionsB.parameters[i].equilConstant();
+        gmx_params.iparams.push_back(param);
+    }
+}
+
+//! \brief FENE bond parameter conversion function
+template<>
+inline void transferParameters(const ListedTypeData<FENEBondType>& interactions, gmx_ffparams_t& gmx_params)
+{
+    for (const auto& bond : interactions.parameters)
+    {
+        t_iparams param;
+        param.fene.kb = bond.forceConstant();
+        param.fene.bm = bond.equilConstant();
+        gmx_params.iparams.push_back(param);
+    }
+}
+
+//! \brief Cubic bond parameter conversion function
+template<>
+inline void transferParameters(const ListedTypeData<CubicBondType>& interactions, gmx_ffparams_t& gmx_params)
+{
+    for (const auto& bond : interactions.parameters)
+    {
+        t_iparams param;
+        param.cubic.kcub = bond.cubicForceConstant();
+        param.cubic.kb   = bond.quadraticForceConstant();
+        param.cubic.b0   = bond.equilDistance();
+        gmx_params.iparams.push_back(param);
+    }
+}
+
+//! \brief Morse bond parameter conversion function
+template<>
+inline void transferParameters(const ListedTypeData<MorseBondType>& interactionsA,
+                               const ListedTypeData<MorseBondType>& interactionsB,
+                               gmx_ffparams_t& gmx_params)
+{
+    if (interactionsA.parameters.size() != interactionsB.parameters.size() && interactionsA.indices.size() != interactionsB.indices.size())
+    {
+        throw InputException("Morse bond interactions array mismatch for A & B");
+    }
+
+    for (size_t i = 0; i < interactionsA.parameters.size(); i++)
+    {
+        t_iparams param;
+        param.morse.b0A   = interactionsA.parameters[i].equilDistance();
+        param.morse.betaA = interactionsA.parameters[i].exponent();
+        param.morse.cbA   = interactionsA.parameters[i].forceConstant();
+        param.morse.b0B   = interactionsB.parameters[i].equilDistance();
+        param.morse.betaB = interactionsB.parameters[i].exponent();
+        param.morse.cbB   = interactionsB.parameters[i].forceConstant();
+        gmx_params.iparams.push_back(param);
+    }
+}
+
+//! \brief Pair LJ 1-4 interaction parameter conversion function
+template<>
+inline void transferParameters(const ListedTypeData<PairLJType>& interactionsA,
+                               const ListedTypeData<PairLJType>& interactionsB, gmx_ffparams_t& gmx_params)
+{
+    if (interactionsA.parameters.size() != interactionsB.parameters.size() && interactionsA.indices.size() != interactionsB.indices.size())
+    {
+        throw InputException("LJ1-4 pair interactions array mismatch for A & B");
+    }
+
+    for (size_t i = 0; i < interactionsA.parameters.size(); i++)
+    {
+        t_iparams param;
+        param.lj14.c6A  = interactionsA.parameters[i].c6();
+        param.lj14.c12A = interactionsA.parameters[i].c12();
+        param.lj14.c6B  = interactionsB.parameters[i].c6();
+        param.lj14.c12B = interactionsB.parameters[i].c12();
+        gmx_params.iparams.push_back(param);
+    }
+}
+
+//! \brief Harmonic angle parameter conversion function
+template<>
+inline void transferParameters(const ListedTypeData<HarmonicAngle>& interactionsA,
+                               const ListedTypeData<HarmonicAngle>& interactionsB, gmx_ffparams_t& gmx_params)
+{
+    if (interactionsA.parameters.size() != interactionsB.parameters.size() && interactionsA.indices.size() != interactionsB.indices.size())
+    {
+        throw InputException("Harmonic angle interactions array mismatch for A & B");
+    }
+
+    for (size_t i = 0; i < interactionsA.parameters.size(); i++)
+    {
+        t_iparams param;
+        param.harmonic.krA = interactionsA.parameters[i].forceConstant();
+        param.harmonic.rA  = interactionsA.parameters[i].equilConstant() / DEG2RAD;
+        param.harmonic.krB = interactionsB.parameters[i].forceConstant();
+        param.harmonic.rB  = interactionsB.parameters[i].equilConstant() / DEG2RAD;
+        gmx_params.iparams.push_back(param);
+    }
+}
+
+//! \brief G96 angle parameter conversion function
+template<>
+inline void transferParameters(const ListedTypeData<G96Angle>& interactionsA,
+                               const ListedTypeData<G96Angle>& interactionsB, gmx_ffparams_t& gmx_params)
+{
+    if (interactionsA.parameters.size() != interactionsB.parameters.size() && interactionsA.indices.size() != interactionsB.indices.size())
+    {
+        throw InputException("G96 angle interactions array mismatch for A & B");
+    }
+
+    for (size_t i = 0; i < interactionsA.parameters.size(); i++)
+    {
+        t_iparams param;
+        param.harmonic.krA = interactionsA.parameters[i].forceConstant();
+        param.harmonic.rA  = interactionsA.parameters[i].equilConstant();
+        param.harmonic.krB = interactionsB.parameters[i].forceConstant();
+        param.harmonic.rB  = interactionsB.parameters[i].equilConstant();
+        gmx_params.iparams.push_back(param);
+    }
+}
+
+//! \brief Linear angle parameter conversion function
+template<>
+inline void transferParameters(const ListedTypeData<LinearAngle>& interactionsA,
+                               const ListedTypeData<LinearAngle>& interactionsB, gmx_ffparams_t& gmx_params)
+{
+    if (interactionsA.parameters.size() != interactionsB.parameters.size() && interactionsA.indices.size() != interactionsB.indices.size())
+    {
+        throw InputException("Linear angle interactions array mismatch for A & B");
+    }
+
+    for (size_t i = 0; i < interactionsA.parameters.size(); i++)
+    {
+        t_iparams param;
+        param.linangle.klinA = interactionsA.parameters[i].forceConstant();
+        param.linangle.aA    = interactionsA.parameters[i].equilConstant();
+        param.linangle.klinB = interactionsB.parameters[i].forceConstant();
+        param.linangle.aB    = interactionsB.parameters[i].equilConstant();
+        gmx_params.iparams.push_back(param);
+    }
+}
+
+//! \brief Restricted angle parameter conversion function
+template<>
+inline void transferParameters(const ListedTypeData<RestrictedAngle>& interactionsA,
+                               const ListedTypeData<RestrictedAngle>& interactionsB, gmx_ffparams_t& gmx_params)
+{
+    if (interactionsA.parameters.size() != interactionsB.parameters.size() && interactionsA.indices.size() != interactionsB.indices.size())
+    {
+        throw InputException("Restricted angle interactions array mismatch for A & B");
+    }
+
+    for (size_t i = 0; i < interactionsA.parameters.size(); i++)
+    {
+        t_iparams param;
+        param.harmonic.krA = interactionsA.parameters[i].forceConstant();
+        param.harmonic.rA  = (std::acos(interactionsA.parameters[i].equilConstant())) / DEG2RAD;
+        param.harmonic.krB = interactionsB.parameters[i].forceConstant();
+        param.harmonic.rB  = (std::acos(interactionsB.parameters[i].equilConstant())) / DEG2RAD;
+        gmx_params.iparams.push_back(param);
+    }
+}
+
+//! \brief Quartic angle parameter conversion function
+template<>
+inline void transferParameters(const ListedTypeData<QuarticAngle>& interactions, gmx_ffparams_t& gmx_params)
 {
     for (const auto& angle : interactions.parameters)
     {
         t_iparams param;
-        param.harmonic.krA = angle.forceConstant();
-        param.harmonic.rA  = angle.equilConstant() / DEG2RAD;
+        param.qangle.theta = angle.equilConstant() / DEG2RAD;
+        param.qangle.c[0] = angle.forceConstant(0);
+        param.qangle.c[1] = angle.forceConstant(1);
+        param.qangle.c[2] = angle.forceConstant(2);
+        param.qangle.c[3] = angle.forceConstant(3);
+        param.qangle.c[4] = angle.forceConstant(4);
         gmx_params.iparams.push_back(param);
     }
 }
 
+//! \brief Cross Bond-Bond interaction parameter conversion function
 template<>
-void transferParameters(const ListedTypeData<ProperDihedral>& interactions, gmx_ffparams_t& gmx_params)
+inline void transferParameters(const ListedTypeData<CrossBondBond>& interactions, gmx_ffparams_t& gmx_params)
 {
-    for (const auto& dihedral : interactions.parameters)
+    for (const auto& bond : interactions.parameters)
     {
         t_iparams param;
-        param.pdihs.phiA = dihedral.equilDistance() / DEG2RAD;
-        param.pdihs.cpA  = dihedral.forceConstant();
-        param.pdihs.mult = dihedral.multiplicity();
+        param.cross_bb.krr = bond.forceConstant();
+        param.cross_bb.r1e = bond.equilDistanceIJ();
+        param.cross_bb.r2e = bond.equilDistanceKJ();
+        gmx_params.iparams.push_back(param);
+    }
+}
+
+//! \brief Cross Bond-Angle interaction parameter conversion function
+template<>
+inline void transferParameters(const ListedTypeData<CrossBondAngle>& interactions, gmx_ffparams_t& gmx_params)
+{
+    for (const auto& bond : interactions.parameters)
+    {
+        t_iparams param;
+        param.cross_ba.krt = bond.forceConstant();
+        param.cross_ba.r1e = bond.equilDistanceIJ();
+        param.cross_ba.r2e = bond.equilDistanceKJ();
+        param.cross_ba.r3e = bond.equilDistanceIK();
+        gmx_params.iparams.push_back(param);
+    }
+}
+
+//! \brief Proper dihedral parameter conversion function
+template<>
+inline void transferParameters(const ListedTypeData<ProperDihedral>& interactionsA,
+                               const ListedTypeData<ProperDihedral>& interactionsB, gmx_ffparams_t& gmx_params)
+{
+    if (interactionsA.parameters.size() != interactionsB.parameters.size() && interactionsA.indices.size() != interactionsB.indices.size())
+    {
+        throw InputException("Proper dihedral interactions array mismatch for A & B");
+    }
+
+    for (size_t i = 0; i < interactionsA.parameters.size(); i++)
+    {
+        t_iparams param;
+        param.pdihs.phiA = interactionsA.parameters[i].equilDistance() / DEG2RAD;
+        param.pdihs.cpA  = interactionsA.parameters[i].forceConstant();
+        param.pdihs.mult = interactionsA.parameters[i].multiplicity();
+        param.pdihs.phiB = interactionsB.parameters[i].equilDistance() / DEG2RAD;
+        param.pdihs.cpB  = interactionsB.parameters[i].forceConstant();
+        gmx_params.iparams.push_back(param);
+    }
+}
+
+//! \brief Ryckaert-Belleman dihedral parameter conversion function
+template<>
+inline void transferParameters(const ListedTypeData<RyckaertBellemanDihedral>& interactionsA,
+                               const ListedTypeData<RyckaertBellemanDihedral>& interactionsB, gmx_ffparams_t& gmx_params)
+{
+    for (size_t i = 0; i < interactionsA.parameters.size(); i++)
+    {
+        t_iparams param;
+        param.rbdihs.rbcA[0] = interactionsA.parameters[i][0];
+        param.rbdihs.rbcA[1] = interactionsA.parameters[i][1];
+        param.rbdihs.rbcA[2] = interactionsA.parameters[i][2];
+        param.rbdihs.rbcA[3] = interactionsA.parameters[i][3];
+        param.rbdihs.rbcA[4] = interactionsA.parameters[i][4];
+        param.rbdihs.rbcA[5] = interactionsA.parameters[i][5];
+        param.rbdihs.rbcB[0] = interactionsB.parameters[i][0];
+        param.rbdihs.rbcB[1] = interactionsB.parameters[i][1];
+        param.rbdihs.rbcB[2] = interactionsB.parameters[i][2];
+        param.rbdihs.rbcB[3] = interactionsB.parameters[i][3];
+        param.rbdihs.rbcB[4] = interactionsB.parameters[i][4];
+        param.rbdihs.rbcB[5] = interactionsB.parameters[i][5];
         gmx_params.iparams.push_back(param);
     }
 }
 
 template<class TwoCenterType>
-std::enable_if_t<Contains<TwoCenterType, SupportedTwoCenterTypes>{}>
+inline std::enable_if_t<Contains<TwoCenterType, SupportedTwoCenterTypes>{}>
 transferIndicesImpl(const ListedTypeData<TwoCenterType>& interactions, InteractionDefinitions& idef, int offset)
 {
     for (const auto& index : interactions.indices)
@@ -175,7 +473,7 @@ transferIndicesImpl(const ListedTypeData<TwoCenterType>& interactions, Interacti
 }
 
 template<class ThreeCenterType>
-std::enable_if_t<Contains<ThreeCenterType, SupportedThreeCenterTypes>{}>
+inline std::enable_if_t<Contains<ThreeCenterType, SupportedThreeCenterTypes>{}>
 transferIndicesImpl(const ListedTypeData<ThreeCenterType>& interactions, InteractionDefinitions& idef, int offset)
 {
     for (const auto& index : interactions.indices)
@@ -189,7 +487,7 @@ transferIndicesImpl(const ListedTypeData<ThreeCenterType>& interactions, Interac
 }
 
 template<class FourCenterType>
-std::enable_if_t<Contains<FourCenterType, SupportedFourCenterTypes>{}>
+inline std::enable_if_t<Contains<FourCenterType, SupportedFourCenterTypes>{}>
 transferIndicesImpl(const ListedTypeData<FourCenterType>& interactions, InteractionDefinitions& idef, int offset)
 {
     for (const auto& index : interactions.indices)
@@ -204,7 +502,7 @@ transferIndicesImpl(const ListedTypeData<FourCenterType>& interactions, Interact
 }
 
 template<class FiveCenterType>
-std::enable_if_t<Contains<FiveCenterType, SupportedFiveCenterTypes>{}>
+inline std::enable_if_t<Contains<FiveCenterType, SupportedFiveCenterTypes>{}>
 transferIndicesImpl(const ListedTypeData<FiveCenterType>& interactions, InteractionDefinitions& idef, int offset)
 {
     for (const auto& index : interactions.indices)
@@ -220,9 +518,9 @@ transferIndicesImpl(const ListedTypeData<FiveCenterType>& interactions, Interact
 }
 
 template<template<class> class Container, class InteractionType>
-void transferIndices(const Container<InteractionType>&  interactionData,
-                     InteractionDefinitions& idef,
-                     [[maybe_unused]] int offset)
+inline void transferIndices(const Container<InteractionType>&  interactionData,
+                           InteractionDefinitions& idef,
+                           [[maybe_unused]] int offset)
 {
     if constexpr (ListedTypeIsImplemented<InteractionType>{})
     {
@@ -239,9 +537,7 @@ void transferIndices(const Container<InteractionType>&  interactionData,
  * \param interactions
  * \return
  */
-std::tuple<std::unique_ptr<InteractionDefinitions>, std::unique_ptr<gmx_ffparams_t>>
-createFFparams(const ListedInteractionData& interactions);
-
+static
 std::tuple<std::unique_ptr<InteractionDefinitions>, std::unique_ptr<gmx_ffparams_t>>
 createFFparams(const ListedInteractionData& interactions)
 {

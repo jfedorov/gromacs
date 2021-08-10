@@ -42,6 +42,8 @@
  * \author Sebastian Keller <keller@cscs.ch>
  * \author Artem Zhmurov <zhmurov@gmail.com>
  */
+#include <algorithm>
+
 #include "nblib/box.h"
 #include "nblib/exception.h"
 #include "nblib/pbc.hpp"
@@ -59,7 +61,8 @@ ListedForceCalculator::ListedForceCalculator(const ListedInteractionData& intera
                                              int                          nthr,
                                              const Box&                   box) :
     numThreads(nthr),
-    masterForceBuffer_(bufferSize, Vec3{ 0, 0, 0 }),
+    threadedForceBuffers_(numThreads),
+    threadedShiftForceBuffers_(numThreads),
     pbcHolder_(std::make_unique<PbcHolder>(PbcType::Xyz, box))
 {
     // split up the work
@@ -67,6 +70,7 @@ ListedForceCalculator::ListedForceCalculator(const ListedInteractionData& intera
 
     // set up the reduction buffers
     int threadRange = bufferSize / numThreads;
+#pragma omp parallel for num_threads(numThreads) schedule(static)
     for (int i = 0; i < numThreads; ++i)
     {
         int rangeStart = i * threadRange;
@@ -77,28 +81,68 @@ ListedForceCalculator::ListedForceCalculator(const ListedInteractionData& intera
             rangeEnd = bufferSize;
         }
 
-        threadedForceBuffers_.push_back(std::make_unique<ForceBuffer<Vec3>>(
-                masterForceBuffer_.data(), rangeStart, rangeEnd));
+        threadedForceBuffers_[i] = std::make_unique<ForceBufferProxy<Vec3>>(rangeStart, rangeEnd);
+        threadedShiftForceBuffers_[i] = std::make_unique<std::vector<Vec3>>(gmx::c_numShiftVectors);
     }
 }
 
-void ListedForceCalculator::computeForcesAndEnergies(gmx::ArrayRef<const Vec3> x, bool usePbc)
+template<class ShiftForce>
+void ListedForceCalculator::computeForcesAndEnergies(gmx::ArrayRef<const Vec3> x,
+                                                     gmx::ArrayRef<Vec3>       forces,
+                                                     [[maybe_unused]] gmx::ArrayRef<ShiftForce> shiftForces,
+                                                     bool usePbc)
 {
+    if (x.size() != forces.size())
+    {
+        throw InputException("Coordinates array and force buffer size mismatch");
+    }
+
     energyBuffer_.fill(0);
     std::vector<std::array<real, std::tuple_size<ListedInteractionData>::value>> energiesPerThread(numThreads);
+
+    constexpr bool haveShiftForces = !std::is_same_v<ShiftForce, std::nullptr_t>;
 
 #pragma omp parallel for num_threads(numThreads) schedule(static)
     for (int thread = 0; thread < numThreads; ++thread)
     {
+        std::conditional_t<haveShiftForces, gmx::ArrayRef<Vec3>, gmx::ArrayRef<std::nullptr_t>> shiftForceBuffer;
+        if constexpr (haveShiftForces)
+        {
+            shiftForceBuffer = gmx::ArrayRef<Vec3>(*threadedShiftForceBuffers_[thread]);
+            std::fill(shiftForceBuffer.begin(), shiftForceBuffer.end(), Vec3{ 0, 0, 0 });
+        }
+
+        ForceBufferProxy<Vec3>* threadBuffer = threadedForceBuffers_[thread].get();
+
+        // forces in range of this thread are directly written into the output buffer
+        threadBuffer->setMasterBuffer(forces.data());
+
+        // zero out the outliers in the thread buffer
+        threadBuffer->clearOutliers();
+
         if (usePbc)
         {
             energiesPerThread[thread] = reduceListedForces(
-                    threadedInteractions_[thread], x, threadedForceBuffers_[thread].get(), *pbcHolder_);
+                    threadedInteractions_[thread], x, threadBuffer, shiftForceBuffer, *pbcHolder_);
         }
         else
         {
             energiesPerThread[thread] = reduceListedForces(
-                    threadedInteractions_[thread], x, threadedForceBuffers_[thread].get(), NoPbc{});
+                    threadedInteractions_[thread], x, threadBuffer, shiftForceBuffer, NoPbc{});
+        }
+    }
+
+    // reduce shift forces
+    if constexpr (haveShiftForces)
+    {
+        for (int i = 0; i < gmx::c_numShiftVectors; ++i)
+        {
+            Vec3 threadSum{ 0, 0, 0 };
+            for (int thread = 0; thread < numThreads; ++thread)
+            {
+                threadSum += (*threadedShiftForceBuffers_[thread])[i];
+            }
+            shiftForces[i] += threadSum;
         }
     }
 
@@ -127,43 +171,35 @@ void ListedForceCalculator::computeForcesAndEnergies(gmx::ArrayRef<const Vec3> x
                 if (thisBuffer.inRange(index))
                 {
                     auto force = outlier.second;
-                    masterForceBuffer_[index] += force;
+                    forces[index] += force;
                 }
             }
         }
     }
 }
 
-void ListedForceCalculator::compute(gmx::ArrayRef<const Vec3> coordinates, gmx::ArrayRef<Vec3> forces, bool usePbc)
+void ListedForceCalculator::compute(gmx::ArrayRef<const Vec3> coordinates,
+                                    gmx::ArrayRef<Vec3>       forces,
+                                    gmx::ArrayRef<Vec3>       shiftForces,
+                                    EnergyType&               energies,
+                                    bool                      usePbc)
 {
-    if (coordinates.size() != forces.size())
-    {
-        throw InputException("Coordinates array and force buffer size mismatch");
-    }
-
-    // check if the force buffers have the same size
-    if (masterForceBuffer_.size() != forces.size())
-    {
-        throw InputException("Input force buffer size mismatch with listed forces buffer");
-    }
-
-    // compute forces and fill in local buffers
-    computeForcesAndEnergies(coordinates, usePbc);
-
-    // add forces to output force buffers
-    for (int pIndex = 0; pIndex < int(forces.size()); pIndex++)
-    {
-        forces[pIndex] += masterForceBuffer_[pIndex];
-    }
+    computeForcesAndEnergies(coordinates, forces, shiftForces, usePbc);
+    energies = energyBuffer_;
 }
+
 void ListedForceCalculator::compute(gmx::ArrayRef<const Vec3> coordinates,
                                     gmx::ArrayRef<Vec3>       forces,
                                     EnergyType&               energies,
                                     bool                      usePbc)
 {
-    compute(coordinates, forces, usePbc);
-
+    computeForcesAndEnergies(coordinates, forces, gmx::ArrayRef<std::nullptr_t>{}, usePbc);
     energies = energyBuffer_;
+}
+
+void ListedForceCalculator::compute(gmx::ArrayRef<const Vec3> coordinates, gmx::ArrayRef<Vec3> forces, bool usePbc)
+{
+    computeForcesAndEnergies(coordinates, forces, gmx::ArrayRef<std::nullptr_t>{}, usePbc);
 }
 
 } // namespace nblib

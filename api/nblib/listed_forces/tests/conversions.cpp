@@ -45,10 +45,11 @@
 
 #include <gtest/gtest.h>
 
+#include "nblib/box.h"
 #include "nblib/listed_forces/conversions.hpp"
+#include "nblib/listed_forces/tests/listedtesthelpers.h"
 
 #include "testutils/testasserts.h"
-
 
 namespace nblib
 {
@@ -100,6 +101,136 @@ TEST(ListedShims, ParameterConversion)
     idef->clear();
 }
 
+std::vector<gmx::RVec> twoCenterCoordinates = { { 1.382, 1.573, 1.482 }, { 1.281, 1.559, 1.596 } };
+
+std::vector<gmx::RVec> threeCenterCoordinates = { { 1.382, 1.573, 1.482 },
+                                                  { 1.281, 1.559, 1.596 },
+                                                  { 1.292, 1.422, 1.663 } };
+
+std::vector<gmx::RVec> fourCentercoordinates = { { 1.382, 1.573, 1.482 },
+                                                 { 1.281, 1.559, 1.596 },
+                                                 { 1.292, 1.422, 1.663 },
+                                                 { 1.189, 1.407, 1.775 } };
+
+std::array<std::vector<gmx::RVec>, 3> NCenterCoordinates{ twoCenterCoordinates,
+                                                          threeCenterCoordinates,
+                                                          fourCentercoordinates };
+
+template<class Interaction>
+struct TypeInput
+{
+    typedef Interaction         type; // needed for pickType
+    ListedTypeData<Interaction> interactionData;
+    // assign coordinates depending on the number of centers in the interaction type from the array above
+    std::vector<gmx::RVec> coordinates = std::get<NCenter<Interaction>{} - 2>(NCenterCoordinates);
+};
+
+std::tuple TestInput{
+    // Two Center Types
+    TypeInput<HarmonicBondType>{
+            { { { HarmonicBondType(500.0, 0.15) } }, { indexVector<HarmonicBondType>() } } },
+    TypeInput<G96BondType>{ { { { G96BondType(50.0, 0.15) } }, { indexVector<G96BondType>() } } },
+    TypeInput<CubicBondType>{ { { { CubicBondType(50.0, 2.0, 0.16) } }, { indexVector<CubicBondType>() } } },
+    TypeInput<MorseBondType>{ { { { MorseBondType(30.0, 2.7, 0.15) } }, { indexVector<MorseBondType>() } } },
+    TypeInput<FENEBondType>{ { { { FENEBondType(5.0, 0.4) } }, { indexVector<FENEBondType>() } } },
+    // Three Center Types
+    TypeInput<HarmonicAngle>{
+            { { { HarmonicAngle(2.2, Degrees(91.0)) } }, { indexVector<HarmonicAngle>() } } },
+    TypeInput<G96Angle>{ { { { G96Angle(50.0, Degrees(100)) } }, { indexVector<G96Angle>() } } },
+    TypeInput<RestrictedAngle>{
+            { { { RestrictedAngle(50.0, Degrees(100)) } }, { indexVector<RestrictedAngle>() } } },
+    TypeInput<LinearAngle>{ { { { LinearAngle(50.0, 0.4) } }, { indexVector<LinearAngle>() } } },
+    TypeInput<QuarticAngle>{ { { { QuarticAngle(1.1, 2.3, 4.6, 7.8, 9.2, Degrees(87)) } },
+                               { indexVector<QuarticAngle>() } } },
+    TypeInput<CrossBondBond>{ { { { CrossBondBond(45.0, 0.8, 0.7) } }, { indexVector<CrossBondBond>() } } },
+    TypeInput<CrossBondAngle>{
+            { { { CrossBondAngle(45.0, 0.8, 0.7, 0.3) } }, { indexVector<CrossBondAngle>() } } },
+    // Four Center Types
+    TypeInput<ProperDihedral>{
+            { { { ProperDihedral(Degrees(45), 2.3, 1) } }, { indexVector<ProperDihedral>() } } }
+};
+
+template<class... Ts>
+ListedInteractionData combineTestInput(std::tuple<Ts...> testInput)
+{
+    ListedInteractionData interactionData;
+    // transfer all elements of testInput into the returned ListedInteractionData
+    // use a lambda + for_each_tuple
+    auto copyParamsOneType = [&interactionData](const auto& typeInput) {
+        for (size_t i = 0; i < typeInput.interactionData.parameters.size(); i++)
+        {
+            auto interactionParams = typeInput.interactionData.parameters[i];
+            using InteractionType  = decltype(interactionParams);
+            pickType<InteractionType>(interactionData).parameters.push_back(interactionParams);
+
+            auto indices = typeInput.interactionData.indices[i];
+            pickType<InteractionType>(interactionData).indices.push_back(indices);
+        }
+    };
+    for_each_tuple(copyParamsOneType, testInput);
+
+    return interactionData;
+}
+
+TEST(NBlibTest, EndToEndListedComparison)
+{
+    int                   numParticles    = 4;
+    ListedInteractionData interactionData = combineTestInput(TestInput);
+
+    Box                    box(1.0);
+    std::vector<gmx::RVec> coordinates = {
+        { 1.382, 1.573, 1.482 }, { 1.281, 1.559, 1.596 }, { 1.292, 1.422, 1.663 }, { 1.189, 1.407, 1.775 }
+    };
+
+    compareNblibAndGmxListedImplementations(interactionData, coordinates, numParticles, 1, box, 1e-2);
+}
+
+template<typename Interaction>
+class NblibGmxListed : public testing::Test
+{
+public:
+    void compareNblibAndGmx()
+    {
+        ListedInteractionData  interactionData;
+        TypeInput<Interaction> typeInput       = pickType<Interaction>(TestInput);
+        pickType<Interaction>(interactionData) = typeInput.interactionData;
+        compareNblibAndGmxListedImplementations(
+                interactionData, typeInput.coordinates, typeInput.coordinates.size(), 1, Box(1.0), 1e-4);
+    }
+};
+
+// Extract a typelist interaction types from the TestInput tuple
+template<class TestInputofInteractionType>
+using ExtractType = typename TestInputofInteractionType::type;
+using ListedTypes = Map<ExtractType, decltype(TestInput)>;
+using TestTypes   = Reduce<::testing::Types, ListedTypes>;
+
+TYPED_TEST_CASE_P(NblibGmxListed);
+
+TYPED_TEST_P(NblibGmxListed, SameForcesOnBoth)
+{
+    this->compareNblibAndGmx();
+}
+
+REGISTER_TYPED_TEST_CASE_P(NblibGmxListed, SameForcesOnBoth);
+
+/* The following macro enclosure is needed to suppress a compiler warning from gtest
+ * when instantiating a parametrized test
+ * This is a known issue which is resolved in gtest v1.10 and won't be needed after update
+ * https://github.com/google/googletest/pull/2316
+ */
+#if defined(__GNUC__) || defined(__clang__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wpragmas"
+#    pragma GCC diagnostic ignored "-Wused-but-marked-unused"
+
+INSTANTIATE_TYPED_TEST_CASE_P(CompareEachTypeInNblibAndGmx, NblibGmxListed, TestTypes);
+
+#    pragma GCC diagnostic pop
+
+#elif
+INSTANTIATE_TYPED_TEST_CASE_P(CompareEachTypeInNblibAndGmx, NblibGmxListed, TestTypes);
+#endif
 } // namespace
 } // namespace test
 } // namespace nblib

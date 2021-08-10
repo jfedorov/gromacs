@@ -52,6 +52,7 @@ set(exename "nblib-setup-test")
 
 gmx_add_gtest_executable(
     ${exename}
+    HARDWARE_DETECTION
     CPP_SOURCE_FILES
     # files with code for tests
         box.cpp
@@ -61,6 +62,7 @@ gmx_add_gtest_executable(
         molecules.cpp
         nbnxmsetup.cpp
         topology.cpp
+        tpr.cpp
         virials.cpp
     )
 target_link_libraries(${exename} PRIVATE mdrun_test_infrastructure)

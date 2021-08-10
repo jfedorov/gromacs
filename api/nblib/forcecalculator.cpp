@@ -45,36 +45,66 @@
 #include "nblib/gmxcalculator.h"
 #include "nblib/gmxsetup.h"
 #include "gromacs/utility/arrayref.h"
+#include "nbnxmsetuphelpers.h"
 
 namespace nblib
 {
 
 ForceCalculator::~ForceCalculator() = default;
 
-ForceCalculator::ForceCalculator(const SimulationState& system, const NBKernelOptions& options)
+ForceCalculator::ForceCalculator(gmx::ArrayRef<int>     particleTypeIdOfAllParticles,
+                                 gmx::ArrayRef<real>    nonBondedParams,
+                                 gmx::ArrayRef<real>    charges,
+                                 gmx::ArrayRef<int64_t> particleInteractionFlags,
+                                 gmx::ArrayRef<int>     exclusionRanges,
+                                 gmx::ArrayRef<int>     exclusionElements,
+                                 const NBKernelOptions& options)
 {
     if (options.useGpu)
     {
         throw InputException("GPUs are not supported for force calculations yet.");
     }
-    gmxForceCalculator_ = GmxSetupDirector::setupGmxForceCalculator(system, options);
+    gmxForceCalculator_ = std::make_unique<GmxNBForceCalculatorCpu>(particleTypeIdOfAllParticles,
+                                                                    nonBondedParams,
+                                                                    charges,
+                                                                    particleInteractionFlags,
+                                                                    exclusionRanges,
+                                                                    exclusionElements,
+                                                                    options);
 }
 
-void ForceCalculator::compute(gmx::ArrayRef<const Vec3> coordinates, gmx::ArrayRef<Vec3> forces)
+void ForceCalculator::compute(gmx::ArrayRef<const Vec3> coordinates, const Box& box, gmx::ArrayRef<Vec3> forces)
 {
     if (coordinates.size() != forces.size())
     {
         throw InputException("Coordinates array and force buffer size mismatch");
     }
 
-    gmxForceCalculator_->compute(coordinates, forces);
+    gmxForceCalculator_->compute(coordinates, box, forces);
 }
 
-void ForceCalculator::updatePairList(gmx::ArrayRef<const int64_t> particleInfoAllVdW,
-                                     gmx::ArrayRef<Vec3>          coordinates,
-                                     const Box&                   box)
+void ForceCalculator::updatePairList(gmx::ArrayRef<const Vec3> coordinates, const Box& box)
 {
-    gmxForceCalculator_->setParticlesOnGrid(particleInfoAllVdW, coordinates, box);
+    gmxForceCalculator_->updatePairlist(coordinates, box);
 }
 
+ForceCalculator createNonBondedForceCalculator(const Topology& topology, const NBKernelOptions& options)
+{
+    if (options.useGpu)
+    {
+        throw InputException("GPUs are not supported for force calculations yet.");
+    }
+    std::vector<real> nonBondedParameters = createNonBondedParameters(
+            topology.getParticleTypes(), topology.getNonBondedInteractionMap());
+
+    std::vector<int64_t> particleInteractionFlags = createParticleInfoAllVdw(topology.numParticles());
+
+    return ForceCalculator(topology.getParticleTypeIdOfAllParticles(),
+                           nonBondedParameters,
+                           topology.getCharges(),
+                           particleInteractionFlags,
+                           topology.exclusionLists().ListRanges,
+                           topology.exclusionLists().ListElements,
+                           options);
+}
 } // namespace nblib

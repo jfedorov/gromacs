@@ -38,6 +38,31 @@
 # \author Sebastian Keller <keller@cscs.ch>
 #
 
+# The following are copied directly from src/CMakeLists.txt
+set(IGNORED_CLANG_ALL_WARNINGS
+        "-Wno-c++98-compat -Wno-c++98-compat-pedantic" #No intention of C++98 compability
+        "-Wno-source-uses-openmp" #Don't warn for no-omp build
+        "-Wno-c++17-extensions"   #Allowed in attributes (compilers are required to ignore unknown attributes)
+        "-Wno-documentation-unknown-command" #Custom commands are used
+        "-Wno-covered-switch-default" #GCC gives maybe-uninitialized without default label and checks for illegal enum values.
+        "-Wno-switch-enum" # default statement for enum is OK
+
+        # These are all needed, mostly for testing code
+        "-Wno-conversion"
+        "-Wno-documentation"
+        "-Wno-double-promotion"
+        "-Wno-exit-time-destructors"
+        "-Wno-float-equal"
+        "-Wno-global-constructors"
+        "-Wno-padded"
+        "-Wno-reserved-id-macro"
+        "-Wno-shadow"
+        "-Wno-unused-macros"
+        "-Wno-weak-vtables"
+        )
+
+string(REPLACE " " ";" IGNORED_CLANG_ALL_WARNINGS "${IGNORED_CLANG_ALL_WARNINGS}")
+
 set(TESTUTILS_DIR ${PROJECT_SOURCE_DIR}/src/testutils)
 if (BUILD_TESTING)
     if(NOT GMX_DEVELOPER_BUILD)
@@ -51,16 +76,14 @@ add_custom_target(nblib-tests
         )
 # Ensure that "make tests" builds all nblib tests so the top-level
 # "make check" will work.
-if (BUILD_TESTING)
-	add_dependencies(tests nblib-tests)
+add_dependencies(tests nblib-tests)
 
-	# this allows all nblib tests to be run with "make check-nblib"
-	add_custom_target(check-nblib
-		COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -R NbLib
-		COMMENT "Running nblib tests"
-		USES_TERMINAL VERBATIM)
-	add_dependencies(check-nblib nblib-tests)
-endif()
+# this allows all nblib tests to be run with "make check-nblib"
+add_custom_target(check-nblib
+        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -R NbLib
+        COMMENT "Running nblib tests"
+        USES_TERMINAL VERBATIM)
+add_dependencies(check-nblib nblib-tests)
 
 set(NBLIB_MAJOR 0)
 set(NBLIB_MINOR 1)
@@ -92,15 +115,16 @@ target_sources(nblib
         forcecalculator.cpp
         gmxcalculator.cpp
         gmxsetup.cpp
+        nbnxmsetuphelpers.cpp
         integrator.cpp
         interactions.cpp
         molecules.cpp
-        nbnxmsetuphelpers.cpp
         particlesequencer.cpp
         particletype.cpp
         simulationstate.cpp
         topologyhelpers.cpp
         topology.cpp
+        tpr.cpp
         virials.cpp
         )
 
@@ -115,9 +139,6 @@ target_link_libraries(nblib PRIVATE common)
 target_link_libraries(nblib PUBLIC legacy_api)
 # TODO: Explicitly link specific modules.
 target_link_libraries(nblib PRIVATE legacy_modules)
-if (GMX_OPENMP)
-    target_link_libraries(nblib PUBLIC OpenMP::OpenMP_CXX)
-endif()
 
 install(TARGETS nblib
         EXPORT nblib
