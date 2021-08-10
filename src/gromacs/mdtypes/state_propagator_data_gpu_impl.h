@@ -60,6 +60,8 @@ struct gmx_wallcycle;
 namespace gmx
 {
 
+namespace {
+
 /*! \brief The states of the host-side buffer
  *
  * Used to keep track of the data when executing asynchronously.
@@ -89,9 +91,23 @@ enum class HostBufferState : int
     Default = Valid
 };
 
+/*! \brief Tracks the state of local and non-local buffers
+ *
+ * Provide functionality to track and switch stated of the local and non-local host buffers.
+ *
+ */
 class HostBufferStateTracker
 {
 public:
+    /*! \brief Validate the host-side buffers
+     * 
+     * Set the host buffer states to valid for a given locality.
+     * Should be used when the event of device to host transfer was waited for.
+     * 
+     *  When used with \c AtomLocality::All, validates both local and non-local buffers.
+     *
+     * \param[in] atomLocality Atom locality.
+     */
     void setValid(AtomLocality atomLocality)
     {
         switch (atomLocality)
@@ -105,6 +121,12 @@ public:
             default: GMX_RELEASE_ASSERT(false, "Wrong locality."); break;
         }
     }
+    /*! \brief Assert if the state of the host buffer for a given locality is valid.
+     * 
+     *  When used with \c AtomLocality::All, checks both local and non-local buffers.
+     *
+     * \param[in] atomLocality Atom locality.
+     */
     void assertValid(AtomLocality atomLocality)
     {
         switch (atomLocality)
@@ -124,6 +146,14 @@ public:
             default: GMX_RELEASE_ASSERT(false, "Wrong locality."); break;
         }
     }
+    /*! \brief Indicate that the device to host copy for the buffer of a given locality was issued.
+     *
+     *  Asserts that the host side buffer is not valid to ensure that the data is not copied twice.
+     *
+     *  When used with \c AtomLocality::All, checks and updates both local and non-local buffers.
+     *
+     * \param[in] atomLocality Atom locality.
+     */
     void setInTransit(AtomLocality atomLocality)
     {
         switch (atomLocality)
@@ -149,6 +179,13 @@ public:
             default: GMX_RELEASE_ASSERT(false, "Wrong locality."); break;
         }
     }
+    /*! \brief Check if the state of the buffer for a given locality indicates that the device to host copy was already issued.
+     *
+     * Should be used when the wait on the copy event is enqueued.
+     * Asserts that the copy call was made.
+     *
+     * \param[in] atomLocality Atom locality.
+     */
     bool checkIfInTransit(AtomLocality atomLocality)
     {
         switch (atomLocality)
@@ -170,6 +207,10 @@ public:
             default: GMX_RELEASE_ASSERT(false, "Wrong locality."); return false;
         }
     }
+    /*! \brief Invalidate the host-side buffer for a given locality
+     *
+     * \param[in] atomLocality Atom locality.
+     */
     void setInvalid(AtomLocality atomLocality)
     {
         switch (atomLocality)
@@ -186,10 +227,12 @@ public:
 
 private:
     //! State of the host-side local positions buffer
-    HostBufferState stateLocal_;
+    HostBufferState stateLocal_ = HostBufferState::Valid;
     //! State of the host-side non-local positions buffer
-    HostBufferState stateNonLocal_;
+    HostBufferState stateNonLocal_ = HostBufferState::Valid;
 };
+
+} // namespace
 
 class StatePropagatorDataGpu::Impl
 {
