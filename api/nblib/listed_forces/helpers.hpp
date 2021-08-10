@@ -75,29 +75,29 @@ inline void gmxRVecZeroWorkaround<gmx::RVec>(gmx::RVec& value)
 }
 } // namespace detail
 
-/*! \internal \brief object to store forces for multithreaded listed forces computation
+/*! \internal \brief proxy object to access forces in an underlying buffer
+ *
+ * Depending on the index, either the underlying master buffer, or local
+ * storage for outliers is accessed. This object does not own the master buffer.
  *
  */
 template<class T>
-class ForceBuffer
+class ForceBufferProxy
 {
     using HashMap = std::unordered_map<int, T>;
 
 public:
-    ForceBuffer() : rangeStart(0), rangeEnd(0) { }
+    ForceBufferProxy() : masterForceBuffer(nullptr), rangeStart_(0), rangeEnd_(0) { }
 
-    ForceBuffer(T* mbuf, int rs, int re) :
-        masterForceBuffer(mbuf),
-        rangeStart(rs),
-        rangeEnd(re)
+    ForceBufferProxy(int rs, int re) : masterForceBuffer(nullptr), rangeStart_(rs), rangeEnd_(re)
     {
     }
 
-    void clear() { outliers.clear(); }
+    void clearOutliers() { outliers.clear(); }
 
     inline NBLIB_ALWAYS_INLINE T& operator[](int i)
     {
-        if (i >= rangeStart && i < rangeEnd)
+        if (i >= rangeStart_ && i < rangeEnd_)
         {
             return masterForceBuffer[i];
         }
@@ -117,12 +117,14 @@ public:
     typename HashMap::const_iterator begin() { return outliers.begin(); }
     typename HashMap::const_iterator end() { return outliers.end(); }
 
-    [[nodiscard]] bool inRange(int index) const { return (index >= rangeStart && index < rangeEnd); }
+    [[nodiscard]] bool inRange(int index) const { return (index >= rangeStart_ && index < rangeEnd_); }
+
+    void setMasterBuffer(T* buffer) { masterForceBuffer = buffer; }
 
 private:
     T*  masterForceBuffer;
-    int rangeStart;
-    int rangeEnd;
+    int rangeStart_;
+    int rangeEnd_;
 
     HashMap outliers;
 };
