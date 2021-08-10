@@ -185,20 +185,20 @@ auto settleKernel(cl::sycl::handler&                                           c
             c1d[ZZ] = trns1[ZZ] * c1[XX] + trns2[ZZ] * c1[YY] + trns3[ZZ] * c1[ZZ];
 
 
-            const float sinphi = a1d_z * cl::sycl::rsqrt(pars.ra * pars.ra);
-            float       tmp2   = 1.0F - sinphi * sinphi;
+            const float sinphi  = a1d_z / pars.ra;
+            float       cosphi2 = 1.0F - sinphi * sinphi;
 
-            if (almost_zero > tmp2)
+            if (almost_zero > cosphi2)
             {
-                tmp2 = almost_zero;
+                cosphi2 = almost_zero;
             }
 
-            const float tmp    = cl::sycl::rsqrt(tmp2);
-            const float cosphi = tmp2 * tmp;
-            const float sinpsi = (b1d[ZZ] - c1d[ZZ]) * pars.irc2 * tmp;
-            tmp2               = 1.0F - sinpsi * sinpsi;
+            const float rcosphi = cl::sycl::rsqrt(cosphi2);
+            const float cosphi  = cosphi2 * rcosphi;
+            const float sinpsi  = (b1d[ZZ] - c1d[ZZ]) * pars.irc2 * rcosphi;
+            const float cospsi2 = 1.0F - sinpsi * sinpsi;
 
-            const float cospsi = tmp2 * cl::sycl::rsqrt(tmp2);
+            const float cospsi = cospsi2 * cl::sycl::rsqrt(cospsi2);
 
             const float a2d_y = pars.ra * cosphi;
             const float b2d_x = -pars.rc * cospsi;
@@ -213,13 +213,13 @@ auto settleKernel(cl::sycl::handler&                                           c
             const float gamma =
                     b0d[XX] * b1d[YY] - b1d[XX] * b0d[YY] + c0d[XX] * c1d[YY] - c1d[XX] * c0d[YY];
             const float al2be2 = alpha * alpha + beta * beta;
-            tmp2               = (al2be2 - gamma * gamma);
-            const float sinthe = (alpha * gamma - beta * tmp2 * cl::sycl::rsqrt(tmp2))
+            const float tmp    = (al2be2 - gamma * gamma);
+            const float sinthe = (alpha * gamma - beta * tmp * cl::sycl::rsqrt(tmp))
                                  * cl::sycl::rsqrt(al2be2 * al2be2);
 
             /*  --- Step4  A3' --- */
-            tmp2         = 1.0F - sinthe * sinthe;
-            float costhe = tmp2 * cl::sycl::rsqrt(tmp2);
+            const float costhe2 = 1.0F - sinthe * sinthe;
+            const float costhe  = costhe2 * cl::sycl::rsqrt(costhe2);
 
             Float3 a3d, b3d, c3d;
 
@@ -320,9 +320,8 @@ auto settleKernel(cl::sycl::handler&                                           c
             // of it sums two values... The procedure continues until only one thread left.
             // Only works if the threads per blocks is a power of two, hence the assertion.
             static_assert(gmx::isPowerOfTwo(sc_workGroupSize));
-            for (int divideBy = 2; divideBy <= blockSize; divideBy *= 2)
+            for (int dividedAt = blockSize / 2; dividedAt >= 1; dividedAt >>= 1)
             {
-                int dividedAt = blockSize / divideBy;
                 if (threadIdx < dividedAt)
                 {
                     for (int d = 0; d < 6; d++)

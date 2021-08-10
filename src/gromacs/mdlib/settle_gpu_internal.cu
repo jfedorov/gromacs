@@ -204,39 +204,39 @@ __launch_bounds__(sc_maxThreadsPerBlock) __global__
         c1d.z = trns1.z * c1.x + trns2.z * c1.y + trns3.z * c1.z;
 
 
-        float sinphi = a1d_z * rsqrt(pars.ra * pars.ra);
-        float tmp2   = 1.0F - sinphi * sinphi;
+        const float sinphi  = a1d_z / pars.ra;
+        float       cosphi2 = 1.0F - sinphi * sinphi;
 
-        if (almost_zero > tmp2)
+        if (almost_zero > cosphi2)
         {
-            tmp2 = almost_zero;
+            cosphi2 = almost_zero;
         }
 
-        float tmp    = rsqrt(tmp2);
-        float cosphi = tmp2 * tmp;
-        float sinpsi = (b1d.z - c1d.z) * pars.irc2 * tmp;
-        tmp2         = 1.0F - sinpsi * sinpsi;
+        const float rcosphi = rsqrt(cosphi2);
+        const float cosphi  = cosphi2 * rcosphi;
+        const float sinpsi  = (b1d.z - c1d.z) * pars.irc2 * rcosphi;
+        const float cospsi2 = 1.0F - sinpsi * sinpsi;
 
-        float cospsi = tmp2 * rsqrt(tmp2);
+        const float cospsi = cospsi2 * rsqrt(cospsi2);
 
-        float a2d_y = pars.ra * cosphi;
-        float b2d_x = -pars.rc * cospsi;
-        float t1    = -pars.rb * cosphi;
-        float t2    = pars.rc * sinpsi * sinphi;
-        float b2d_y = t1 - t2;
-        float c2d_y = t1 + t2;
+        const float a2d_y = pars.ra * cosphi;
+        const float b2d_x = -pars.rc * cospsi;
+        const float t1    = -pars.rb * cosphi;
+        const float t2    = pars.rc * sinpsi * sinphi;
+        const float b2d_y = t1 - t2;
+        const float c2d_y = t1 + t2;
 
         /*     --- Step3  al,be,ga            --- */
-        float alpha  = b2d_x * (b0d.x - c0d.x) + b0d.y * b2d_y + c0d.y * c2d_y;
-        float beta   = b2d_x * (c0d.y - b0d.y) + b0d.x * b2d_y + c0d.x * c2d_y;
-        float gamma  = b0d.x * b1d.y - b1d.x * b0d.y + c0d.x * c1d.y - c1d.x * c0d.y;
-        float al2be2 = alpha * alpha + beta * beta;
-        tmp2         = (al2be2 - gamma * gamma);
-        float sinthe = (alpha * gamma - beta * tmp2 * rsqrt(tmp2)) * rsqrt(al2be2 * al2be2);
+        const float alpha  = b2d_x * (b0d.x - c0d.x) + b0d.y * b2d_y + c0d.y * c2d_y;
+        const float beta   = b2d_x * (c0d.y - b0d.y) + b0d.x * b2d_y + c0d.x * c2d_y;
+        const float gamma  = b0d.x * b1d.y - b1d.x * b0d.y + c0d.x * c1d.y - c1d.x * c0d.y;
+        const float al2be2 = alpha * alpha + beta * beta;
+        const float tmp    = (al2be2 - gamma * gamma);
+        const float sinthe = (alpha * gamma - beta * tmp * rsqrt(tmp)) * rsqrt(al2be2 * al2be2);
 
         /*  --- Step4  A3' --- */
-        tmp2         = 1.0F - sinthe * sinthe;
-        float costhe = tmp2 * rsqrt(tmp2);
+        const float costhe2 = 1.0F - sinthe * sinthe;
+        const float costhe  = costhe2 * rsqrt(costhe2);
 
         float3 a3d, b3d, c3d;
 
@@ -336,9 +336,8 @@ __launch_bounds__(sc_maxThreadsPerBlock) __global__
         // two virials. Then the first half is divided by two and the first half
         // of it sums two values... The procedure continues until only one thread left.
         // Only works if the threads per blocks is a power of two.
-        for (int divideBy = 2; divideBy <= blockSize; divideBy *= 2)
+        for (int dividedAt = blockSize / 2; dividedAt >= 1; dividedAt >>= 1)
         {
-            int dividedAt = blockSize / divideBy;
             if (tib < dividedAt)
             {
                 for (int d = 0; d < 6; d++)
