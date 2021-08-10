@@ -60,35 +60,36 @@ struct gmx_wallcycle;
 namespace gmx
 {
 
-namespace {
+namespace
+{
 
 /*! \brief The states of the host-side buffer
  *
  * Used to keep track of the data when executing asynchronously.
  * When the buffer update is requested on the device, the host-side buffer
- * is invalidated. When the device to host copy is requested, the host-side
- * buffer is set to InTransit state. The buffer becomes valid, when one ensures
- * that the device event on copy completeness is waited for.
+ * is marked inconsistent. When the device to host copy is requested, the host-side
+ * buffer is set to InTransit state. The buffer becomes consistent when one waits
+ * for completion of the event to copy from the device.
  *
  * Allowed transitions are:
  *
- * Valid --> Invalid --> InTransit
- *   ^                       |
- *   └-----------------------┘
+ * Consistent --> Inconsistent --> InTransit
+ *     ^                               |
+ *     └-------------------------------┘
  *
  */
 enum class HostBufferState : int
 {
-    //! The data on the host-side is valid.
-    Valid,
+    //! The data on the host-side is consistent with the device-side counterpart.
+    Consistent,
     //! The device to host copy was issued, but may not be completed yet.
     InTransit,
-    //! The buffer was or being updated on the device and this is not yet reflected on the host side.
-    Invalid,
+    //! The buffer was or is being updated on the device and this is not yet reflected on the host side.
+    Inconsistent,
     //! Number of states
     Count,
     //! Default
-    Default = Valid
+    Default = Consistent
 };
 
 /*! \brief Tracks the state of local and non-local buffers
@@ -99,56 +100,57 @@ enum class HostBufferState : int
 class HostBufferStateTracker
 {
 public:
-    /*! \brief Validate the host-side buffers
-     * 
-     * Set the host buffer states to valid for a given locality.
+    /*! \brief Mark the host-side buffer as consistent with the device-side buffer.
+     *
+     * Set the host buffer states to \c HostBufferState::Consistent for a given locality.
      * Should be used when the event of device to host transfer was waited for.
-     * 
+     *
      *  When used with \c AtomLocality::All, validates both local and non-local buffers.
      *
      * \param[in] atomLocality Atom locality.
      */
-    void setValid(AtomLocality atomLocality)
+    void setConsistent(AtomLocality atomLocality)
     {
         switch (atomLocality)
         {
-            case AtomLocality::Local: stateLocal_ = HostBufferState::Valid; break;
-            case AtomLocality::NonLocal: stateNonLocal_ = HostBufferState::Valid; break;
+            case AtomLocality::Local: stateLocal_ = HostBufferState::Consistent; break;
+            case AtomLocality::NonLocal: stateNonLocal_ = HostBufferState::Consistent; break;
             case AtomLocality::All:
-                stateLocal_    = HostBufferState::Valid;
-                stateNonLocal_ = HostBufferState::Valid;
+                stateLocal_    = HostBufferState::Consistent;
+                stateNonLocal_ = HostBufferState::Consistent;
                 break;
             default: GMX_RELEASE_ASSERT(false, "Wrong locality."); break;
         }
     }
-    /*! \brief Assert if the state of the host buffer for a given locality is valid.
-     * 
+    /*! \brief Assert if the host buffer for a given locality is consistent with the device-side buffer.
+     *
      *  When used with \c AtomLocality::All, checks both local and non-local buffers.
      *
      * \param[in] atomLocality Atom locality.
      */
-    void assertValid(AtomLocality atomLocality)
+    void assertConsistent(AtomLocality atomLocality)
     {
         switch (atomLocality)
         {
             case AtomLocality::Local:
-                GMX_ASSERT(stateLocal_ == HostBufferState::Valid,
-                           "Host-side local buffer should be valid before H2D copy.");
+                GMX_ASSERT(stateLocal_ == HostBufferState::Consistent,
+                           "Host-side local buffer should be consistent before H2D copy.");
                 break;
             case AtomLocality::NonLocal:
-                GMX_ASSERT(stateNonLocal_ == HostBufferState::Valid,
-                           "Host-side non-local buffer should be valid before H2D copy.");
+                GMX_ASSERT(stateNonLocal_ == HostBufferState::Consistent,
+                           "Host-side non-local buffer should be consistent before H2D copy.");
                 break;
             case AtomLocality::All:
-                GMX_ASSERT(stateLocal_ == HostBufferState::Valid && stateNonLocal_ == HostBufferState::Valid,
-                           "Host-side buffer should be valid before H2D copy.");
+                GMX_ASSERT(stateLocal_ == HostBufferState::Consistent
+                                   && stateNonLocal_ == HostBufferState::Consistent,
+                           "Host-side buffer should be consistent before H2D copy.");
                 break;
             default: GMX_RELEASE_ASSERT(false, "Wrong locality."); break;
         }
     }
     /*! \brief Indicate that the device to host copy for the buffer of a given locality was issued.
      *
-     *  Asserts that the host side buffer is not valid to ensure that the data is not copied twice.
+     *  Asserts that the host side buffer is not consistent to ensure that the data is not copied twice.
      *
      *  When used with \c AtomLocality::All, checks and updates both local and non-local buffers.
      *
@@ -159,20 +161,23 @@ public:
         switch (atomLocality)
         {
             case AtomLocality::Local:
-                GMX_ASSERT(
-                        stateLocal_ != HostBufferState::Valid,
-                        "Trying to copy local values from the device into the valid host buffer.");
+                GMX_ASSERT(stateLocal_ != HostBufferState::Consistent,
+                           "Trying to copy local values from the device into the consistent host "
+                           "buffer.");
                 stateLocal_ = HostBufferState::InTransit;
                 break;
             case AtomLocality::NonLocal:
-                GMX_ASSERT(stateNonLocal_ != HostBufferState::Valid,
-                           "Trying to copy non-local values from the device into the valid host "
-                           "buffer.");
+                GMX_ASSERT(
+                        stateNonLocal_ != HostBufferState::Consistent,
+                        "Trying to copy non-local values from the device into the consistent host "
+                        "buffer.");
                 stateNonLocal_ = HostBufferState::InTransit;
                 break;
             case AtomLocality::All:
-                GMX_ASSERT(stateLocal_ != HostBufferState::Valid && stateNonLocal_ != HostBufferState::Valid,
-                           "Trying to copy values from the device into the valid host buffer.");
+                GMX_ASSERT(
+                        stateLocal_ != HostBufferState::Consistent
+                                && stateNonLocal_ != HostBufferState::Consistent,
+                        "Trying to copy values from the device into the consistent host buffer.");
                 stateLocal_    = HostBufferState::InTransit;
                 stateNonLocal_ = HostBufferState::InTransit;
                 break;
@@ -191,35 +196,35 @@ public:
         switch (atomLocality)
         {
             case AtomLocality::Local:
-                GMX_ASSERT(stateLocal_ != HostBufferState::Invalid,
+                GMX_ASSERT(stateLocal_ != HostBufferState::Inconsistent,
                            "Trying to wait for the local data before the D2H copy was issued.");
                 return stateLocal_ == HostBufferState::InTransit;
             case AtomLocality::NonLocal:
-                GMX_ASSERT(stateNonLocal_ != HostBufferState::Invalid,
+                GMX_ASSERT(stateNonLocal_ != HostBufferState::Inconsistent,
                            "Trying to wait for the non-local data before the D2H copy was issued.");
                 return stateNonLocal_ == HostBufferState::InTransit;
             case AtomLocality::All:
-                GMX_ASSERT(stateLocal_ != HostBufferState::Invalid
-                                   && stateNonLocal_ != HostBufferState::Invalid,
+                GMX_ASSERT(stateLocal_ != HostBufferState::Inconsistent
+                                   && stateNonLocal_ != HostBufferState::Inconsistent,
                            "Trying to wait for the data before the D2H copy was issued.");
                 return stateLocal_ == HostBufferState::InTransit
                        || stateNonLocal_ == HostBufferState::InTransit;
             default: GMX_RELEASE_ASSERT(false, "Wrong locality."); return false;
         }
     }
-    /*! \brief Invalidate the host-side buffer for a given locality
+    /*! \brief Mark the host-side buffer for a given locality as inconsistent with device-side buffers.
      *
      * \param[in] atomLocality Atom locality.
      */
-    void setInvalid(AtomLocality atomLocality)
+    void setInconsistent(AtomLocality atomLocality)
     {
         switch (atomLocality)
         {
-            case AtomLocality::Local: stateLocal_ = HostBufferState::Invalid; break;
-            case AtomLocality::NonLocal: stateNonLocal_ = HostBufferState::Invalid; break;
+            case AtomLocality::Local: stateLocal_ = HostBufferState::Inconsistent; break;
+            case AtomLocality::NonLocal: stateNonLocal_ = HostBufferState::Inconsistent; break;
             case AtomLocality::All:
-                stateLocal_    = HostBufferState::Invalid;
-                stateNonLocal_ = HostBufferState::Invalid;
+                stateLocal_    = HostBufferState::Inconsistent;
+                stateNonLocal_ = HostBufferState::Inconsistent;
                 break;
             default: GMX_RELEASE_ASSERT(false, "Wrong locality."); break;
         }
@@ -227,9 +232,9 @@ public:
 
 private:
     //! State of the host-side local positions buffer
-    HostBufferState stateLocal_ = HostBufferState::Valid;
+    HostBufferState stateLocal_ = HostBufferState::Consistent;
     //! State of the host-side non-local positions buffer
-    HostBufferState stateNonLocal_ = HostBufferState::Valid;
+    HostBufferState stateNonLocal_ = HostBufferState::Consistent;
 };
 
 } // namespace
@@ -383,14 +388,14 @@ public:
      */
     void waitCoordinatesReadyOnHost(AtomLocality atomLocality);
 
-    /*! \brief Invalidate the host-side coordinates buffer
+    /*! \brief Marks the host-side coordinates buffer as inconsistent with the device-side buffer for a given locality.
      *
-     *  Sets the state of the host-side coordinates buffer to invalid.
-     *  Should be called, when the coordinates update is issued on the device side
+     *  Sets the state of the host-side coordinates buffer to \c HostBufferState::Inconsistent'.
+     *  Should be called, when the coordinates are updated on the device.
      *
-     *  \param[in] atomLocality  Locality of the particles to invalidate buffer for.
+     *  \param[in] atomLocality  Locality of the particles.
      */
-    void invalidateHostCoordinatesBuffer(AtomLocality atomLocality);
+    void markHostCoordinatesBufferInconsistent(AtomLocality atomLocality);
 
 
     /*! \brief Get the velocities buffer on the GPU.

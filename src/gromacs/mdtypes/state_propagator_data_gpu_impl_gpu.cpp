@@ -174,7 +174,7 @@ void StatePropagatorDataGpu::Impl::reinit(int numAtomsLocal, int numAtomsAll)
         clearDeviceBufferAsync(&d_f_, 0, d_fCapacity_, *localStream_);
     }
 
-    xHostState_.assertValid(AtomLocality::All);
+    xHostState_.assertConsistent(AtomLocality::All);
 
     wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LaunchStatePropagatorData);
     wallcycle_stop(wcycle_, WallCycleCounter::LaunchGpu);
@@ -313,7 +313,7 @@ DeviceBuffer<RVec> StatePropagatorDataGpu::Impl::getCoordinates()
 void StatePropagatorDataGpu::Impl::copyCoordinatesToGpu(const gmx::ArrayRef<const gmx::RVec> h_x,
                                                         AtomLocality atomLocality)
 {
-    xHostState_.assertValid(atomLocality);
+    xHostState_.assertConsistent(atomLocality);
     GMX_ASSERT(atomLocality < AtomLocality::All,
                formatString("Wrong atom locality. Only Local and NonLocal are allowed for "
                             "coordinate transfers, passed value is \"%s\"",
@@ -410,14 +410,14 @@ void StatePropagatorDataGpu::Impl::waitCoordinatesReadyOnHost(AtomLocality atomL
     {
         wallcycle_start(wcycle_, WallCycleCounter::WaitGpuStatePropagatorData);
         xReadyOnHost_[atomLocality].waitForEvent();
-        xHostState_.setValid(atomLocality);
+        xHostState_.setConsistent(atomLocality);
         wallcycle_stop(wcycle_, WallCycleCounter::WaitGpuStatePropagatorData);
     }
 }
 
-void StatePropagatorDataGpu::Impl::invalidateHostCoordinatesBuffer(AtomLocality atomLocality)
+void StatePropagatorDataGpu::Impl::markHostCoordinatesBufferInconsistent(AtomLocality atomLocality)
 {
-    xHostState_.setInvalid(atomLocality);
+    xHostState_.setInconsistent(atomLocality);
 }
 
 
@@ -651,9 +651,9 @@ void StatePropagatorDataGpu::waitCoordinatesReadyOnHost(AtomLocality atomLocalit
     return impl_->waitCoordinatesReadyOnHost(atomLocality);
 }
 
-void StatePropagatorDataGpu::invalidateHostCoordinatesBuffer(AtomLocality atomLocality)
+void StatePropagatorDataGpu::markHostCoordinatesBufferInconsistent(AtomLocality atomLocality)
 {
-    return impl_->invalidateHostCoordinatesBuffer(atomLocality);
+    return impl_->markHostCoordinatesBufferInconsistent(atomLocality);
 }
 
 

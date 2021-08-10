@@ -225,14 +225,14 @@ public:
      */
     void waitCoordinatesReadyOnHost(AtomLocality atomLocality);
 
-    /*! \brief Invalidate the host-side coordinates buffer
+    /*! \brief Marks the host-side coordinates buffer as inconsistent with the device-side buffer for a given locality.
      *
-     *  Sets the state of the host-side coordinates buffer to invalid.
-     *  Should be called, when the coordinates update is issued on the device side
+     *  Sets the state of the host-side coordinates buffer to \c HostBufferState::Inconsistent'.
+     *  Should be called, when the coordinates are updated on the device.
      *
-     *  \param[in] atomLocality  Locality of the particles to invalidate buffer for.
+     *  \param[in] atomLocality  Locality of the particles.
      */
-    void invalidateHostCoordinatesBuffer(AtomLocality atomLocality);
+    void markHostCoordinatesBufferInconsistent(AtomLocality atomLocality);
 
 
     /*! \brief Get the velocities buffer on the GPU.

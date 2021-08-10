@@ -1550,7 +1550,7 @@ void gmx::LegacySimulator::do_md()
                         doParrinelloRahman,
                         ir->nstpcouple * ir->delta_t,
                         M);
-                stateGpu->invalidateHostCoordinatesBuffer(AtomLocality::Local);
+                stateGpu->markHostCoordinatesBufferInconsistent(AtomLocality::Local);
 
                 // Copy velocities D2H after update if:
                 // - Globals are computed this step (includes the energy output steps).
