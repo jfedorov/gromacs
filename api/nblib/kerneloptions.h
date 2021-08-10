@@ -59,6 +59,7 @@ enum class SimdKernels : int
     SimdNo,
     Simd4XM,
     Simd2XMM,
+    GPU,
     Count
 };
 
@@ -97,8 +98,6 @@ struct NBKernelOptions final
     bool useHalfLJOptimization = false;
     //! The pairlist and interaction cut-off
     real pairlistCutoff = 1.0;
-    //! Whether to compute energies (shift forces for virial are always computed on CPU)
-    bool computeVirialAndEnergy = false;
     //! The Coulomb interaction function
     CoulombType coulombType = CoulombType::Pme;
     //! Whether to use tabulated PME grid correction instead of analytical, not applicable with simd=no

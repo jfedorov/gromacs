@@ -48,6 +48,7 @@
 #include "gromacs/utility/arrayref.h"
 
 #include "nblib/box.h"
+#include "nblib/tpr.h"
 #include "nblib/vector.h"
 
 #include "testutils/conftest.h"

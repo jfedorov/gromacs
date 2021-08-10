@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2020,2021, by the GROMACS development team, led by
+ * Copyright (c) 2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -34,52 +34,62 @@
  */
 /*! \inpublicapi \file
  * \brief
- * Implements functionality to compute virials from force data
+ * Implements nblib tpr reading
  *
  * \author Victor Holanda <victor.holanda@cscs.ch>
  * \author Joe Jordan <ejjordan@kth.se>
  * \author Prashanth Kanduri <kanduri@cscs.ch>
  * \author Sebastian Keller <keller@cscs.ch>
  */
+#ifndef NBLIB_TPR_H
+#define NBLIB_TPR_H
 
-#include "gromacs/mdlib/calcvir.h"
-#include "gromacs/utility/arrayref.h"
+#include <memory>
+#include <string>
+#include <vector>
+
+#include "nblib/basicdefinitions.h"
 #include "nblib/box.h"
-#include "nblib/exception.h"
-#include "nblib/virials.h"
+#include "nblib/vector.h"
+#include "nblib/topology.h"
 
 namespace nblib
 {
+template<typename T>
+struct ExclusionLists;
+class Box;
 
-void computeVirialTensor(gmx::ArrayRef<const Vec3> coordinates,
-                         gmx::ArrayRef<const Vec3> forces,
-                         gmx::ArrayRef<const Vec3> shiftVectors,
-                         gmx::ArrayRef<const Vec3> shiftForces,
-                         const Box&                box,
-                         gmx::ArrayRef<real>       virialOutput)
+class TprReader
 {
-    if (virialOutput.size() != 9)
-    {
-        throw InputException("Virial array size incorrect, should be 9");
-    }
+public:
+    TprReader(std::string filename);
 
-    // set virial output array to zero
-    std::fill(virialOutput.begin(), virialOutput.end(), 0.0);
-    // use legacy tensor format
-    rvec* virial = reinterpret_cast<rvec*>(virialOutput.data());
+    //! Particle info where all particles are marked to have Van der Waals interactions
+    std::vector<int64_t> particleInteractionFlags_;
+    //! particle type id of all particles
+    std::vector<int> particleTypeIdOfAllParticles_;
+    //! Storage for parameters for short range interactions.
+    std::vector<real> nonbondedParameters_;
+    //! electrostatic charges
+    std::vector<real> charges_;
+    //! stores information about particles pairs to be excluded from the non-bonded force
+    //! calculation exclusion list ranges
+    std::vector<int> exclusionListRanges;
+    //! exclusion list elements
+    std::vector<int> exclusionListElements;
+    //! coordinates
+    std::vector<Vec3> coordinates_;
+    //! velocities
+    std::vector<Vec3> velocities_;
 
-    // compute the virials from surrounding boxes
-    const rvec* fshift    = as_rvec_array(shiftForces.data());
-    const rvec* shift_vec = as_rvec_array(shiftVectors.data());
-    calc_vir(numShiftVectors, shift_vec, fshift, virial, false, box.legacyMatrix());
+    //! bounding box of particle coordinates
+    [[nodiscard]] Box getBox() const;
 
-    // calculate partial virial, for local atoms only, based on short range
-    // NOTE: GROMACS uses a variable called mdatoms.homenr which is basically number of atoms in current processor
-    //       Used numAtoms from the coordinate array in its place
-    auto        numAtoms = coordinates.size();
-    const rvec* f        = as_rvec_array(forces.data());
-    const rvec* x        = as_rvec_array(coordinates.data());
-    calc_vir(numAtoms, x, f, virial, false, box.legacyMatrix());
-}
+private:
+    real boxX_;
+    real boxY_;
+    real boxZ_;
+};
 
 } // namespace nblib
+#endif // NBLIB_TPR_H
