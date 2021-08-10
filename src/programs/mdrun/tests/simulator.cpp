@@ -73,7 +73,7 @@ namespace
  * are equivalent.
  */
 using SimulatorComparisonTestParams =
-        std::tuple<std::tuple<std::string, std::string, std::string, std::string>, std::string>;
+        std::tuple<std::tuple<std::string, std::string, std::string, std::string, MdpParameterDatabase>, std::string>;
 class SimulatorComparisonTest :
     public MdrunTestFixture,
     public ::testing::WithParamInterface<SimulatorComparisonTestParams>
@@ -88,6 +88,7 @@ TEST_P(SimulatorComparisonTest, WithinTolerances)
     const auto& integrator          = std::get<1>(mdpParams);
     const auto& tcoupling           = std::get<2>(mdpParams);
     const auto& pcoupling           = std::get<3>(mdpParams);
+    const auto& additionalParameter = std::get<4>(mdpParams);
     const auto& environmentVariable = std::get<1>(params);
 
     int maxNumWarnings = 0;
@@ -169,13 +170,19 @@ TEST_P(SimulatorComparisonTest, WithinTolerances)
             environmentVariable.c_str()));
 
     auto mdpFieldValues = prepareMdpFieldValues(
-            simulationName.c_str(), integrator.c_str(), tcoupling.c_str(), pcoupling.c_str());
+            simulationName.c_str(), integrator.c_str(), tcoupling.c_str(), pcoupling.c_str(), additionalParameter);
     if (tcoupling == "andersen")
     {
         // Fixes error "nstcomm must be 1, not 4 for Andersen, as velocities of
         //              atoms in coupled groups are randomized every time step"
         mdpFieldValues["nstcomm"]       = "1";
         mdpFieldValues["nstcalcenergy"] = "1";
+    }
+    if (pcoupling == "mttk")
+    {
+        // Standard parameters use compressibility of 5e-5
+        // Increasing compressibility makes this test significantly more sensitive
+        mdpFieldValues["compressibility"] = "1";
     }
 
     EnergyTermsToCompare energyTermsToCompare{ {
@@ -281,22 +288,22 @@ TEST_P(SimulatorComparisonTest, WithinTolerances)
 // These tests are very sensitive, so we only run them in double precision.
 // As we change call ordering, they might actually become too strict to be useful.
 #if !GMX_GPU_OPENCL && GMX_DOUBLE
-INSTANTIATE_TEST_CASE_P(SimulatorsAreEquivalentDefaultModular,
-                        SimulatorComparisonTest,
-                        ::testing::Combine(::testing::Combine(::testing::Values("argon12", "tip3p5"),
-                                                              ::testing::Values("md-vv"),
-                                                              ::testing::Values("no",
-                                                                                "v-rescale",
-                                                                                "berendsen",
-                                                                                "nose-hoover",
-                                                                                "andersen-massive",
-                                                                                "andersen"),
-                                                              ::testing::Values("no",
-                                                                                "berendsen",
-                                                                                "c-rescale",
-                                                                                "mttk")),
-                                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR")));
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
+        SimulatorsAreEquivalentDefaultModular,
+        SimulatorComparisonTest,
+        ::testing::Combine(
+                ::testing::Combine(::testing::Values("argon12", "tip3p5"),
+                                   ::testing::Values("md-vv"),
+                                   ::testing::Values("no",
+                                                     "v-rescale",
+                                                     "berendsen",
+                                                     "nose-hoover",
+                                                     "andersen-massive",
+                                                     "andersen"),
+                                   ::testing::Values("mttk", "no", "berendsen", "c-rescale", "mttk"),
+                                   ::testing::Values(MdpParameterDatabase::Default)),
+                ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR")));
+INSTANTIATE_TEST_SUITE_P(
         SimulatorsAreEquivalentDefaultLegacy,
         SimulatorComparisonTest,
         ::testing::Combine(
@@ -304,25 +311,26 @@ INSTANTIATE_TEST_CASE_P(
                         ::testing::Values("argon12", "tip3p5"),
                         ::testing::Values("md"),
                         ::testing::Values("no", "v-rescale", "berendsen", "nose-hoover"),
-                        ::testing::Values("no", "Parrinello-Rahman", "berendsen", "c-rescale")),
+                        ::testing::Values("no", "Parrinello-Rahman", "berendsen", "c-rescale"),
+                        ::testing::Values(MdpParameterDatabase::Default)),
                 ::testing::Values("GMX_USE_MODULAR_SIMULATOR")));
 #else
-INSTANTIATE_TEST_CASE_P(DISABLED_SimulatorsAreEquivalentDefaultModular,
-                        SimulatorComparisonTest,
-                        ::testing::Combine(::testing::Combine(::testing::Values("argon12", "tip3p5"),
-                                                              ::testing::Values("md-vv"),
-                                                              ::testing::Values("no",
-                                                                                "v-rescale",
-                                                                                "berendsen",
-                                                                                "andersen-massive",
-                                                                                "andersen",
-                                                                                "nose-hoover"),
-                                                              ::testing::Values("no",
-                                                                                "berendsen",
-                                                                                "c-rescale",
-                                                                                "mttk")),
-                                           ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR")));
-INSTANTIATE_TEST_CASE_P(
+INSTANTIATE_TEST_SUITE_P(
+        DISABLED_SimulatorsAreEquivalentDefaultModular,
+        SimulatorComparisonTest,
+        ::testing::Combine(
+                ::testing::Combine(::testing::Values("argon12", "tip3p5"),
+                                   ::testing::Values("md-vv"),
+                                   ::testing::Values("no",
+                                                     "v-rescale",
+                                                     "berendsen",
+                                                     "andersen-massive",
+                                                     "andersen",
+                                                     "nose-hoover"),
+                                   ::testing::Values("no", "berendsen", "c-rescale", "mttk"),
+                                   ::testing::Values(MdpParameterDatabase::Default)),
+                ::testing::Values("GMX_DISABLE_MODULAR_SIMULATOR")));
+INSTANTIATE_TEST_SUITE_P(
         DISABLED_SimulatorsAreEquivalentDefaultLegacy,
         SimulatorComparisonTest,
         ::testing::Combine(
@@ -330,7 +338,8 @@ INSTANTIATE_TEST_CASE_P(
                         ::testing::Values("argon12", "tip3p5"),
                         ::testing::Values("md"),
                         ::testing::Values("no", "v-rescale", "berendsen", "nose-hoover"),
-                        ::testing::Values("no", "Parrinello-Rahman", "berendsen", "c-rescale")),
+                        ::testing::Values("no", "Parrinello-Rahman", "berendsen", "c-rescale"),
+                        ::testing::Values(MdpParameterDatabase::Default)),
                 ::testing::Values("GMX_USE_MODULAR_SIMULATOR")));
 #endif
 

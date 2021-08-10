@@ -125,6 +125,8 @@ public:
     void useTopGroAndNdxFromDatabase(const std::string& name);
     //! Use a standard .gro file as input to grompp
     void useGroFromDatabase(const char* name);
+    //! Use a standard .ndx as input to grompp
+    void useNdxFromDatabase(const std::string& name);
     //! Use .top, .gro, and .mdp from FEP test database
     void useTopGroAndMdpFromFepTestDatabase(const std::string& name);
     //! Calls grompp (on rank 0, with a customized command line) to prepare for the mdrun test
@@ -200,9 +202,9 @@ class MdrunTestFixtureBase : public ::testing::Test
 {
 public:
     //! Per-test-case setup for lengthy processes that need run only once.
-    static void SetUpTestCase();
+    static void SetUpTestSuite();
     //! Per-test-case tear down
-    static void TearDownTestCase();
+    static void TearDownTestSuite();
 
     MdrunTestFixtureBase();
     ~MdrunTestFixtureBase() override;

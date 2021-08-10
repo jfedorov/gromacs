@@ -52,7 +52,36 @@
 namespace gmx
 {
 class EnergyData;
+class MttkPropagatorConnection;
 enum class ScheduleOnInitStep;
+
+/*! \internal
+ * \brief Struct collecting the propagator tags and offsets used by the MTTK pressure coupling
+ *
+ * MTTK scales the positions before and after the propagation step, and the
+ * velocities before and after each propagation half step.
+ */
+struct MttkPropagatorConnectionDetails
+{
+    //! The tag of the position scaling before the propagation step
+    PropagatorTag propagatorTagPrePosition;
+    //! The tag of the position scaling after the propagation step
+    PropagatorTag propagatorTagPostPosition;
+    //! The offset at which position scaling is applied
+    Offset positionOffset;
+    //! The tag of the velocity scaling before the first propagation half step
+    PropagatorTag propagatorTagPreVelocity1;
+    //! The tag of the velocity scaling after the first propagation half step
+    PropagatorTag propagatorTagPostVelocity1;
+    //! The offset at which the first velocity half step scaling is applied
+    Offset velocityOffset1;
+    //! The tag of the velocity scaling before the second propagation half step
+    PropagatorTag propagatorTagPreVelocity2;
+    //! The tag of the velocity scaling after the second propagation half step
+    PropagatorTag propagatorTagPostVelocity2;
+    //! The offset at which the second velocity half step scaling is applied
+    Offset velocityOffset2;
+};
 
 /*! \internal
  * \brief Class holding the extra dof and parameters used by the MTTK algorithm
@@ -77,16 +106,24 @@ public:
              real                       couplingTimeStep,
              real                       couplingTime,
              real                       initialVolume,
+             real                       numDegreesOfFreedom,
+             real                       simulationTimeStep,
              const tensor               compressibility,
-             const StatePropagatorData* statePropagatorData);
+             const StatePropagatorData* statePropagatorData,
+             MttkPropagatorConnection*  mttkPropagatorConnection);
 
     //! Explicit copy constructor (interface has a standard destructor)
     MttkData(const MttkData& other);
 
     //! The current kinetic energy of the MTTK degree of freedom
     [[nodiscard]] real kineticEnergy() const;
-    //! Scale the MTTK dof velocity
-    void scale(real scalingFactor);
+    /*! \brief Scale the MTTK dof velocity
+     *
+     * \param scalingFactor  The factor by which the velocity is scaled
+     * \param scalingAtFullCouplingTimeStep  Whether the calling object is at full timestep
+     *                                       (determines whether the integral is calculated)
+     */
+    void scale(real scalingFactor, bool scalingAtFullCouplingTimeStep);
 
     //! The current MTTK dof velocity
     [[nodiscard]] real etaVelocity() const;
@@ -100,6 +137,9 @@ public:
     //! Pointer to the box velocities
     [[nodiscard]] rvec* boxVelocities();
 
+    //! Inform the propagators that scaling is needed
+    void propagatorCallback(Step step) const;
+
     //! ICheckpointHelperClient write checkpoint implementation
     void saveCheckpointState(std::optional<WriteCheckpointData> checkpointData, const t_commrec* cr) override;
     //! ICheckpointHelperClient read checkpoint implementation
@@ -111,7 +151,11 @@ public:
     static void build(LegacySimulatorData*                    legacySimulatorData,
                       ModularSimulatorAlgorithmBuilderHelper* builderHelper,
                       StatePropagatorData*                    statePropagatorData,
-                      EnergyData*                             energyData);
+                      EnergyData*                             energyData,
+                      const MttkPropagatorConnectionDetails&  mttkPropagatorConnectionDetails);
+
+    //! Calculate the current value of the MTTK conserved energy if it is needed
+    void calculateIntegralIfNeeded();
 
     //! Identifier used to store objects
     static std::string dataID();
@@ -119,10 +163,12 @@ public:
 private:
     //! Return the current value of the MTTK dof contribution to the conserved energy
     double temperatureCouplingIntegral(Time time) const;
-    //! Calculate the current value of the MTTK conserved energy if it is needed
-    void calculateIntegralIfNeeded();
+    //! Update the position and velocity scaling factors
+    void updateScalingFactors();
     //! Update the reference temperature
     void updateReferenceTemperature(real temperature, ReferenceTemperatureChangeAlgorithm algorithm);
+    //! Calculate the MTTK conserved energy
+    void calculateIntegral(real volume);
 
     //! The coupling time step
     const real couplingTimeStep_;
@@ -140,12 +186,18 @@ private:
     const real referencePressure_;
     //! The current box velocities (used for reporting only)
     tensor boxVelocity_;
+    //! The number of degrees of freedom in the first temperature group
+    const real numDegreesOfFreedom_;
+    //! The simulation time step - by how much the propagators are advancing the positions
+    const real simulationTimeStep_;
     //! The reference temperature the mass is based on
     real referenceTemperature_;
 
     // TODO: Clarify relationship to data objects and find a more robust alternative to raw pointers (#3583)
     //! Pointer to the micro state data (access to the current box)
     const StatePropagatorData* statePropagatorData_;
+    //! Pointer to the propagator connection object
+    MttkPropagatorConnection* mttkPropagatorConnection_;
 
     //! CheckpointHelper identifier
     const std::string identifier_ = "MttkData";
@@ -237,13 +289,11 @@ public:
     MttkElement(int                        nstcouple,
                 int                        offset,
                 real                       propagationTimeStep,
-                real                       simulationTimeStep,
                 ScheduleOnInitStep         scheduleOnInitStep,
                 Step                       initStep,
                 const StatePropagatorData* statePropagatorData,
                 EnergyData*                energyData,
                 MttkData*                  mttkData,
-                MttkPropagatorConnection*  mttkPropagatorConnection,
                 PbcType                    pbcType,
                 int                        numWalls,
                 real                       numDegreesOfFreedom);
@@ -271,35 +321,21 @@ public:
      * \param globalCommunicationHelper  Pointer to the \c GlobalCommunicationHelper object
      * \param offset  The step offset at which the thermostat is applied
      * \param scheduleOnInitStep  Whether the element is scheduled on the initial step
-     * \param propagatorTagPrePosition  Tag of the propagators to scale positions before propagation
-     * \param propagatorTagPostPosition  Tag of the propagators to scale positions after propagation
-     * \param positionOffset  The step offset at which the position scaling is applied
-     * \param propagatorTagPreVelocity1  Tag of the propagators to scale velocities before first propagation
-     * \param propagatorTagPostVelocity1  Tag of the propagators to scale velocities after first propagation
-     * \param velocityOffset1  The step offset at which the first velocity scaling is applied
-     * \param propagatorTagPreVelocity2  Tag of the propagators to scale velocities before second propagation
-     * \param propagatorTagPostVelocity2  Tag of the propagators to scale velocities after second propagation
-     * \param velocityOffset2  The step offset at which the second velocity scaling is applied
+     * \param mttkPropagatorConnectionDetails  Reference to the \c MttkPropagatorConnectionDetails object containing propagator tags and offsets
+
      *
      * \return  Pointer to the element to be added. Element needs to have been stored using \c storeElement
      */
-    static ISimulatorElement* getElementPointerImpl(LegacySimulatorData* legacySimulatorData,
-                                                    ModularSimulatorAlgorithmBuilderHelper* builderHelper,
-                                                    StatePropagatorData*        statePropagatorData,
-                                                    EnergyData*                 energyData,
-                                                    FreeEnergyPerturbationData* freeEnergyPerturbationData,
-                                                    GlobalCommunicationHelper* globalCommunicationHelper,
-                                                    Offset                     offset,
-                                                    ScheduleOnInitStep         scheduleOnInitStep,
-                                                    const PropagatorTag& propagatorTagPrePosition,
-                                                    const PropagatorTag& propagatorTagPostPosition,
-                                                    Offset               positionOffset,
-                                                    const PropagatorTag& propagatorTagPreVelocity1,
-                                                    const PropagatorTag& propagatorTagPostVelocity1,
-                                                    Offset               velocityOffset1,
-                                                    const PropagatorTag& propagatorTagPreVelocity2,
-                                                    const PropagatorTag& propagatorTagPostVelocity2,
-                                                    Offset               velocityOffset2);
+    static ISimulatorElement*
+    getElementPointerImpl(LegacySimulatorData*                    legacySimulatorData,
+                          ModularSimulatorAlgorithmBuilderHelper* builderHelper,
+                          StatePropagatorData*                    statePropagatorData,
+                          EnergyData*                             energyData,
+                          FreeEnergyPerturbationData*             freeEnergyPerturbationData,
+                          GlobalCommunicationHelper*              globalCommunicationHelper,
+                          Offset                                  offset,
+                          ScheduleOnInitStep                      scheduleOnInitStep,
+                          const MttkPropagatorConnectionDetails&  mttkPropagatorConnectionDetails);
 
 private:
     //! Propagation of the MTTK dof velocity
@@ -318,8 +354,6 @@ private:
     const int offset_;
     //! The propagation time step - by how much we propagate the MTTK dof
     const real propagationTimeStep_;
-    //! The simulation time step - by how much the propagators are advancing the positions
-    const real simulationTimeStep_;
     //! Whether we're scheduling on the first step
     const ScheduleOnInitStep scheduleOnInitStep_;
     //! The initial step number
@@ -332,8 +366,6 @@ private:
     EnergyData* energyData_;
     //! Pointer to the MTTK data
     MttkData* mttkData_;
-    //! Pointer to the propagator connection object
-    MttkPropagatorConnection* mttkPropagatorConnection_;
 };
 
 /*! \internal
@@ -366,15 +398,18 @@ public:
      * \param energyData  Pointer to the \c EnergyData object
      * \param freeEnergyPerturbationData  Pointer to the \c FreeEnergyPerturbationData object
      * \param globalCommunicationHelper  Pointer to the \c GlobalCommunicationHelper object
+     * \param mttkPropagatorConnectionDetails  Reference to the \c MttkPropagatorConnectionDetails object containing propagator tags and offsets
      *
      * \return  Pointer to the element to be added. Element needs to have been stored using \c storeElement
      */
-    static ISimulatorElement* getElementPointerImpl(LegacySimulatorData* legacySimulatorData,
-                                                    ModularSimulatorAlgorithmBuilderHelper* builderHelper,
-                                                    StatePropagatorData*        statePropagatorData,
-                                                    EnergyData*                 energyData,
-                                                    FreeEnergyPerturbationData* freeEnergyPerturbationData,
-                                                    GlobalCommunicationHelper* globalCommunicationHelper);
+    static ISimulatorElement*
+    getElementPointerImpl(LegacySimulatorData*                    legacySimulatorData,
+                          ModularSimulatorAlgorithmBuilderHelper* builderHelper,
+                          StatePropagatorData*                    statePropagatorData,
+                          EnergyData*                             energyData,
+                          FreeEnergyPerturbationData*             freeEnergyPerturbationData,
+                          GlobalCommunicationHelper*              globalCommunicationHelper,
+                          const MttkPropagatorConnectionDetails&  mttkPropagatorConnectionDetails);
 
 private:
     //! Scale the box

@@ -44,8 +44,6 @@
 
 #include "gromacs/ewald/ewald_utils.h"
 
-#include "pme_gpu_3dfft.h"
-#include "pme_gpu_internal.h"
 #include "pme_gpu_program_impl.h"
 
 PmeGpuProgramImpl::PmeGpuProgramImpl(const DeviceContext& deviceContext) :
@@ -59,21 +57,3 @@ PmeGpuProgramImpl::PmeGpuProgramImpl(const DeviceContext& deviceContext) :
 }
 
 PmeGpuProgramImpl::~PmeGpuProgramImpl() = default;
-
-// [[noreturn]] attributes must be added in the common headers, so it's easier to silence the warning here
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wmissing-noreturn"
-
-GpuParallel3dFft::GpuParallel3dFft(PmeGpu const* /*pmeGpu*/, int /*gridIndex*/)
-{
-    GMX_THROW(gmx::NotImplementedError("PME is not implemented in SYCL"));
-}
-
-GpuParallel3dFft::~GpuParallel3dFft() = default;
-
-void GpuParallel3dFft::perform3dFft(gmx_fft_direction /*dir*/, CommandEvent* /*timingEvent*/)
-{
-    GMX_THROW(gmx::NotImplementedError("Not implemented on SYCL yet"));
-}
-
-#pragma clang diagnostic pop
