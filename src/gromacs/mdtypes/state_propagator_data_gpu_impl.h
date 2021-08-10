@@ -89,6 +89,108 @@ enum class HostBufferState : int
     Default = Valid
 };
 
+class HostBufferStateTracker
+{
+public:
+    void setValid(AtomLocality atomLocality)
+    {
+        switch (atomLocality)
+        {
+            case AtomLocality::Local: stateLocal_ = HostBufferState::Valid; break;
+            case AtomLocality::NonLocal: stateNonLocal_ = HostBufferState::Valid; break;
+            case AtomLocality::All:
+                stateLocal_    = HostBufferState::Valid;
+                stateNonLocal_ = HostBufferState::Valid;
+                break;
+            default: GMX_RELEASE_ASSERT(false, "Wrong locality."); break;
+        }
+    }
+    void assertValid(AtomLocality atomLocality)
+    {
+        switch (atomLocality)
+        {
+            case AtomLocality::Local:
+                GMX_ASSERT(stateLocal_ == HostBufferState::Valid,
+                           "Host-side local buffer should be valid before H2D copy.");
+                break;
+            case AtomLocality::NonLocal:
+                GMX_ASSERT(stateNonLocal_ == HostBufferState::Valid,
+                           "Host-side non-local buffer should be valid before H2D copy.");
+                break;
+            case AtomLocality::All:
+                GMX_ASSERT(stateLocal_ == HostBufferState::Valid && stateNonLocal_ == HostBufferState::Valid,
+                           "Host-side buffer should be valid before H2D copy.");
+                break;
+            default: GMX_RELEASE_ASSERT(false, "Wrong locality."); break;
+        }
+    }
+    void setInTransit(AtomLocality atomLocality)
+    {
+        switch (atomLocality)
+        {
+            case AtomLocality::Local:
+                GMX_ASSERT(
+                        stateLocal_ != HostBufferState::Valid,
+                        "Trying to copy local values from the device into the valid host buffer.");
+                stateLocal_ = HostBufferState::InTransit;
+                break;
+            case AtomLocality::NonLocal:
+                GMX_ASSERT(stateNonLocal_ != HostBufferState::Valid,
+                           "Trying to copy non-local values from the device into the valid host "
+                           "buffer.");
+                stateNonLocal_ = HostBufferState::InTransit;
+                break;
+            case AtomLocality::All:
+                GMX_ASSERT(stateLocal_ != HostBufferState::Valid && stateNonLocal_ != HostBufferState::Valid,
+                           "Trying to copy values from the device into the valid host buffer.");
+                stateLocal_    = HostBufferState::InTransit;
+                stateNonLocal_ = HostBufferState::InTransit;
+                break;
+            default: GMX_RELEASE_ASSERT(false, "Wrong locality."); break;
+        }
+    }
+    bool checkIfInTransit(AtomLocality atomLocality)
+    {
+        switch (atomLocality)
+        {
+            case AtomLocality::Local:
+                GMX_ASSERT(stateLocal_ != HostBufferState::Invalid,
+                           "Trying to wait for the local data before the D2H copy was issued.");
+                return stateLocal_ == HostBufferState::InTransit;
+            case AtomLocality::NonLocal:
+                GMX_ASSERT(stateNonLocal_ != HostBufferState::Invalid,
+                           "Trying to wait for the non-local data before the D2H copy was issued.");
+                return stateNonLocal_ == HostBufferState::InTransit;
+            case AtomLocality::All:
+                GMX_ASSERT(stateLocal_ != HostBufferState::Invalid
+                                   && stateNonLocal_ != HostBufferState::Invalid,
+                           "Trying to wait for the data before the D2H copy was issued.");
+                return stateLocal_ == HostBufferState::InTransit
+                       || stateNonLocal_ == HostBufferState::InTransit;
+            default: GMX_RELEASE_ASSERT(false, "Wrong locality."); return false;
+        }
+    }
+    void setInvalid(AtomLocality atomLocality)
+    {
+        switch (atomLocality)
+        {
+            case AtomLocality::Local: stateLocal_ = HostBufferState::Invalid; break;
+            case AtomLocality::NonLocal: stateNonLocal_ = HostBufferState::Invalid; break;
+            case AtomLocality::All:
+                stateLocal_    = HostBufferState::Invalid;
+                stateNonLocal_ = HostBufferState::Invalid;
+                break;
+            default: GMX_RELEASE_ASSERT(false, "Wrong locality."); break;
+        }
+    }
+
+private:
+    //! State of the host-side local positions buffer
+    HostBufferState stateLocal_;
+    //! State of the host-side non-local positions buffer
+    HostBufferState stateNonLocal_;
+};
+
 class StatePropagatorDataGpu::Impl
 {
 public:
@@ -405,7 +507,7 @@ private:
     //! Allocation size for the positions buffer
     int d_xCapacity_ = -1;
     //! State of the host-side positions buffer
-    EnumerationArray<AtomLocality, HostBufferState> xHostState_;
+    HostBufferStateTracker xHostState_;
 
     //! Device velocities buffer
     DeviceBuffer<RVec> d_v_;
