@@ -174,7 +174,7 @@ void StatePropagatorDataGpu::Impl::reinit(int numAtomsLocal, int numAtomsAll)
         clearDeviceBufferAsync(&d_f_, 0, d_fCapacity_, *localStream_);
     }
 
-    xHostState_.setValid(AtomLocality::All);
+    xHostState_.assertValid(AtomLocality::All);
 
     wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LaunchStatePropagatorData);
     wallcycle_stop(wcycle_, WallCycleCounter::LaunchGpu);
