@@ -92,6 +92,14 @@ enum class HostBufferState : int
     Default = Consistent
 };
 
+static const char* enumValueToString(HostBufferState enumValue)
+{
+    static constexpr gmx::EnumerationArray<HostBufferState, const char*> hostBufferStateNames = {
+        "Consistent", "In transit", "Inconsistent"
+    };
+    return hostBufferStateNames[enumValue];
+}
+
 /*! \brief Tracks the state of local and non-local buffers
  *
  * Provide functionality to track and switch stated of the local and non-local host buffers.
@@ -134,16 +142,26 @@ public:
         {
             case AtomLocality::Local:
                 GMX_ASSERT(stateLocal_ == HostBufferState::Consistent,
-                           "Host-side local buffer should be consistent before H2D copy.");
+                           formatString("Host-side local buffer should be consistent before H2D "
+                                        "copy. The state is \"%s\".",
+                                        enumValueToString(stateLocal_))
+                                   .c_str());
                 break;
             case AtomLocality::NonLocal:
                 GMX_ASSERT(stateNonLocal_ == HostBufferState::Consistent,
-                           "Host-side non-local buffer should be consistent before H2D copy.");
+                           formatString("Host-side non-local buffer should be consistent before "
+                                        "H2D copy. The state is \"%s\".",
+                                        enumValueToString(stateNonLocal_))
+                                   .c_str());
                 break;
             case AtomLocality::All:
                 GMX_ASSERT(stateLocal_ == HostBufferState::Consistent
                                    && stateNonLocal_ == HostBufferState::Consistent,
-                           "Host-side buffer should be consistent before H2D copy.");
+                           formatString("Host-side buffer should be consistent before H2D copy. "
+                                        "Local state is \"%s\", non-local state is \"%s\".",
+                                        enumValueToString(stateLocal_),
+                                        enumValueToString(stateNonLocal_))
+                                   .c_str());
                 break;
             default: GMX_RELEASE_ASSERT(false, "Wrong locality."); break;
         }
@@ -162,22 +180,31 @@ public:
         {
             case AtomLocality::Local:
                 GMX_ASSERT(stateLocal_ != HostBufferState::Consistent,
-                           "Trying to copy local values from the device into the consistent host "
-                           "buffer.");
+                           formatString("Trying to copy local values from the device into the "
+                                        "consistent host "
+                                        "buffer. The state is \"%s\".",
+                                        enumValueToString(stateLocal_))
+                                   .c_str());
                 stateLocal_ = HostBufferState::InTransit;
                 break;
             case AtomLocality::NonLocal:
-                GMX_ASSERT(
-                        stateNonLocal_ != HostBufferState::Consistent,
-                        "Trying to copy non-local values from the device into the consistent host "
-                        "buffer.");
+                GMX_ASSERT(stateNonLocal_ != HostBufferState::Consistent,
+                           formatString("Trying to copy non-local values from the device into the "
+                                        "consistent host "
+                                        "buffer. The state is \"%s\".",
+                                        enumValueToString(stateNonLocal_))
+                                   .c_str());
                 stateNonLocal_ = HostBufferState::InTransit;
                 break;
             case AtomLocality::All:
-                GMX_ASSERT(
-                        stateLocal_ != HostBufferState::Consistent
-                                && stateNonLocal_ != HostBufferState::Consistent,
-                        "Trying to copy values from the device into the consistent host buffer.");
+                GMX_ASSERT(stateLocal_ != HostBufferState::Consistent
+                                   && stateNonLocal_ != HostBufferState::Consistent,
+                           formatString(
+                                   "Trying to copy values from the device into the consistent host "
+                                   "buffer. Local state is \"%s\", non-local state is \"%s\".",
+                                   enumValueToString(stateLocal_),
+                                   enumValueToString(stateNonLocal_))
+                                   .c_str());
                 stateLocal_    = HostBufferState::InTransit;
                 stateNonLocal_ = HostBufferState::InTransit;
                 break;
@@ -197,16 +224,26 @@ public:
         {
             case AtomLocality::Local:
                 GMX_ASSERT(stateLocal_ != HostBufferState::Inconsistent,
-                           "Trying to wait for the local data before the D2H copy was issued.");
+                           formatString("Trying to wait for the local data before the D2H copy was "
+                                        "issued. The state is \"%s\".",
+                                        enumValueToString(stateLocal_))
+                                   .c_str());
                 return stateLocal_ == HostBufferState::InTransit;
             case AtomLocality::NonLocal:
                 GMX_ASSERT(stateNonLocal_ != HostBufferState::Inconsistent,
-                           "Trying to wait for the non-local data before the D2H copy was issued.");
+                           formatString("Trying to wait for the non-local data before the D2H copy "
+                                        "was issued. The state is \"%s\".",
+                                        enumValueToString(stateNonLocal_))
+                                   .c_str());
                 return stateNonLocal_ == HostBufferState::InTransit;
             case AtomLocality::All:
                 GMX_ASSERT(stateLocal_ != HostBufferState::Inconsistent
                                    && stateNonLocal_ != HostBufferState::Inconsistent,
-                           "Trying to wait for the data before the D2H copy was issued.");
+                           formatString("Trying to wait for the data before the D2H copy was "
+                                        "issued. Local state is \"%s\", non-local state is \"%s\".",
+                                        enumValueToString(stateLocal_),
+                                        enumValueToString(stateNonLocal_))
+                                   .c_str());
                 return stateLocal_ == HostBufferState::InTransit
                        || stateNonLocal_ == HostBufferState::InTransit;
             default: GMX_RELEASE_ASSERT(false, "Wrong locality."); return false;
