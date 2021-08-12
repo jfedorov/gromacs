@@ -391,17 +391,21 @@ void StatePropagatorDataGpu::Impl::copyCoordinatesFromGpu(gmx::ArrayRef<gmx::RVe
     const DeviceStream* deviceStream = xCopyStreams_[atomLocality];
     GMX_ASSERT(deviceStream != nullptr,
                "No stream is valid for copying positions with given atom locality.");
-    xHostState_.setInTransit(atomLocality);
 
-    wallcycle_start_nocount(wcycle_, WallCycleCounter::LaunchGpu);
-    wallcycle_sub_start(wcycle_, WallCycleSubCounter::LaunchStatePropagatorData);
+    if (xHostState_.checkIfInconsistent(atomLocality))
+    {
+        xHostState_.setInTransit(atomLocality);
 
-    copyFromDevice(h_x, d_x_, d_xSize_, atomLocality, *deviceStream);
-    // Note: unlike copyCoordinatesToGpu this is not used in OpenCL, and the conditional is not needed.
-    xReadyOnHost_[atomLocality].markEvent(*deviceStream);
+        wallcycle_start_nocount(wcycle_, WallCycleCounter::LaunchGpu);
+        wallcycle_sub_start(wcycle_, WallCycleSubCounter::LaunchStatePropagatorData);
 
-    wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LaunchStatePropagatorData);
-    wallcycle_stop(wcycle_, WallCycleCounter::LaunchGpu);
+        copyFromDevice(h_x, d_x_, d_xSize_, atomLocality, *deviceStream);
+        // Note: unlike copyCoordinatesToGpu this is not used in OpenCL, and the conditional is not needed.
+        xReadyOnHost_[atomLocality].markEvent(*deviceStream);
+
+        wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LaunchStatePropagatorData);
+        wallcycle_stop(wcycle_, WallCycleCounter::LaunchGpu);
+    }
 }
 
 void StatePropagatorDataGpu::Impl::waitCoordinatesReadyOnHost(AtomLocality atomLocality)

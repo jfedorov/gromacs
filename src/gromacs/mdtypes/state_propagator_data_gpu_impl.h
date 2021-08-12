@@ -263,6 +263,24 @@ public:
             default: GMX_RELEASE_ASSERT(false, "Wrong locality."); break;
         }
     }
+    /*! \brief Check if the state of the buffer for a given locality indicates that the host data is not consistent with the device data.
+     *
+     * The copy call should not be executed if the data is consistent or the copy call was already made.
+     *
+     * \param[in] atomLocality Atom locality.
+     */
+    bool checkIfInconsistent(AtomLocality atomLocality)
+    {
+        switch (atomLocality)
+        {
+            case AtomLocality::Local: return stateLocal_ == HostBufferState::Inconsistent;
+            case AtomLocality::NonLocal: return stateNonLocal_ == HostBufferState::Inconsistent;
+            case AtomLocality::All:
+                return stateLocal_ == HostBufferState::Inconsistent
+                       || stateNonLocal_ == HostBufferState::Inconsistent;
+            default: GMX_RELEASE_ASSERT(false, "Wrong locality."); return false;
+        }
+    }
 
 private:
     //! State of the host-side local positions buffer
