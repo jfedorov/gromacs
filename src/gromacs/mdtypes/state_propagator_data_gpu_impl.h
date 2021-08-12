@@ -60,9 +60,6 @@ struct gmx_wallcycle;
 namespace gmx
 {
 
-namespace
-{
-
 /*! \brief The states of the host-side buffer
  *
  * Used to keep track of the data when executing asynchronously.
@@ -273,8 +270,6 @@ private:
     //! State of the host-side non-local positions buffer
     HostBufferState stateNonLocal_ = HostBufferState::Consistent;
 };
-
-} // namespace
 
 class StatePropagatorDataGpu::Impl
 {
