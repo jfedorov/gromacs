@@ -1105,9 +1105,9 @@ void launchNbnxmKernel(NbnxmGpu* nb, const gmx::StepWorkload& stepWork, const In
 
     // Casting to float simplifies using atomic ops in the kernel
     cl::sycl::buffer<Float3, 1> f(*adat->f.buffer_);
-    auto                        fAsFloat = f.reinterpret<float, 1>(f.get_count() * DIM);
+    auto                        fAsFloat = f.reinterpret<float, 1>(sycl_2020::size(f) * DIM);
     cl::sycl::buffer<Float3, 1> fShift(*adat->fShift.buffer_);
-    auto fShiftAsFloat = fShift.reinterpret<float, 1>(fShift.get_count() * DIM);
+    auto fShiftAsFloat = fShift.reinterpret<float, 1>(sycl_2020::size(fShift) * DIM);
 
     cl::sycl::event e = chooseAndLaunchNbnxmKernel(doPruneNBL,
                                                    stepWork.computeEnergy,

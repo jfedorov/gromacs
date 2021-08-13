@@ -244,7 +244,7 @@ using OptionalAccessor =
 template<typename T>
 static gmx_unused bool checkDeviceBuffer(const DeviceBuffer<T>& buffer, int requiredSize)
 {
-    return buffer.buffer_ && (static_cast<int>(buffer.buffer_->get_count()) >= requiredSize);
+    return buffer.buffer_ && (static_cast<int>(sycl_2020::size(buffer.buffer_)) >= requiredSize);
 }
 
 /*! \libinternal \brief
@@ -457,7 +457,8 @@ inline cl::sycl::event fillSyclBufferWithNull(cl::sycl::buffer<Float3, 1>& buffe
     else // When not using hipSYCL, reinterpret as a flat float array
     {
 #ifndef __HIPSYCL__
-        cl::sycl::buffer<float, 1> bufferAsFloat = buffer.reinterpret<float, 1>(buffer.get_count() * DIM);
+        cl::sycl::buffer<float, 1> bufferAsFloat =
+                buffer.reinterpret<float, 1>(sycl_2020::size(buffer) * DIM);
         return fillSyclBufferWithNull<float>(
                 bufferAsFloat, startingOffset * DIM, numValues * DIM, std::move(queue));
 #endif

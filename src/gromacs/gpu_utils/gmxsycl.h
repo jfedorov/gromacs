@@ -106,7 +106,11 @@ namespace detail
 #if GMX_SYCL_DPCPP
 // Confirmed to work for 2021.1-beta10 (20201005) to 2021.3.0 (20210619).
 // Deprecated in favor of sycl::ext::oneapi on 20210717 in https://github.com/intel/llvm/commit/d703f578.
+#    if __clang_major__ >= 14
+namespace origin = sycl::ext::oneapi;
+#    else
 namespace origin = cl::sycl::ONEAPI;
+#    endif
 #elif GMX_SYCL_HIPSYCL
 namespace origin = cl::sycl;
 #else
@@ -120,6 +124,7 @@ using detail::origin::plus;
 using detail::origin::sub_group;
 
 #if GMX_SYCL_DPCPP
+#    if __clang_major__ < 14
 using detail::origin::atomic_ref;
 template<typename... Args>
 bool group_any_of(Args&&... args)
@@ -131,10 +136,38 @@ auto group_reduce(Args&&... args) -> decltype(detail::origin::reduce(std::forwar
 {
     return detail::origin::reduce(std::forward<Args>(args)...);
 }
+template<typename T, int d, typename A>
+decltype(auto) size(const sycl::buffer<T, d, A>& b)
+{
+    return b.get_count();
+}
+#    else
+using detail::origin::atomic_ref;
+template<typename... Args>
+bool group_any_of(Args&&... args)
+{
+    return sycl::any_of_group(std::forward<Args>(args)...);
+}
+template<typename... Args>
+decltype(auto) group_reduce(Args&&... args)
+{
+    return sycl::reduce_over_group(std::forward<Args>(args)...);
+}
+template<typename T, int d, typename A>
+decltype(auto) size(const sycl::buffer<T, d, A>& b)
+{
+    return b.size();
+}
+#    endif
 #elif GMX_SYCL_HIPSYCL
 // No atomic_ref in hipSYCL yet (2021-02-22)
 using detail::origin::group_any_of;
 using detail::origin::group_reduce;
+template<typename T, int d, typename A>
+decltype(auto) size(const sycl::buffer<T, d, A>& b)
+{
+    return b.size();
+}
 #else
 #    error "Unsupported SYCL compiler"
 #endif
