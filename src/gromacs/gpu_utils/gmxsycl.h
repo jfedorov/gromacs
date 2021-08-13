@@ -164,7 +164,7 @@ decltype(auto) size(const sycl::buffer<T, d, A>& b)
 using detail::origin::group_any_of;
 using detail::origin::group_reduce;
 template<typename T, int d, typename A>
-decltype(auto) size(const sycl::buffer<T, d, A>& b)
+decltype(auto) size(const cl::sycl::buffer<T, d, A>& b)
 {
     return b.size();
 }

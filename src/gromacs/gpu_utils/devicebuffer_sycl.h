@@ -244,7 +244,7 @@ using OptionalAccessor =
 template<typename T>
 static gmx_unused bool checkDeviceBuffer(const DeviceBuffer<T>& buffer, int requiredSize)
 {
-    return buffer.buffer_ && (static_cast<int>(sycl_2020::size(buffer.buffer_)) >= requiredSize);
+    return buffer.buffer_ && (static_cast<int>(sycl_2020::size(*(buffer.buffer_))) >= requiredSize);
 }
 
 /*! \libinternal \brief
