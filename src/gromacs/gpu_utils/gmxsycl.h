@@ -166,7 +166,7 @@ using detail::origin::group_reduce;
 template<typename T, int d, typename A>
 decltype(auto) size(const cl::sycl::buffer<T, d, A>& b)
 {
-    return b.size();
+    return b.get_count();
 }
 #else
 #    error "Unsupported SYCL compiler"
