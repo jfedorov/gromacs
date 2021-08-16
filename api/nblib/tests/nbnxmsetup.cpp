@@ -63,7 +63,6 @@ namespace test
 namespace
 {
 
-}
 TEST(NbnxmSetupTest, findNumEnergyGroups)
 {
     std::vector<int64_t> v(10);
