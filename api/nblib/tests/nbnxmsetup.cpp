@@ -58,7 +58,12 @@
 
 namespace nblib
 {
+namespace test
+{
+namespace
+{
 
+}
 TEST(NbnxmSetupTest, findNumEnergyGroups)
 {
     std::vector<int64_t> v(10);
@@ -280,4 +285,6 @@ TEST(NbnxmSetupTest, CreateNbnxmGPUThrowsInvalidKernelChoice)
 }
 #endif
 
+} // namespace
+} // namespace test
 } // namespace nblib
