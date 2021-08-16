@@ -102,7 +102,7 @@ public:
                  EnergyType&               energies,
                  bool                      usePbc = false);
 
-    //! \brief Alternative overload without shift forces
+    //! \brief Alternative overload with the energies in an output buffer
     void compute(gmx::ArrayRef<const Vec3> coordinates,
                  gmx::ArrayRef<Vec3>       forces,
                  EnergyType&               energies,
