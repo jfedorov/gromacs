@@ -86,12 +86,17 @@ Nbnxm::KernelType translateBenchmarkEnum(const SimdKernels& kernel)
     return static_cast<Nbnxm::KernelType>(kernelInt);
 }
 
-void checkKernelSetup(const SimdKernels nbnxmSimd)
+void checkKernelSetupSimd(const SimdKernels nbnxmSimd)
 {
     if (nbnxmSimd >= SimdKernels::Count || nbnxmSimd == SimdKernels::SimdAuto)
     {
         throw InputException("Need a valid kernel SIMD type");
     }
+    if (nbnxmSimd == SimdKernels::GPU)
+    {
+        throw InputException("Cannot select GPU kernel on CPU");
+    }
+
     // Check SIMD support
     if ((nbnxmSimd != SimdKernels::SimdNo && !GMX_SIMD)
 #ifndef GMX_NBNXN_SIMD_4XN
@@ -106,14 +111,14 @@ void checkKernelSetup(const SimdKernels nbnxmSimd)
     }
 }
 
-Nbnxm::KernelSetup createKernelSetupCPU(const NBKernelOptions& options)
+Nbnxm::KernelSetup createKernelSetupCPU(const SimdKernels nbnxmSimd, const bool useTabulatedEwaldCorr)
 {
-    checkKernelSetup(options.nbnxmSimd);
+    checkKernelSetupSimd(nbnxmSimd);
 
     Nbnxm::KernelSetup kernelSetup;
 
     // The int enum options.nbnxnSimd is set up to match Nbnxm::KernelType + 1
-    kernelSetup.kernelType = translateBenchmarkEnum(options.nbnxmSimd);
+    kernelSetup.kernelType = translateBenchmarkEnum(nbnxmSimd);
 
     // The plain-C kernel does not support analytical ewald correction
     if (kernelSetup.kernelType == Nbnxm::KernelType::Cpu4x4_PlainC)
@@ -122,16 +127,30 @@ Nbnxm::KernelSetup createKernelSetupCPU(const NBKernelOptions& options)
     }
     else
     {
-        kernelSetup.ewaldExclusionType = options.useTabulatedEwaldCorr
-                                                 ? Nbnxm::EwaldExclusionType::Table
-                                                 : Nbnxm::EwaldExclusionType::Analytical;
+        kernelSetup.ewaldExclusionType = useTabulatedEwaldCorr ? Nbnxm::EwaldExclusionType::Table
+                                                               : Nbnxm::EwaldExclusionType::Analytical;
     }
 
     return kernelSetup;
 }
 
-std::vector<int64_t> createParticleInfoAllVdv(const size_t numParticles)
+Nbnxm::KernelSetup createKernelSetupGPU(const SimdKernels nbnxmSimd, const bool useTabulatedEwaldCorr)
+{
+    if (nbnxmSimd != SimdKernels::GPU)
+    {
+        throw InputException(
+                "You tried to select SIMD kernels, but they are not available on the GPU");
+    }
 
+    Nbnxm::KernelSetup kernelSetup;
+    kernelSetup.kernelType         = Nbnxm::KernelType::Gpu8x8x8;
+    kernelSetup.ewaldExclusionType = useTabulatedEwaldCorr ? Nbnxm::EwaldExclusionType::Table
+                                                           : Nbnxm::EwaldExclusionType::Analytical;
+
+    return kernelSetup;
+}
+
+std::vector<int64_t> createParticleInfoAllVdw(const size_t numParticles)
 {
     std::vector<int64_t> particleInfoAllVdw(numParticles);
     for (size_t particleI = 0; particleI < numParticles; particleI++)
@@ -278,7 +297,8 @@ std::unique_ptr<nonbonded_verlet_t> createNbnxmCPU(const size_t              num
     // Note: the options and Nbnxm combination rule enums values should match
     const int combinationRule = static_cast<int>(options.ljCombinationRule);
 
-    Nbnxm::KernelSetup kernelSetup = createKernelSetupCPU(options);
+    Nbnxm::KernelSetup kernelSetup =
+            createKernelSetupCPU(options.nbnxmSimd, options.useTabulatedEwaldCorr);
 
     PairlistParams pairlistParams(kernelSetup.kernelType, false, options.pairlistCutoff, false);
 
@@ -312,11 +332,8 @@ std::unique_ptr<nonbonded_verlet_t> createNbnxmGPU(const size_t               nu
     const auto pinPolicy       = gmx::PinningPolicy::PinnedIfSupported;
     const int  combinationRule = static_cast<int>(options.ljCombinationRule);
 
-    Nbnxm::KernelSetup kernelSetup;
-    kernelSetup.kernelType         = Nbnxm::KernelType::Gpu8x8x8;
-    kernelSetup.ewaldExclusionType = options.useTabulatedEwaldCorr
-                                             ? Nbnxm::EwaldExclusionType::Table
-                                             : Nbnxm::EwaldExclusionType::Analytical;
+    Nbnxm::KernelSetup kernelSetup =
+            createKernelSetupGPU(options.nbnxmSimd, options.useTabulatedEwaldCorr);
 
     PairlistParams pairlistParams(kernelSetup.kernelType, false, options.pairlistCutoff, false);
 
@@ -347,6 +364,10 @@ std::unique_ptr<nonbonded_verlet_t> createNbnxmGPU(const size_t               nu
     // Put everything together
     auto nbv = std::make_unique<nonbonded_verlet_t>(
             std::move(pairlistSets), std::move(pairSearch), std::move(atomData), kernelSetup, nbnxmGpu, nullptr);
+
+    // Some paramters must be copied to NbnxmGpu to have a fully constructed nonbonded_verlet_t
+    Nbnxm::gpu_init_atomdata(nbv->gpu_nbv, nbv->nbat.get());
+
     return nbv;
 }
 

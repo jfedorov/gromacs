@@ -59,6 +59,7 @@ enum class SimdKernels : int
     SimdNo,
     Simd4XM,
     Simd2XMM,
+    GPU,
     Count
 };
 

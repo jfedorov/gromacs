@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2021, by the GROMACS development team, led by
+ * Copyright (c) 2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -58,10 +58,6 @@
 
 namespace nblib
 {
-namespace test
-{
-namespace
-{
 
 TEST(NbnxmSetupTest, findNumEnergyGroups)
 {
@@ -103,19 +99,25 @@ TEST(NbnxmSetupTest, canTranslateBenchmarkEnum4XM)
 
 TEST(NbnxmSetupTest, CheckKernelSetupThrowsAuto)
 {
-    EXPECT_ANY_THROW(checkKernelSetup(SimdKernels::SimdAuto));
+    EXPECT_ANY_THROW(checkKernelSetupSimd(SimdKernels::SimdAuto));
+}
+
+TEST(NbnxmSetupTest, CheckKernelSetupThrowsGpu)
+{
+    EXPECT_ANY_THROW(checkKernelSetupSimd(SimdKernels::GPU));
 }
 
 TEST(NbnxmSetupTest, CheckKernelSetupThrowsCount)
 {
-    EXPECT_ANY_THROW(checkKernelSetup(SimdKernels::Count));
+    EXPECT_ANY_THROW(checkKernelSetupSimd(SimdKernels::Count));
 }
 
 TEST(NbnxmSetupTest, canCreateKernelSetupPlain)
 {
     NBKernelOptions nbKernelOptions;
-    nbKernelOptions.nbnxmSimd      = SimdKernels::SimdNo;
-    Nbnxm::KernelSetup kernelSetup = createKernelSetupCPU(nbKernelOptions);
+    nbKernelOptions.nbnxmSimd = SimdKernels::SimdNo;
+    Nbnxm::KernelSetup kernelSetup =
+            createKernelSetupCPU(nbKernelOptions.nbnxmSimd, nbKernelOptions.useTabulatedEwaldCorr);
     EXPECT_EQ(kernelSetup.kernelType, Nbnxm::KernelType::Cpu4x4_PlainC);
     EXPECT_EQ(kernelSetup.ewaldExclusionType, Nbnxm::EwaldExclusionType::Table);
 }
@@ -127,7 +129,7 @@ TEST(NbnxmSetupTest, canCreateParticleInfoAllVdv)
     mask |= gmx::sc_atomInfo_HasVdw;
     mask |= gmx::sc_atomInfo_HasCharge;
     std::vector<int64_t> refParticles  = { mask, mask };
-    std::vector<int64_t> testParticles = createParticleInfoAllVdv(numParticles);
+    std::vector<int64_t> testParticles = createParticleInfoAllVdw(numParticles);
     EXPECT_EQ(refParticles, testParticles);
 }
 
@@ -158,7 +160,7 @@ TEST(NbnxmSetupTest, canCheckKernelSetup)
 #ifdef GMX_NBNXN_SIMD_2XNN
     nbKernelOptions.nbnxmSimd = SimdKernels::Simd2XMM;
 #endif
-    EXPECT_NO_THROW(checkKernelSetup(nbKernelOptions.nbnxmSimd));
+    EXPECT_NO_THROW(checkKernelSetupSimd(nbKernelOptions.nbnxmSimd));
 }
 
 // check if the user is allowed to ask for SimdKernels::Simd2XMM when NBLIB is not compiled with it
@@ -168,7 +170,7 @@ TEST(NbnxmSetupTest, cannotCreateKernelSetupCPU2XM)
     NBKernelOptions nbKernelOptions;
     nbKernelOptions.nbnxmSimd             = SimdKernels::Simd2XMM;
     nbKernelOptions.useTabulatedEwaldCorr = true;
-    EXPECT_ANY_THROW(createKernelSetupCPU(nbKernelOptions));
+    EXPECT_ANY_THROW(createKernelSetupCPU(nbKernelOptions.nbnxmSimd, nbKernelOptions.useTabulatedEwaldCorr));
 }
 #endif
 
@@ -179,7 +181,7 @@ TEST(NbnxmSetupTest, cannotCreateKernelSetupCPU4XM)
     NBKernelOptions nbKernelOptions;
     nbKernelOptions.nbnxmSimd             = SimdKernels::Simd4XM;
     nbKernelOptions.useTabulatedEwaldCorr = false;
-    EXPECT_ANY_THROW(createKernelSetupCPU(nbKernelOptions));
+    EXPECT_ANY_THROW(createKernelSetupCPU(nbKernelOptions.nbnxmSimd, nbKernelOptions.useTabulatedEwaldCorr));
 }
 #endif
 
@@ -194,6 +196,36 @@ TEST(NbnxmSetupTest, CanCreateNbnxmCPU)
 }
 
 #ifdef GMX_GPU_CUDA
+TEST(NbnxmSetupTest, canCreateKernelSetupGPU)
+{
+    NBKernelOptions nbKernelOptions;
+    nbKernelOptions.nbnxmSimd = SimdKernels::GPU;
+    Nbnxm::KernelSetup kernelSetup =
+            createKernelSetupGPU(nbKernelOptions.nbnxmSimd, nbKernelOptions.useTabulatedEwaldCorr);
+    EXPECT_EQ(kernelSetup.kernelType, Nbnxm::KernelType::Gpu8x8x8);
+    EXPECT_EQ(kernelSetup.ewaldExclusionType, Nbnxm::EwaldExclusionType::Analytical);
+}
+
+TEST(NbnxmSetupTest, canCreateKernelSetupGPUThrows)
+{
+    NBKernelOptions nbKernelOptions;
+    EXPECT_ANY_THROW(createKernelSetupGPU(nbKernelOptions.nbnxmSimd, nbKernelOptions.useTabulatedEwaldCorr));
+}
+
+TEST(NbnxmSetupTest, canCreateKernelSetupGPUThrows4XM)
+{
+    NBKernelOptions nbKernelOptions;
+    nbKernelOptions.nbnxmSimd = SimdKernels::Simd4XM;
+    EXPECT_ANY_THROW(createKernelSetupGPU(nbKernelOptions.nbnxmSimd, nbKernelOptions.useTabulatedEwaldCorr));
+}
+
+TEST(NbnxmSetupTest, canCreateKernelSetupGPUThrows2XM)
+{
+    NBKernelOptions nbKernelOptions;
+    nbKernelOptions.nbnxmSimd = SimdKernels::Simd2XMM;
+    EXPECT_ANY_THROW(createKernelSetupGPU(nbKernelOptions.nbnxmSimd, nbKernelOptions.useTabulatedEwaldCorr));
+}
+
 TEST(NbnxmSetupTest, CanCreateDeviceStreamManager)
 {
     const auto& testDeviceList = gmx::test::getTestHardwareEnvironment()->getTestDeviceList();
@@ -214,8 +246,9 @@ TEST(NbnxmSetupTest, CanCreateNbnxmGPU)
     {
         const DeviceInformation& deviceInfo = testDevice->deviceInfo();
         setActiveDevice(deviceInfo);
-        size_t                  numParticles = 1;
-        NBKernelOptions         nbKernelOptions;
+        size_t          numParticles = 1;
+        NBKernelOptions nbKernelOptions;
+        nbKernelOptions.nbnxmSimd                   = SimdKernels::GPU;
         std::vector<real>       nonbondedParameters = { 1, 1 };
         gmx::SimulationWorkload simulationWork      = createSimulationWorkloadGpu(nbKernelOptions);
         interaction_const_t     interactionConst    = createInteractionConst(nbKernelOptions);
@@ -225,8 +258,26 @@ TEST(NbnxmSetupTest, CanCreateNbnxmGPU)
                 numParticles, nbKernelOptions, nonbondedParameters, interactionConst, deviceStreamManager));
     }
 }
+
+TEST(NbnxmSetupTest, CreateNbnxmGPUThrowsInvalidKernelChoice)
+{
+    const auto& testDeviceList = gmx::test::getTestHardwareEnvironment()->getTestDeviceList();
+    for (const auto& testDevice : testDeviceList)
+    {
+        const DeviceInformation& deviceInfo = testDevice->deviceInfo();
+        setActiveDevice(deviceInfo);
+        size_t          numParticles = 1;
+        NBKernelOptions nbKernelOptions;
+        nbKernelOptions.nbnxmSimd                   = SimdKernels::SimdNo;
+        std::vector<real>       nonbondedParameters = { 1, 1 };
+        gmx::SimulationWorkload simulationWork      = createSimulationWorkloadGpu(nbKernelOptions);
+        interaction_const_t     interactionConst    = createInteractionConst(nbKernelOptions);
+        // set DeviceInformation and create the DeviceStreamManager
+        auto deviceStreamManager = createDeviceStreamManager(deviceInfo, simulationWork);
+        EXPECT_ANY_THROW(createNbnxmGPU(
+                numParticles, nbKernelOptions, nonbondedParameters, interactionConst, deviceStreamManager));
+    }
+}
 #endif
 
-} // namespace
-} // namespace test
 } // namespace nblib
