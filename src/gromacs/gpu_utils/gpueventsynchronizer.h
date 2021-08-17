@@ -33,22 +33,91 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 /*! \libinternal \file
- *  \brief Implements a GpuEventSynchronizer class for CUDA.
+ *  \brief Implements a GpuEventSynchronizer class.
  *
+ *  \author Andrey Alekseenko <al42and@gmail.com>
+ *  \author Artem Zhmurov <zhmurov@gmail.com>
  *  \author Aleksei Iupinov <a.yupinov@gmail.com>
- *  \inlibraryapi
+ * \inlibraryapi
  */
 #ifndef GMX_GPU_UTILS_GPUEVENTSYNCHRONIZER_H
 #define GMX_GPU_UTILS_GPUEVENTSYNCHRONIZER_H
 
 #include "config.h"
 
+#include "gromacs/utility/exceptions.h"
+#include "gromacs/utility/gmxassert.h"
+
 #if GMX_GPU_CUDA
-#    include "gromacs/gpu_utils/gpueventsynchronizer.cuh"
+#    include "device_event.cuh"
 #elif GMX_GPU_OPENCL
-#    include "gromacs/gpu_utils/gpueventsynchronizer_ocl.h"
+#    include "device_event_ocl.h"
 #elif GMX_GPU_SYCL
-#    include "gromacs/gpu_utils/gpueventsynchronizer_sycl.h"
+#    include "device_event_sycl.h"
+#else
+#    error Can not compile GpuEventSynchronizer in a CPU-only build
 #endif
 
-#endif // GMX_GPU_UTILS_GPUEVENTSYNCHRONIZER_H
+/*! \libinternal \brief
+ * A class which allows for CPU thread to mark and wait for certain GPU stream execution point.
+ * The event can be put into the stream with \ref markEvent() and then later waited on with \ref waitForEvent().
+ * This can be repeated as necessary, but the current implementation does not allow waiting on
+ * completed event more than once, expecting only exact pairs of markEvent(stream); waitForEvent().
+ * The class generally attempts to track the correctness of its state transitions, but
+ * please note that calling waitForEvent() right after the construction will fail with OpenCL but succeed with CUDA.
+ */
+class GpuEventSynchronizer
+{
+public:
+    //! A constructor
+    GpuEventSynchronizer() = default;
+    //! A destructor
+    ~GpuEventSynchronizer() = default;
+
+    GMX_DISALLOW_COPY_MOVE_AND_ASSIGN(GpuEventSynchronizer);
+
+    /*! \brief Marks the synchronization point in the \p stream.
+     * Should be called first and then followed by waitForEvent().
+     */
+    inline void markEvent(const DeviceStream& deviceStream)
+    {
+#if !GMX_GPU_CUDA
+        GMX_ASSERT(!event_.isMarked(), "Do not call markEvent more than once!");
+#endif
+        event_.mark(deviceStream);
+    }
+    /*! \brief Synchronizes the host thread on the marked event. */
+    inline void waitForEvent()
+    {
+        event_.wait();
+        reset();
+    }
+    /*! \brief Checks the completion of the underlying event and resets the object if it was. */
+    inline bool isReady()
+    {
+        bool isReady = event_.isReady();
+        if (isReady)
+        {
+            reset();
+        }
+        return isReady;
+    }
+    /*! \brief Enqueues a wait for the recorded event in stream \p stream
+     *
+     *  After enqueue, the associated event is released, so this method should
+     *  be only called once per markEvent() call.
+     */
+    inline void enqueueWaitEvent(const DeviceStream& deviceStream)
+    {
+        event_.enqueueWait(deviceStream);
+        reset();
+    }
+
+    //! Reset (release) the event to unmarked state.
+    inline void reset() { event_.reset(); }
+
+private:
+    DeviceEvent event_;
+};
+
+#endif
