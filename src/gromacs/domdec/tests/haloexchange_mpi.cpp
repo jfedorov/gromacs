@@ -63,8 +63,8 @@
 #if GMX_GPU_CUDA
 #    include "gromacs/gpu_utils/device_stream.h"
 #    include "gromacs/gpu_utils/devicebuffer.h"
+#    include "gromacs/gpu_utils/gpueventsynchronizer.h"
 #endif
-#include "gromacs/gpu_utils/gpueventsynchronizer.h"
 #include "gromacs/gpu_utils/hostallocator.h"
 #include "gromacs/mdtypes/inputrec.h"
 

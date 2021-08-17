@@ -45,6 +45,7 @@
 
 #include "config.h"
 
+#include "gromacs/utility/classhelpers.h"
 #include "gromacs/utility/exceptions.h"
 #include "gromacs/utility/gmxassert.h"
 
