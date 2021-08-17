@@ -364,17 +364,25 @@ macro (gmx_c_flags)
         if(NOT GMX_OPENMP)
             GMX_TEST_CXXFLAG(CXXFLAGS_PRAGMA "-Wno-unknown-pragmas" GMXC_CXXFLAGS)
         endif()
+        GMX_TEST_CXXFLAG(CXXFLAGS_WARN_NO_RESERVED_IDENTIFIER "-Wno-reserved-identifier" GMXC_CXXFLAGS) # LLVM BUG #50644
         GMX_TEST_CXXFLAG(CXXFLAGS_WARN_NO_MISSING_FIELD_INITIALIZERS "-Wno-missing-field-initializers" GMXC_CXXFLAGS)
         # Intel LLVM 2021.2 defaults to no-finite-math which isn't OK for GROMACS
         if(GMX_INTEL_LLVM AND GMX_INTEL_LLVM_VERSION GREATER_EQUAL 2021020)
             GMX_TEST_CXXFLAG(CXXFLAGS_FINITE_MATH "-fno-finite-math-only" GMXC_CXXFLAGS)
         endif()
-        # Some versions of Intel ICPX compiler (at least 2021.1.1 to 2021.2.0) fail to unroll a loop
+        # Some versions of Intel ICPX compiler (at least 2021.1.1 to 2021.3.0) fail to unroll a loop
         # in sycl::accessor::__init, and emit -Wpass-failed=transform-warning. This is a useful
         # warning, but mostly noise right now. Probably related to using shared memory accessors.
         # Note: not a typo: ICPX 2021.1.1 has GMX_INTEL_LLVM_VERSION 202110; 2021.2.0 has 20210200.
         if(GMX_INTEL_LLVM AND GMX_INTEL_LLVM_VERSION GREATER_EQUAL 202110)
             GMX_TEST_CXXFLAG(CXXFLAGS_NO_UNROLL_WARNING "-Wno-pass-failed" GMXC_CXXFLAGS)
+        endif()
+        # Intel ICPX compiler since 2021.3.0 uses -ffp-contract=fast option by default.
+        # This causes issues with the CorrelationsTests ExpfitTest.EffnERREST.
+        # The root cause is the test itself, but while it's being fixed, here is a workaround.
+        # See Issue #3955. TODO: Remove once the issue is resolved (e.g., by !1794).
+        if(GMX_INTEL_LLVM AND GMX_INTEL_LLVM_VERSION GREATER_EQUAL 20210300)
+            GMX_TEST_CXXFLAG(CXXFLAGS_FFP_CONTRACT "-ffp-contract=on" GMXC_CXXFLAGS)
         endif()
     endif()
 
