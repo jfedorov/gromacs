@@ -72,7 +72,11 @@ public:
     DeviceEvent(const cl::sycl::event& event) : events_{ event } {}
     //! A destructor.
     ~DeviceEvent() = default;
-    GMX_DISALLOW_COPY_MOVE_AND_ASSIGN(DeviceEvent);
+    // Disable copy, move, and assignment. They all can be allowed, but not needed yet.
+    DeviceEvent& operator=(const DeviceEvent&) = delete;
+    DeviceEvent(const DeviceEvent&)            = delete;
+    DeviceEvent& operator=(DeviceEvent&&) = delete;
+    DeviceEvent(DeviceEvent&&)            = delete;
 
     /*! \brief Marks the synchronization point in the \p deviceStream.
      * Should be called first and then followed by wait() or enqueueWait().

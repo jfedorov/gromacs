@@ -60,7 +60,11 @@ public:
         }
     }
     ~DeviceEvent() { cudaEventDestroy(event_); }
-    GMX_DISALLOW_COPY_MOVE_AND_ASSIGN(DeviceEvent);
+    // Disable copy, move, and assignment. Move can be allowed, but not needed yet.
+    DeviceEvent& operator=(const DeviceEvent&) = delete;
+    DeviceEvent(const DeviceEvent&)            = delete;
+    DeviceEvent& operator=(DeviceEvent&&) = delete;
+    DeviceEvent(DeviceEvent&&)            = delete;
 
     /*! \brief Marks the synchronization point in the \p stream.
      * Should be followed by waitForEvent().
