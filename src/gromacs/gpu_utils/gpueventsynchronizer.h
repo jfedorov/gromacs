@@ -88,21 +88,36 @@ public:
      */
     inline void markEvent(const DeviceStream& deviceStream)
     {
-#if !GMX_GPU_CUDA
-        // For now, we have relaxed conditions for CUDA
-        GMX_ASSERT(!event_.isMarked(), "Do not call markEvent more than once!");
+#if !GMX_GPU_CUDA // For now, we have relaxed conditions for CUDA
+        if (event_.isMarked())
+        {
+            GMX_THROW(gmx::InternalError("Trying to mark event before first consuming it"));
+        }
 #endif
         event_.mark(deviceStream);
     }
     /*! \brief Synchronizes the host thread on the marked event. */
     inline void waitForEvent()
     {
+#if !GMX_GPU_CUDA // For now, we have relaxed conditions for CUDA
+        if (!event_.isMarked())
+        {
+            GMX_THROW(gmx::InternalError(
+                    "Trying to wait for event before marking it or after fully consuming it"));
+        }
+#endif
         event_.wait();
         reset();
     }
     /*! \brief Checks the completion of the underlying event and resets the object if it was. */
     inline bool isReady()
     {
+#if !GMX_GPU_CUDA // For now, we have relaxed conditions for CUDA
+        if (!event_.isMarked())
+        {
+            GMX_THROW(gmx::InternalError("Trying to check the status of event before marking it"));
+        }
+#endif
         bool isReady = event_.isReady();
         if (isReady)
         {
@@ -117,6 +132,14 @@ public:
      */
     inline void enqueueWaitEvent(const DeviceStream& deviceStream)
     {
+#if !GMX_GPU_CUDA // For now, we have relaxed conditions for CUDA
+        if (!event_.isMarked())
+        {
+            GMX_THROW(
+                    gmx::InternalError("Trying to enqueue wait for event before marking it or "
+                                       "after fully consuming it"));
+        }
+#endif
         event_.enqueueWait(deviceStream);
         reset();
     }

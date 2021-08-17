@@ -96,7 +96,8 @@ public:
     inline void wait()
     {
 #    if GMX_SYCL_DPCPP
-        GMX_ASSERT(events_.size() == 1, "One event expected in DPCPP, but we have several!");
+        // Note: this is not to prevent use-before-marking, but for checking the DPC++ vs hipSYCL consistency
+        GMX_ASSERT(events_.size() <= 1, "One event expected in DPC++, but we have several!");
 #    endif
         for (auto& event : events_)
         {
@@ -112,8 +113,8 @@ public:
             // Submit an empty kernel that depends on all the events recorded.
             deviceStream.stream().single_task(events_, [=]() {});
 #    else
+            GMX_ASSERT(events_.size() <= 1, "One event expected in DPC++, but we have several!");
             // Relies on SYCL_INTEL_enqueue_barrier extensions
-            GMX_ASSERT(events_.size() == 1, "Only one event expected in DPCPP!");
             deviceStream.stream().submit_barrier(events_);
 #    endif
         }
