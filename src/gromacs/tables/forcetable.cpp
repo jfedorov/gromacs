@@ -153,7 +153,7 @@ EwaldCorrectionTables generateEwaldCorrectionTables(const int    numPoints,
     double   x_r0;
 
     /* This function is called using either v_ewald_lr or v_lj_ewald_lr as a function argument
-     * depending on wether we should create electrostatic or Lennard-Jones Ewald tables.
+     * depending on whether we should create electrostatic or Lennard-Jones Ewald tables.
      */
 
     if (numPoints < 2)
@@ -754,7 +754,7 @@ static std::vector<t_tabledata> read_tables(FILE* fp, const char* filename, int 
     std::vector<t_tabledata> td;
     for (k = 0; (k < ntab); k++)
     {
-        td.emplace_back(t_tabledata(numRows, nx0, tabscale, true));
+        td.emplace_back(numRows, nx0, tabscale, true);
         for (i = 0; (i < numRows); i++)
         {
             td[k].x[i] = yy[0][i];

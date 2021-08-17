@@ -134,6 +134,8 @@ struct gmx_pme_pp
 
     /*! \brief whether GPU direct communications are active for PME-PP transfers */
     bool useGpuDirectComm = false;
+    /*! \brief whether GPU direct communications should send forces directly to remote GPU memory */
+    bool sendForcesDirectToPpGpu = false;
 };
 
 /*! \brief Initialize the PME-only side of the PME <-> PP communication */
@@ -288,6 +290,7 @@ static int gmx_pme_recv_coeffs_coords(struct gmx_pme_t*            pme,
         GMX_ASSERT(!pme_pp->useGpuDirectComm || (pme_pp->pmeForceSenderGpu != nullptr),
                    "The use of GPU direct communication for PME-PP is enabled, "
                    "but the PME GPU force reciever object does not exist");
+        pme_pp->sendForcesDirectToPpGpu = ((cnb.flags & PP_PME_RECVFTOGPU) != 0);
 
         if (cnb.flags & PP_PME_FINISH)
         {
@@ -558,7 +561,8 @@ static void gmx_pme_send_force_vir_ener(const gmx_pme_t& pme,
 
             if (GMX_THREAD_MPI)
             {
-                pme_pp->pmeForceSenderGpu->sendFToPpCudaDirect(receiver.rankId, receiver.numAtoms);
+                pme_pp->pmeForceSenderGpu->sendFToPpCudaDirect(
+                        receiver.rankId, receiver.numAtoms, pme_pp->sendForcesDirectToPpGpu);
             }
             else
             {
@@ -755,7 +759,8 @@ int gmx_pmeonly(struct gmx_pme_t*               pme,
             pme_gpu_prepare_computation(pme, box, wcycle, stepWork);
             if (!pme_pp->useGpuDirectComm)
             {
-                stateGpu->copyCoordinatesToGpu(gmx::ArrayRef<gmx::RVec>(pme_pp->x), gmx::AtomLocality::All);
+                stateGpu->copyCoordinatesToGpu(gmx::ArrayRef<gmx::RVec>(pme_pp->x),
+                                               gmx::AtomLocality::Local);
             }
             // On the separate PME rank we do not need a synchronizer as we schedule everything in a single stream
             // TODO: with pme on GPU the receive should make a list of synchronizers and pass it here #3157

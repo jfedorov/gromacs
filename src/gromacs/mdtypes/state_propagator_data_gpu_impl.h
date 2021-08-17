@@ -50,14 +50,7 @@
 #include <memory>
 
 #include "gromacs/gpu_utils/devicebuffer.h"
-#if GMX_GPU_CUDA
-#    include "gromacs/gpu_utils/gpueventsynchronizer.cuh"
-#elif GMX_GPU_OPENCL
-#    include "gromacs/gpu_utils/gpueventsynchronizer_ocl.h"
-#elif GMX_GPU_SYCL
-#    include "gromacs/gpu_utils/gpueventsynchronizer_sycl.h"
-#endif
-
+#include "gromacs/gpu_utils/gpueventsynchronizer.h"
 #include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/state_propagator_data_gpu.h"
 #include "gromacs/utility/enumerationhelpers.h"
@@ -230,14 +223,6 @@ public:
      */
     void copyVelocitiesToGpu(gmx::ArrayRef<const gmx::RVec> h_v, AtomLocality atomLocality);
 
-    /*! \brief Get the event synchronizer on the H2D velocities copy.
-     *
-     *  \param[in] atomLocality  Locality of the particles to wait for.
-     *
-     *  \returns  The event to synchronize the stream that consumes velocities on device.
-     */
-    GpuEventSynchronizer* getVelocitiesReadyOnDeviceEvent(AtomLocality atomLocality);
-
     /*! \brief Copy velocities from the GPU memory.
      *
      *  \param[in] h_v           Velocities buffer in the host memory.
@@ -333,7 +318,7 @@ private:
     const DeviceStream* localStream_;
     //! GPU NBNXM non-local stream.
     const DeviceStream* nonLocalStream_;
-    //! GPU Update-constreaints stream.
+    //! GPU Update-constraints stream.
     const DeviceStream* updateStream_;
 
     // Streams to use for coordinates H2D and D2H copies (one event for each atom locality)
@@ -353,8 +338,6 @@ private:
     //! An array of events that indicate D2H copy of coordinates is complete (one event for each atom locality)
     EnumerationArray<AtomLocality, GpuEventSynchronizer> xReadyOnHost_;
 
-    //! An array of events that indicate H2D copy of velocities is complete (one event for each atom locality)
-    EnumerationArray<AtomLocality, GpuEventSynchronizer> vReadyOnDevice_;
     //! An array of events that indicate D2H copy of velocities is complete (one event for each atom locality)
     EnumerationArray<AtomLocality, GpuEventSynchronizer> vReadyOnHost_;
 

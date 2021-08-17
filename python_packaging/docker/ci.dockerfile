@@ -73,7 +73,6 @@ RUN . $VENV/bin/activate && \
 
 ADD --chown=testing:testing src/test /home/testing/gmxapi/test
 ADD scripts /docker_entry_points
-ADD --chown=testing:testing test /home/testing/test
 
 ADD --chown=testing:testing sample_restraint /home/testing/sample_restraint
 
@@ -87,6 +86,7 @@ RUN . $VENV/bin/activate && \
              -DDOWNLOAD_GOOGLETEST=ON \
              -DGMXAPI_EXTENSION_DOWNLOAD_PYBIND=ON && \
      make -j4 && \
+     make tests && \
      make test && \
      make install \
     )

@@ -51,14 +51,16 @@ add_custom_target(nblib-tests
         )
 # Ensure that "make tests" builds all nblib tests so the top-level
 # "make check" will work.
-add_dependencies(tests nblib-tests)
+if (BUILD_TESTING)
+	add_dependencies(tests nblib-tests)
 
-# this allows all nblib tests to be run with "make check-nblib"
-add_custom_target(check-nblib
-        COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -R NbLib
-        COMMENT "Running nblib tests"
-        USES_TERMINAL VERBATIM)
-add_dependencies(check-nblib nblib-tests)
+	# this allows all nblib tests to be run with "make check-nblib"
+	add_custom_target(check-nblib
+		COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -R NbLib
+		COMMENT "Running nblib tests"
+		USES_TERMINAL VERBATIM)
+	add_dependencies(check-nblib nblib-tests)
+endif()
 
 set(NBLIB_MAJOR 0)
 set(NBLIB_MINOR 1)
@@ -99,6 +101,7 @@ target_sources(nblib
         simulationstate.cpp
         topologyhelpers.cpp
         topology.cpp
+        virials.cpp
         )
 
 gmx_target_compile_options(nblib)
@@ -112,6 +115,9 @@ target_link_libraries(nblib PRIVATE common)
 target_link_libraries(nblib PUBLIC legacy_api)
 # TODO: Explicitly link specific modules.
 target_link_libraries(nblib PRIVATE legacy_modules)
+if (GMX_OPENMP)
+    target_link_libraries(nblib PUBLIC OpenMP::OpenMP_CXX)
+endif()
 
 install(TARGETS nblib
         EXPORT nblib

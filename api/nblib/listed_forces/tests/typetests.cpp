@@ -67,7 +67,7 @@ std::vector<std::vector<HarmonicBondType>> c_InputHarmonicBond = { { HarmonicBon
 
 // Parameters for harmonic angles
 std::vector<InteractionIndex<HarmonicAngle>> c_HarmonicAngleIndices{ { 0, 1, 2, 0 }, { 1, 2, 3, 0 } };
-std::vector<std::vector<HarmonicAngle>> c_InputHarmonicAngle = { { HarmonicAngle(Degrees(100), 50.0) } };
+std::vector<std::vector<HarmonicAngle>> c_InputHarmonicAngle = { { HarmonicAngle(50.0, Degrees(100)) } };
 
 //! Function types for testing dihedrals. Add new terms at the end.
 std::vector<std::vector<ProperDihedral>> c_InputDihs = { { { ProperDihedral(Degrees(-105.0), 15.0, 2) } } /*, { ImproperDihedral(100.0, 50.0) }*/ };
@@ -146,10 +146,10 @@ TEST_P(ProperDihedralTest, CheckListed)
     checkForcesAndEnergies();
 }
 
-INSTANTIATE_TEST_CASE_P(FourCenter,
-                        ProperDihedralTest,
-                        ::testing::Combine(::testing::ValuesIn(c_InputDihs),
-                                           ::testing::ValuesIn(c_coordinatesForTests)));
+INSTANTIATE_TEST_SUITE_P(FourCenter,
+                         ProperDihedralTest,
+                         ::testing::Combine(::testing::ValuesIn(c_InputDihs),
+                                            ::testing::ValuesIn(c_coordinatesForTests)));
 
 class HarmonicBondTest :
     public ListedForcesBase<HarmonicBondType>,
@@ -169,10 +169,10 @@ TEST_P(HarmonicBondTest, CheckListed)
     checkForcesAndEnergies();
 }
 
-INSTANTIATE_TEST_CASE_P(TwoCenter,
-                        HarmonicBondTest,
-                        ::testing::Combine(::testing::ValuesIn(c_InputHarmonicBond),
-                                           ::testing::ValuesIn(c_coordinatesForTests)));
+INSTANTIATE_TEST_SUITE_P(TwoCenter,
+                         HarmonicBondTest,
+                         ::testing::Combine(::testing::ValuesIn(c_InputHarmonicBond),
+                                            ::testing::ValuesIn(c_coordinatesForTests)));
 
 class HarmonicAngleTest :
     public ListedForcesBase<HarmonicAngle>,
@@ -193,9 +193,9 @@ TEST_P(HarmonicAngleTest, CheckListed)
     checkForcesAndEnergies();
 }
 
-INSTANTIATE_TEST_CASE_P(ThreeCenter,
-                        HarmonicAngleTest,
-                        ::testing::Combine(::testing::ValuesIn(c_InputHarmonicAngle),
-                                           ::testing::ValuesIn(c_coordinatesForTests)));
+INSTANTIATE_TEST_SUITE_P(ThreeCenter,
+                         HarmonicAngleTest,
+                         ::testing::Combine(::testing::ValuesIn(c_InputHarmonicAngle),
+                                            ::testing::ValuesIn(c_coordinatesForTests)));
 
 } // namespace nblib
