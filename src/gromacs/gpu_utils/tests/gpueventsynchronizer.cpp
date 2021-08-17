@@ -41,7 +41,11 @@
  */
 #include "gmxpre.h"
 
-#include "gromacs/gpu_utils/gpueventsynchronizer.h"
+#include "config.h"
+
+#if GMX_GPU
+#    include "gromacs/gpu_utils/gpueventsynchronizer.h"
+#endif
 
 #include <gtest/gtest.h>
 
