@@ -174,7 +174,7 @@ void StatePropagatorDataGpu::Impl::reinit(int numAtomsLocal, int numAtomsAll)
         clearDeviceBufferAsync(&d_f_, 0, d_fCapacity_, *localStream_);
     }
 
-    xHostState_.assertConsistent(AtomLocality::Local);
+    xHostState_[AtomLocality::Local].assertConsistent();
 
     wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LaunchStatePropagatorData);
     wallcycle_stop(wcycle_, WallCycleCounter::LaunchGpu);
@@ -313,7 +313,7 @@ DeviceBuffer<RVec> StatePropagatorDataGpu::Impl::getCoordinates()
 void StatePropagatorDataGpu::Impl::copyCoordinatesToGpu(const gmx::ArrayRef<const gmx::RVec> h_x,
                                                         AtomLocality atomLocality)
 {
-    xHostState_.assertConsistent(atomLocality);
+    xHostState_[atomLocality].assertConsistent();
     GMX_ASSERT(atomLocality < AtomLocality::All,
                formatString("Wrong atom locality. Only Local and NonLocal are allowed for "
                             "coordinate transfers, passed value is \"%s\"",
@@ -392,9 +392,9 @@ void StatePropagatorDataGpu::Impl::copyCoordinatesFromGpu(gmx::ArrayRef<gmx::RVe
     GMX_ASSERT(deviceStream != nullptr,
                "No stream is valid for copying positions with given atom locality.");
 
-    if (xHostState_.checkIfInconsistent(atomLocality))
+    if (xHostState_[atomLocality].checkIfInconsistent())
     {
-        xHostState_.setInTransit(atomLocality);
+        xHostState_[atomLocality].setInTransit();
 
         wallcycle_start_nocount(wcycle_, WallCycleCounter::LaunchGpu);
         wallcycle_sub_start(wcycle_, WallCycleSubCounter::LaunchStatePropagatorData);
@@ -410,18 +410,23 @@ void StatePropagatorDataGpu::Impl::copyCoordinatesFromGpu(gmx::ArrayRef<gmx::RVe
 
 void StatePropagatorDataGpu::Impl::waitCoordinatesReadyOnHost(AtomLocality atomLocality)
 {
-    if (xHostState_.checkIfInTransit(atomLocality))
+    if (xHostState_[atomLocality].checkIfInTransit())
     {
         wallcycle_start(wcycle_, WallCycleCounter::WaitGpuStatePropagatorData);
         xReadyOnHost_[atomLocality].waitForEvent();
-        xHostState_.setConsistent(atomLocality);
+        xHostState_[atomLocality].setConsistent();
         wallcycle_stop(wcycle_, WallCycleCounter::WaitGpuStatePropagatorData);
     }
 }
 
 void StatePropagatorDataGpu::Impl::markHostCoordinatesBufferInconsistent(AtomLocality atomLocality)
 {
-    xHostState_.setInconsistent(atomLocality);
+    GMX_ASSERT(atomLocality < AtomLocality::All,
+               formatString("Wrong atom locality. Only Local and NonLocal are allowed for "
+                            "coordinate, passed value is \"%s\"",
+                            enumValueToString(atomLocality))
+                       .c_str());
+    xHostState_[atomLocality].setInconsistent();
 }
 
 

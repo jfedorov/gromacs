@@ -156,104 +156,6 @@ private:
     HostBufferState state_ = HostBufferState::Consistent;
 };
 
-/*! \brief Tracks the state of local and non-local buffers
- *
- * Provide functionality to track and switch stated of the local and non-local host buffers.
- *
- */
-class CoordinatesHostBufferStateTracker
-{
-public:
-    /*! \brief Mark the host-side buffer as consistent with the device-side buffer for a given locality.
-     *
-     * \param[in] atomLocality Atom locality.
-     */
-    void setConsistent(AtomLocality atomLocality)
-    {
-        switch (atomLocality)
-        {
-            case AtomLocality::Local: stateTrackerLocal_.setConsistent(); break;
-            case AtomLocality::NonLocal: stateTrackerNonLocal_.setConsistent(); break;
-            default: GMX_RELEASE_ASSERT(false, "Wrong locality."); break;
-        }
-    }
-    /*! \brief Assert if the host buffer for a given locality is consistent with the device-side buffer.
-     *
-     * \param[in] atomLocality Atom locality.
-     */
-    void assertConsistent(AtomLocality atomLocality)
-    {
-        switch (atomLocality)
-        {
-            case AtomLocality::Local: stateTrackerLocal_.assertConsistent(); break;
-            case AtomLocality::NonLocal: stateTrackerNonLocal_.assertConsistent(); break;
-            default: GMX_RELEASE_ASSERT(false, "Wrong locality."); break;
-        }
-    }
-
-    /*! \brief Indicate that the device to host copy for the buffer of a given locality was issued.
-     *
-     * \param[in] atomLocality Atom locality.
-     */
-    void setInTransit(AtomLocality atomLocality)
-    {
-        switch (atomLocality)
-        {
-            case AtomLocality::Local: stateTrackerLocal_.setInTransit(); break;
-            case AtomLocality::NonLocal: stateTrackerNonLocal_.setInTransit(); break;
-            default: GMX_RELEASE_ASSERT(false, "Wrong locality."); break;
-        }
-    }
-
-    /*! \brief Check if the state of the buffer for a given locality indicates that the device to host copy was already issued.
-     *
-     * \param[in] atomLocality Atom locality.
-     */
-    bool checkIfInTransit(AtomLocality atomLocality)
-    {
-        switch (atomLocality)
-        {
-            case AtomLocality::Local: return stateTrackerLocal_.checkIfInTransit();
-            case AtomLocality::NonLocal: return stateTrackerNonLocal_.checkIfInTransit();
-            default: GMX_RELEASE_ASSERT(false, "Wrong locality."); return false;
-        }
-    }
-
-    /*! \brief Mark the host-side buffer for a given locality as inconsistent with device-side buffers.
-     *
-     * \param[in] atomLocality Atom locality.
-     */
-    void setInconsistent(AtomLocality atomLocality)
-    {
-        switch (atomLocality)
-        {
-            case AtomLocality::Local: stateTrackerLocal_.setInconsistent(); break;
-            case AtomLocality::NonLocal: stateTrackerNonLocal_.setInconsistent(); break;
-            default: GMX_RELEASE_ASSERT(false, "Wrong locality."); break;
-        }
-    }
-
-    /*! \brief Check if the state of the buffer for a given locality indicates that the host data is not consistent with the device data.
-     *
-     * \param[in] atomLocality Atom locality.
-     */
-    bool checkIfInconsistent(AtomLocality atomLocality)
-    {
-        switch (atomLocality)
-        {
-            case AtomLocality::Local: return stateTrackerLocal_.checkIfInconsistent();
-            case AtomLocality::NonLocal: return stateTrackerNonLocal_.checkIfInconsistent();
-            default: GMX_RELEASE_ASSERT(false, "Wrong locality."); return false;
-        }
-    }
-
-private:
-    //! State tracker of the host-side local positions buffer
-    HostBufferStateTracker stateTrackerLocal_;
-    //! State tracker of the host-side non-local positions buffer
-    HostBufferStateTracker stateTrackerNonLocal_;
-};
-
 class StatePropagatorDataGpu::Impl
 {
 public:
@@ -570,7 +472,7 @@ private:
     //! Allocation size for the positions buffer
     int d_xCapacity_ = -1;
     //! State of the host-side positions buffer
-    CoordinatesHostBufferStateTracker xHostState_;
+    EnumerationArray<AtomLocality, HostBufferStateTracker> xHostState_;
 
     //! Device velocities buffer
     DeviceBuffer<RVec> d_v_;
