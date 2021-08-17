@@ -116,7 +116,7 @@ TEST(NbnxmSetupTest, CheckKernelSetupThrowsCount)
     EXPECT_ANY_THROW(checkKernelSetupSimd(SimdKernels::Count));
 }
 
-TEST(NbnxmSetupTest, canCreateKernelSetupPlain)
+TEST(NbnxmSetupTest, CanCreateKernelSetupPlain)
 {
     NBKernelOptions nbKernelOptions;
     nbKernelOptions.nbnxmSimd = SimdKernels::SimdNo;
@@ -126,7 +126,7 @@ TEST(NbnxmSetupTest, canCreateKernelSetupPlain)
     EXPECT_EQ(kernelSetup.ewaldExclusionType, Nbnxm::EwaldExclusionType::Table);
 }
 
-TEST(NbnxmSetupTest, canCreateParticleInfoAllVdv)
+TEST(NbnxmSetupTest, CanCreateParticleInfoAllVdv)
 {
     size_t  numParticles = 2;
     int64_t mask         = 0;
@@ -137,14 +137,14 @@ TEST(NbnxmSetupTest, canCreateParticleInfoAllVdv)
     EXPECT_EQ(refParticles, testParticles);
 }
 
-TEST(NbnxmSetupTest, ewaldCoeffWorks)
+TEST(NbnxmSetupTest, EwaldCoeffWorks)
 {
     real                              ewald     = ewaldCoeff(1e-5, 1.0);
     gmx::test::FloatingPointTolerance tolerance = gmx::test::absoluteTolerance(1e-5);
     EXPECT_REAL_EQ_TOL(ewald, 3.12341, tolerance);
 }
 
-TEST(NbnxmSetupTest, updateForcerecWorks)
+TEST(NbnxmSetupTest, UpdateForcerecWorks)
 {
     t_forcerec forcerec;
     Box        box(3);
@@ -154,7 +154,7 @@ TEST(NbnxmSetupTest, updateForcerecWorks)
 // The following tests check if the user is allowed to specify configurations not permitted due
 // to conflicting compile time setup flags
 
-TEST(NbnxmSetupTest, canCheckKernelSetup)
+TEST(NbnxmSetupTest, CanCheckKernelSetup)
 {
     NBKernelOptions nbKernelOptions;
     nbKernelOptions.nbnxmSimd = SimdKernels::SimdNo;
@@ -169,7 +169,7 @@ TEST(NbnxmSetupTest, canCheckKernelSetup)
 
 // check if the user is allowed to ask for SimdKernels::Simd2XMM when NBLIB is not compiled with it
 #ifndef GMX_NBNXN_SIMD_2XNN
-TEST(NbnxmSetupTest, cannotCreateKernelSetupCPU2XM)
+TEST(NbnxmSetupTest, CannotCreateKernelSetupCPU2XM)
 {
     NBKernelOptions nbKernelOptions;
     nbKernelOptions.nbnxmSimd             = SimdKernels::Simd2XMM;
@@ -180,7 +180,7 @@ TEST(NbnxmSetupTest, cannotCreateKernelSetupCPU2XM)
 
 // check if the user is allowed to ask for SimdKernels::Simd4XM when NBLIB is not compiled with it
 #ifndef GMX_NBNXN_SIMD_4XN
-TEST(NbnxmSetupTest, cannotCreateKernelSetupCPU4XM)
+TEST(NbnxmSetupTest, CannotCreateKernelSetupCPU4XM)
 {
     NBKernelOptions nbKernelOptions;
     nbKernelOptions.nbnxmSimd             = SimdKernels::Simd4XM;
@@ -200,7 +200,7 @@ TEST(NbnxmSetupTest, CanCreateNbnxmCPU)
 }
 
 #ifdef GMX_GPU_CUDA
-TEST(NbnxmSetupTest, canCreateKernelSetupGPU)
+TEST(NbnxmSetupTest, CanCreateKernelSetupGPU)
 {
     NBKernelOptions nbKernelOptions;
     nbKernelOptions.nbnxmSimd = SimdKernels::GPU;
@@ -210,20 +210,20 @@ TEST(NbnxmSetupTest, canCreateKernelSetupGPU)
     EXPECT_EQ(kernelSetup.ewaldExclusionType, Nbnxm::EwaldExclusionType::Analytical);
 }
 
-TEST(NbnxmSetupTest, canCreateKernelSetupGPUThrows)
+TEST(NbnxmSetupTest, CanCreateKernelSetupGPUThrows)
 {
     NBKernelOptions nbKernelOptions;
     EXPECT_ANY_THROW(createKernelSetupGPU(nbKernelOptions.nbnxmSimd, nbKernelOptions.useTabulatedEwaldCorr));
 }
 
-TEST(NbnxmSetupTest, canCreateKernelSetupGPUThrows4XM)
+TEST(NbnxmSetupTest, CanCreateKernelSetupGPUThrows4XM)
 {
     NBKernelOptions nbKernelOptions;
     nbKernelOptions.nbnxmSimd = SimdKernels::Simd4XM;
     EXPECT_ANY_THROW(createKernelSetupGPU(nbKernelOptions.nbnxmSimd, nbKernelOptions.useTabulatedEwaldCorr));
 }
 
-TEST(NbnxmSetupTest, canCreateKernelSetupGPUThrows2XM)
+TEST(NbnxmSetupTest, CanCreateKernelSetupGPUThrows2XM)
 {
     NBKernelOptions nbKernelOptions;
     nbKernelOptions.nbnxmSimd = SimdKernels::Simd2XMM;
