@@ -74,15 +74,22 @@ public:
     GpuEventSynchronizer() = default;
     //! A destructor
     ~GpuEventSynchronizer() = default;
-
-    GMX_DISALLOW_COPY_MOVE_AND_ASSIGN(GpuEventSynchronizer);
+    //! Remove copy assignment, because we can not copy the underlying event object.
+    GpuEventSynchronizer& operator=(const GpuEventSynchronizer&) = delete;
+    //! Remove copy constructor, because we can not copy the underlying event object.
+    GpuEventSynchronizer(const GpuEventSynchronizer&) = delete;
+    //! Remove move assignment, because we don't allow moving the underlying event object.
+    GpuEventSynchronizer& operator=(GpuEventSynchronizer&&) = delete;
+    //! Remove move constructor, because we don't allow moving the underlying event object.
+    GpuEventSynchronizer(GpuEventSynchronizer&&) = delete;
 
     /*! \brief Marks the synchronization point in the \p stream.
-     * Should be called first and then followed by waitForEvent().
+     * Should be called first and then followed by \ref waitForEvent().
      */
     inline void markEvent(const DeviceStream& deviceStream)
     {
 #if !GMX_GPU_CUDA
+        // For now, we have relaxed conditions for CUDA
         GMX_ASSERT(!event_.isMarked(), "Do not call markEvent more than once!");
 #endif
         event_.mark(deviceStream);
@@ -106,7 +113,7 @@ public:
     /*! \brief Enqueues a wait for the recorded event in stream \p stream
      *
      *  After enqueue, the associated event is released, so this method should
-     *  be only called once per markEvent() call.
+     *  be only called once per \ref markEvent() call (not enforced in CUDA yet).
      */
     inline void enqueueWaitEvent(const DeviceStream& deviceStream)
     {
@@ -114,7 +121,7 @@ public:
         reset();
     }
 
-    //! Reset (release) the event to unmarked state.
+    //! Resets the event to unmarked state, releasing the underlying event object if needed.
     inline void reset() { event_.reset(); }
 
 private:
