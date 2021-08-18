@@ -50,14 +50,7 @@
 #include <memory>
 
 #include "gromacs/gpu_utils/devicebuffer.h"
-#if GMX_GPU_CUDA
-#    include "gromacs/gpu_utils/gpueventsynchronizer.cuh"
-#elif GMX_GPU_OPENCL
-#    include "gromacs/gpu_utils/gpueventsynchronizer_ocl.h"
-#elif GMX_GPU_SYCL
-#    include "gromacs/gpu_utils/gpueventsynchronizer_sycl.h"
-#endif
-
+#include "gromacs/gpu_utils/gpueventsynchronizer.h"
 #include "gromacs/math/vectypes.h"
 #include "gromacs/mdtypes/state_propagator_data_gpu.h"
 #include "gromacs/utility/enumerationhelpers.h"
@@ -197,11 +190,11 @@ public:
      */
     void waitCoordinatesCopiedToDevice(AtomLocality atomLocality);
 
-    /*! \brief Getter for the event synchronizer for the update is done on th GPU
+    /*! \brief Setter for the event synchronizer for the update is done on th GPU
      *
-     *  \returns  The event to synchronize the stream coordinates wre updated on device.
+     *  \param[in] xUpdatedOnDeviceEvent  The event to synchronize the stream coordinates wre updated on device.
      */
-    GpuEventSynchronizer* xUpdatedOnDevice();
+    void setXUpdatedOnDeviceEvent(GpuEventSynchronizer* xUpdatedOnDeviceEvent);
 
     /*! \brief Copy positions from the GPU memory.
      *
@@ -325,7 +318,7 @@ private:
     const DeviceStream* localStream_;
     //! GPU NBNXM non-local stream.
     const DeviceStream* nonLocalStream_;
-    //! GPU Update-constreaints stream.
+    //! GPU Update-constraints stream.
     const DeviceStream* updateStream_;
 
     // Streams to use for coordinates H2D and D2H copies (one event for each atom locality)
@@ -340,8 +333,8 @@ private:
      * \todo Reconsider naming. It should be xCopiedToDevice or xH2DCopyComplete, etc.
      */
     EnumerationArray<AtomLocality, GpuEventSynchronizer> xReadyOnDevice_;
-    //! An event that the coordinates are ready after update-constraints execution
-    GpuEventSynchronizer xUpdatedOnDevice_;
+    //! A pointer to an event that the coordinates are ready after update-constraints execution
+    GpuEventSynchronizer* xUpdatedOnDeviceEvent_ = nullptr;
     //! An array of events that indicate D2H copy of coordinates is complete (one event for each atom locality)
     EnumerationArray<AtomLocality, GpuEventSynchronizer> xReadyOnHost_;
 

@@ -41,6 +41,7 @@
  * \author Prashanth Kanduri <kanduri@cscs.ch>
  * \author Sebastian Keller <keller@cscs.ch>
  */
+#include "gromacs/utility/arrayref.h"
 #include "nblib/listed_forces/dataflow.hpp"
 #include "nblib/listed_forces/tests/listedtesthelpers.h"
 #include "nblib/tests/testhelpers.h"
@@ -52,65 +53,40 @@ namespace nblib
 {
 
 //! Coordinates for testing
-std::vector<gmx::RVec> c_coordinatesForDihTests = { { 0.0, 0.0, 0.0 },
-                                                    { 0.0, 0.0, 0.2 },
-                                                    { 0.005, 0.0, 0.1 },
-                                                    { -0.001, 0.1, 0.0 } };
+static const std::vector<gmx::RVec> c_coordinatesForDihTests = { { 0.0, 0.0, 0.0 },
+                                                                 { 0.0, 0.0, 0.2 },
+                                                                 { 0.005, 0.0, 0.1 },
+                                                                 { -0.001, 0.1, 0.0 } };
 
 //! Coordinates for testing angles
-std::vector<gmx::RVec> c_coordinatesForAngleTests = { { 1.382, 1.573, 1.482 },
-                                                      { 1.281, 1.559, 1.596 },
-                                                      { 1.292, 1.422, 1.663 } };
+static const std::vector<gmx::RVec> c_coordinatesForAngleTests = { { 1.382, 1.573, 1.482 },
+                                                                   { 1.281, 1.559, 1.596 },
+                                                                   { 1.292, 1.422, 1.663 } };
 
 //! Coordinates for testing bonds
-std::vector<gmx::RVec> c_coordinatesForBondTests = { { 1.382, 1.573, 1.482 }, { 1.281, 1.559, 1.596 } };
-
-// Todo: add the following to the inputs
-// std::vector<RyckaertBellemanDihedral> c_InputDihs = { RyckaertBellemanDihedral({ -7.35, 13.6, 8.4, -16.7, 1.3, 12.4 }) };
+static const std::vector<gmx::RVec> c_coordinatesForBondTests = { { 1.382, 1.573, 1.482 },
+                                                                  { 1.281, 1.559, 1.596 } };
 
 //! Function types for testing Harmonic bonds
-std::vector<HarmonicBondType> c_InputHarmonicBonds = { { HarmonicBondType(500.0, 0.15) } };
+static const std::vector<HarmonicBondType> c_InputHarmonicBonds = { { HarmonicBondType(500.0, 0.15) } };
 
 //! Function types for testing G96 bonds
-std::vector<G96BondType> c_InputG96Bonds = { { G96BondType(50.0, 0.15) } };
+static const std::vector<G96BondType> c_InputG96Bonds = { { G96BondType(50.0, 0.15) } };
 
 //! Function types for testing cubic bonds
-std::vector<CubicBondType> c_InputCubicBonds = { { CubicBondType(50.0, 2.0, 0.16) } };
-
-//! Function types for testing Morse bonds
-std::vector<MorseBondType> c_InputMorseBonds = { { MorseBondType(30.0, 2.7, 0.15) } };
+static const std::vector<CubicBondType> c_InputCubicBonds = { { CubicBondType(50.0, 2.0, 0.16) } };
 
 //! Function types for testing FENE bonds
-std::vector<FENEBondType> c_InputFeneBonds = { { FENEBondType(5.0, 0.4) } };
+static const std::vector<FENEBondType> c_InputFeneBonds = { { FENEBondType(5.0, 0.4) } };
 
 //! Function types for testing Harmonic angles
-std::vector<HarmonicAngle> c_InputHarmonicAngles = { { HarmonicAngle(50.0, Degrees(100)) } };
-
-//! Function types for testing Linear angles
-std::vector<LinearAngle> c_InputLinearAngles = { { LinearAngle(50.0, 0.4) } };
-
-//! Function types for testing G96 angles
-std::vector<G96Angle> c_InputG96Angles = { { G96Angle(50.0, Degrees(100)) } };
-
-//! Function types for testing Restricted angles
-std::vector<RestrictedAngle> c_InputRestrictedAngles = { { RestrictedAngle(50.0, Degrees(100)) } };
-
-//! Function types for testing Quartic angles
-std::vector<QuarticAngle> c_InputQuarticAngles = { { QuarticAngle(1.1, 2.3, 4.6, 7.8, 9.2, Degrees(87)) } };
-
-//! Function types for testing cross bond-bond interaction
-std::vector<CrossBondBond> c_InputCrossBondBond = { { CrossBondBond(45.0, 0.8, 0.7) } };
-
-//! Function types for testing cross bond-angle interaction
-std::vector<CrossBondAngle> c_InputCrossBondAngle = { { CrossBondAngle(45.0, 0.8, 0.7, 0.3) } };
+static const std::vector<HarmonicAngle> c_InputHarmonicAngles = { { HarmonicAngle(50.0, Degrees(100)) } };
 
 //! Function types for testing dihedrals
-std::vector<ProperDihedral> c_InputDihs = { { ProperDihedral(Degrees(-105.0), 15.0, 2) } };
-
-/*, { ImproperDihedral(100.0, 50.0) }*/
+static const std::vector<ProperDihedral> c_InputDihs = { { ProperDihedral(Degrees(-105.0), 15.0, 2) } };
 
 template<class Interaction, std::enable_if_t<Contains<Interaction, SupportedListedTypes>{}>* = nullptr>
-void checkForcesAndEnergiesWithRefData(std::vector<Interaction> input, std::vector<gmx::RVec> x)
+void checkForcesAndEnergiesWithRefData(std::vector<Interaction> input, gmx::ArrayRef<const gmx::RVec> x)
 {
     auto                   indices = indexVector<Interaction>();
     PbcHolder              pbcHolder(PbcType::Xyz, Box(1.5));
@@ -132,39 +108,9 @@ TEST(FourCenter, ListedForcesProperDihedralTest)
     checkForcesAndEnergiesWithRefData(c_InputDihs, c_coordinatesForDihTests);
 }
 
-TEST(ThreeCenter, ListedForcesG96AngleTest)
-{
-    checkForcesAndEnergiesWithRefData(c_InputG96Angles, c_coordinatesForAngleTests);
-}
-
 TEST(ThreeCenter, ListedForcesHarmonicAngleTest)
 {
     checkForcesAndEnergiesWithRefData(c_InputHarmonicAngles, c_coordinatesForAngleTests);
-}
-
-TEST(ThreeCenter, ListedForcesLinearAngleTest)
-{
-    checkForcesAndEnergiesWithRefData(c_InputLinearAngles, c_coordinatesForAngleTests);
-}
-
-TEST(ThreeCenter, ListedForcesCrossBondBondTest)
-{
-    checkForcesAndEnergiesWithRefData(c_InputCrossBondBond, c_coordinatesForAngleTests);
-}
-
-TEST(ThreeCenter, ListedForcesCrossBondAngleTest)
-{
-    checkForcesAndEnergiesWithRefData(c_InputCrossBondAngle, c_coordinatesForAngleTests);
-}
-
-TEST(ThreeCenter, ListedForcesQuarticAngleTest)
-{
-    checkForcesAndEnergiesWithRefData(c_InputQuarticAngles, c_coordinatesForAngleTests);
-}
-
-TEST(ThreeCenter, ListedForcesRestrictedAngleTest)
-{
-    checkForcesAndEnergiesWithRefData(c_InputRestrictedAngles, c_coordinatesForAngleTests);
 }
 
 TEST(TwoCenter, ListedForcesHarmonicBondTest)
@@ -180,11 +126,6 @@ TEST(TwoCenter, ListedForcesG96BondTest)
 TEST(TwoCenter, ListedForcesCubicBondTest)
 {
     checkForcesAndEnergiesWithRefData(c_InputCubicBonds, c_coordinatesForBondTests);
-}
-
-TEST(TwoCenter, ListedForcesMorseBondTest)
-{
-    checkForcesAndEnergiesWithRefData(c_InputMorseBonds, c_coordinatesForBondTests);
 }
 
 TEST(TwoCenter, ListedForcesFeneBondTest)
