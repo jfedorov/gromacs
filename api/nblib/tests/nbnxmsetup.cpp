@@ -89,7 +89,7 @@ TEST(NbnxmSetupTest, canTranslateBenchmarkEnumNo)
     EXPECT_EQ(translateBenchmarkEnum(kernel), Nbnxm::KernelType::Cpu4x4_PlainC);
 }
 
-TEST(NbnxmSetupTest, canTranslateBenchmarkEnum2XM)
+TEST(NbnxmSetupTest, canTranslateBenchmarkEnum2XMM)
 {
     auto kernel = SimdKernels::Simd2XMM;
     EXPECT_EQ(translateBenchmarkEnum(kernel), Nbnxm::KernelType::Cpu4xN_Simd_2xNN);
@@ -169,7 +169,7 @@ TEST(NbnxmSetupTest, CanCheckKernelSetup)
 
 // check if the user is allowed to ask for SimdKernels::Simd2XMM when NBLIB is not compiled with it
 #ifndef GMX_NBNXN_SIMD_2XNN
-TEST(NbnxmSetupTest, CannotCreateKernelSetupCPU2XM)
+TEST(NbnxmSetupTest, CannotCreateKernelSetupCPU2XMM)
 {
     NBKernelOptions nbKernelOptions;
     nbKernelOptions.nbnxmSimd             = SimdKernels::Simd2XMM;
@@ -199,7 +199,7 @@ TEST(NbnxmSetupTest, CanCreateNbnxmCPU)
     EXPECT_NO_THROW(createNbnxmCPU(numParticles, nbKernelOptions, numEnergyGroups, nonbondedParameters));
 }
 
-#ifdef GMX_GPU_CUDA
+#if GMX_GPU_CUDA
 TEST(NbnxmSetupTest, CanCreateKernelSetupGPU)
 {
     NBKernelOptions nbKernelOptions;
@@ -223,7 +223,7 @@ TEST(NbnxmSetupTest, CanCreateKernelSetupGPUThrows4XM)
     EXPECT_ANY_THROW(createKernelSetupGPU(nbKernelOptions.nbnxmSimd, nbKernelOptions.useTabulatedEwaldCorr));
 }
 
-TEST(NbnxmSetupTest, CanCreateKernelSetupGPUThrows2XM)
+TEST(NbnxmSetupTest, CanCreateKernelSetupGPUThrows2XMM)
 {
     NBKernelOptions nbKernelOptions;
     nbKernelOptions.nbnxmSimd = SimdKernels::Simd2XMM;
@@ -237,8 +237,7 @@ TEST(NbnxmSetupTest, CanCreateDeviceStreamManager)
     {
         const DeviceInformation& deviceInfo = testDevice->deviceInfo();
         setActiveDevice(deviceInfo);
-        NBKernelOptions         nbKernelOptions;
-        gmx::SimulationWorkload simulationWork = createSimulationWorkloadGpu(nbKernelOptions);
+        gmx::SimulationWorkload simulationWork = createSimulationWorkloadGpu();
         EXPECT_NO_THROW(createDeviceStreamManager(deviceInfo, simulationWork));
     }
 }
@@ -254,7 +253,7 @@ TEST(NbnxmSetupTest, CanCreateNbnxmGPU)
         NBKernelOptions nbKernelOptions;
         nbKernelOptions.nbnxmSimd                   = SimdKernels::GPU;
         std::vector<real>       nonbondedParameters = { 1, 1 };
-        gmx::SimulationWorkload simulationWork      = createSimulationWorkloadGpu(nbKernelOptions);
+        gmx::SimulationWorkload simulationWork      = createSimulationWorkloadGpu();
         interaction_const_t     interactionConst    = createInteractionConst(nbKernelOptions);
         // set DeviceInformation and create the DeviceStreamManager
         auto deviceStreamManager = createDeviceStreamManager(deviceInfo, simulationWork);
@@ -274,7 +273,7 @@ TEST(NbnxmSetupTest, CreateNbnxmGPUThrowsInvalidKernelChoice)
         NBKernelOptions nbKernelOptions;
         nbKernelOptions.nbnxmSimd                   = SimdKernels::SimdNo;
         std::vector<real>       nonbondedParameters = { 1, 1 };
-        gmx::SimulationWorkload simulationWork      = createSimulationWorkloadGpu(nbKernelOptions);
+        gmx::SimulationWorkload simulationWork      = createSimulationWorkloadGpu();
         interaction_const_t     interactionConst    = createInteractionConst(nbKernelOptions);
         // set DeviceInformation and create the DeviceStreamManager
         auto deviceStreamManager = createDeviceStreamManager(deviceInfo, simulationWork);

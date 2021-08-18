@@ -86,7 +86,7 @@ public:
     void setParticleInfoAllVdv(size_t numParticles);
 
     //! Set up StepWorkload data
-    void setupStepWorkload(const NBKernelOptions& options);
+    void setupStepWorkload();
 
     //! Return an interaction constants struct with members set appropriately
     void setupInteractionConst(const NBKernelOptions& options);

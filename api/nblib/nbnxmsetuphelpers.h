@@ -82,7 +82,7 @@ int64_t findNumEnergyGroups(gmx::ArrayRef<int64_t> particleInteractionFlags);
 //! Helper to translate between the different enumeration values.
 Nbnxm::KernelType translateBenchmarkEnum(const SimdKernels& kernel);
 
-/*! \brief Checks the kernel Simd setup in CPU case
+/*! \brief Checks the kernel SIMD setup in CPU case
  *
  * Throws an exception when the kernel is not available.
  */
@@ -92,7 +92,7 @@ void checkKernelSetupSimd(SimdKernels nbnxmSimd);
 Nbnxm::KernelSetup createKernelSetupCPU(const SimdKernels nbnxmSimd, const bool useTabulatedEwaldCorr);
 
 //! Creates and returns the kernel setup for GPU
-Nbnxm::KernelSetup createKernelSetupGPU(const SimdKernels nbnxmSimd, const bool useTabulatedEwaldCorr);
+Nbnxm::KernelSetup createKernelSetupGPU(const bool useTabulatedEwaldCorr);
 
 //! Create Particle info array to mark those that undergo VdV interaction
 std::vector<int64_t> createParticleInfoAllVdw(size_t numParticles);
@@ -102,10 +102,10 @@ std::vector<real> createNonBondedParameters(const std::vector<ParticleType>& par
                                             const NonBondedInteractionMap& nonBondedInteractionMap);
 
 //! Create a step work object
-gmx::StepWorkload createStepWorkload(const NBKernelOptions& options);
+gmx::StepWorkload createStepWorkload();
 
 //! Create a SimulationWorkload object for use with createDeviceStreamManager
-gmx::SimulationWorkload createSimulationWorkloadGpu(const NBKernelOptions& options);
+gmx::SimulationWorkload createSimulationWorkloadGpu();
 
 std::shared_ptr<gmx::DeviceStreamManager> createDeviceStreamManager(const DeviceInformation& deviceInfo,
                                                                     const gmx::SimulationWorkload& simulationWorkload);

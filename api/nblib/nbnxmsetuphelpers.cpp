@@ -134,14 +134,8 @@ Nbnxm::KernelSetup createKernelSetupCPU(const SimdKernels nbnxmSimd, const bool 
     return kernelSetup;
 }
 
-Nbnxm::KernelSetup createKernelSetupGPU(const SimdKernels nbnxmSimd, const bool useTabulatedEwaldCorr)
+Nbnxm::KernelSetup createKernelSetupGPU(const bool useTabulatedEwaldCorr)
 {
-    if (nbnxmSimd != SimdKernels::GPU)
-    {
-        throw InputException(
-                "You tried to select SIMD kernels, but they are not available on the GPU");
-    }
-
     Nbnxm::KernelSetup kernelSetup;
     kernelSetup.kernelType         = Nbnxm::KernelType::Gpu8x8x8;
     kernelSetup.ewaldExclusionType = useTabulatedEwaldCorr ? Nbnxm::EwaldExclusionType::Table
@@ -188,7 +182,7 @@ std::vector<real> createNonBondedParameters(const std::vector<ParticleType>& par
     return nonbondedParameters;
 }
 
-gmx::StepWorkload createStepWorkload([[maybe_unused]] const NBKernelOptions& options)
+gmx::StepWorkload createStepWorkload()
 {
     gmx::StepWorkload stepWorkload;
     stepWorkload.computeForces          = true;
@@ -199,16 +193,16 @@ gmx::StepWorkload createStepWorkload([[maybe_unused]] const NBKernelOptions& opt
     return stepWorkload;
 }
 
-static gmx::SimulationWorkload createSimulationWorkload([[maybe_unused]] const NBKernelOptions& options)
+static gmx::SimulationWorkload createSimulationWorkload()
 {
     gmx::SimulationWorkload simulationWork;
     simulationWork.computeNonbonded = true;
     return simulationWork;
 }
 
-gmx::SimulationWorkload createSimulationWorkloadGpu(const NBKernelOptions& options)
+gmx::SimulationWorkload createSimulationWorkloadGpu()
 {
-    gmx::SimulationWorkload simulationWork = createSimulationWorkload(options);
+    gmx::SimulationWorkload simulationWork = createSimulationWorkload();
 
     simulationWork.useGpuNonbonded = true;
     simulationWork.useGpuUpdate    = false;
@@ -329,11 +323,15 @@ std::unique_ptr<nonbonded_verlet_t> createNbnxmGPU(const size_t               nu
                                                    const interaction_const_t& interactionConst,
                                                    std::shared_ptr<gmx::DeviceStreamManager> deviceStreamManager)
 {
+    if (options.nbnxmSimd != SimdKernels::GPU)
+    {
+        throw InputException(
+                "You tried to select SIMD kernels, but they are not available on the GPU");
+    }
     const auto pinPolicy       = gmx::PinningPolicy::PinnedIfSupported;
     const int  combinationRule = static_cast<int>(options.ljCombinationRule);
 
-    Nbnxm::KernelSetup kernelSetup =
-            createKernelSetupGPU(options.nbnxmSimd, options.useTabulatedEwaldCorr);
+    Nbnxm::KernelSetup kernelSetup = createKernelSetupGPU(options.useTabulatedEwaldCorr);
 
     PairlistParams pairlistParams(kernelSetup.kernelType, false, options.pairlistCutoff, false);
 

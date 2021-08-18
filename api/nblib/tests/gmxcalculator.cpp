@@ -68,8 +68,7 @@ TEST(NBlibTest, GmxForceCalculatorCanCompute)
 
 TEST(NBlibTest, CanSetupStepWorkload)
 {
-    NBKernelOptions options;
-    EXPECT_NO_THROW(NbvSetupUtil{}.setupStepWorkload(options));
+    EXPECT_NO_THROW(NbvSetupUtil{}.setupStepWorkload());
 }
 
 TEST(NBlibTest, GmxForceCalculatorCanSetupInteractionConst)

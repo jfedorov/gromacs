@@ -52,7 +52,7 @@
 namespace nblib
 {
 
-//! Enum for selecting the SIMD kernel type
+//! Enum for selecting the non-bonded kernel type
 enum class SimdKernels : int
 {
     SimdAuto,

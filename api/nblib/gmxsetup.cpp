@@ -101,9 +101,9 @@ void NbvSetupUtil::setupNbnxmInstance(const size_t numParticleTypes, const NBKer
     gmxForceCalculator_->nbv_ = createNbnxmCPU(numParticleTypes, options, 1, nonbondedParameters_);
 }
 
-void NbvSetupUtil::setupStepWorkload(const NBKernelOptions& options)
+void NbvSetupUtil::setupStepWorkload()
 {
-    gmxForceCalculator_->stepWork_ = std::make_unique<gmx::StepWorkload>(createStepWorkload(options));
+    gmxForceCalculator_->stepWork_ = std::make_unique<gmx::StepWorkload>(createStepWorkload());
 }
 
 void NbvSetupUtil::setupInteractionConst(const NBKernelOptions& options)
@@ -141,7 +141,7 @@ std::unique_ptr<GmxForceCalculator> GmxSetupDirector::setupGmxForceCalculator(co
     nbvSetupUtil.setParticleInfoAllVdv(system.topology().numParticles());
 
     nbvSetupUtil.setupInteractionConst(options);
-    nbvSetupUtil.setupStepWorkload(options);
+    nbvSetupUtil.setupStepWorkload();
     nbvSetupUtil.setupNbnxmInstance(system.topology().getParticleTypes().size(), options);
     nbvSetupUtil.setParticlesOnGrid(system.coordinates(), system.box());
     nbvSetupUtil.constructPairList(system.topology().exclusionLists());
