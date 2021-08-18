@@ -70,7 +70,7 @@ void allocateDeviceBuffer(DeviceBuffer<ValueType>* buffer, size_t numValues, con
     GMX_UNUSED_VALUE(deviceContext);
     GMX_ASSERT(deviceContext.isDeviceActive(),
                "Could not allocate device buffer in a provided device context because the latter "
-               "does not correspond to a device currently active. Active it first using "
+               "does not correspond to a device currently active. Activate it first using "
                "setDeviceActive() method.");
     GMX_ASSERT(buffer, "needs a buffer pointer");
     cudaError_t stat = cudaMalloc(buffer, numValues * sizeof(ValueType));
@@ -130,7 +130,7 @@ void copyToDeviceBuffer(DeviceBuffer<ValueType>* buffer,
     GMX_ASSERT(hostBuffer, "needs a host buffer pointer");
     GMX_ASSERT(deviceStream.deviceContext().isDeviceActive(),
                "Could not copy to device buffer: provided stream is attached to a device context "
-               "that does not correspond to a device currently active. Active it first using "
+               "that does not correspond to a device currently active. Activate it first using "
                "setDeviceActive() method.");
 
     cudaError_t  stat;
@@ -194,7 +194,7 @@ void copyFromDeviceBuffer(ValueType*               hostBuffer,
     GMX_ASSERT(hostBuffer, "needs a host buffer pointer");
     GMX_ASSERT(deviceStream.deviceContext().isDeviceActive(),
                "Could not copy from device buffer: provided stream is attached to a device context "
-               "that does not correspond to a device currently active. Active it first using "
+               "that does not correspond to a device currently active. Activate it first using "
                "setDeviceActive() method.");
 
     cudaError_t  stat;
@@ -303,7 +303,7 @@ void clearDeviceBufferAsync(DeviceBuffer<ValueType>* buffer,
     GMX_ASSERT(buffer, "needs a buffer pointer");
     GMX_ASSERT(deviceStream.deviceContext().isDeviceActive(),
                "Could not clear device buffer: provided stream is attached to a device context "
-               "that does not correspond to a device currently active. Active it first using "
+               "that does not correspond to a device currently active. Activate it first using "
                "setDeviceActive() method.");
     const size_t bytes   = numValues * sizeof(ValueType);
     const char   pattern = 0;
