@@ -205,29 +205,9 @@ TEST(NbnxmSetupTest, CanCreateKernelSetupGPU)
     NBKernelOptions nbKernelOptions;
     nbKernelOptions.nbnxmSimd = SimdKernels::GPU;
     Nbnxm::KernelSetup kernelSetup =
-            createKernelSetupGPU(nbKernelOptions.nbnxmSimd, nbKernelOptions.useTabulatedEwaldCorr);
+            createKernelSetupGPU(nbKernelOptions.useTabulatedEwaldCorr);
     EXPECT_EQ(kernelSetup.kernelType, Nbnxm::KernelType::Gpu8x8x8);
     EXPECT_EQ(kernelSetup.ewaldExclusionType, Nbnxm::EwaldExclusionType::Analytical);
-}
-
-TEST(NbnxmSetupTest, CanCreateKernelSetupGPUThrows)
-{
-    NBKernelOptions nbKernelOptions;
-    EXPECT_ANY_THROW(createKernelSetupGPU(nbKernelOptions.nbnxmSimd, nbKernelOptions.useTabulatedEwaldCorr));
-}
-
-TEST(NbnxmSetupTest, CanCreateKernelSetupGPUThrows4XM)
-{
-    NBKernelOptions nbKernelOptions;
-    nbKernelOptions.nbnxmSimd = SimdKernels::Simd4XM;
-    EXPECT_ANY_THROW(createKernelSetupGPU(nbKernelOptions.nbnxmSimd, nbKernelOptions.useTabulatedEwaldCorr));
-}
-
-TEST(NbnxmSetupTest, CanCreateKernelSetupGPUThrows2XMM)
-{
-    NBKernelOptions nbKernelOptions;
-    nbKernelOptions.nbnxmSimd = SimdKernels::Simd2XMM;
-    EXPECT_ANY_THROW(createKernelSetupGPU(nbKernelOptions.nbnxmSimd, nbKernelOptions.useTabulatedEwaldCorr));
 }
 
 TEST(NbnxmSetupTest, CanCreateDeviceStreamManager)
