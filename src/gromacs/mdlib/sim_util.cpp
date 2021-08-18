@@ -1294,10 +1294,9 @@ void do_force(FILE*                               fplog,
     const bool reinitGpuPmePpComms =
             simulationWork.useGpuPmePpCommunication && (stepWork.doNeighborSearch);
 
-    auto* localXReadyOnDevice = (stepWork.haveGpuPmeOnThisRank || simulationWork.useGpuBufferOps)
-                                        ? stateGpu->getCoordinatesReadyOnDeviceEvent(
-                                                AtomLocality::Local, simulationWork, stepWork)
-                                        : nullptr;
+    auto* localXReadyOnDevice = stateGpu != nullptr ? stateGpu->getCoordinatesReadyOnDeviceEvent(
+                                        AtomLocality::Local, simulationWork, stepWork)
+                                                    : nullptr;
 
     GMX_ASSERT(simulationWork.useGpuHaloExchange
                        == ((cr->dd != nullptr) && (!cr->dd->gpuHaloExchange[0].empty())),
