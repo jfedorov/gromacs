@@ -126,12 +126,14 @@ static double computeDerivativeForTransformationPullCoord(pull_coord_work_t* coo
     return derivative;
 }
 
-/**
- * Distributes the force from a transformation pull coordiante to the dependent pull coordinates
- * by computing the inner derivatives
- * @param pcrd the transformation pull coord
- * @param variableCoords the dependent pull coordinates
- * @param transformationCoordForce the force to distribute
+
+/*!
+ * \brief Distributes the force from a transformation pull coordiante to the dependent pull
+ * coordinates by computing the inner derivatives
+ *
+ * \param pcrd[in,out]  The transformation pull coord
+ * \param variableCoords[in,out]    The dependent pull coordinates
+ * \param transformationCoordForce[in]  The force to distribute
  */
 static void distributeTransformationPullCoordForce(pull_coord_work_t*               pcrd,
                                                    gmx::ArrayRef<pull_coord_work_t> variableCoords,
@@ -198,7 +200,16 @@ void applyTransformationPullCoordForce(pull_coord_work_t*               pcrd,
                                        const double                     transformationCoordForce)
 {
     pcrd->scalarForce = transformationCoordForce;
+    // Note on why we need to call another method here:
+    // applyTransformationPullCoordForce is the method that should be called by the rest of the pull code.
+    // It's non-recursive and called exactly once for every transformation coordinate for every timestep.
+    // In it, we set the force on the transformation coordinate,
+    // then pass the force on to the other pull coordinates via the method distributeTransformationPullCoordForce.
+    // The latter method is recursive to account for inner derivatives.
+    // Note that we don't set the force on the top-level transformation coordinate in distributeTransformationPullCoordForce,
+    // we only add to the force, which is why it can be recursive.
     distributeTransformationPullCoordForce(pcrd, variableCoords, transformationCoordForce);
 }
+
 
 } // namespace gmx

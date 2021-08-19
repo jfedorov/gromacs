@@ -199,16 +199,52 @@ TEST_F(PullTest, MaxPullDistanceXySkewedBox)
 }
 
 #if HAVE_MUPARSER
-TEST_F(PullTest, TransformationCoord)
+
+/*
+ * Simple test case with one transformation coordiante and one pull coordinate.
+ *
+ */
+TEST_F(PullTest, TransformationCoordSimple)
 {
-    t_pbc pbc;
-
-    // PBC stuff
-    matrix box = { { 10, 0, 0 }, { 0, 10, 0 }, { 0, 0, 10 } };
-    set_pbc(&pbc, PbcType::Xyz, box);
-
+    //-----_SETUP-------
     pull_t pull;
+    // Create standard pull coordinates
+    const double dist = 10; // the pull coord value
+    t_pull_coord x1;
+    x1.coordIndex = 0;
+    pull.coord.emplace_back(x1);
+    pull.coord[0].spatialData.value = dist;
 
+    // Create transformation pull coordinates
+    t_pull_coord x2;
+    x2.eGeom      = PullGroupGeometry::Transformation;
+    x2.expression = "-x1";
+    x2.coordIndex = 1;
+    pull.coord.emplace_back(x2);
+
+    //-----TESTS -------
+    // 1) check transformation pull coordinate values
+    pull.coord[1].spatialData.value = getTransformationPullCoordinateValue(
+            &pull.coord[1], constArrayRefFromArray(pull.coord.data(), 1));
+    EXPECT_REAL_EQ_TOL(pull.coord[1].spatialData.value, -dist, defaultRealTolerance());
+
+    // 2) check that a force on the transformation coord propagates to the original pull coordinate
+    const double force = 10; // The force on the transformation coordinate
+    applyTransformationPullCoordForce(
+            &pull.coord[1], gmx::ArrayRef<pull_coord_work_t>(pull.coord).subArray(0, 1), force);
+    EXPECT_REAL_EQ_TOL(force, pull.coord[1].scalarForce, defaultRealTolerance());
+    EXPECT_REAL_EQ_TOL(-force, pull.coord[0].scalarForce, defaultRealTolerance());
+}
+
+/*
+ * More complicated test case of transformation pull coordinates.
+ * To account for all the different ways transformation coordinates can depend on each other,
+ * we need a relatively complicated setup with multiple pull coordinates.
+ * We also test the code for multiple numerical values, which adds a for loop.
+ */
+TEST_F(PullTest, TransformationCoordAdvanced)
+{
+    pull_t pull;
     // Create standard pull coordinates
     t_pull_coord x1;
     x1.eGeom      = PullGroupGeometry::Distance;
