@@ -65,9 +65,10 @@
  * \param[in]     deviceContext        The buffer's dummy device  context - not managed explicitly in CUDA RT.
  */
 template<typename ValueType>
-void allocateDeviceBuffer(DeviceBuffer<ValueType>* buffer, size_t numValues, const DeviceContext& deviceContext)
+void allocateDeviceBuffer(DeviceBuffer<ValueType>*              buffer,
+                          size_t                                numValues,
+                          [[maybe_unused]] const DeviceContext& deviceContext)
 {
-    GMX_UNUSED_VALUE(deviceContext);
     GMX_ASSERT(deviceContext.isDeviceActive(),
                "Could not allocate device buffer in a provided device context because the latter "
                "does not correspond to a device currently active. Activate it first using "
