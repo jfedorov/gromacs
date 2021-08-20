@@ -113,7 +113,6 @@ TEST(GpuEventSynchronizerTest, BasicFunctionality)
             gpuEventSynchronizer.waitForEvent();
         }
 
-#    if !GMX_GPU_CUDA // CUDA has very lax rules for event consumption. See Issues #2527 and #3988.
         {
             SCOPED_TRACE("Wait before marking");
             GpuEventSynchronizer gpuEventSynchronizer;
@@ -158,7 +157,6 @@ TEST(GpuEventSynchronizerTest, BasicFunctionality)
             gpuEventSynchronizer.waitForEvent();
             EXPECT_THROW(gpuEventSynchronizer.markEvent(streamB), gmx::InternalError);
         }
-#    endif
     }
 }
 #endif // GMX_GPU

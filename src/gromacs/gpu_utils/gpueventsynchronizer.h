@@ -116,12 +116,10 @@ public:
      */
     inline void markEvent(const DeviceStream& deviceStream)
     {
-#if !GMX_GPU_CUDA // For now, we have relaxed conditions for CUDA
         if (consumptionCount_ < minConsumptionCount_)
         {
             GMX_THROW(gmx::InternalError("Trying to mark event before fully consuming it"));
         }
-#endif
         event_.mark(deviceStream);
         consumptionCount_ = 0;
     }
@@ -154,13 +152,11 @@ public:
      */
     inline void consume()
     {
-#if !GMX_GPU_CUDA // For now, we have relaxed conditions for CUDA
         if (consumptionCount_ >= maxConsumptionCount_)
         {
             GMX_THROW(gmx::InternalError(
                     "Trying to consume an event before marking it or after fully consuming it"));
         }
-#endif
         consumptionCount_++;
     }
     //! Helper function to reset the event when it is fully consumed.
