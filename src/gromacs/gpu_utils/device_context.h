@@ -83,10 +83,16 @@ public:
 
     /*! \brief Check if this context is currently active (i.e. corresponding device is set in CUDA)
      *
-     * In CUDA, the active device should be explicitely activated, and the device buffers and device
-     * streams are not attached to the device through context. This function allows one to introduce
-     * explicit checks in order to make sure that the device buffers and streams, that are created
-     * for one device, are not used when the other is active.
+     * In CUDA, switching the current device is done explicitely, using \c cudaSetDevice(..) function.
+     * When e.g. the device streams are created, they are attached to the device that is currently set active.
+     * For performance reasons, current implementation of the \c DeviceContext in CUDA does not track
+     * this attachment. As a result, when the CUDA active device is changed after e.g. the stream was created,
+     * this stream should not be used until the active device is explicetely switched back. Since using
+     * this stream is still allowed by the API, it is beneficial to have the function that checks if
+     * the \c DeviceContext object corresponds to the device that is currently active.
+     * 
+     * These checks are not needed in SYCL and OpenCL, where the device handle (reference to \c DeviceContext
+     * object) is passed to the API calls, which redirects the calls to a specific device.
      *
      * \return Whether this context corresponds to an active device.
      */
