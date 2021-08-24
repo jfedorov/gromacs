@@ -185,7 +185,7 @@ auto settleKernel(cl::sycl::handler&                                           c
             c1d[ZZ] = trns1[ZZ] * c1[XX] + trns2[ZZ] * c1[YY] + trns3[ZZ] * c1[ZZ];
 
 
-            const float sinphi  = a1d_z / pars.ra;
+            const float sinphi  = a1d_z * cl::sycl::rsqrt(pars.ra * pars.ra);
             float       cosphi2 = 1.0F - sinphi * sinphi;
 
             if (almost_zero > cosphi2)

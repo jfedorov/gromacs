@@ -204,8 +204,8 @@ __launch_bounds__(sc_maxThreadsPerBlock) __global__
         c1d.z = trns1.z * c1.x + trns2.z * c1.y + trns3.z * c1.z;
 
 
-        const float sinphi  = a1d_z / pars.ra;
-        float       cosphi2 = 1.0F - sinphi * sinphi;
+        float sinphi  = a1d_z * rsqrt(pars.ra * pars.ra);
+        float cosphi2 = 1.0F - sinphi * sinphi;
 
         if (almost_zero > cosphi2)
         {
