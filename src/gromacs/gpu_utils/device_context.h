@@ -90,7 +90,7 @@ public:
      * this stream should not be used until the active device is explicetely switched back. Since using
      * this stream is still allowed by the API, it is beneficial to have the function that checks if
      * the \c DeviceContext object corresponds to the device that is currently active.
-     * 
+     *
      * These checks are not needed in SYCL and OpenCL, where the device handle (reference to \c DeviceContext
      * object) is passed to the API calls, which redirects the calls to a specific device.
      *
