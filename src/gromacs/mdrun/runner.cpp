@@ -1981,7 +1981,8 @@ int Mdrunner::mdrunner()
         std::unique_ptr<gmx::StatePropagatorDataGpu> stateGpu;
         if (gpusWereDetected
             && ((runScheduleWork.simulationWork.useGpuPme && thisRankHasDuty(cr, DUTY_PME))
-                || runScheduleWork.simulationWork.useGpuBufferOps))
+                || runScheduleWork.simulationWork.useGpuBufferOps
+                || runScheduleWork.simulationWork.useGpuUpdate))
         {
             GpuApiCallBehavior transferKind =
                     (inputrec->eI == IntegrationAlgorithm::MD && !doRerun && !useModularSimulator)
