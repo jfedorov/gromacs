@@ -201,7 +201,7 @@ TEST_F(PullTest, MaxPullDistanceXySkewedBox)
 #if HAVE_MUPARSER
 
 /*
- * Simple test case with one transformation coordiante and one pull coordinate.
+ * Simple test case with one transformation coordinate and one pull coordinate.
  *
  */
 TEST_F(PullTest, TransformationCoordSimple)
@@ -349,6 +349,28 @@ TEST_F(PullTest, TransformationCoordAdvanced)
         expectedFx4 += transformationForcex4;
         EXPECT_REAL_EQ_TOL(expectedFx4, pull.coord[3].scalarForce, defaultRealTolerance());
     }
+}
+
+/*
+ * Simple test case with one transformation coordinate set to a constant value
+ *
+ * The purpose of this test is just to make sure that the code works even in this case
+ *
+ */
+TEST_F(PullTest, TransformationCoordDummyExpression)
+{
+    //-----_SETUP-------
+    pull_t       pull;
+    t_pull_coord x;
+    x.eGeom      = PullGroupGeometry::Transformation;
+    x.coordIndex = 0;
+    x.expression = "10";
+    pull.coord.emplace_back(x);
+    //-----TESTS -------
+    // check transformation pull coordinate values
+    double value =
+            getTransformationPullCoordinateValue(&pull.coord[0], ArrayRef<const pull_coord_work_t>{});
+    EXPECT_REAL_EQ_TOL(value, 10, defaultRealTolerance());
 }
 #endif // HAVE_MUPARSER
 
