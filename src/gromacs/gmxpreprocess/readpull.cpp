@@ -134,6 +134,62 @@ static void process_pull_dim(char* dim_buf, ivec dim, const t_pull_coord* pcrd)
     }
 }
 
+static void initTransformationPullCoord(t_pull_coord* pcrd, const pull_params_t& pull)
+{
+    const int coord_index_for_output = pull.coord.size() + 1;
+    if (pcrd->eType == PullingAlgorithm::Constraint)
+    {
+        GMX_THROW(gmx::InvalidInputError(gmx::formatString(
+                "pull-coord%d can not have type 'constraint' and geometry 'transformation'",
+                coord_index_for_output)));
+    }
+
+    /*Validate the mathematical expression to epullgTRANSFORMATION*/
+    if (pcrd->expression.empty())
+    {
+        GMX_THROW(gmx::InvalidInputError(
+                gmx::formatString("pull-coord%d-expression not set for pull coordinate of geometry "
+                                  "'transformation'",
+                                  coord_index_for_output)));
+    }
+    if (pcrd->dx == 0)
+    {
+        GMX_THROW(gmx::InvalidInputError(gmx::formatString(
+                "pull-coord%d-dx cannot be set to zero for pull coordinate of geometry "
+                "'transformation'",
+                coord_index_for_output)));
+    }
+    /* make sure that the kappa of all previous pull coords is 0*/
+    int previousCoordOutputIndex = 0;
+    for (const auto& previousPcrd : pull.coord)
+    {
+        previousCoordOutputIndex++;
+        // See if the previous variable is used by the transformatino coord
+        // Note that a simple std::string::find won't work since we don't want x1 to match x11 etc.
+        std::string previousPcrdName = gmx::formatString("x%d(\\D|$)", previousCoordOutputIndex);
+        std::regex  rx(previousPcrdName);
+
+        std::ptrdiff_t number_of_matches = std::distance(
+                std::sregex_iterator(pcrd->expression.begin(), pcrd->expression.end(), rx),
+                std::sregex_iterator());
+
+        if (number_of_matches == 0)
+        {
+            // This previous coordinate is not used in this transformation, do not check it
+            continue;
+        }
+
+        if (previousPcrd.eType == PullingAlgorithm::Constraint)
+        {
+            GMX_THROW(gmx::InvalidInputError(
+                    gmx::formatString("pull-coord%d can not use pull-coord%d in the "
+                                      "transformation since this is a constraint",
+                                      coord_index_for_output,
+                                      previousCoordOutputIndex)));
+        }
+    }
+}
+
 static void init_pull_coord(t_pull_coord*        pcrd,
                             char*                dim_buf,
                             const char*          origin_buf,
@@ -303,57 +359,7 @@ static void init_pull_coord(t_pull_coord*        pcrd,
     }
     if (pcrd->eGeom == PullGroupGeometry::Transformation)
     {
-        if (pcrd->eType == PullingAlgorithm::Constraint)
-        {
-            GMX_THROW(gmx::InvalidInputError(gmx::formatString(
-                    "pull-coord%d can not have type 'constraint' and geometry 'transformation'",
-                    coord_index_for_output)));
-        }
-
-        /*Validate the mathematical expression to epullgTRANSFORMATION*/
-        if (pcrd->expression.empty())
-        {
-            GMX_THROW(gmx::InvalidInputError(gmx::formatString(
-                    "pull-coord%d-expression not set for pull coordinate of geometry "
-                    "'transformation'",
-                    coord_index_for_output)));
-        }
-        if (pcrd->dx == 0)
-        {
-            GMX_THROW(gmx::InvalidInputError(gmx::formatString(
-                    "pull-coord%d-dx cannot be set to zero for pull coordinate of geometry "
-                    "'transformation'",
-                    coord_index_for_output)));
-        }
-        /* make sure that the kappa of all previous pull coords is 0*/
-        int previousCoordOutputIndex = 0;
-        for (const auto& previousPcrd : pull.coord)
-        {
-            previousCoordOutputIndex++;
-            // See if the previous variable is used by the transformatino coord
-            // Note that a simple std::string::find won't work since we don't want x1 to match x11 etc.
-            std::string previousPcrdName = gmx::formatString("x%d(\\D|$)", previousCoordOutputIndex);
-            std::regex  rx(previousPcrdName);
-
-            std::ptrdiff_t number_of_matches = std::distance(
-                    std::sregex_iterator(pcrd->expression.begin(), pcrd->expression.end(), rx),
-                    std::sregex_iterator());
-
-            if (number_of_matches == 0)
-            {
-                // This previous coordinate is not used in this transformation, do not check it
-                continue;
-            }
-
-            if (previousPcrd.eType == PullingAlgorithm::Constraint)
-            {
-                GMX_THROW(gmx::InvalidInputError(
-                        gmx::formatString("pull-coord%d can not use pull-coord%d in the "
-                                          "transformation since this is a constraint",
-                                          coord_index_for_output,
-                                          previousCoordOutputIndex)));
-            }
-        }
+        initTransformationPullCoord(pcrd, pull);
     }
 
     for (m = 0; m < DIM; m++)
