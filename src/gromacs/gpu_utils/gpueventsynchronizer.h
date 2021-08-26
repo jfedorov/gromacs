@@ -62,6 +62,10 @@
  *
  * - When the class is constructed, a required minimal (\c minConsumptionCount) and maximal (\c maxConsumptionCount) number of
  * consumptions can be specified. By default, both are set to 1.
+ * Note that we define an event to be produced by marking (\ref markEvent()) and consumed by either
+ * synchronization operations (\ref waitForEnvent and \ref enqueueWaitEvent()) or manual consumption
+ * using \ref consume. Manual consumption is primarily aimed at explicitly satisfying implicit dependencies
+ * or irregular steps when some event is may not be consumed through the usual means.
  * - The event is considered <em>fully consumed</em> if its current number of consumptions \c c equals
  * \c maxConsumptionCount.
  * - The event is considered <em>sufficiently consumed</em> if <tt>minConsumptionCount <= c <= maxConsumptionCount</tt>.
@@ -85,7 +89,7 @@
  * Default <tt>minConsumptionCount=maxConsumptionCount=1</tt> limits mean that each call to \ref markEvent must be followed
  * by exactly one \ref enqueueWaitEvent or \ref enqueueWaitEvent. This is the recommended pattern
  * for most use cases. By providing other constructor arguments, this requirement can be relaxed
- * as needed.
+ * as needed, but manual consumption should generally be favored over <tt>cMin!=cMax</tt> .
  */
 class GpuEventSynchronizer
 {
