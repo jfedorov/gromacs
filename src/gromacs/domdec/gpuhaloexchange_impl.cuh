@@ -220,7 +220,7 @@ private:
     //! full forces buffer in GPU memory
     float3* d_f_ = nullptr;
     //! An event recorded once the exchanged forces are ready on the GPU
-    GpuEventSynchronizer fReadyOnDevice_{0, 1};
+    GpuEventSynchronizer fReadyOnDevice_{ 0, 1 };
     //! The dimension index corresponding to this halo exchange instance
     int dimIndex_ = 0;
     //! The pulse corresponding to this halo exchange instance
