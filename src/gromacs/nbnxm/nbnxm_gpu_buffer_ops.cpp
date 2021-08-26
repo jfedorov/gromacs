@@ -82,7 +82,13 @@ void nbnxn_gpu_x_to_nbat_x(const Nbnxm::Grid&      grid,
     // Only insert wait on the first iteration of the loop.
     if (xReadyOnDevice != nullptr)
     {
-        xReadyOnDevice->enqueueWaitEvent(deviceStream);
+        // TODO(#3988): Remove this conditional
+        // GMX_FORCE_UPDATE_DEFAULT_GPU=1 GMX_USE_GPU_BUFFER_OPS=1 GMX_GPU_DD_COMMS=1 GMX_GPU_PME_PP_COMMS=1
+        //      ./bin/mdrun-vsites-test -ntmpi 2
+        if (xReadyOnDevice->isMarked())
+        {
+            xReadyOnDevice->enqueueWaitEvent(deviceStream);
+        }
     }
 
     // avoid empty kernel launch, skip to inserting stream dependency

@@ -332,11 +332,11 @@ private:
      *
      * \todo Reconsider naming. It should be xCopiedToDevice or xH2DCopyComplete, etc.
      */
-    EnumerationArray<AtomLocality, GpuEventSynchronizer> xReadyOnDevice_{ { { 0, 2 }, { 1, 1 }, { 1, 1 } } };
+    EnumerationArray<AtomLocality, GpuEventSynchronizer> xReadyOnDevice_{ { { 0, 5 }, { 1, 1 }, { 1, 1 } } };
     //! A pointer to an event that the coordinates are ready after update-constraints execution
     GpuEventSynchronizer* xUpdatedOnDeviceEvent_ = nullptr;
     //! An array of events that indicate D2H copy of coordinates is complete (one event for each atom locality)
-    EnumerationArray<AtomLocality, GpuEventSynchronizer> xReadyOnHost_{ { { 1, 2 }, { 1, 1 }, { 1, 1 } } };
+    EnumerationArray<AtomLocality, GpuEventSynchronizer> xReadyOnHost_{ { { 1, 2 }, { 1, 2 }, { 1, 1 } } };
 
     //! An array of events that indicate D2H copy of velocities is complete (one event for each atom locality)
     EnumerationArray<AtomLocality, GpuEventSynchronizer> vReadyOnHost_;

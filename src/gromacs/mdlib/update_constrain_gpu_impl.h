@@ -220,7 +220,7 @@ private:
     std::unique_ptr<SettleGpu> settleGpu_;
 
     //! The event to indicate when the update of coordinates is complete
-    GpuEventSynchronizer xUpdatedOnDeviceEvent_{ 0, 2 };
+    GpuEventSynchronizer xUpdatedOnDeviceEvent_{ 0, 4 };
     //! The wallclock counter
     gmx_wallcycle* wcycle_ = nullptr;
 };
