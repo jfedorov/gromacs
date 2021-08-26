@@ -161,9 +161,7 @@ class CubicBondType
 public:
     CubicBondType() = default;
     CubicBondType(ForceConstant fq, ForceConstant fc, EquilConstant d) :
-        quadraticForceConstant_(fq),
-        cubicForceConstant_(fc),
-        equilDistance_(d)
+        quadraticForceConstant_(fq), cubicForceConstant_(fc), equilDistance_(d)
     {
     }
 
@@ -202,9 +200,7 @@ class MorseBondType
 public:
     MorseBondType() = default;
     MorseBondType(ForceConstant f, Exponent e, EquilConstant d) :
-        forceConstant_(f),
-        exponent_(e),
-        equilDistance_(d)
+        forceConstant_(f), exponent_(e), equilDistance_(d)
     {
     }
 
@@ -352,15 +348,13 @@ public:
     QuarticAngle() = default;
     //! \brief construct from given angle in radians
     QuarticAngle(ForceConstant f0, ForceConstant f1, ForceConstant f2, ForceConstant f3, ForceConstant f4, Radians angle) :
-        forceConstants_{ f0, f1, f2, f3, f4 },
-        equilConstant_(angle)
+        forceConstants_{ f0, f1, f2, f3, f4 }, equilConstant_(angle)
     {
     }
 
     //! \brief construct from given angle in degrees
     QuarticAngle(ForceConstant f0, ForceConstant f1, ForceConstant f2, ForceConstant f3, ForceConstant f4, Degrees angle) :
-        forceConstants_{ f0, f1, f2, f3, f4 },
-        equilConstant_(angle * DEG2RAD)
+        forceConstants_{ f0, f1, f2, f3, f4 }, equilConstant_(angle * DEG2RAD)
     {
     }
 
@@ -409,9 +403,7 @@ class CrossBondBond
 public:
     CrossBondBond() = default;
     CrossBondBond(ForceConstant f, EquilConstant r0ij, EquilConstant r0kj) :
-        forceConstant_(f),
-        r0ij_(r0ij),
-        r0kj_(r0kj)
+        forceConstant_(f), r0ij_(r0ij), r0kj_(r0kj)
     {
     }
 
@@ -444,10 +436,7 @@ class CrossBondAngle
 public:
     CrossBondAngle() = default;
     CrossBondAngle(ForceConstant f, EquilConstant r0ij, EquilConstant r0kj, EquilConstant r0ik) :
-        forceConstant_(f),
-        r0ij_(r0ij),
-        r0kj_(r0kj),
-        r0ik_(r0ik)
+        forceConstant_(f), r0ij_(r0ij), r0kj_(r0kj), r0ik_(r0ik)
     {
     }
 
@@ -484,15 +473,11 @@ public:
 
     ProperDihedral() = default;
     ProperDihedral(Radians phi, ForceConstant f, Multiplicity m) :
-        phi_(phi),
-        forceConstant_(f),
-        multiplicity_(m)
+        phi_(phi), forceConstant_(f), multiplicity_(m)
     {
     }
     ProperDihedral(Degrees phi, ForceConstant f, Multiplicity m) :
-        phi_(phi * DEG2RAD),
-        forceConstant_(f),
-        multiplicity_(m)
+        phi_(phi * DEG2RAD), forceConstant_(f), multiplicity_(m)
     {
     }
 
@@ -576,10 +561,7 @@ class Default5Center
 public:
     Default5Center() = default;
     Default5Center(Radians phi, Radians psi, ForceConstant fphi, ForceConstant fpsi) :
-        phi_(phi),
-        psi_(psi),
-        fphi_(fphi),
-        fpsi_(fpsi)
+        phi_(phi), psi_(psi), fphi_(fphi), fpsi_(fpsi)
     {
     }
 
