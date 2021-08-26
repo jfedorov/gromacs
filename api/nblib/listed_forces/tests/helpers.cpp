@@ -112,7 +112,7 @@ TEST(NBlibTest, ListedForceBuffer)
     int rangeEnd   = 15;
 
     ForceBufferProxy<T> forceBuffer(rangeStart, rangeEnd);
-    forceBuffer.setMasterBuffer(masterBuffer.data());
+    forceBuffer.setMasterBuffer(masterBuffer);
 
     // in range
     T internal1{ 1, 2, 3 };

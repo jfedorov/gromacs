@@ -49,8 +49,9 @@
 
 #include <unordered_map>
 
+#include "gromacs/utility/arrayref.h"
 #include "nblib/pbc.hpp"
-#include "definitions.h"
+#include "nblib/listed_forces/definitions.h"
 #include "nblib/util/util.hpp"
 
 #define NBLIB_ALWAYS_INLINE __attribute((always_inline))
@@ -87,9 +88,9 @@ class ForceBufferProxy
     using HashMap = std::unordered_map<int, T>;
 
 public:
-    ForceBufferProxy() : masterForceBuffer(nullptr), rangeStart_(0), rangeEnd_(0) { }
+    ForceBufferProxy() : rangeStart_(0), rangeEnd_(0) { }
 
-    ForceBufferProxy(int rs, int re) : masterForceBuffer(nullptr), rangeStart_(rs), rangeEnd_(re)
+    ForceBufferProxy(int rangeStart, int rangeEnd) : rangeStart_(rangeStart), rangeEnd_(rangeEnd)
     {
     }
 
@@ -119,10 +120,10 @@ public:
 
     [[nodiscard]] bool inRange(int index) const { return (index >= rangeStart_ && index < rangeEnd_); }
 
-    void setMasterBuffer(T* buffer) { masterForceBuffer = buffer; }
+    void setMasterBuffer(gmx::ArrayRef<T> buffer) { masterForceBuffer = buffer; }
 
 private:
-    T*  masterForceBuffer;
+    gmx::ArrayRef<T>  masterForceBuffer;
     int rangeStart_;
     int rangeEnd_;
 
