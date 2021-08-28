@@ -1532,7 +1532,7 @@ void gmx::LegacySimulator::do_md()
                 if (simulationWork.useGpuPme && simulationWork.useCpuPmePpCommunication)
                 {
                     // The PME forces were recieved to the host, so have to be copied
-                    stateGpu->copyForcesToGpu(f.view().force(), AtomLocality::All);
+                stateGpu->copyForcesToGpu(f.view().force(), AtomLocality::Local);
                 }
                 else if (!runScheduleWork->stepWork.useGpuFBufferOps)
                 {
