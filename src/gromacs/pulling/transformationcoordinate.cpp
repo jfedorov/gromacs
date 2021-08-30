@@ -131,9 +131,9 @@ static double computeDerivativeForTransformationPullCoord(pull_coord_work_t* coo
  * \brief Distributes the force from a transformation pull coordiante to the dependent pull
  * coordinates by computing the inner derivatives
  *
- * \param pcrd[in,out]  The transformation pull coord
- * \param variableCoords[in,out]    The dependent pull coordinates
- * \param transformationCoordForce[in]  The force to distribute
+ * \param pcrd The transformation pull coord
+ * \param variableCoords The dependent pull coordinates
+ * \param transformationCoordForce The force to distribute
  */
 static void distributeTransformationPullCoordForce(pull_coord_work_t*               pcrd,
                                                    gmx::ArrayRef<pull_coord_work_t> variableCoords,
