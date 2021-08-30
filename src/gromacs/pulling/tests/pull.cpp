@@ -233,7 +233,10 @@ TEST_F(PullTest, TransformationCoordSimple)
     applyTransformationPullCoordForce(
             &pull.coord[1], gmx::ArrayRef<pull_coord_work_t>(pull.coord).subArray(0, 1), force);
     EXPECT_REAL_EQ_TOL(force, pull.coord[1].scalarForce, defaultRealTolerance());
-    EXPECT_REAL_EQ_TOL(-force, pull.coord[0].scalarForce, defaultRealTolerance());
+    EXPECT_REAL_EQ_TOL(-force,
+                       pull.coord[0].scalarForce,
+                       // Since we do numerical differentiation we need to increase the tolerance
+                       test::relativeToleranceAsFloatingPoint(force, 1e-2));
 }
 
 /*
