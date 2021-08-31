@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2020,2021, by the GROMACS development team, led by
+ * Copyright (c) 2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -34,17 +34,13 @@
  */
 
 /*! \internal \file
- * \brief Implements stubs of high-level PME GPU functions for SYCL.
+ * \brief Implements stubs of high-level PME GPU functions for OPenCL.
  *
- * \author Andrey Alekseenko <al42and@gmail.com>
+ * \author Gaurav Garg <gaugarg@nvidia.com>
  *
  * \ingroup module_ewald
  */
 #include "gmxpre.h"
-
-#include "gromacs/ewald/ewald_utils.h"
-
-#include "pme_gpu_program_impl.h"
 
 #include "pme.cuh"
 #include "pme_gpu_types_host.h"
@@ -53,30 +49,20 @@
 #include "gromacs/fft/parallel_3dfft.h"
 #include "pme_gpu_grid.h"
 
-PmeGpuProgramImpl::PmeGpuProgramImpl(const DeviceContext& deviceContext) :
-    deviceContext_(deviceContext),
-    warpSize_(0),
-    spreadWorkGroupSize(0),
-    gatherWorkGroupSize(0),
-    solveMaxWorkGroupSize(0)
-{
-    // SYCL-TODO
-}
-
-PmeGpuProgramImpl::~PmeGpuProgramImpl() = default;
-
 // [[noreturn]] attributes must be added in the common headers, so it's easier to silence the warning here
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wmissing-noreturn"
+#if defined(__clang__)
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wmissing-noreturn"
+#endif // (__clang__)
 
 void pmeGpuGridHaloExchange(const PmeGpu* /*pmeGpu*/)
 {
-    GMX_THROW(gmx::NotImplementedError("PME decomposition is not implemented in SYCL"));
+    GMX_THROW(gmx::NotImplementedError("PME decomposition is not implemented in OpenCL"));
 }
 
 void pmeGpuGridHaloExchangeReverse(const PmeGpu* /*pmeGpu*/)
 {
-    GMX_THROW(gmx::NotImplementedError("PME decomposition is not implemented in SYCL"));
+    GMX_THROW(gmx::NotImplementedError("PME decomposition is not implemented in OpenCL"));
 }
 
 template<bool forward>
@@ -85,7 +71,7 @@ void convertPmeGridToFftGrid(const PmeGpu* /*pmeGpu*/,
                              gmx_parallel_3dfft_t* /*fftSetup*/,
                              const int /*gridIndex*/)
 {
-    GMX_THROW(gmx::NotImplementedError("PME decomposition is not implemented in SYCL"));
+    GMX_THROW(gmx::NotImplementedError("PME decomposition is not implemented in OpenCL"));
 }
 
 template void convertPmeGridToFftGrid<true>(const PmeGpu* /*pmeGpu*/,
@@ -98,4 +84,6 @@ template void convertPmeGridToFftGrid<false>(const PmeGpu* /*pmeGpu*/,
                                              gmx_parallel_3dfft_t* /*fftSetup*/,
                                              const int /*gridIndex*/);
 
-#pragma clang diagnostic pop
+#if defined(__clang__)
+#    pragma clang diagnostic pop
+#endif // (__clang__)

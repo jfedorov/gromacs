@@ -103,8 +103,8 @@ void PmeLoadBalanceHelper::run(gmx::Step step, gmx::Time gmx_unused time)
     }
 
     // PME grid + cut-off optimization with GPUs or PME nodes
-    // TODO pass SimulationWork object into this function, such that last argument can be set as
-    // simulationWork.useGpuPmePpCommunication as is done in main MD loop.
+    // TODO pass SimulationWork object into this function, such that last two arguments can be set as
+    // simulationWork.useGpuPmePpCommunication, simulationWork.useGpuPme as is done in main MD loop.
     pme_loadbal_do(pme_loadbal_,
                    cr_,
                    (isVerbose_ && MASTER(cr_)) ? stderr : nullptr,
@@ -118,6 +118,7 @@ void PmeLoadBalanceHelper::run(gmx::Step step, gmx::Time gmx_unused time)
                    step,
                    step - inputrec_->init_step,
                    &bPMETunePrinting_,
+                   false,
                    false);
 }
 

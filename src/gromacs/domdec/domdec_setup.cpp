@@ -421,16 +421,22 @@ static float comm_cost_est(real               limit,
          * along the x dimension per rank doing PME.
          */
         int npme_x = (npme_tot > 1 ? npme[XX] : nc[XX]);
+        int npme_y = (npme_tot > 1 ? npme[YY] : nc[YY]);
 
         /* Currently we don't have the OpenMP thread count available here.
          * But with threads we have only tighter restrictions and it's
          * probably better anyhow to avoid settings where we need to reduce
          * grid lines over multiple ranks, as the thread check will do.
+         *
+         * extendedHaloRegion (used for PME GPU decomposition runs) is also not known
+         * at this point. Just ignore it at this point.
          */
-        bool useThreads     = true;
-        bool errorsAreFatal = false;
+        bool useThreads         = true;
+        int  extendedHaloRegion = 0;
+        bool useGpuPme          = false;
+        bool errorsAreFatal     = false;
         if (!gmx_pme_check_restrictions(
-                    ir.pme_order, ir.nkx, ir.nky, ir.nkz, npme_x, useThreads, errorsAreFatal))
+                    ir.pme_order, ir.nkx, ir.nky, ir.nkz, npme_x, npme_y, extendedHaloRegion, useGpuPme, useThreads, errorsAreFatal))
         {
             return -1;
         }
@@ -744,29 +750,30 @@ gmx::SeparatePmeRanksPermitted checkForSeparatePmeRanks(const gmx::MDModulesNoti
                                                         const DomdecOptions&           options,
                                                         int  numRanksRequested,
                                                         bool useGpuForNonbonded,
-                                                        bool useGpuForPme)
+                                                        bool pmeDecompositionSupported)
 {
     gmx::SeparatePmeRanksPermitted separatePmeRanksPermitted;
 
     /* Permit MDModules to notify whether they want to use PME-only ranks */
     notifiers.simulationSetupNotifier_.notify(&separatePmeRanksPermitted);
 
-    /* With NB GPUs we don't automatically use PME-only CPU ranks. PME ranks can
-     * improve performance with many threads per GPU, since our OpenMP
+    /* With NB GPUs we don't automatically use PME-only ranks. PME-only CPU ranks can
+     * improve performance with many ranks per GPU, since our OpenMP
      * scaling is bad, but it's difficult to automate the setup.
      */
     if (useGpuForNonbonded && options.numPmeRanks < 0)
     {
         separatePmeRanksPermitted.disablePmeRanks(
-                "PME-only CPU ranks are not automatically used when "
+                "PME-only ranks are not automatically used when "
                 "non-bonded interactions are computed on GPUs");
     }
 
-    /* If GPU is used for PME then only 1 PME rank is permitted */
-    if (useGpuForPme && (options.numPmeRanks < 0 || options.numPmeRanks > 1))
+    /* If more than one PME ranks requested, check if PME decomposition is supported */
+    if (!pmeDecompositionSupported && (options.numPmeRanks < 0 || options.numPmeRanks > 1))
     {
         separatePmeRanksPermitted.disablePmeRanks(
-                "PME GPU decomposition is not supported, only one separate PME-only GPU rank "
+                "PME GPU decomposition is not supported for current build configuration, only one "
+                "separate PME-only GPU rank "
                 "can be used");
     }
 
