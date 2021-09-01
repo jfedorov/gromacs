@@ -236,7 +236,7 @@ TEST_F(PullTest, TransformationCoordSimple)
     EXPECT_REAL_EQ_TOL(-force,
                        pull.coord[0].scalarForce,
                        // Since we do numerical differentiation we need to increase the tolerance
-                       test::relativeToleranceAsFloatingPoint(force, 1e-2));
+                       test::relativeToleranceAsFloatingPoint(force, 1e-5));
 }
 
 /*
