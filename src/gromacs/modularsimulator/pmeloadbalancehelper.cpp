@@ -88,7 +88,7 @@ PmeLoadBalanceHelper::PmeLoadBalanceHelper(bool                 isVerbose,
 
 void PmeLoadBalanceHelper::setup()
 {
-    auto box = statePropagatorData_->constBox();
+    const auto* box = statePropagatorData_->constBox();
     GMX_RELEASE_ASSERT(box[0][0] != 0 && box[1][1] != 0 && box[2][2] != 0,
                        "PmeLoadBalanceHelper cannot be initialized with zero box.");
     pme_loadbal_init(
@@ -127,7 +127,7 @@ void PmeLoadBalanceHelper::teardown()
     pme_loadbal_done(pme_loadbal_, fplog_, mdlog_, fr_->nbv->useGpu());
 }
 
-bool PmeLoadBalanceHelper::pmePrinting()
+bool PmeLoadBalanceHelper::pmePrinting() const
 {
     return bPMETunePrinting_;
 }
