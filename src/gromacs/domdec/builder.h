@@ -92,7 +92,8 @@ public:
                                ArrayRef<const RVec>              xGlobal,
                                bool                              useGpuForNonbonded,
                                bool                              useGpuForPme,
-                               bool                              directGpuCommUsedWithGpuUpdate);
+                               bool                              directGpuCommUsedWithGpuUpdate,
+                               bool                              pmeDecompositionSupported);
     //! Destructor
     ~DomainDecompositionBuilder();
     //! Build the resulting DD manager

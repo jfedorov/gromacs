@@ -48,6 +48,7 @@
 struct gmx_hw_info_t;
 struct gmx_mtop_t;
 struct t_inputrec;
+struct t_commrec;
 enum class PmeRunMode;
 
 namespace gmx
@@ -213,7 +214,6 @@ bool decideWhetherToUseGpusForNonbonded(TaskTarget              nonbondedTarget,
  * \param[in]  hardwareInfo              Hardware information
  * \param[in]  inputrec                  The user input
  * \param[in]  numRanksPerSimulation     The number of ranks in each simulation.
- * \param[in]  numPmeRanksPerSimulation  The number of PME ranks in each simulation.
  * \param[in]  gpusWereDetected          Whether compatible GPUs were detected on any node.
  *
  * \returns    Whether the simulation will run nonbonded and PME tasks, respectively, on GPUs.
@@ -226,7 +226,6 @@ bool decideWhetherToUseGpusForPme(bool                    useGpuForNonbonded,
                                   const gmx_hw_info_t&    hardwareInfo,
                                   const t_inputrec&       inputrec,
                                   int                     numRanksPerSimulation,
-                                  int                     numPmeRanksPerSimulation,
                                   bool                    gpusWereDetected);
 
 /*! \brief Determine PME run mode.
@@ -321,6 +320,20 @@ bool decideWhetherToUseGpuForHalo(const DevelopmentFeatureFlags& devFlags,
                                   bool                           useModularSimulator,
                                   bool                           doRerun,
                                   bool                           haveEnergyMinimization);
+
+/*! \brief Decide whether to support GPU PME decomposition.
+ *
+ * \param[in]  devFlags                     GPU development / experimental feature flags.
+ * \param[in]  pmeRunMode                   Run mode indicating what resource is PME execured on.
+ * \param[in]  numRanksPerSimulation        The number of ranks in each simulation.
+ * \param[in]  numPmeRanksPerSimulation     The number of PME ranks in each simulation, can be -1 for auto.
+ *
+ * \returns    Whether Direct PME-PP communication should be enabled.
+ */
+bool decideWhetherToUseGpuPmeDecomposition(const DevelopmentFeatureFlags& devFlags,
+                                           PmeRunMode                     pmeRunMode,
+                                           int                            numRanksPerSimulation,
+                                           int                            numPmeRanksPerSimulation);
 
 } // namespace gmx
 

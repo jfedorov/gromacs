@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -91,7 +91,7 @@ public:
     //! Final printout and deconstruction of the load balancing object
     void teardown();
     //! Whether PME load balancing printing is active \todo Check this!
-    bool pmePrinting();
+    bool pmePrinting() const;
 
     //! Whether we're doing PME load balancing
     static bool doPmeLoadBalancing(const MdrunOptions& mdrunOptions,
