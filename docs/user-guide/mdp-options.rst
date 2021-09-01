@@ -1798,7 +1798,6 @@ pull-coord2-vec, pull-coord2-k, and so on.
       Pull coordinates of lower indices can be used as variables to this pull coordinate.
       Thus, pull transformation coordinates should have a higher pull coordinate index
       than all pull coordinates they transform.
-      All pull coordinates of lower pull coordinate index must also have :mdp:`pull-coord1-k` set to zero.
 
 .. mdp:: pull-coord1-expression
 
