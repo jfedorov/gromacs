@@ -429,7 +429,7 @@ static gmx_bool pme_loadbal_increase_cutoff(pme_load_balancing_t* pme_lb,
     set.spacing = sp;
 
     // check if PME selected rlist and spacing meets the expected criteria
-    const int halo = extendedHaloRegion(pme_order, set.rlistOuter - set.rcut_coulomb, set.spacing);
+    const int halo = pme_lb->setup[0].pmedata->pmeGpuGridHalo;
     if (!gmx_pme_check_restrictions(
                 pme_order, set.grid[XX], set.grid[YY], set.grid[ZZ], numPmeDomains.x, numPmeDomains.y, halo, useGpuPme, true, false))
     {
@@ -889,7 +889,6 @@ static void pme_load_balance(pme_load_balancing_t*          pme_lb,
                            set->grid,
                            set->ewaldcoeff_q,
                            set->ewaldcoeff_lj,
-                           set->rlistOuter,
                            set->rcut_coulomb,
                            set->spacing);
         }

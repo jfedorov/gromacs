@@ -121,10 +121,12 @@ PmeSafePointer pmeInitWrapper(const t_inputrec*    inputRec,
     const auto     runMode       = (mode == CodePath::CPU) ? PmeRunMode::CPU : PmeRunMode::Mixed;
     t_commrec      dummyCommrec  = { 0 };
     NumPmeDomains  numPmeDomains = { 1, 1 };
-    gmx_pme_t*     pmeDataRaw    = gmx_pme_init(&dummyCommrec,
+    const real     haloExtentForAtomDisplacement = 1.0; // TODO
+    gmx_pme_t*     pmeDataRaw                    = gmx_pme_init(&dummyCommrec,
                                          numPmeDomains,
                                          inputRec,
                                          dummyBox,
+                                         haloExtentForAtomDisplacement,
                                          false,
                                          false,
                                          true,

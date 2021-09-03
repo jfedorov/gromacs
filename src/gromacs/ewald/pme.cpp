@@ -466,11 +466,23 @@ int minimalPmeGridSize(int pmeOrder)
     return minimalSize;
 }
 
-int extendedHaloRegion(int pmeOrder, real pairList, real gridSpacing)
+/*! \brief Calculates the number of grid lines used as halo region for PME decomposition.
+ *
+ * This function is only used for PME GPU decomposition case
+ *
+ * \param[in]     pmeOrder                          PME interpolation order
+ * \param[in]     haloExtentForAtomDisplacement     extent of halo region in nm to account for atom displacement
+ * \param[in]     gridSpacing                       spacing between grid lines
+ *
+ * \returns  extended halo region used in GPU PME decomposition
+ */
+
+static int getExtendedHaloRegion(int pmeOrder, real haloExtentForAtomDisplacement, real gridSpacing)
 {
-    constexpr float diffusionProbability = 0.1F;
-    return gridSpacing > 0 ? ceil(pairList * (1.0F + diffusionProbability) / gridSpacing) + pmeOrder - 1
-                           : pmeOrder - 1;
+    // use at least one grid line if haloExtentForAtomDisplacement is zero
+    return (gridSpacing > 0) ? std::max(
+                   static_cast<int>(std::ceil(haloExtentForAtomDisplacement / gridSpacing)), 1)
+                             : pmeOrder - 1;
 }
 
 real getGridSpacingFromBox(const matrix box, const ivec gridDim)
@@ -572,6 +584,7 @@ gmx_pme_t* gmx_pme_init(const t_commrec*     cr,
                         const NumPmeDomains& numPmeDomains,
                         const t_inputrec*    ir,
                         const matrix         box,
+                        real                 haloExtentForAtomDisplacement,
                         gmx_bool             bFreeEnergy_q,
                         gmx_bool             bFreeEnergy_lj,
                         gmx_bool             bReproducible,
@@ -719,7 +732,6 @@ gmx_pme_t* gmx_pme_init(const t_commrec*     cr,
     pme->pme_order     = ir->pme_order;
     pme->ewaldcoeff_q  = ewaldcoeff_q;
     pme->ewaldcoeff_lj = ewaldcoeff_lj;
-    pme->pairList      = ir->rlist - ir->rcoulomb;
 
     /* Always constant electrostatics coefficients */
     pme->epsilon_r = ir->epsilon_r;
@@ -747,16 +759,32 @@ gmx_pme_t* gmx_pme_init(const t_commrec*     cr,
         pme->spacing = getGridSpacingFromBox(scaledBox, gridDim);
     }
 
-    /* If we violate restrictions, generate a fatal error here */
-    int halo = extendedHaloRegion(pme->pme_order, pme->pairList, pme->spacing);
+    if (runMode != PmeRunMode::CPU && pme->ndecompdim >= 1)
+    {
+        pme->pmeGpuGridHalo =
+                getExtendedHaloRegion(pme->pme_order, haloExtentForAtomDisplacement, pme->spacing);
 
+        if (debug)
+        {
+            fprintf(debug,
+                    "PME GPU haloExtent = %.3f pmeGpuGridHalo = %d\n",
+                    haloExtentForAtomDisplacement,
+                    pme->pmeGpuGridHalo);
+        }
+    }
+    else
+    {
+        pme->pmeGpuGridHalo = 0;
+    }
+
+    /* If we violate restrictions, generate a fatal error here */
     gmx_pme_check_restrictions(pme->pme_order,
                                pme->nkx,
                                pme->nky,
                                pme->nkz,
                                pme->nnodes_major,
                                pme->nnodes_minor,
-                               halo,
+                               pme->pmeGpuGridHalo,
                                runMode != PmeRunMode::CPU,
                                pme->bUseThreads,
                                true);
@@ -968,7 +996,6 @@ void gmx_pme_reinit(struct gmx_pme_t** pmedata,
                     const ivec         grid_size,
                     real               ewaldcoeff_q,
                     real               ewaldcoeff_lj,
-                    real               rlist,
                     real               rcoulomb,
                     real               spacing)
 {
@@ -986,7 +1013,6 @@ void gmx_pme_reinit(struct gmx_pme_t** pmedata,
     irc.nkx                    = grid_size[XX];
     irc.nky                    = grid_size[YY];
     irc.nkz                    = grid_size[ZZ];
-    irc.rlist                  = rlist;
     irc.rcoulomb               = rcoulomb;
     irc.fourier_spacing        = spacing;
 
@@ -1005,6 +1031,7 @@ void gmx_pme_reinit(struct gmx_pme_t** pmedata,
                                 numPmeDomains,
                                 &irc,
                                 dummyBox,
+                                pme_src->pmeGpuGridHalo,
                                 pme_src->bFEP_q,
                                 pme_src->bFEP_lj,
                                 FALSE,

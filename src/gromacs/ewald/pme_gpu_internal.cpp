@@ -409,8 +409,6 @@ void pme_gpu_realloc_grids(PmeGpu* pmeGpu)
     // allocate overlap buffers needed for PME grid halo exchanges
     if (pmeGpu->settings.useDecomposition)
     {
-        int overlappedGridLines = extendedHaloRegion(
-                pmeGpu->common->pme_order, pmeGpu->common->pairList, pmeGpu->common->spacing);
         if (pmeGpu->common->nnodesMajor > 1)
         {
             int rank  = pmeGpu->common->nodeidMajor;
@@ -421,7 +419,7 @@ void pme_gpu_realloc_grids(PmeGpu* pmeGpu)
             int myGrid    = pmeGpu->common->s2g0x[rank + 1] - pmeGpu->common->s2g0x[rank];
             int rightGrid = pmeGpu->common->s2g0x[right + 1] - pmeGpu->common->s2g0x[right];
 
-            int overapSize = overlappedGridLines * kernelParamsPtr->grid.realGridSizePadded[YY]
+            int overapSize = pmeGpu->common->gridHalo * kernelParamsPtr->grid.realGridSizePadded[YY]
                              * kernelParamsPtr->grid.realGridSizePadded[ZZ];
 
             // if only 2 PME ranks in X-domain and overlap width more than slab width
@@ -456,7 +454,7 @@ void pme_gpu_realloc_grids(PmeGpu* pmeGpu)
             int myGrid    = pmeGpu->common->s2g0y[rank + 1] - pmeGpu->common->s2g0y[rank];
             int rightGrid = pmeGpu->common->s2g0y[right + 1] - pmeGpu->common->s2g0y[right];
 
-            int overapSize = overlappedGridLines * kernelParamsPtr->grid.realGridSizePadded[XX]
+            int overapSize = pmeGpu->common->gridHalo * kernelParamsPtr->grid.realGridSizePadded[XX]
                              * kernelParamsPtr->grid.realGridSizePadded[ZZ];
 
             // if only 2 PME ranks in Y-domain and overlap width more than slab width
@@ -962,8 +960,8 @@ static void pme_gpu_copy_common_data_from(const gmx_pme_t* pme)
     pmeGpu->common->s2g1x         = pme->overlap[0].s2g1;
     pmeGpu->common->s2g0y         = pme->overlap[1].s2g0;
     pmeGpu->common->s2g1y         = pme->overlap[1].s2g1;
-    pmeGpu->common->pairList      = pme->pairList;
-    pmeGpu->common->spacing       = pme->spacing;
+    pmeGpu->common->gridHalo      = pme->pmeGpuGridHalo;
+    // pmeGpu->common->spacing       = pme->spacing;
 
     if (pmeGpu->common->pme_order != c_pmeGpuOrder)
     {

@@ -188,7 +188,6 @@ static gmx_pme_t* gmx_pmeonly_switch(std::vector<gmx_pme_t*>* pmedata,
                                      const ivec               grid_size,
                                      real                     ewaldcoeff_q,
                                      real                     ewaldcoeff_lj,
-                                     real                     rlist,
                                      real                     rcoulomb,
                                      real                     spacing,
                                      const t_commrec*         cr,
@@ -206,7 +205,7 @@ static gmx_pme_t* gmx_pmeonly_switch(std::vector<gmx_pme_t*>* pmedata,
              * So, just some grid size updates in the GPU kernel parameters.
              * TODO: this should be something like gmx_pme_update_split_params()
              */
-            gmx_pme_reinit(&pme, cr, pme, ir, grid_size, ewaldcoeff_q, ewaldcoeff_lj, rlist, rcoulomb, spacing);
+            gmx_pme_reinit(&pme, cr, pme, ir, grid_size, ewaldcoeff_q, ewaldcoeff_lj, rcoulomb, spacing);
             return pme;
         }
     }
@@ -214,7 +213,7 @@ static gmx_pme_t* gmx_pmeonly_switch(std::vector<gmx_pme_t*>* pmedata,
     const auto& pme          = pmedata->back();
     gmx_pme_t*  newStructure = nullptr;
     // Copy last structure with new grid params
-    gmx_pme_reinit(&newStructure, cr, pme, ir, grid_size, ewaldcoeff_q, ewaldcoeff_lj, rlist, rcoulomb, spacing);
+    gmx_pme_reinit(&newStructure, cr, pme, ir, grid_size, ewaldcoeff_q, ewaldcoeff_lj, rcoulomb, spacing);
     pmedata->push_back(newStructure);
     return newStructure;
 }
@@ -235,7 +234,6 @@ static gmx_pme_t* gmx_pmeonly_switch(std::vector<gmx_pme_t*>* pmedata,
  * \param[out] grid_size              PME grid size, if received.
  * \param[out] ewaldcoeff_q           Ewald cut-off parameter for electrostatics, if received.
  * \param[out] ewaldcoeff_lj          Ewald cut-off parameter for Lennard-Jones, if received.
- * \param[out] rlist                  updated rlist value, if received.
  * \param[out] rcoulomb                  updated rcoulomb value, if received.
  * \param[out] spacing                updated fourier grid spacing, if received.
  * \param[in]  useGpuForPme           Flag on whether PME is on GPU.
@@ -730,7 +728,7 @@ int gmx_pmeonly(struct gmx_pme_t*               pme,
             {
                 /* Switch the PME grid to newGridSize */
                 pme = gmx_pmeonly_switch(
-                        &pmedata, newGridSize, ewaldcoeff_q, ewaldcoeff_lj, rlist, rcoulomb, spacing, cr, ir);
+                        &pmedata, newGridSize, ewaldcoeff_q, ewaldcoeff_lj, rcoulomb, spacing, cr, ir);
             }
 
             if (ret == pmerecvqxRESETCOUNTERS)

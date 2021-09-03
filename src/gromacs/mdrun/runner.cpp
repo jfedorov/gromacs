@@ -1844,22 +1844,27 @@ int Mdrunner::mdrunner()
                     GMX_THROW(gmx::NotImplementedError("PME GPU decomposition is not supported"));
                 }
 
-                pmedata = gmx_pme_init(cr,
-                                       getNumPmeDomains(cr->dd),
-                                       inputrec.get(),
-                                       box,
-                                       nChargePerturbed != 0,
-                                       nTypePerturbed != 0,
-                                       mdrunOptions.reproducible,
-                                       ewaldcoeff_q,
-                                       ewaldcoeff_lj,
-                                       gmx_omp_nthreads_get(ModuleMultiThread::Pme),
-                                       pmeRunMode,
-                                       nullptr,
-                                       deviceContext,
-                                       pmeStream,
-                                       pmeGpuProgram.get(),
-                                       mdlog);
+                pmedata = gmx_pme_init(
+                        cr,
+                        getNumPmeDomains(cr->dd),
+                        inputrec.get(),
+                        box,
+                        minCellSizeForAtomDisplacement(mtop,
+                                                       *inputrec.get(),
+                                                       updateGroups.updateGroupingPerMoleculeType(),
+                                                       inputrec.get()->ewald_rtol),
+                        nChargePerturbed != 0,
+                        nTypePerturbed != 0,
+                        mdrunOptions.reproducible,
+                        ewaldcoeff_q,
+                        ewaldcoeff_lj,
+                        gmx_omp_nthreads_get(ModuleMultiThread::Pme),
+                        pmeRunMode,
+                        nullptr,
+                        deviceContext,
+                        pmeStream,
+                        pmeGpuProgram.get(),
+                        mdlog);
             }
             GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR
         }
