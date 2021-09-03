@@ -336,8 +336,7 @@ void pmeGpuGridHaloExchange(const PmeGpu* pmeGpu)
     localPmeSize[YY] = kernelParamsPtr->grid.realGridSizePadded[YY];
     localPmeSize[ZZ] = kernelParamsPtr->grid.realGridSizePadded[ZZ];
 
-    int overlapSize = extendedHaloRegion(
-            pmeGpu->common->pme_order, pmeGpu->common->pairList, pmeGpu->common->spacing);
+    int overlapSize = pmeGpu->common->gridHalo;
 
     // minor dimension
     if (pmeGpu->common->nnodesMinor > 1)
@@ -555,8 +554,7 @@ void pmeGpuGridHaloExchangeReverse(const PmeGpu* pmeGpu)
     localPmeSize[YY] = kernelParamsPtr->grid.realGridSizePadded[YY];
     localPmeSize[ZZ] = kernelParamsPtr->grid.realGridSizePadded[ZZ];
 
-    int overlapSize = extendedHaloRegion(
-            pmeGpu->common->pme_order, pmeGpu->common->pairList, pmeGpu->common->spacing);
+    int overlapSize = pmeGpu->common->gridHalo;
 
     // minor dimension
     if (pmeGpu->common->nnodesMinor > 1)

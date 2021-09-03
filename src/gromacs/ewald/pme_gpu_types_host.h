@@ -148,10 +148,8 @@ struct PmeShared
     std::vector<int> s2g1y;
     /*! \brief local grid size*/
     std::array<int, DIM> pmegridNk;
-    /*! \brief pair list buffer*/
-    real pairList;
-    /*! \brief spacing*/
-    real spacing;
+    /*! \brief Size of the grid halo region */
+    int gridHalo;
 };
 
 /*! \internal \brief

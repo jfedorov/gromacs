@@ -335,8 +335,8 @@ struct gmx_pme_t
     real ewaldcoeff_q;  /* Ewald splitting coefficient for Coulomb */
     real ewaldcoeff_lj; /* Ewald splitting coefficient for r^-6 */
     real epsilon_r;
-    real pairList; /* Pair list buffer value */
-    real spacing;  /* fourier grid spacing */
+    int  pmeGpuGridHalo; /* Size of the grid halo region with PME GPU decomposition */
+    real spacing;        /* fourier grid spacing */
 
 
     enum PmeRunMode runMode; /* Which codepath is the PME runner taking - CPU, GPU, mixed;
