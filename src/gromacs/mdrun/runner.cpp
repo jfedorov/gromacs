@@ -189,7 +189,7 @@ namespace gmx
  * - a GPU feature that will use it is enabled.
  *
  * If CUDA awareness was not detected but the environment variable
- * forced its usage, a warning is issued. */
+ * forced its usage, a warning is issued to the developer. */
 static bool canUseCudaAwareMpi(const MDLogger& mdlog,
                                const bool      haveDetectedCudaAwareMpi,
                                const bool      forceCudaAwareMpi,
@@ -218,7 +218,7 @@ static bool canUseCudaAwareMpi(const MDLogger& mdlog,
 
     if (forceCudaAwareMpi)
     {
-        // CUDA-aware support not detected in MPI library but, user has forced its use
+        // CUDA-aware support not detected in MPI library but, developer has forced its use
         GMX_LOG(mdlog.warning)
                 .asParagraph()
                 .appendText(
