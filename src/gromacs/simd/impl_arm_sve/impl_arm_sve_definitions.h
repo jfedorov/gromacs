@@ -43,6 +43,16 @@
 #define GMX_SIMD_IMPL_ARM_SVE_DEFINITIONS_H
 
 #include "config.h"
+#include <arm_sve.h>
+
+typedef svint32_t sve_vec_int32 __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+typedef svuint32_t sve_vec_uint32 __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+typedef svint64_t sve_vec_int64 __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+typedef svuint64_t sve_vec_uint64 __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+typedef svfloat32_t sve_vec_float __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+typedef svfloat64_t sve_vec_double __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+typedef svbool_t sve_pred __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+
 
 #define GMX_SIMD 1
 #define GMX_SIMD_HAVE_FLOAT 1

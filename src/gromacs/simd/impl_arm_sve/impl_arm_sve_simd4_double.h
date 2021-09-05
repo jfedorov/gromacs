@@ -57,7 +57,7 @@ namespace gmx
 
 typedef struct Simd4Double
 {
-    float64_t simdInternal_ __attribute__((vector_size(GMX_SIMD_ARM_SVE_LENGTH_VALUE / 8)));
+    sve_vec_double simdInternal_;
 
     Simd4Double(const double d) { this->simdInternal_ = svdup_f64(d); }
 
@@ -68,18 +68,18 @@ typedef struct Simd4Double
 
 typedef struct Simd4DBool
 {
-    uint64_t simdInternal_ __attribute__((vector_size(GMX_SIMD_ARM_SVE_LENGTH_VALUE / 8)));
+    sve_pred simdInternal_;
 
-    Simd4DBool(const bool b) { this->simdInternal_ = svdup_n_u64_z(svptrue_b64(), b ? 1 : 0); }
+    Simd4DBool(const bool b) { this->simdInternal_ = svdup_b64(b); }
 
-    Simd4DBool(svbool_t simd) { this->simdInternal_ = svdup_n_u64_z(simd, 1); }
+    Simd4DBool(svbool_t simd) { this->simdInternal_ = simd; }
 
     Simd4DBool() {}
 } Simd4DBool;
 
 static inline svbool_t getMask(Simd4DBool m)
 {
-    return svcmpne_n_u64(svptrue_b64(), m.simdInternal_, 0);
+    return m.simdInternal_;
 }
 
 static inline Simd4Double gmx_simdcall load4(const double* m)
@@ -250,35 +250,34 @@ static inline Simd4DBool gmx_simdcall operator<=(Simd4Double a, Simd4Double b)
 static inline Simd4DBool gmx_simdcall operator&&(Simd4DBool a, Simd4DBool b)
 {
     svbool_t pg = svptrue_b64();
-    return { svand_z(pg, getMask(a), getMask(b)) };
+    return { svand_z(pg, a.simdInternal_, b.simdInternal_) };
 }
 
 static inline Simd4DBool gmx_simdcall operator||(Simd4DBool a, Simd4DBool b)
 {
     svbool_t pg = svptrue_b64();
-    return { svorr_b_z(pg, getMask(a), getMask(b)) };
+    return { svorr_b_z(pg, a.simdInternal_, b.simdInternal_) };
 }
 
 static inline bool gmx_simdcall anyTrue(Simd4DBool a)
 {
     svbool_t pg = svwhilelt_b64(0, 4);
-    return svptest_any(pg, getMask(a));
+    return svptest_any(pg, a.simdInternal_);
 }
 
 static inline Simd4Double gmx_simdcall selectByMask(Simd4Double a, Simd4DBool m)
 {
-    return { svsel_f64(getMask(m), a.simdInternal_, svdup_f64(0.0f)) };
+    return { svsel_f64(m.simdInternal_, a.simdInternal_, svdup_f64(0.0f)) };
 }
 
 static inline Simd4Double gmx_simdcall selectByNotMask(Simd4Double a, Simd4DBool m)
 {
-    svbool_t pg = svptrue_b64();
-    return { svsel_f64(sveor_b_z(pg, getMask(m), pg), a.simdInternal_, svdup_f64(0.0f)) };
+    return { svsel_f64(m.simdInternal_, svdup_f64(0.0f), a.simdInternal_) };
 }
 
 static inline Simd4Double gmx_simdcall blend(Simd4Double a, Simd4Double b, Simd4DBool sel)
 {
-    return { svsel_f64(getMask(sel), b.simdInternal_, a.simdInternal_) };
+    return { svsel_f64(sel.simdInternal_, b.simdInternal_, a.simdInternal_) };
 }
 
 static inline Simd4Double gmx_simdcall round(Simd4Double x)
