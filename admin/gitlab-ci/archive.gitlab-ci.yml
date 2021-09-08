@@ -155,7 +155,6 @@ archive:configure:release:
     - cmake --build . --target man -- -j4 2>&1 | tee manBuildLogFile.log
     - cmake --build . --target completion -- -j4 2>&1 | tee completionBuildLogFile.log
     - cmake --build . --target install-guide -- -j4 2>&1 | tee installGuideBuildLogFile.log
-    - cmake --build . --target reference_checksum -- -j4 2>&1 | tee checksumBuildLogFile.log
     - cmake --build . --target package_source -- -j4 2>&1 | tee packageBuildLogFile.log
     - awk '/warning/,/warning.*generated|^$/' buildLogFile.log manBuildLogFile.log
       completionBuildLogFile.log installGuideBuildLogFile.log checksumBuildLogFile.log
