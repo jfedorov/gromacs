@@ -133,6 +133,9 @@ struct PmeGpuGridParams
     /*! \brief Offsets for X/Y/Z components of d_fractShiftsTable and d_gridlineIndicesTable */
     int tablesOffsets[DIM];
 
+    /*! \brief Offsets for the complex grid in pme_solve */
+    int kOffsets[DIM];
+
     /* Grid arrays */
     /*! \brief Real space grid. */
     HIDE_FROM_OPENCL_COMPILER(DeviceBuffer<float>) d_realGrid[NUMFEPSTATES];

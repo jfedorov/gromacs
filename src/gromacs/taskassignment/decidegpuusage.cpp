@@ -723,9 +723,10 @@ bool decideWhetherToUseGpuPmeDecomposition(const DevelopmentFeatureFlags& devFla
                                            const int                      numRanksPerSimulation,
                                            const int                      numPmeRanksPerSimulation)
 {
-    // PME decomposition is supported only with CUDA-backend in mixed mode
-    // CUDA-backend also needs CUDA-aware MPI support for Mixed-mode decomposition to work
-    const bool pmeDecompositionSupported = (devFlags.usingCudaAwareMpi && pmeRunMode == PmeRunMode::Mixed);
+    // PME decomposition is supported only with CUDA-backend with CUDA-aware MPI
+    const bool pmeDecompositionSupported =
+            (devFlags.usingCudaAwareMpi
+             && (pmeRunMode == PmeRunMode::Mixed || pmeRunMode == PmeRunMode::GPU));
 
     if (!pmeDecompositionSupported
         && ((numRanksPerSimulation > 1 && numPmeRanksPerSimulation == 0) || numPmeRanksPerSimulation > 1))

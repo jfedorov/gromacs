@@ -250,7 +250,8 @@ void pme_gpu_launch_complex_transforms(gmx_pme_t* pme, gmx_wallcycle* wcycle, co
                         settings.useDecomposition ? GridOrdering::YZX : GridOrdering::XYZ;
                 wallcycle_start_nocount(wcycle, WallCycleCounter::LaunchGpu);
                 wallcycle_sub_start_nocount(wcycle, WallCycleSubCounter::LaunchGpuPme);
-                pme_gpu_solve(pmeGpu, gridIndex, cfftgrid, gridOrdering, computeEnergyAndVirial);
+                pme_gpu_solve(
+                        pmeGpu, gridIndex, cfftgrid, gridOrdering, computeEnergyAndVirial, pme->nodeid, pme->nnodes);
                 wallcycle_sub_stop(wcycle, WallCycleSubCounter::LaunchGpuPme);
                 wallcycle_stop(wcycle, WallCycleCounter::LaunchGpu);
             }
