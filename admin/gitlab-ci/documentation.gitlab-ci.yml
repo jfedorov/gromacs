@@ -278,7 +278,7 @@ webpage:configure:
     - .rules:nightly-only-for-release
   cache: {}
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   dependencies:
     - archive:package
     - regressiontests:package
@@ -297,7 +297,7 @@ webpage:dependencies:
     - .rules:nightly-only-for-release
   stage: release-build
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: webpage:configure
   variables:
@@ -309,7 +309,7 @@ webpage:build:release:
     - .rules:nightly-only-for-release
   stage: release-prepare-deploy
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   dependencies:
     - webpage:dependencies
     - webpage:configure

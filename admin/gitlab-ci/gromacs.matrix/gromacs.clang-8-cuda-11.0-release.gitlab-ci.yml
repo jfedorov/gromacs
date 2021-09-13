@@ -52,7 +52,7 @@ gromacs:clang-8-cuda-11.0:release:test:
     KUBERNETES_EXTENDED_RESOURCE_LIMIT: 1
     BUILD_DIR: release-builds-clang
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:clang-8-cuda-11.0:release:configure
     - job: gromacs:clang-8-cuda-11.0:release:build
@@ -71,7 +71,7 @@ gromacs:clang-8-cuda-11.0:release:regressiontest:
     REGRESSIONTEST_TOTAL_RANK_NUMBER: 2
     REGRESSIONTEST_OMP_RANK_NUMBER: 1
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:clang-8-cuda-11.0:release:build
     - job: regressiontests:package

@@ -55,7 +55,7 @@ gromacs:clang-TSAN:regressiontest:
   variables:
     CMAKE: /usr/local/cmake-3.17.2/bin/cmake
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:clang-TSAN:build
     - job: regressiontests:prepare

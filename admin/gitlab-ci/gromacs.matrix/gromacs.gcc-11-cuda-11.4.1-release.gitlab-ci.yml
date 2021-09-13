@@ -60,7 +60,7 @@ gromacs:gcc-11-cuda-11.4.1:release:test:
     KUBERNETES_EXTENDED_RESOURCE_LIMIT: 1
     BUILD_DIR: release-builds-gcc
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:gcc-11-cuda-11.4.1:release:configure
     - job: gromacs:gcc-11-cuda-11.4.1:release:build

@@ -48,7 +48,7 @@ gromacs:clang-8:regressiontest:
     - .rules:merge-requests
   image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-20.04-llvm-8-cuda-11.0
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:clang-8:build
     - job: regressiontests:prepare

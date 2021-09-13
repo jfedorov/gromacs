@@ -35,7 +35,7 @@ gromacs:clang-static-analyzer:build:
   variables:
     CMAKE: /usr/local/cmake-3.16.3/bin/cmake
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:clang-static-analyzer:configure
 

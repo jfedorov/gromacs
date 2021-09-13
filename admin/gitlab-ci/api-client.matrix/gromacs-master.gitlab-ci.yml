@@ -39,7 +39,7 @@
     when: always
     expire_in: 1 week
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   # The dependency means we need to use the same tag restriction as upstream.
   needs:
     - job: gromacs:clang-8:build

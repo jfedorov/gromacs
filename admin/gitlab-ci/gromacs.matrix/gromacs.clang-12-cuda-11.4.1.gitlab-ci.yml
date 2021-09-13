@@ -52,7 +52,7 @@ gromacs:clang-12-cuda-11.4.1:test:
     KUBERNETES_EXTENDED_RESOURCE_NAME: "nvidia.com/gpu"
     KUBERNETES_EXTENDED_RESOURCE_LIMIT: 1
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:clang-12-cuda-11.4.1:build
 
@@ -69,7 +69,7 @@ gromacs:clang-12-cuda-11.4.1:regressiontest:
     REGRESSIONTEST_TOTAL_RANK_NUMBER: 2
     REGRESSIONTEST_OMP_RANK_NUMBER: 1
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:clang-12-cuda-11.4.1:build
     - job: regressiontests:prepare

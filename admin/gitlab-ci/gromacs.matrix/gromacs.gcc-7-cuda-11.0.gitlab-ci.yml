@@ -55,7 +55,7 @@ gromacs:gcc-7-cuda-11.0:test:
     KUBERNETES_EXTENDED_RESOURCE_NAME: "nvidia.com/gpu"
     KUBERNETES_EXTENDED_RESOURCE_LIMIT: 1
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:gcc-7-cuda-11.0:build
 
@@ -72,7 +72,7 @@ gromacs:gcc-7-cuda-11.0:test-gpucommupd:
     GMX_GPU_PME_PP_COMMS: 1
     GMX_FORCE_UPDATE_DEFAULT_GPU: 1
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:gcc-7-cuda-11.0:build
 
@@ -89,7 +89,7 @@ gromacs:gcc-7-cuda-11.0:regressiontest:
     REGRESSIONTEST_TOTAL_RANK_NUMBER: 2
     REGRESSIONTEST_OMP_RANK_NUMBER: 1
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:gcc-7-cuda-11.0:build
     - job: regressiontests:prepare
@@ -110,7 +110,7 @@ gromacs:gcc-7-cuda-11.0:regressiontest-gpucommupd-tMPI:
     GMX_GPU_PME_PP_COMMS: 1
     GMX_FORCE_UPDATE_DEFAULT_GPU: 1
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:gcc-7-cuda-11.0:build
     - job: regressiontests:prepare
@@ -133,7 +133,7 @@ gromacs:gcc-7-cuda-11.0:regressiontest-upd-tMPI:
     REGRESSIONTEST_OMP_RANK_NUMBER: 1
     GMX_FORCE_UPDATE_DEFAULT_GPU: 1
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:gcc-7-cuda-11.0:build
     - job: regressiontests:prepare

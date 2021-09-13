@@ -45,7 +45,7 @@ gromacs:gcc-11:coverage:test:
   variables:
     CMAKE: /usr/local/cmake-3.18.4/bin/cmake
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:gcc-11:coverage:build
   artifacts:
@@ -68,7 +68,7 @@ gromacs:coverage:analyse:
     - job: gromacs:gcc-11:coverage:test
 
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   script:
     - echo ${GCOVR_GENERAL_OPTIONS}
     - echo ${GCOVR_EXCLUDE_OPTIONS}

@@ -60,7 +60,7 @@ gromacs:gcc-11-cuda-11.4:regressiontest-gpucommupd-MPI:
     GMX_GPU_PME_PP_COMMS: 1
     GMX_FORCE_UPDATE_DEFAULT_GPU: 1
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:gcc-11-cuda-11.4:buildMPI
     - job: regressiontests:prepare

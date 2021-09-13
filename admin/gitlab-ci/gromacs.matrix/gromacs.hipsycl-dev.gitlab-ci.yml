@@ -43,7 +43,7 @@ gromacs:hipsycl-dev:build:
   variables:
     CMAKE: /usr/local/cmake-3.18.4/bin/cmake
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:hipsycl-dev:configure
 

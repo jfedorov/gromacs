@@ -35,7 +35,7 @@ gromacs:clang-UBSAN:build:
   variables:
     CMAKE: /usr/local/cmake-3.18.4/bin/cmake
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:clang-UBSAN:configure
 
@@ -48,7 +48,7 @@ gromacs:clang-UBSAN:test:
   variables:
     CMAKE: /usr/local/cmake-3.18.4/bin/cmake
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:clang-UBSAN:build
 

@@ -62,7 +62,7 @@ gromacs:gcc-11:release:test:
     KUBERNETES_EXTENDED_RESOURCE_LIMIT: 1
     LD_LIBRARY_PATH: "/opt/rocm-3.5.0/opencl/lib"
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:gcc-11:release:configure
     - job: gromacs:gcc-11:release:build
@@ -83,7 +83,7 @@ gromacs:gcc-11:release:regressiontest:
     REGRESSIONTEST_OMP_RANK_NUMBER: 1
     LD_LIBRARY_PATH: "/opt/rocm-3.5.0/opencl/lib"
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:gcc-11:release:build
     - job: regressiontests:package

@@ -73,7 +73,7 @@ gromacs:clang-12:release:regressiontest:
     REGRESSIONTEST_DOUBLE: "-double"
     REGRESSIONTEST_PARALLEL: "-np"
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:clang-12:release:build
     - job: regressiontests:package

@@ -35,7 +35,7 @@ gromacs:clang-ASAN:build:
   variables:
     CMAKE: /usr/local/cmake-3.21.2/bin/cmake
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:clang-ASAN:configure
 
@@ -49,7 +49,7 @@ gromacs:clang-ASAN:test:
     CMAKE: /usr/local/cmake-3.21.2/bin/cmake
     CTEST_RUN_MODE: "ExperimentalMemCheck"
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:clang-ASAN:build
   after_script:
@@ -67,7 +67,7 @@ gromacs:clang-ASAN:regressiontest:
   variables:
     CMAKE: /usr/local/cmake-3.21.2/bin/cmake
   tags:
-    - k8s-scilifelab
+    - k8s-scilifelab-test
   needs:
     - job: gromacs:clang-ASAN:build
     - job: regressiontests:prepare
