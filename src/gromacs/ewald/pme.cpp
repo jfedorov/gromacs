@@ -479,10 +479,9 @@ int minimalPmeGridSize(int pmeOrder)
 
 static int getExtendedHaloRegion(int pmeOrder, real haloExtentForAtomDisplacement, real gridSpacing)
 {
+    GMX_ASSERT(gridSpacing > 0, "PME grid spacing must be >0");
     // use at least one grid line if haloExtentForAtomDisplacement is zero
-    return (gridSpacing > 0) ? std::max(
-                   static_cast<int>(std::ceil(haloExtentForAtomDisplacement / gridSpacing)), 1)
-                             : pmeOrder - 1;
+    return std::max(static_cast<int>(std::ceil(haloExtentForAtomDisplacement / gridSpacing)), 1) + (pmeOrder - 1);
 }
 
 real getGridSpacingFromBox(const matrix box, const ivec gridDim)
@@ -580,23 +579,22 @@ static int div_round_up(int enumerator, int denominator)
     return (enumerator + denominator - 1) / denominator;
 }
 
-gmx_pme_t* gmx_pme_init(const t_commrec*     cr,
-                        const NumPmeDomains& numPmeDomains,
-                        const t_inputrec*    ir,
-                        const matrix         box,
-                        real                 haloExtentForAtomDisplacement,
-                        gmx_bool             bFreeEnergy_q,
-                        gmx_bool             bFreeEnergy_lj,
-                        gmx_bool             bReproducible,
-                        real                 ewaldcoeff_q,
-                        real                 ewaldcoeff_lj,
-                        int                  nthread,
-                        PmeRunMode           runMode,
-                        PmeGpu*              pmeGpu,
-                        const DeviceContext* deviceContext,
-                        const DeviceStream*  deviceStream,
-                        const PmeGpuProgram* pmeGpuProgram,
-                        const gmx::MDLogger& mdlog)
+static gmx_pme_t* gmx_pme_init_internal(const t_commrec*     cr,
+                                        const NumPmeDomains& numPmeDomains,
+                                        const t_inputrec*    ir,
+                                        int                  pmeGpuGridHaloSize,
+                                        gmx_bool             bFreeEnergy_q,
+                                        gmx_bool             bFreeEnergy_lj,
+                                        gmx_bool             bReproducible,
+                                        real                 ewaldcoeff_q,
+                                        real                 ewaldcoeff_lj,
+                                        int                  nthread,
+                                        PmeRunMode           runMode,
+                                        PmeGpu*              pmeGpu,
+                                        const DeviceContext* deviceContext,
+                                        const DeviceStream*  deviceStream,
+                                        const PmeGpuProgram* pmeGpuProgram,
+                                        const gmx::MDLogger& mdlog)
 {
     int  use_threads, sum_use_threads, i;
     ivec ndata;
@@ -744,37 +742,9 @@ gmx_pme_t* gmx_pme_init(const t_commrec*     cr,
     pme->boxScaler = std::make_unique<EwaldBoxZScaler>(
             EwaldBoxZScaler(inputrecPbcXY2Walls(ir), ir->wall_ewald_zfac));
 
-    if (ir->fourier_spacing > 0)
-    {
-        pme->spacing = ir->fourier_spacing;
-    }
-    else
-    {
-        // if ir doesn't have valid fourier_spacing value
-        // calculate it from simulation box and grid dimension
-        matrix scaledBox;
-        pme->boxScaler->scaleBox(box, scaledBox);
-
-        ivec gridDim = { pme->nkx, pme->nky, pme->nkz };
-        pme->spacing = getGridSpacingFromBox(scaledBox, gridDim);
-    }
-
     if (runMode != PmeRunMode::CPU && pme->ndecompdim >= 1)
     {
-        pme->pmeGpuGridHalo =
-                getExtendedHaloRegion(pme->pme_order, haloExtentForAtomDisplacement, pme->spacing);
-
-        if (debug)
-        {
-            fprintf(debug,
-                    "PME GPU haloExtent = %.3f pmeGpuGridHalo = %d\n",
-                    haloExtentForAtomDisplacement,
-                    pme->pmeGpuGridHalo);
-        }
-    }
-    else
-    {
-        pme->pmeGpuGridHalo = 0;
+        pme->pmeGpuGridHalo =  pmeGpuGridHaloSize;
     }
 
     /* If we violate restrictions, generate a fatal error here */
@@ -989,6 +959,64 @@ gmx_pme_t* gmx_pme_init(const t_commrec*     cr,
     return pme.release();
 }
 
+gmx_pme_t* gmx_pme_init(const t_commrec*     cr,
+                        const NumPmeDomains& numPmeDomains,
+                        const t_inputrec*    ir,
+                        const matrix         box,
+                        real                 haloExtentForAtomDisplacement,
+                        gmx_bool             bFreeEnergy_q,
+                        gmx_bool             bFreeEnergy_lj,
+                        gmx_bool             bReproducible,
+                        real                 ewaldcoeff_q,
+                        real                 ewaldcoeff_lj,
+                        int                  nthread,
+                        PmeRunMode           runMode,
+                        PmeGpu*              pmeGpu,
+                        const DeviceContext* deviceContext,
+                        const DeviceStream*  deviceStream,
+                        const PmeGpuProgram* pmeGpuProgram,
+                        const gmx::MDLogger& mdlog)
+{
+
+    // The box requires scaling with nwalls = 2, we store that condition as well
+    // as the scaling factor
+    auto boxScaler = std::make_unique<EwaldBoxZScaler>(
+            EwaldBoxZScaler(inputrecPbcXY2Walls(ir), ir->wall_ewald_zfac));
+
+    real gridSpacing = .0;
+    if (ir->fourier_spacing > 0)
+    {
+        gridSpacing = ir->fourier_spacing;
+    }
+    else
+    {
+        // if ir doesn't have valid fourier_spacing value
+        // calculate it from simulation box and grid dimension
+        matrix scaledBox;
+        boxScaler->scaleBox(box, scaledBox);
+
+        ivec gridDim = { ir->nkx, ir->nky, ir->nkz };
+        gridSpacing = getGridSpacingFromBox(scaledBox, gridDim);
+    }
+
+    int pmeGpuGridHalo = 0;
+    if (runMode != PmeRunMode::CPU)
+    {
+        pmeGpuGridHalo = getExtendedHaloRegion(ir->pme_order, haloExtentForAtomDisplacement, gridSpacing);
+
+        if (debug)
+        {
+            fprintf(debug,
+                    "PME GPU haloExtent = %.3f pmeGpuGridHalo = %d\n",
+                    haloExtentForAtomDisplacement,
+                    pmeGpuGridHalo);
+        }
+    }
+
+    return gmx_pme_init_internal(cr, numPmeDomains, ir, pmeGpuGridHalo, bFreeEnergy_q, bFreeEnergy_lj, bReproducible, ewaldcoeff_q, ewaldcoeff_lj, nthread,
+                                 runMode, pmeGpu, deviceContext, deviceStream, pmeGpuProgram, mdlog);
+}
+
 void gmx_pme_reinit(struct gmx_pme_t** pmedata,
                     const t_commrec*   cr,
                     struct gmx_pme_t*  pme_src,
@@ -1024,13 +1052,11 @@ void gmx_pme_reinit(struct gmx_pme_t** pmedata,
         // Here we should avoid writing notes for settings the user did not
         // set directly.
         const gmx::MDLogger dummyLogger;
-        const matrix        dummyBox = { { 0 } };
         GMX_ASSERT(pmedata, "Invalid PME pointer");
         NumPmeDomains numPmeDomains = { pme_src->nnodes_major, pme_src->nnodes_minor };
-        *pmedata                    = gmx_pme_init(cr,
+        *pmedata                    = gmx_pme_init_internal(cr,
                                 numPmeDomains,
                                 &irc,
-                                dummyBox,
                                 pme_src->pmeGpuGridHalo,
                                 pme_src->bFEP_q,
                                 pme_src->bFEP_lj,

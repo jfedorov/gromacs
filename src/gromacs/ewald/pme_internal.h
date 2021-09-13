@@ -335,7 +335,7 @@ struct gmx_pme_t
     real ewaldcoeff_q;  /* Ewald splitting coefficient for Coulomb */
     real ewaldcoeff_lj; /* Ewald splitting coefficient for r^-6 */
     real epsilon_r;
-    int  pmeGpuGridHalo; /* Size of the grid halo region with PME GPU decomposition */
+    int  pmeGpuGridHalo = 0; /* Size of the grid halo region with PME GPU decomposition */
     real spacing;        /* fourier grid spacing */
 
 
