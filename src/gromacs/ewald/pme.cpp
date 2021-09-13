@@ -471,8 +471,8 @@ int minimalPmeGridSize(int pmeOrder)
  * This function is only used for PME GPU decomposition case
  *
  * \param[in]     pmeOrder                          PME interpolation order
- * \param[in]     haloExtentForAtomDisplacement     extent of halo region in nm to account for atom displacement
- * \param[in]     gridSpacing                       spacing between grid lines
+ * \param[in]     haloExtentForAtomDisplacement     extent of halo region in nm to account for atom
+ * displacement \param[in]     gridSpacing                       spacing between grid lines
  *
  * \returns  extended halo region used in GPU PME decomposition
  */
@@ -481,7 +481,8 @@ static int getExtendedHaloRegion(int pmeOrder, real haloExtentForAtomDisplacemen
 {
     GMX_ASSERT(gridSpacing > 0, "PME grid spacing must be >0");
     // use at least one grid line if haloExtentForAtomDisplacement is zero
-    return std::max(static_cast<int>(std::ceil(haloExtentForAtomDisplacement / gridSpacing)), 1) + (pmeOrder - 1);
+    return std::max(static_cast<int>(std::ceil(haloExtentForAtomDisplacement / gridSpacing)), 1)
+           + (pmeOrder - 1);
 }
 
 real getGridSpacingFromBox(const matrix box, const ivec gridDim)
@@ -744,7 +745,7 @@ static gmx_pme_t* gmx_pme_init_internal(const t_commrec*     cr,
 
     if (runMode != PmeRunMode::CPU && pme->ndecompdim >= 1)
     {
-        pme->pmeGpuGridHalo =  pmeGpuGridHaloSize;
+        pme->pmeGpuGridHalo = pmeGpuGridHaloSize;
     }
 
     /* If we violate restrictions, generate a fatal error here */
@@ -996,7 +997,7 @@ gmx_pme_t* gmx_pme_init(const t_commrec*     cr,
         boxScaler->scaleBox(box, scaledBox);
 
         ivec gridDim = { ir->nkx, ir->nky, ir->nkz };
-        gridSpacing = getGridSpacingFromBox(scaledBox, gridDim);
+        gridSpacing  = getGridSpacingFromBox(scaledBox, gridDim);
     }
 
     int pmeGpuGridHalo = 0;
@@ -1013,8 +1014,22 @@ gmx_pme_t* gmx_pme_init(const t_commrec*     cr,
         }
     }
 
-    return gmx_pme_init_internal(cr, numPmeDomains, ir, pmeGpuGridHalo, bFreeEnergy_q, bFreeEnergy_lj, bReproducible, ewaldcoeff_q, ewaldcoeff_lj, nthread,
-                                 runMode, pmeGpu, deviceContext, deviceStream, pmeGpuProgram, mdlog);
+    return gmx_pme_init_internal(cr,
+                                 numPmeDomains,
+                                 ir,
+                                 pmeGpuGridHalo,
+                                 bFreeEnergy_q,
+                                 bFreeEnergy_lj,
+                                 bReproducible,
+                                 ewaldcoeff_q,
+                                 ewaldcoeff_lj,
+                                 nthread,
+                                 runMode,
+                                 pmeGpu,
+                                 deviceContext,
+                                 deviceStream,
+                                 pmeGpuProgram,
+                                 mdlog);
 }
 
 void gmx_pme_reinit(struct gmx_pme_t** pmedata,
@@ -1055,21 +1070,21 @@ void gmx_pme_reinit(struct gmx_pme_t** pmedata,
         GMX_ASSERT(pmedata, "Invalid PME pointer");
         NumPmeDomains numPmeDomains = { pme_src->nnodes_major, pme_src->nnodes_minor };
         *pmedata                    = gmx_pme_init_internal(cr,
-                                numPmeDomains,
-                                &irc,
-                                pme_src->pmeGpuGridHalo,
-                                pme_src->bFEP_q,
-                                pme_src->bFEP_lj,
-                                FALSE,
-                                ewaldcoeff_q,
-                                ewaldcoeff_lj,
-                                pme_src->nthread,
-                                pme_src->runMode,
-                                pme_src->gpu,
-                                nullptr,
-                                nullptr,
-                                nullptr,
-                                dummyLogger);
+                                         numPmeDomains,
+                                         &irc,
+                                         pme_src->pmeGpuGridHalo,
+                                         pme_src->bFEP_q,
+                                         pme_src->bFEP_lj,
+                                         FALSE,
+                                         ewaldcoeff_q,
+                                         ewaldcoeff_lj,
+                                         pme_src->nthread,
+                                         pme_src->runMode,
+                                         pme_src->gpu,
+                                         nullptr,
+                                         nullptr,
+                                         nullptr,
+                                         dummyLogger);
         /* When running PME on the CPU not using domain decomposition,
          * the atom data is allocated once only in gmx_pme_(re)init().
          */
