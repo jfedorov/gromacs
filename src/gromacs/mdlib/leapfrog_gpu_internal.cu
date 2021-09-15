@@ -54,6 +54,8 @@
 #include "gromacs/mdtypes/group.h"
 #include "gromacs/pbcutil/pbc.h"
 #include "gromacs/pbcutil/pbc_aiuc_cuda.cuh"
+#include "tabulatednormaldistribution_cuda.h"
+#include "threefry_cuda.h"
 #include "gromacs/utility/arrayref.h"
 
 namespace gmx
@@ -104,6 +106,13 @@ __launch_bounds__(c_maxThreadsPerBlock) __global__
                              const unsigned short* __restrict__ gm_tempScaleGroups,
                              const float3 prVelocityScalingMatrixDiagonal)
 {
+    int seed = -34;
+    gmx::ThreeFry2x64<0>                       rng(seed, gmx::RandomDomain::UpdateCoordinates);
+    gmx::TabulatedNormalDistribution<real, 14> dist;
+    rng.restart(234, 1234);
+    dist.reset();
+    dist(rng);
+
     int threadIndex = blockIdx.x * blockDim.x + threadIdx.x;
     if (threadIndex < numAtoms)
     {
