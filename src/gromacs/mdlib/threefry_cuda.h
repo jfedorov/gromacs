@@ -114,7 +114,7 @@ struct highBitCounter
      *  \param         ctr       Reference to counter to check and clear.
      */
     template<class UIntType, std::size_t words, unsigned int highBits>
-    __device__ static bool checkAndClear(std::array<UIntType, words>* ctr)
+    __device__ static bool checkAndClear(UIntType* ctr)
     {
         const std::size_t bitsPerWord = std::numeric_limits<UIntType>::digits;
         const std::size_t bitsTotal   = bitsPerWord * words;
@@ -130,16 +130,16 @@ struct highBitCounter
 
         for (unsigned int i = words - 1; i > lastWordIdx; --i)
         {
-            if ((*ctr)[i])
+            if ((ctr)[i])
             {
                 isClear   = false;
-                (*ctr)[i] = 0;
+                (ctr)[i] = 0;
             }
         }
-        if (highBits > 0 && (*ctr)[lastWordIdx] >= lastWordOne)
+        if (highBits > 0 && (ctr)[lastWordIdx] >= lastWordOne)
         {
             isClear = false;
-            (*ctr)[lastWordIdx] &= mask;
+            (ctr)[lastWordIdx] &= mask;
         }
         return isClear;
     }
@@ -157,7 +157,7 @@ struct highBitCounter
      *  of internal counter bits that fits in the total counter.
      */
     template<class UIntType, std::size_t words, unsigned int highBits>
-    __device__ static void increment(std::array<UIntType, words>* ctr)
+    __device__ static void increment(UIntType* ctr)
     {
         const std::size_t bitsPerWord = std::numeric_limits<UIntType>::digits;
         const std::size_t bitsTotal   = bitsPerWord * words;
@@ -210,14 +210,14 @@ struct highBitCounter
 
         for (unsigned int i = words - 1; i > lastWordIdx; --i)
         {
-            (*ctr)[i]++;
-            if ((*ctr)[i])
+            (ctr)[i]++;
+            if ((ctr)[i])
             {
                 return; // No carry means we are done
             }
         }
-        (*ctr)[lastWordIdx] += lastWordOne;
-        assert((*ctr)[lastWordIdx] >= lastWordOne);
+        (ctr)[lastWordIdx] += lastWordOne;
+        assert((ctr)[lastWordIdx] >= lastWordOne);
         // "Random engine stream ran out of internal counter space.")
     }
 
@@ -235,7 +235,7 @@ struct highBitCounter
      *  of internal counter bits that fits in the total counter.
      */
     template<class UIntType, std::size_t words, unsigned int highBits>
-    __device__ static void increment(std::array<UIntType, words>* ctr, UIntType addend)
+    __device__ static void increment(UIntType* ctr, UIntType addend)
     {
         const std::size_t bitsPerWord = std::numeric_limits<UIntType>::digits;
         const std::size_t bitsTotal   = bitsPerWord * words;
@@ -252,8 +252,8 @@ struct highBitCounter
 
         for (unsigned int i = words - 1; i > lastWordIdx; --i)
         {
-            (*ctr)[i] += addend;
-            addend = ((*ctr)[i] < addend); // 1 is the carry!
+            (ctr)[i] += addend;
+            addend = ((ctr)[i] < addend); // 1 is the carry!
             if (addend == 0)
             {
                 return;
@@ -264,9 +264,9 @@ struct highBitCounter
         // "Random engine stream ran out of internal counter space.")
         addend *= lastWordOne;
 
-        (*ctr)[lastWordIdx] += addend;
+        (ctr)[lastWordIdx] += addend;
 
-        assert((*ctr)[lastWordIdx] >= addend);
+        assert((ctr)[lastWordIdx] >= addend);
         // "Random engine stream ran out of internal counter space.")
     }
 };
@@ -331,7 +331,18 @@ public:
     /*! \brief Integer type for output. */
     typedef uint64_t result_type;
     /*! \brief Use array for counter & key states so it is allocated on the stack */
-    typedef std::array<result_type, 2> counter_type;
+    typedef result_type counter_type[2];
+        struct counter_struct
+        {
+                union {
+                        struct
+                        {
+                                result_type counter;
+                                result_type key;
+                        } s;
+                        result_type a[2];
+                };
+        };
 
 private:
     /*! \brief Rotate value left by specified number of bits
@@ -358,10 +369,10 @@ private:
      *
      *  \return Newly encrypted 2x64 block, according to the class template parameters.
      */
-    __device__ counter_type generateBlock(const counter_type& key, const counter_type& ctr)
+    __device__ counter_struct generateBlock(const counter_type& key, const counter_type& ctr)
     {
         const unsigned int rotations[] = { 16, 42, 12, 31, 16, 32, 24, 21 };
-        counter_type       x           = ctr;
+        counter_struct       x         = { ctr[0], ctr[1]};
 
         result_type ks[3] = { 0x0, 0x0, 0x1bd11bdaa9fc1a22 };
 
@@ -374,149 +385,149 @@ private:
         {
             ks[0] = key[0];
             ks[2] ^= key[0];
-            x[0]  = x[0] + key[0];
+            x.a[0]  = x.a[0] + key[0];
             ks[1] = key[1];
             ks[2] ^= key[1];
-            x[1] = x[1] + key[1];
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 16);
-            x[1] ^= x[0];
+            x.a[1] = x.a[1] + key[1];
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 16);
+            x.a[1] ^= x.a[0];
         }
         if (rounds > 1)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 42);
-            x[1] ^= x[0];
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 42);
+            x.a[1] ^= x.a[0];
         }
         if (rounds > 2)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 12);
-            x[1] ^= x[0];
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 12);
+            x.a[1] ^= x.a[0];
         }
         if (rounds > 3)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 31);
-            x[1] ^= x[0];
-            x[0] += ks[1];
-            x[1] += ks[2] + 1;
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 31);
+            x.a[1] ^= x.a[0];
+            x.a[0] += ks[1];
+            x.a[1] += ks[2] + 1;
         }
         if (rounds > 4)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 16);
-            x[1] ^= x[0];
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 16);
+            x.a[1] ^= x.a[0];
         }
         if (rounds > 5)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 32);
-            x[1] ^= x[0];
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 32);
+            x.a[1] ^= x.a[0];
         }
         if (rounds > 6)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 24);
-            x[1] ^= x[0];
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 24);
+            x.a[1] ^= x.a[0];
         }
         if (rounds > 7)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 21);
-            x[1] ^= x[0];
-            x[0] += ks[2];
-            x[1] += ks[0] + 2;
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 21);
+            x.a[1] ^= x.a[0];
+            x.a[0] += ks[2];
+            x.a[1] += ks[0] + 2;
         }
         if (rounds > 8)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 16);
-            x[1] ^= x[0];
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 16);
+            x.a[1] ^= x.a[0];
         }
         if (rounds > 9)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 42);
-            x[1] ^= x[0];
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 42);
+            x.a[1] ^= x.a[0];
         }
         if (rounds > 10)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 12);
-            x[1] ^= x[0];
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 12);
+            x.a[1] ^= x.a[0];
         }
         if (rounds > 11)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 31);
-            x[1] ^= x[0];
-            x[0] += ks[0];
-            x[1] += ks[1] + 3;
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 31);
+            x.a[1] ^= x.a[0];
+            x.a[0] += ks[0];
+            x.a[1] += ks[1] + 3;
         }
         if (rounds > 12)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 16);
-            x[1] ^= x[0];
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 16);
+            x.a[1] ^= x.a[0];
         }
         if (rounds > 13)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 32);
-            x[1] ^= x[0];
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 32);
+            x.a[1] ^= x.a[0];
         }
         if (rounds > 14)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 24);
-            x[1] ^= x[0];
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 24);
+            x.a[1] ^= x.a[0];
         }
         if (rounds > 15)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 21);
-            x[1] ^= x[0];
-            x[0] += ks[1];
-            x[1] += ks[2] + 4;
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 21);
+            x.a[1] ^= x.a[0];
+            x.a[0] += ks[1];
+            x.a[1] += ks[2] + 4;
         }
         if (rounds > 16)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 16);
-            x[1] ^= x[0];
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 16);
+            x.a[1] ^= x.a[0];
         }
         if (rounds > 17)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 42);
-            x[1] ^= x[0];
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 42);
+            x.a[1] ^= x.a[0];
         }
         if (rounds > 18)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 12);
-            x[1] ^= x[0];
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 12);
+            x.a[1] ^= x.a[0];
         }
         if (rounds > 19)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], 31);
-            x[1] ^= x[0];
-            x[0] += ks[2];
-            x[1] += ks[0] + 5;
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], 31);
+            x.a[1] ^= x.a[0];
+            x.a[0] += ks[2];
+            x.a[1] += ks[0] + 5;
         }
 
         for (unsigned int r = 20; r < rounds; r++)
         {
-            x[0] += x[1];
-            x[1] = rotLeft(x[1], rotations[r % 8]);
-            x[1] ^= x[0];
+            x.a[0] += x.a[1];
+            x.a[1] = rotLeft(x.a[1], rotations[r % 8]);
+            x.a[1] ^= x.a[0];
             if (((r + 1) & 3) == 0)
             {
                 unsigned int r4 = (r + 1) >> 2;
-                x[0] += ks[r4 % 3];
-                x[1] += ks[(r4 + 1) % 3] + r4;
+                x.a[0] += ks[r4 % 3];
+                x.a[1] += ks[(r4 + 1) % 3] + r4;
             }
         }
         return x;
@@ -622,13 +633,14 @@ public:
         const unsigned int internalCounterBitsBits =
                 (internalCounterBits > 0) ? (StaticLog2<internalCounterBits>::value + 1) : 0;
 
-        key_ = { { key0, key1 } };
+        key_[0] = key0;
+        key_[1] = key1;
 
         if (internalCounterBits > 0)
         {
-            internal::highBitCounter::checkAndClear<result_type, 2, internalCounterBitsBits>(&key_);
+            internal::highBitCounter::checkAndClear<result_type, 2, internalCounterBitsBits>(key_);
             internal::highBitCounter::increment<result_type, 2, internalCounterBitsBits>(
-                    &key_, internalCounterBits - 1);
+                                                                                         key_, internalCounterBits - 1);
         }
         restart(0, 0);
     }
@@ -650,8 +662,9 @@ public:
     __device__ void restart(uint64_t ctr0 = 0, uint64_t ctr1 = 0)
     {
 
-        counter_ = { { ctr0, ctr1 } };
-        if (!internal::highBitCounter::checkAndClear<result_type, 2, internalCounterBits>(&counter_))
+        counter_[0] = ctr0;
+        counter_[1] = ctr1;
+        if (!internal::highBitCounter::checkAndClear<result_type, 2, internalCounterBits>(counter_))
         {
             assert(false);
             // "High bits of counter are reserved for the internal stream counter."
@@ -672,11 +685,11 @@ public:
     {
         if (index_ >= c_resultsPerCounter_)
         {
-            internal::highBitCounter::increment<result_type, 2, internalCounterBits>(&counter_);
+            internal::highBitCounter::increment<result_type, 2, internalCounterBits>(counter_);
             block_ = generateBlock(key_, counter_);
             index_ = 0;
         }
-        return block_[index_++];
+        return block_.a[index_++];
     }
 
     /*! \brief Skip next n random numbers
@@ -758,7 +771,7 @@ private:
      */
     counter_type counter_;
     /*! \brief The present block encrypted from values of key and counter. */
-    counter_type block_;
+    counter_struct block_;
     /*! \brief Index of the next value in block_ to return from random engine */
     unsigned int index_;
 

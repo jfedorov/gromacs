@@ -169,7 +169,7 @@ public:
      *  and is exposed only to permit testing. Normal code should not
      *  need to call this function.
      */
-    static std::array<RealType, 1 << tableBits> makeTable()
+    static void makeTable()
     {
         /* Fill the table with the integral of a gaussian distribution, which
          * corresponds to the inverse error function.
@@ -180,7 +180,7 @@ public:
         constexpr std::size_t halfSize    = tableSize / 2;
         constexpr double      invHalfSize = 1.0 / halfSize;
 
-        std::array<RealType, tableSize> table;
+        RealType &table = c_table_;
 
         // Fill in all but the extremal entries of the table
         for (std::size_t i = 0; i < halfSize - 1; i++)
@@ -208,8 +208,6 @@ public:
         double extremalValue = std::sqrt(0.5 * missingVariance * tableSize);
         table.at(0)          = -extremalValue;
         table.back()         = extremalValue;
-
-        return table;
     }
 
     /*! \brief Construct new normal distribution with specified mean & stdddev.
@@ -245,7 +243,7 @@ public:
      *       depends on the table resolution. With 14 bits, this is roughly
      *       four standard deviations above the mean.
      */
-    result_type max() const { return c_table_[c_table_.size() - 1]; }
+    result_type max() const { return c_table_[1 << tableBits - 1]; }
 
     /*! \brief Mean of the present normal distribution */
     result_type mean() const { return param_.mean(); }
@@ -327,7 +325,7 @@ private:
     /*! \brief Parameters of normal distribution (mean and stddev) */
     param_type param_;
     /*! \brief Array with tabluated values of normal distribution */
-    static const std::array<RealType, 1 << tableBits> c_table_;
+    static const RealType c_table_[1 << tableBits];
     /*! \brief Saved output from random engine, shifted tableBits right each time */
     uint64_t savedRandomBits_;
     /*! \brief Number of valid bits remaining i savedRandomBits_ */
@@ -342,18 +340,24 @@ private:
 // scripts), so to avoid confusion we hide it from doxygen too.
 #if !defined(_MSC_VER) && !defined(DOXYGEN)
 // Declaration of template specialization
+/*
 template<>
-const std::array<real, 1 << detail::c_TabulatedNormalDistributionDefaultBits> TabulatedNormalDistribution<>::c_table_;
+const real TabulatedNormalDistribution<>::c_table_[1 << detail::c_TabulatedNormalDistributionDefaultBits];
+*/
 
-extern template const std::array<real, 1 << detail::c_TabulatedNormalDistributionDefaultBits>
-        TabulatedNormalDistribution<>::c_table_;
+// TODO need a kernel call to do this, or to work out how to fill the
+// C array at compile time, or how to revert to using std::array on
+// the device, or to implement a simple thing like std::array on the
+// device
+TabulatedNormalDistribution<>::makeTable();
 #endif
 
 // Instantiation for all tables without specialization
+/*
 template<class RealType, unsigned int tableBits>
-const std::array<RealType, 1 << tableBits> TabulatedNormalDistribution<RealType, tableBits>::c_table_ =
+const RealType TabulatedNormalDistribution<RealType, tableBits>::c_table_[1 << tableBits] =
         TabulatedNormalDistribution<RealType, tableBits>::makeTable();
-
+*/
 } // namespace gmx
 
 #endif // GMX_RANDOM_TABULATEDNORMALDISTRIBUTION_H
