@@ -47,17 +47,18 @@ namespace gmx
 {
 
 /*! \libinternal
- * \brief Describes work done on this domain that may change per-step.
+ * \brief Describes work done on this domain by the current rank that may change per-step.
  *
  * This work description is based on the SimulationWorkload in the context of the
  * current particle interactions assigned to this domain as well as other
  * factors that may change during the lifetime of a domain.
  *
+ * Note that unlike the other workload descriptors, these flags are also used on
+ * dedicated PME ranks, hence the content is rank-specific (at least when it
+ * comes to flags related to PME).
+ *
  * Note that the contents of an object of this type is valid for
  * a single step and it is expected to be set at the beginning each step.
- *
- * The initial set of flags map the legacy force flags to boolean flags;
- * these have the role of directing per-step compute tasks undertaken by a PP rank.
  *
  */
 class StepWorkload
@@ -99,7 +100,7 @@ public:
     bool useGpuXHalo = false;
     //! Whether GPU forces halo exchange is active this step
     bool useGpuFHalo = false;
-    //! Whether GPU PME work is compute this step (can be false also on fast steps with MTS)
+    //! Whether GPU PME work is computed on the current rank this step (can be false on PP-only ranks or on fast steps with MTS)
     bool haveGpuPmeOnThisRank = false;
     //! Whether to combine the forces for multiple time stepping before the halo exchange
     bool combineMtsForcesBeforeHaloExchange = false;
@@ -180,8 +181,16 @@ public:
     bool useGpuUpdate = false;
     //! If buffer operations are performed on GPU.
     bool useGpuBufferOps = false;
+    //! If PP domain decomposition is active.
+    bool havePpDomainDecomposition = false;
+    //! If domain decomposition halo exchange is performed on CPU (in CPU-only runs or with staged GPU communication).
+    bool useCpuHaloExchange = false;
     //! If domain decomposition halo exchange is performed on GPU.
     bool useGpuHaloExchange = false;
+    //! If separate PME rank(s) are used.
+    bool haveSeparatePmeRank = false;
+    //! If PP-PME communication is done purely on CPU (in CPU-only runs or with staged GPU communication).
+    bool useCpuPmePpCommunication = false;
     //! If direct PP-PME communication between GPU is used.
     bool useGpuPmePpCommunication = false;
     //! If direct GPU-GPU communication is enabled.

@@ -35,83 +35,67 @@
 #ifndef GMX_TOPOLOGY_RESIDUETYPES_H
 #define GMX_TOPOLOGY_RESIDUETYPES_H
 
-#include <memory>
-#include <optional>
 #include <string>
+#include <unordered_map>
 
 #include "gromacs/utility/basedefinitions.h"
+#include "gromacs/utility/stringutil.h"
 
-struct ResidueTypeEntry;
+/*! \brief Convenience type aliases
+ *
+ * These are not as useful as strong types, but they will
+ * help clarify usage to humans in some cases. */
+//! \{
+using ResidueName = std::string;
+using ResidueType = std::string;
+//! \}
 
-class ResidueType
-{
-public:
-    //! Default constructor.
-    ResidueType();
-    //! Default destructor.
-    ~ResidueType();
+/*! \brief Maps residue names to residue types
+ *
+ * The contents are typically loaded from share/top/residuetypes.dat
+ * or similar file provided in the users's working directory.
+ */
+using ResidueTypeMap =
+        std::unordered_map<ResidueName, ResidueType, std::hash<ResidueName>, gmx::EqualCaseInsensitive>;
 
-    //! Get handle to underlying residue type data.
-    ResidueTypeEntry* ResidueTypes();
+/*! \brief
+ * Add entry to ResidueTypeMap if unique.
+ *
+ * \param[in] residueTypeMap Map to which to add new name+type entry
+ * \param[in] residueName    Name of new residue.
+ * \param[in] residueType    Type of new residue.
+ */
+void addResidue(ResidueTypeMap* residueTypeMap, const ResidueName& residueName, const ResidueType& residueType);
 
-    //! Get number of entries in ResidueTypes.
-    int numberOfEntries() const;
-    /*! \brief
-     * Return true if residue \p residueName is found or false otherwise.
-     *
-     * \param[in] residueName Residue name to search database for.
-     * \returns true if successful.
-     */
-    bool nameIndexedInResidueTypes(const std::string& residueName);
-    /*! \brief
-     * Add entry to ResidueTypes if unique.
-     *
-     * \param[in] residueName Name of new residue.
-     * \param[in] residueType Type of new residue.
-     */
-    void addResidue(const std::string& residueName, const std::string& residueType);
-    /*! \brief
-     * Checks if the indicated \p residueName if of \p residueType.
-     *
-     * \param[in] residueName Residue that should be checked.
-     * \param[in] residueType Which ResidueType the residue should have.
-     * \returns If the check was successful.
-     */
-    bool namedResidueHasType(const std::string& residueName, const std::string& residueType);
-    /*! \brief
-     * Get index to entry in ResidueTypes with name \p residueName.
-     *
-     * \param[in] residueName Name of the residue being searched.
-     * \returns The index or -1 if not found.
-     */
-    int indexFromResidueName(const std::string& residueName) const;
-    /*! \brief
-     * Get the name of the entry in ResidueTypes with \p index.
-     *
-     * \param[in] index Which entry should be returned.
-     * \returns The name of the entry at \p index, or nullptr.
-     */
-    std::string nameFromResidueIndex(int index) const;
-    /*! \brief
-     * Return the residue type if a residue with that name exists, or "Other"
-     *
-     * \param[in] residueName Name of the residue to search for.
-     * \returns The residue type of any matching residue, or "Other"
-     */
-    std::string typeOfNamedDatabaseResidue(const std::string& residueName);
-    /*! \brief
-     * Return an optional residue type if a residue with that name exists
-     *
-     * \param[in] residueName Name of the residue to search for.
-     * \returns An optional containing the residue type of any matching residue
-     */
-    std::optional<std::string> optionalTypeOfNamedDatabaseResidue(const std::string& residueName);
+/*! \brief Returns a ResidueTypeMap filled from a file
+ *
+ * The value of the parameter is typically "residuetypes.dat" which
+ * treats that as a GROMACS library file, ie. loads it from the working
+ * directory or from "share/top" corresponding to the sourced GMXRC.
+ *
+ * \param[in] residueTypesDatFilename Library file to read and from which to fill the returned map
+ */
+ResidueTypeMap residueTypeMapFromLibraryFile(const std::string& residueTypesDatFilename);
 
-private:
-    //! Implementation pointer.
-    class Impl;
+/*! \brief
+ * Checks if the indicated \p residueName is of \p residueType.
+ *
+ * \param[in] residueTypeMap Map to search
+ * \param[in] residueName    Residue that should be checked.
+ * \param[in] residueType    Which ResidueType the residue should have.
+ * \returns If the check was successful.
+ */
+bool namedResidueHasType(const ResidueTypeMap& residueTypeMap,
+                         const ResidueName&    residueName,
+                         const ResidueType&    residueType);
 
-    std::unique_ptr<Impl> impl_;
-};
+/*! \brief
+ * Return the residue type if a residue with that name exists, or "Other"
+ *
+ * \param[in] residueTypeMap Map to search
+ * \param[in] residueName    Name of the residue to search for.
+ * \returns The residue type of any matching residue, or "Other"
+ */
+ResidueType typeOfNamedDatabaseResidue(const ResidueTypeMap& residueTypeMap, const ResidueName& residueName);
 
 #endif

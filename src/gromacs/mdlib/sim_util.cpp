@@ -900,12 +900,11 @@ static ForceOutputs setupForceOutputs(ForceHelperBuffers*                 forceH
 
 /*! \brief Set up flags that have the lifetime of the domain indicating what type of work is there to compute.
  */
-static DomainLifetimeWorkload setupDomainLifetimeWorkload(const t_inputrec& inputrec,
-                                                          const t_forcerec& fr,
-                                                          const pull_t*     pull_work,
-                                                          const gmx_edsam*  ed,
-                                                          const t_mdatoms&  mdatoms,
-                                                          bool havePPDomainDecomposition,
+static DomainLifetimeWorkload setupDomainLifetimeWorkload(const t_inputrec&         inputrec,
+                                                          const t_forcerec&         fr,
+                                                          const pull_t*             pull_work,
+                                                          const gmx_edsam*          ed,
+                                                          const t_mdatoms&          mdatoms,
                                                           const SimulationWorkload& simulationWork,
                                                           const StepWorkload&       stepWork)
 {
@@ -938,7 +937,7 @@ static DomainLifetimeWorkload setupDomainLifetimeWorkload(const t_inputrec& inpu
             || domainWork.haveFreeEnergyWork || simulationWork.useCpuNonbonded || simulationWork.useCpuPme
             || simulationWork.haveEwaldSurfaceContribution || inputrec.nwall > 0;
     domainWork.haveLocalForceContribInCpuBuffer =
-            domainWork.haveCpuLocalForceWork || havePPDomainDecomposition;
+            domainWork.haveCpuLocalForceWork || simulationWork.havePpDomainDecomposition;
     domainWork.haveNonLocalForceContribInCpuBuffer =
             domainWork.haveCpuBondedWork || domainWork.haveFreeEnergyWork;
 
@@ -951,15 +950,13 @@ static DomainLifetimeWorkload setupDomainLifetimeWorkload(const t_inputrec& inpu
  * \param[in]      mtsLevels            The multiple time-stepping levels, either empty or 2 levels
  * \param[in]      step                 The current MD step
  * \param[in]      simulationWork       Simulation workload description.
- * \param[in]      rankHasPmeDuty       If this rank computes PME.
  *
  * \returns New Stepworkload description.
  */
 static StepWorkload setupStepWorkload(const int                     legacyFlags,
                                       ArrayRef<const gmx::MtsLevel> mtsLevels,
                                       const int64_t                 step,
-                                      const SimulationWorkload&     simulationWork,
-                                      const bool                    rankHasPmeDuty)
+                                      const SimulationWorkload&     simulationWork)
 {
     GMX_ASSERT(mtsLevels.empty() || mtsLevels.size() == 2, "Expect 0 or 2 MTS levels");
     const bool computeSlowForces = (mtsLevels.empty() || step % mtsLevels[1].stepFactor == 0);
@@ -986,12 +983,13 @@ static StepWorkload setupStepWorkload(const int                     legacyFlags,
     }
     flags.useGpuXBufferOps = simulationWork.useGpuBufferOps;
     // on virial steps the CPU reduction path is taken
-    flags.useGpuFBufferOps = simulationWork.useGpuBufferOps && !flags.computeVirial;
-    flags.useGpuPmeFReduction = flags.computeSlowForces && flags.useGpuFBufferOps && simulationWork.useGpuPme
-                                && (rankHasPmeDuty || simulationWork.useGpuPmePpCommunication);
+    flags.useGpuFBufferOps       = simulationWork.useGpuBufferOps && !flags.computeVirial;
+    const bool rankHasGpuPmeTask = simulationWork.useGpuPme && !simulationWork.haveSeparatePmeRank;
+    flags.useGpuPmeFReduction    = flags.computeSlowForces && flags.useGpuFBufferOps
+                                && (rankHasGpuPmeTask || simulationWork.useGpuPmePpCommunication);
     flags.useGpuXHalo          = simulationWork.useGpuHaloExchange;
     flags.useGpuFHalo          = simulationWork.useGpuHaloExchange && flags.useGpuFBufferOps;
-    flags.haveGpuPmeOnThisRank = simulationWork.useGpuPme && rankHasPmeDuty && flags.computeSlowForces;
+    flags.haveGpuPmeOnThisRank = rankHasGpuPmeTask && flags.computeSlowForces;
     flags.combineMtsForcesBeforeHaloExchange =
             (flags.computeForces && simulationWork.useMts && flags.computeSlowForces
              && flags.useOnlyMtsCombinedForceBuffer
@@ -1131,8 +1129,8 @@ static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
     gmx::StatePropagatorDataGpu* stateGpu = fr->stateGpu;
 
     // (re-)initialize local GPU force reduction
-    const bool accumulate =
-            runScheduleWork->domainWork.haveCpuLocalForceWork || havePPDomainDecomposition(cr);
+    const bool accumulate = runScheduleWork->domainWork.haveCpuLocalForceWork
+                            || runScheduleWork->simulationWork.havePpDomainDecomposition;
     const int atomStart = 0;
     fr->gpuForceReduction[gmx::AtomLocality::Local]->reinit(stateGpu->getForces(),
                                                             nbv->getNumAtoms(AtomLocality::Local),
@@ -1145,19 +1143,19 @@ static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
     fr->gpuForceReduction[gmx::AtomLocality::Local]->registerNbnxmForce(Nbnxm::gpu_get_f(nbv->gpu_nbv));
 
     if (runScheduleWork->simulationWork.useGpuPme
-        && (thisRankHasDuty(cr, DUTY_PME) || runScheduleWork->simulationWork.useGpuPmePpCommunication))
+        && (!runScheduleWork->simulationWork.haveSeparatePmeRank
+            || runScheduleWork->simulationWork.useGpuPmePpCommunication))
     {
         DeviceBuffer<gmx::RVec> forcePtr =
-                thisRankHasDuty(cr, DUTY_PME) ? pme_gpu_get_device_f(fr->pmedata)
-                                              :                    // PME force buffer on same GPU
-                        fr->pmePpCommGpu->getGpuForceStagingPtr(); // buffer received from other GPU
+                runScheduleWork->simulationWork.haveSeparatePmeRank
+                        ? fr->pmePpCommGpu->getGpuForceStagingPtr() // buffer received from other GPU
+                        : pme_gpu_get_device_f(fr->pmedata);        // PME force buffer on same GPU
         fr->gpuForceReduction[gmx::AtomLocality::Local]->registerRvecForce(forcePtr);
 
         GpuEventSynchronizer* const pmeSynchronizer =
-                (thisRankHasDuty(cr, DUTY_PME) ? pme_gpu_get_f_ready_synchronizer(fr->pmedata)
-                                               : // PME force buffer on same GPU
-                         fr->pmePpCommGpu->getForcesReadySynchronizer()); // buffer received from other GPU
-
+                (runScheduleWork->simulationWork.haveSeparatePmeRank
+                         ? fr->pmePpCommGpu->getForcesReadySynchronizer() // buffer received from other GPU
+                         : pme_gpu_get_f_ready_synchronizer(fr->pmedata)); // PME force buffer on same GPU
         if (GMX_THREAD_MPI)
         {
             GMX_ASSERT(pmeSynchronizer != nullptr, "PME force ready cuda event should not be NULL");
@@ -1168,7 +1166,7 @@ static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
     if (runScheduleWork->domainWork.haveCpuLocalForceWork && !runScheduleWork->simulationWork.useGpuHaloExchange)
     {
         // in the DD case we use the same stream for H2D and reduction, hence no explicit dependency needed
-        if (!havePPDomainDecomposition(cr))
+        if (!runScheduleWork->simulationWork.havePpDomainDecomposition)
         {
             const bool useGpuForceBufferOps = true;
             fr->gpuForceReduction[gmx::AtomLocality::Local]->addDependency(
@@ -1182,7 +1180,7 @@ static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
                 cr->dd->gpuHaloExchange[0][0]->getForcesReadyOnDeviceEvent());
     }
 
-    if (havePPDomainDecomposition(cr))
+    if (runScheduleWork->simulationWork.havePpDomainDecomposition)
     {
         // (re-)initialize non-local GPU force reduction
         const bool accumulate = runScheduleWork->domainWork.haveCpuBondedWork
@@ -1253,8 +1251,7 @@ void do_force(FILE*                               fplog,
 
     const SimulationWorkload& simulationWork = runScheduleWork->simulationWork;
 
-    runScheduleWork->stepWork = setupStepWorkload(
-            legacyFlags, inputrec.mtsLevels, step, simulationWork, thisRankHasDuty(cr, DUTY_PME));
+    runScheduleWork->stepWork = setupStepWorkload(legacyFlags, inputrec.mtsLevels, step, simulationWork);
     const StepWorkload& stepWork = runScheduleWork->stepWork;
 
     /* At a search step we need to start the first balancing region
@@ -1302,25 +1299,21 @@ void do_force(FILE*                               fplog,
                                                 AtomLocality::Local, simulationWork, stepWork)
                                         : nullptr;
 
+    GMX_ASSERT(simulationWork.useGpuHaloExchange
+                       == ((cr->dd != nullptr) && (!cr->dd->gpuHaloExchange[0].empty())),
+               "The GPU halo exchange is active, but it has not been constructed.");
+
+    bool gmx_used_in_debug haveCopiedXFromGpu = false;
     // Copy coordinate from the GPU if update is on the GPU and there
     // are forces to be computed on the CPU, or for the computation of
     // virial, or if host-side data will be transferred from this task
     // to a remote task for halo exchange or PME-PP communication. At
     // search steps the current coordinates are already on the host,
     // hence copy is not needed.
-    const bool haveHostPmePpComms =
-            !thisRankHasDuty(cr, DUTY_PME) && !simulationWork.useGpuPmePpCommunication;
-
-    GMX_ASSERT(simulationWork.useGpuHaloExchange
-                       == ((cr->dd != nullptr) && (!cr->dd->gpuHaloExchange[0].empty())),
-               "The GPU halo exchange is active, but it has not been constructed.");
-    const bool haveHostHaloExchangeComms =
-            havePPDomainDecomposition(cr) && !simulationWork.useGpuHaloExchange;
-
-    bool gmx_used_in_debug haveCopiedXFromGpu = false;
     if (simulationWork.useGpuUpdate && !stepWork.doNeighborSearch
         && (runScheduleWork->domainWork.haveCpuLocalForceWork || stepWork.computeVirial
-            || haveHostPmePpComms || haveHostHaloExchangeComms || simulationWork.computeMuTot))
+            || simulationWork.useCpuPmePpCommunication || simulationWork.useCpuHaloExchange
+            || simulationWork.computeMuTot))
     {
         stateGpu->copyCoordinatesFromGpu(x.unpaddedArrayRef(), AtomLocality::Local);
         haveCopiedXFromGpu = true;
@@ -1336,7 +1329,7 @@ void do_force(FILE*                               fplog,
         {
             // TODO refactor this to do_md, after partitioning.
             stateGpu->reinit(mdatoms->homenr,
-                             getLocalAtomCount(cr->dd, *mdatoms, havePPDomainDecomposition(cr)));
+                             getLocalAtomCount(cr->dd, *mdatoms, simulationWork.havePpDomainDecomposition));
             if (stepWork.haveGpuPmeOnThisRank)
             {
                 // TODO: This should be moved into PME setup function ( pme_gpu_prepare_computation(...) )
@@ -1353,7 +1346,7 @@ void do_force(FILE*                               fplog,
         }
     }
 
-    if (!thisRankHasDuty(cr, DUTY_PME) && stepWork.computeSlowForces)
+    if (simulationWork.haveSeparatePmeRank && stepWork.computeSlowForces)
     {
         /* Send particle coordinates to the pme nodes */
         if (!pmeSendCoordinatesFromGpu && !stepWork.doNeighborSearch && simulationWork.useGpuUpdate)
@@ -1464,7 +1457,7 @@ void do_force(FILE*                               fplog,
         // Need to run after the GPU-offload bonded interaction lists
         // are set up to be able to determine whether there is bonded work.
         runScheduleWork->domainWork = setupDomainLifetimeWorkload(
-                inputrec, *fr, pull_work, ed, *mdatoms, havePPDomainDecomposition(cr), simulationWork, stepWork);
+                inputrec, *fr, pull_work, ed, *mdatoms, simulationWork, stepWork);
 
         wallcycle_start_nocount(wcycle, WallCycleCounter::NS);
         wallcycle_sub_start(wcycle, WallCycleSubCounter::NBSSearchLocal);
@@ -1523,7 +1516,7 @@ void do_force(FILE*                               fplog,
 
         // bonded work not split into separate local and non-local, so with DD
         // we can only launch the kernel after non-local coordinates have been received.
-        if (domainWork.haveGpuBondedWork && !havePPDomainDecomposition(cr))
+        if (domainWork.haveGpuBondedWork && !simulationWork.havePpDomainDecomposition)
         {
             fr->listedForcesGpu->setPbcAndlaunchKernel(fr->pbcType, box, fr->bMolPBC, stepWork);
         }
@@ -1550,7 +1543,7 @@ void do_force(FILE*                               fplog,
 
     /* Communicate coordinates and sum dipole if necessary +
        do non-local pair search */
-    if (havePPDomainDecomposition(cr))
+    if (simulationWork.havePpDomainDecomposition)
     {
         if (stepWork.doNeighborSearch)
         {
@@ -1599,7 +1592,7 @@ void do_force(FILE*                               fplog,
 
             if (stepWork.useGpuXBufferOps)
             {
-                if (!stepWork.haveGpuPmeOnThisRank && !stepWork.useGpuXHalo)
+                if (!stepWork.useGpuXHalo)
                 {
                     stateGpu->copyCoordinatesToGpu(x.unpaddedArrayRef(), AtomLocality::NonLocal);
                 }
@@ -1646,7 +1639,7 @@ void do_force(FILE*                               fplog,
         wallcycle_start_nocount(wcycle, WallCycleCounter::LaunchGpu);
         wallcycle_sub_start_nocount(wcycle, WallCycleSubCounter::LaunchGpuNonBonded);
 
-        if (havePPDomainDecomposition(cr))
+        if (simulationWork.havePpDomainDecomposition)
         {
             Nbnxm::gpu_launch_cpyback(nbv->gpu_nbv, nbv->nbat.get(), stepWork, AtomLocality::NonLocal);
         }
@@ -1672,7 +1665,7 @@ void do_force(FILE*                               fplog,
     {
         const bool needCoordsOnHost  = (runScheduleWork->domainWork.haveCpuLocalForceWork
                                        || stepWork.computeVirial || simulationWork.computeMuTot);
-        const bool haveAlreadyWaited = haveHostHaloExchangeComms;
+        const bool haveAlreadyWaited = simulationWork.useCpuHaloExchange;
         if (needCoordsOnHost && !haveAlreadyWaited)
         {
             GMX_ASSERT(haveCopiedXFromGpu,
@@ -1710,7 +1703,7 @@ void do_force(FILE*                               fplog,
     /* Reset energies */
     reset_enerdata(enerd);
 
-    if (DOMAINDECOMP(cr) && !thisRankHasDuty(cr, DUTY_PME))
+    if (DOMAINDECOMP(cr) && simulationWork.haveSeparatePmeRank)
     {
         wallcycle_start(wcycle, WallCycleCounter::PpDuringPme);
         dd_force_flop_start(cr->dd, nrnb);
@@ -1736,7 +1729,7 @@ void do_force(FILE*                               fplog,
      * With multiple time-stepping the use is different for MTS fast (level0 only) and slow steps.
      */
     ForceOutputs forceOutMtsLevel0 = setupForceOutputs(
-            &fr->forceHelperBuffers[0], force, domainWork, stepWork, havePPDomainDecomposition(cr), wcycle);
+            &fr->forceHelperBuffers[0], force, domainWork, stepWork, simulationWork.havePpDomainDecomposition, wcycle);
 
     // Force output for MTS combined forces, only set at level1 MTS steps
     std::optional<ForceOutputs> forceOutMts =
@@ -1745,7 +1738,7 @@ void do_force(FILE*                               fplog,
                                                       forceView->forceMtsCombinedWithPadding(),
                                                       domainWork,
                                                       stepWork,
-                                                      havePPDomainDecomposition(cr),
+                                                      simulationWork.havePpDomainDecomposition,
                                                       wcycle))
                     : std::nullopt;
 
@@ -1807,7 +1800,7 @@ void do_force(FILE*                               fplog,
                 stepWork,
                 nrnb);
 
-        if (havePPDomainDecomposition(cr))
+        if (simulationWork.havePpDomainDecomposition)
         {
             nbv->dispatchFreeEnergyKernel(
                     InteractionLocality::NonLocal,
@@ -1838,7 +1831,7 @@ void do_force(FILE*                               fplog,
 
     if (stepWork.computeNonbondedForces && !useOrEmulateGpuNb)
     {
-        if (havePPDomainDecomposition(cr))
+        if (simulationWork.havePpDomainDecomposition)
         {
             do_nb_verlet(fr, ic, enerd, stepWork, InteractionLocality::NonLocal, enbvClearFNo, step, nrnb, wcycle);
         }
@@ -2008,7 +2001,7 @@ void do_force(FILE*                               fplog,
                          ed,
                          stepWork.doNeighborSearch);
 
-    if (havePPDomainDecomposition(cr) && stepWork.computeForces && stepWork.useGpuFHalo
+    if (simulationWork.havePpDomainDecomposition && stepWork.computeForces && stepWork.useGpuFHalo
         && domainWork.haveCpuLocalForceWork)
     {
         stateGpu->copyForcesToGpu(forceOutMtsLevel0.forceWithShiftForces().force(), AtomLocality::Local);
@@ -2026,7 +2019,7 @@ void do_force(FILE*                               fplog,
         auto& forceWithShiftForces = forceOutNonbonded->forceWithShiftForces();
 
         /* wait for non-local forces (or calculate in emulation mode) */
-        if (havePPDomainDecomposition(cr))
+        if (simulationWork.havePpDomainDecomposition)
         {
             if (simulationWork.useGpuNonbonded)
             {
@@ -2082,13 +2075,13 @@ void do_force(FILE*                               fplog,
      */
     if (stepWork.combineMtsForcesBeforeHaloExchange)
     {
-        combineMtsForces(getLocalAtomCount(cr->dd, *mdatoms, havePPDomainDecomposition(cr)),
+        combineMtsForces(getLocalAtomCount(cr->dd, *mdatoms, simulationWork.havePpDomainDecomposition),
                          force.unpaddedArrayRef(),
                          forceView->forceMtsCombined(),
                          inputrec.mtsLevels[1].stepFactor);
     }
 
-    if (havePPDomainDecomposition(cr))
+    if (simulationWork.havePpDomainDecomposition)
     {
         /* We are done with the CPU compute.
          * We will now communicate the non-local forces.
@@ -2215,8 +2208,8 @@ void do_force(FILE*                               fplog,
 
     // If on GPU PME-PP comms path, receive forces from PME before GPU buffer ops
     // TODO refactor this and unify with below default-path call to the same function
-    if (PAR(cr) && !thisRankHasDuty(cr, DUTY_PME) && stepWork.computeSlowForces
-        && simulationWork.useGpuPmePpCommunication)
+    if (PAR(cr) && simulationWork.haveSeparatePmeRank && simulationWork.useGpuPmePpCommunication
+        && stepWork.computeSlowForces)
     {
         /* In case of node-splitting, the PP nodes receive the long-range
          * forces, virial and energy from the PME nodes here.
@@ -2255,7 +2248,8 @@ void do_force(FILE*                               fplog,
                 // CPU force H2D with GPU force tasks on all streams including those in the
                 // local stream which would otherwise be implicit dependencies for the
                 // transfer and would not overlap.
-                auto locality = havePPDomainDecomposition(cr) ? AtomLocality::Local : AtomLocality::All;
+                auto locality = simulationWork.havePpDomainDecomposition ? AtomLocality::Local
+                                                                         : AtomLocality::All;
 
                 stateGpu->copyForcesToGpu(forceWithShift, locality);
             }
@@ -2272,7 +2266,8 @@ void do_force(FILE*                               fplog,
             // NOTE: If there are virtual sites, the forces are modified on host after this D2H copy. Hence,
             //       they should not be copied in do_md(...) for the output.
             if (!simulationWork.useGpuUpdate
-                || (simulationWork.useGpuUpdate && DOMAINDECOMP(cr) && haveHostPmePpComms) || vsite)
+                || (simulationWork.useGpuUpdate && DOMAINDECOMP(cr) && simulationWork.useCpuPmePpCommunication)
+                || vsite)
             {
                 stateGpu->copyForcesFromGpu(forceWithShift, AtomLocality::Local);
                 stateGpu->waitForcesReadyOnHost(AtomLocality::Local);
@@ -2308,7 +2303,7 @@ void do_force(FILE*                               fplog,
     }
 
     // TODO refactor this and unify with above GPU PME-PP / GPU update path call to the same function
-    if (PAR(cr) && !thisRankHasDuty(cr, DUTY_PME) && !simulationWork.useGpuPmePpCommunication
+    if (PAR(cr) && simulationWork.haveSeparatePmeRank && simulationWork.useCpuPmePpCommunication
         && stepWork.computeSlowForces)
     {
         /* In case of node-splitting, the PP nodes receive the long-range

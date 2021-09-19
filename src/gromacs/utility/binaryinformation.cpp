@@ -52,7 +52,7 @@
 #    include <fftw3.h>
 #endif
 
-#ifdef HAVE_LIBMKL
+#if HAVE_LIBMKL
 #    include <mkl.h>
 #endif
 
@@ -86,6 +86,7 @@
 #include "gromacs/utility/textwriter.h"
 
 #include "cuda_version_information.h"
+#include "sycl_version_information.h"
 
 namespace
 {
@@ -204,8 +205,8 @@ void printCopyright(gmx::TextWriter* writer)
     }
 }
 
-// Construct a string that describes the library that provides FFT support to this build
-const char* getFftDescriptionString()
+//! Construct a string that describes the library that provides CPU FFT support to this build
+const char* getCpuFftDescriptionString()
 {
 // Define the FFT description string
 #if GMX_FFT_FFTW3 || GMX_FFT_ARMPL_FFTW3
@@ -227,6 +228,35 @@ const char* getFftDescriptionString()
 #if GMX_FFT_FFTPACK
     return "fftpack (built-in)";
 #endif
+};
+
+//! Construct a string that describes the library that provides GPU FFT support to this build
+const char* getGpuFftDescriptionString()
+{
+    if (GMX_GPU)
+    {
+        if (GMX_GPU_CUDA)
+        {
+            return "cuFFT";
+        }
+        else if (GMX_GPU_OPENCL)
+        {
+            return "clFFT";
+        }
+        else if (GMX_GPU_SYCL)
+        {
+            return "unknown";
+        }
+        else
+        {
+            GMX_RELEASE_ASSERT(false, "Unknown GPU configuration");
+            return "impossible";
+        }
+    }
+    else
+    {
+        return "none";
+    }
 };
 
 void gmx_print_version_info(gmx::TextWriter* writer)
@@ -309,7 +339,8 @@ void gmx_print_version_info(gmx::TextWriter* writer)
 #endif
     writer->writeLine(formatString("GPU support:        %s", getGpuImplementationString()));
     writer->writeLine(formatString("SIMD instructions:  %s", GMX_SIMD_STRING));
-    writer->writeLine(formatString("FFT library:        %s", getFftDescriptionString()));
+    writer->writeLine(formatString("CPU FFT library:    %s", getCpuFftDescriptionString()));
+    writer->writeLine(formatString("GPU FFT library:    %s", getGpuFftDescriptionString()));
 #if GMX_TARGET_X86
     writer->writeLine(formatString("RDTSCP usage:       %s", GMX_USE_RDTSCP ? "enabled" : "disabled"));
 #endif
@@ -342,10 +373,10 @@ void gmx_print_version_info(gmx::TextWriter* writer)
     writer->writeLine(formatString("C++ compiler:       %s", BUILD_CXX_COMPILER));
     writer->writeLine(formatString(
             "C++ compiler flags: %s %s", BUILD_CXXFLAGS, CMAKE_BUILD_CONFIGURATION_CXX_FLAGS));
-#ifdef HAVE_LIBMKL
+#if HAVE_LIBMKL
     /* MKL might be used for LAPACK/BLAS even if FFTs use FFTW, so keep it separate */
     writer->writeLine(formatString(
-            "Linked with Intel MKL version %d.%d.%d.", __INTEL_MKL__, __INTEL_MKL_MINOR__, __INTEL_MKL_UPDATE__));
+            "Intel MKL version:  %d.%d.%d", __INTEL_MKL__, __INTEL_MKL_MINOR__, __INTEL_MKL_UPDATE__));
 #endif
 #if GMX_GPU_OPENCL
     writer->writeLine(formatString("OpenCL include dir: %s", OPENCL_INCLUDE_DIR));
@@ -360,12 +391,14 @@ void gmx_print_version_info(gmx::TextWriter* writer)
     writer->writeLine("CUDA runtime:       " + gmx::getCudaRuntimeVersionString());
 #endif
 #if GMX_SYCL_DPCPP
-    writer->writeLine(formatString("SYCL DPCPP flags:   %s", SYCL_DPCPP_COMPILER_FLAGS));
+    writer->writeLine(formatString("SYCL DPC++ flags:   %s", SYCL_DPCPP_COMPILER_FLAGS));
+    writer->writeLine("SYCL DPC++ version: " + gmx::getSyclCompilerVersion());
 #endif
 #if GMX_SYCL_HIPSYCL
     writer->writeLine(formatString("hipSYCL launcher:   %s", SYCL_HIPSYCL_COMPILER_LAUNCHER));
     writer->writeLine(formatString("hipSYCL flags:      %s", SYCL_HIPSYCL_COMPILER_FLAGS));
-    writer->writeLine(formatString("hipSYCL platforms:  %s", SYCL_HIPSYCL_PLATFORMS));
+    writer->writeLine(formatString("hipSYCL targets:    %s", SYCL_HIPSYCL_TARGETS));
+    writer->writeLine("hipSYCL version:    " + gmx::getSyclCompilerVersion());
 #endif
 }
 

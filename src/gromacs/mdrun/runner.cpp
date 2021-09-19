@@ -128,6 +128,7 @@
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/mdrunoptions.h"
 #include "gromacs/mdtypes/observableshistory.h"
+#include "gromacs/mdtypes/observablesreducer.h"
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/mdtypes/state_propagator_data_gpu.h"
@@ -1034,6 +1035,8 @@ int Mdrunner::mdrunner()
                                                               doEssentialDynamics,
                                                               membedHolder.doMembed());
 
+    ObservablesReducerBuilder observablesReducerBuilder;
+
     // Build restraints.
     // TODO: hide restraint implementation details from Mdrunner.
     // There is nothing unique about restraints at this point as far as the
@@ -1158,10 +1161,9 @@ int Mdrunner::mdrunner()
                 globalState.get(),
                 replExParams.exchangeInterval > 0);
 
-    std::unique_ptr<t_oriresdata> oriresData;
-    if (gmx_mtop_ftype_count(mtop, F_ORIRES) > 0)
+    if (gmx_mtop_ftype_count(mtop, F_ORIRES) > 0 && isSimulationMasterRank)
     {
-        oriresData = std::make_unique<t_oriresdata>(fplog, mtop, *inputrec, cr, ms, globalState.get());
+        extendStateWithOriresHistory(mtop, *inputrec, globalState.get());
     }
 
     auto deform = prepareBoxDeformation(globalState != nullptr ? globalState->box : box,
@@ -1298,6 +1300,45 @@ int Mdrunner::mdrunner()
                                                  systemHasConstraintsOrVsites(mtop),
                                                  cutoffMargin);
 
+    try
+    {
+        const bool haveFrozenAtoms = inputrecFrozenAtoms(inputrec.get());
+
+        useGpuForUpdate = decideWhetherToUseGpuForUpdate(useDomainDecomposition,
+                                                         updateGroups.useUpdateGroups(),
+                                                         pmeRunMode,
+                                                         domdecOptions.numPmeRanks > 0,
+                                                         useGpuForNonbonded,
+                                                         updateTarget,
+                                                         gpusWereDetected,
+                                                         *inputrec,
+                                                         mtop,
+                                                         doEssentialDynamics,
+                                                         gmx_mtop_ftype_count(mtop, F_ORIRES) > 0,
+                                                         haveFrozenAtoms,
+                                                         doRerun,
+                                                         devFlags,
+                                                         mdlog);
+    }
+    GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR
+
+    bool useGpuDirectHalo = false;
+
+    if (useGpuForNonbonded)
+    {
+        // cr->npmenodes is not yet initialized.
+        // domdecOptions.numPmeRanks == -1 results in 0 separate PME ranks when useGpuForNonbonded is true.
+        // Todo: remove this assumption later once auto mode has support for separate PME rank
+        const int numPmeRanks = domdecOptions.numPmeRanks > 0 ? domdecOptions.numPmeRanks : 0;
+        bool      havePPDomainDecomposition = (cr->sizeOfDefaultCommunicator - numPmeRanks) > 1;
+        useGpuDirectHalo                    = decideWhetherToUseGpuForHalo(devFlags,
+                                                        havePPDomainDecomposition,
+                                                        useGpuForNonbonded,
+                                                        useModularSimulator,
+                                                        doRerun,
+                                                        EI_ENERGY_MINIMIZATION(inputrec->eI));
+    }
+
     // This builder is necessary while we have multi-part construction
     // of DD. Before DD is constructed, we use the existence of
     // the builder object to indicate that further construction of DD
@@ -1305,7 +1346,10 @@ int Mdrunner::mdrunner()
     std::unique_ptr<DomainDecompositionBuilder> ddBuilder;
     if (useDomainDecomposition)
     {
-        ddBuilder = std::make_unique<DomainDecompositionBuilder>(
+        // P2P GPU comm + GPU update leads to case in which we enqueue async work for multiple
+        // timesteps. DLB needs to be disabled in that case
+        const bool directGpuCommUsedWithGpuUpdate = GMX_THREAD_MPI && useGpuDirectHalo && useGpuForUpdate;
+        ddBuilder                                 = std::make_unique<DomainDecompositionBuilder>(
                 mdlog,
                 cr,
                 domdecOptions,
@@ -1319,7 +1363,8 @@ int Mdrunner::mdrunner()
                 updateGroups.maxUpdateGroupRadius(),
                 positionsFromStatePointer(globalState.get()),
                 useGpuForNonbonded,
-                useGpuForPme);
+                useGpuForPme,
+                directGpuCommUsedWithGpuUpdate);
     }
     else
     {
@@ -1389,32 +1434,19 @@ int Mdrunner::mdrunner()
         ddBuilder.reset(nullptr);
         // Note that local state still does not exist yet.
     }
-
-    // The GPU update is decided here because we need to know whether the constraints or
-    // SETTLEs can span across the domain borders (i.e. whether or not update groups are
-    // defined). This is only known after DD is initialized, hence decision on using GPU
-    // update is done so late.
-    try
+    // Ensure that all atoms within the same update group are in the
+    // same periodic image. Otherwise, a simulation that did not use
+    // update groups (e.g. a single-rank simulation) cannot always be
+    // correctly restarted in a way that does use update groups
+    // (e.g. a multi-rank simulation).
+    if (isSimulationMasterRank)
     {
-        const bool haveFrozenAtoms = inputrecFrozenAtoms(inputrec.get());
-
-        useGpuForUpdate = decideWhetherToUseGpuForUpdate(useDomainDecomposition,
-                                                         updateGroups.useUpdateGroups(),
-                                                         pmeRunMode,
-                                                         domdecOptions.numPmeRanks > 0,
-                                                         useGpuForNonbonded,
-                                                         updateTarget,
-                                                         gpusWereDetected,
-                                                         *inputrec,
-                                                         mtop,
-                                                         doEssentialDynamics,
-                                                         gmx_mtop_ftype_count(mtop, F_ORIRES) > 0,
-                                                         haveFrozenAtoms,
-                                                         doRerun,
-                                                         devFlags,
-                                                         mdlog);
+        const bool useUpdateGroups = cr->dd ? ddUsesUpdateGroups(*cr->dd) : false;
+        if (useUpdateGroups)
+        {
+            putUpdateGroupAtomsInSamePeriodicImage(*cr->dd, mtop, globalState->box, globalState->x);
+        }
     }
-    GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR
 
     const bool printHostName = (cr->nnodes > 1);
     gpuTaskAssignments.reportGpuUsage(mdlog, printHostName, useGpuForBonded, pmeRunMode, useGpuForUpdate);
@@ -1432,17 +1464,16 @@ int Mdrunner::mdrunner()
 
     MdrunScheduleWorkload runScheduleWork;
 
-    bool useGpuDirectHalo = decideWhetherToUseGpuForHalo(devFlags,
-                                                         havePPDomainDecomposition(cr),
-                                                         useGpuForNonbonded,
-                                                         useModularSimulator,
-                                                         doRerun,
-                                                         EI_ENERGY_MINIMIZATION(inputrec->eI));
-
     // Also populates the simulation constant workload description.
+    // Note: currently the default duty is DUTY_PP | DUTY_PME for all simulations, including those without PME,
+    // so this boolean is sufficient on all ranks to determine whether separate PME ranks are used,
+    // but this will no longer be the case if cr->duty is changed for !EEL_PME(fr->ic->eeltype).
+    const bool haveSeparatePmeRank = (!thisRankHasDuty(cr, DUTY_PP) || !thisRankHasDuty(cr, DUTY_PME));
     runScheduleWork.simulationWork = createSimulationWorkload(*inputrec,
                                                               disableNonbondedCalculation,
                                                               devFlags,
+                                                              havePPDomainDecomposition(cr),
+                                                              haveSeparatePmeRank,
                                                               useGpuForNonbonded,
                                                               pmeRunMode,
                                                               useGpuForBonded,
@@ -1630,7 +1661,11 @@ int Mdrunner::mdrunner()
                       pforce);
         // Dirty hack, for fixing disres and orires should be made mdmodules
         fr->fcdata->disres = disresdata;
-        fr->fcdata->orires.swap(oriresData);
+        if (gmx_mtop_ftype_count(mtop, F_ORIRES) > 0)
+        {
+            fr->fcdata->orires = std::make_unique<t_oriresdata>(
+                    fplog, mtop, *inputrec, ms, globalState.get(), &atomSets);
+        }
 
         // Save a handle to device stream manager to use elsewhere in the code
         // TODO: Forcerec is not a correct place to store it.
@@ -1984,7 +2019,7 @@ int Mdrunner::mdrunner()
         simulatorBuilder.add(SimulatorConfig(mdrunOptions, startingBehavior, &runScheduleWork));
 
 
-        simulatorBuilder.add(SimulatorEnv(fplog, cr, ms, mdlog, oenv));
+        simulatorBuilder.add(SimulatorEnv(fplog, cr, ms, mdlog, oenv, &observablesReducerBuilder));
         simulatorBuilder.add(Profiling(&nrnb, walltime_accounting, wcycle.get()));
         simulatorBuilder.add(ConstraintsParam(
                 constr.get(), enforcedRotation ? enforcedRotation->getLegacyEnfrot() : nullptr, vsite.get()));

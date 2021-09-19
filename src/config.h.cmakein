@@ -389,14 +389,17 @@
 /* Define if we have fedisableexcept */
 #cmakedefine01 HAVE_FEDISABLEEXCEPT
 
+/* Define if we have MKL available */
+#cmakedefine01 HAVE_LIBMKL
+
 /* Define if we have lmfit support */
 #cmakedefine01 HAVE_LMFIT
 
+/* Define if we have muparser support */
+#cmakedefine01 HAVE_MUPARSER
+
 /* Build using clang analyzer */
 #cmakedefine01 GMX_CLANG_ANALYZER
-
-/* Use MiMiC QM/MM interface */
-#cmakedefine01 GMX_MIMIC
 
 /* Use Interactive Molecular Dynamics */
 #cmakedefine01 GMX_IMD

@@ -115,6 +115,7 @@
 #include "gromacs/mdtypes/mdatom.h"
 #include "gromacs/mdtypes/mdrunoptions.h"
 #include "gromacs/mdtypes/observableshistory.h"
+#include "gromacs/mdtypes/observablesreducer.h"
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/mimic/communicator.h"
@@ -143,7 +144,6 @@ using gmx::SimulationSignaller;
 void gmx::LegacySimulator::do_mimic()
 {
     const t_inputrec* ir = inputrec;
-    int64_t           step, step_rel;
     double            t;
     bool              isLastStep               = false;
     bool              doFreeEnergyPerturbation = false;
@@ -206,6 +206,8 @@ void gmx::LegacySimulator::do_mimic()
     }
     int        nstglobalcomm = 1;
     const bool bNS           = true;
+
+    ObservablesReducer observablesReducer = observablesReducerBuilder->build();
 
     if (MASTER(cr))
     {
@@ -340,6 +342,9 @@ void gmx::LegacySimulator::do_mimic()
         doFreeEnergyPerturbation = true;
     }
 
+    int64_t step     = ir->init_step;
+    int64_t step_rel = 0;
+
     {
         int cglo_flags = CGLO_GSTAT;
         if (DOMAINDECOMP(cr) && dd_localTopologyChecker(*cr->dd).shouldCheckNumberOfBondedInteractions())
@@ -369,7 +374,9 @@ void gmx::LegacySimulator::do_mimic()
                         &nullSignaller,
                         state->box,
                         &bSumEkinhOld,
-                        cglo_flags);
+                        cglo_flags,
+                        step,
+                        &observablesReducer);
         if (DOMAINDECOMP(cr))
         {
             dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
@@ -415,9 +422,6 @@ void gmx::LegacySimulator::do_mimic()
                     "MiMiC does not report kinetic energy, total energy, temperature, virial and "
                     "pressure.");
 
-    step     = ir->init_step;
-    step_rel = 0;
-
     auto stopHandler = stopHandlerBuilder->getStopHandlerMD(
             compat::not_null<SimulationSignal*>(&signals[eglsSTOPCOND]),
             false,
@@ -448,7 +452,7 @@ void gmx::LegacySimulator::do_mimic()
 
         if (MASTER(cr))
         {
-            MimicCommunicator::getCoords(&state_global->x, state_global->natoms);
+            MimicCommunicator::getCoords(state_global->x, state_global->natoms);
         }
 
         if (ir->efep != FreeEnergyPerturbationType::No)
@@ -656,7 +660,9 @@ void gmx::LegacySimulator::do_mimic()
                             &signaller,
                             state->box,
                             &bSumEkinhOld,
-                            cglo_flags);
+                            cglo_flags,
+                            step,
+                            &observablesReducer);
             if (DOMAINDECOMP(cr))
             {
                 dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(

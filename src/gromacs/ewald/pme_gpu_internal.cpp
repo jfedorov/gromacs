@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2016,2017,2018,2019,2020, by the GROMACS development team.
+ * Copyright (c) 2016,2017,2018,2019,2020 by the GROMACS development team.
  * Copyright (c) 2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
@@ -606,21 +606,40 @@ void pme_gpu_reinit_3dfft(const PmeGpu* pmeGpu)
     if (pme_gpu_settings(pmeGpu).performGPUFFT)
     {
         pmeGpu->archSpecific->fftSetup.resize(0);
-        const bool        useDecomposition     = pme_gpu_settings(pmeGpu).useDecomposition;
-        const bool        performOutOfPlaceFFT = pmeGpu->archSpecific->performOutOfPlaceFFT;
-        PmeGpuGridParams& grid                 = pme_gpu_get_kernel_params_base_ptr(pmeGpu)->grid;
+        const bool         performOutOfPlaceFFT      = pmeGpu->archSpecific->performOutOfPlaceFFT;
+        const bool         allocateGrid              = false;
+        MPI_Comm           comm                      = MPI_COMM_NULL;
+        std::array<int, 1> gridOffsetsInXForEachRank = { 0 };
+        std::array<int, 1> gridOffsetsInYForEachRank = { 0 };
+#if GMX_GPU_CUDA
+        const gmx::FftBackend backend = gmx::FftBackend::Cufft;
+#elif GMX_GPU_OPENCL
+        const gmx::FftBackend backend = gmx::FftBackend::Ocl;
+#elif GMX_GPU_SYCL
+        const gmx::FftBackend backend = gmx::FftBackend::Sycl;
+#else
+        GMX_RELEASE_ASSERT(false, "Unknown GPU backend");
+        const gmx::FftBackend backend = gmx::FftBackend::Count;
+#endif
+
+        PmeGpuGridParams& grid = pme_gpu_get_kernel_params_base_ptr(pmeGpu)->grid;
         for (int gridIndex = 0; gridIndex < pmeGpu->common->ngrids; gridIndex++)
         {
             pmeGpu->archSpecific->fftSetup.push_back(
-                    std::make_unique<gmx::Gpu3dFft>(grid.realGridSize,
-                                                    grid.realGridSizePadded,
-                                                    grid.complexGridSizePadded,
-                                                    useDecomposition,
+                    std::make_unique<gmx::Gpu3dFft>(backend,
+                                                    allocateGrid,
+                                                    comm,
+                                                    gridOffsetsInXForEachRank,
+                                                    gridOffsetsInYForEachRank,
+                                                    grid.realGridSize[ZZ],
                                                     performOutOfPlaceFFT,
                                                     pmeGpu->archSpecific->deviceContext_,
                                                     pmeGpu->archSpecific->pmeStream_,
-                                                    grid.d_realGrid[gridIndex],
-                                                    grid.d_fourierGrid[gridIndex]));
+                                                    grid.realGridSize,
+                                                    grid.realGridSizePadded,
+                                                    grid.complexGridSizePadded,
+                                                    &(grid.d_realGrid[gridIndex]),
+                                                    &(grid.d_fourierGrid[gridIndex])));
         }
     }
 }
@@ -1204,6 +1223,7 @@ static auto selectSpreadKernelPtr(const PmeGpu*  pmeGpu,
             {
                 kernelPtr = pmeGpu->programHandle_->impl_->spreadKernelThPerAtom4Dual;
             }
+            else
             {
                 kernelPtr = pmeGpu->programHandle_->impl_->spreadKernelThPerAtom4Single;
             }

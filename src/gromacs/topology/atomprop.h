@@ -54,7 +54,6 @@ enum
 };
 
 struct AtomProperty;
-class ResidueType;
 /*! \brief
  * Holds all the atom property information loaded.
  */
@@ -108,8 +107,6 @@ public:
      * \returns Pointer to property entry.
      */
     AtomProperty* prop(int eprop);
-    //! Get handle to residuetype library.
-    ResidueType* restype();
 
 private:
     //! Implementation pointer.

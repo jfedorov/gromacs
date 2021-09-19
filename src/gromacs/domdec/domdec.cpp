@@ -706,7 +706,8 @@ static int ddcoord2simnodeid(const t_commrec* cr, int x, int y, int z)
         }
         else
         {
-            if (cr->dd->comm->ddRankSetup.usePmeOnlyRanks)
+            const DDRankSetup& rankSetup = cr->dd->comm->ddRankSetup;
+            if (rankSetup.rankOrder != DdRankOrder::pp_pme && rankSetup.usePmeOnlyRanks)
             {
                 nodeid = ddindex + gmx_ddcoord2pmeindex(*cr->dd, x, y, z);
             }
@@ -1802,18 +1803,20 @@ static DlbState forceDlbOffOrBail(DlbState             cmdlineDlbState,
  * state with other run parameters and settings. As a result, the initial state
  * may be altered or an error may be thrown if incompatibility of options is detected.
  *
- * \param [in] mdlog       Logger.
- * \param [in] dlbOption   Enum value for the DLB option.
- * \param [in] bRecordLoad True if the load balancer is recording load information.
- * \param [in] mdrunOptions  Options for mdrun.
- * \param [in] inputrec    Pointer mdrun to input parameters.
- * \returns                DLB initial/startup state.
+ * \param [in] mdlog                Logger.
+ * \param [in] dlbOption            Enum value for the DLB option.
+ * \param [in] bRecordLoad          True if the load balancer is recording load information.
+ * \param [in] mdrunOptions         Options for mdrun.
+ * \param [in] inputrec             Pointer mdrun to input parameters.
+ * \param [in] directGpuCommUsedWithGpuUpdate     Direct GPU halo exchange and GPU update enabled
+ * \returns                         DLB initial/startup state.
  */
 static DlbState determineInitialDlbState(const gmx::MDLogger&     mdlog,
                                          DlbOption                dlbOption,
                                          gmx_bool                 bRecordLoad,
                                          const gmx::MdrunOptions& mdrunOptions,
-                                         const t_inputrec&        inputrec)
+                                         const t_inputrec&        inputrec,
+                                         const bool               directGpuCommUsedWithGpuUpdate)
 {
     DlbState dlbState = DlbState::offCanTurnOn;
 
@@ -1823,6 +1826,15 @@ static DlbState determineInitialDlbState(const gmx::MDLogger&     mdlog,
         case DlbOption::no: dlbState = DlbState::offUser; break;
         case DlbOption::yes: dlbState = DlbState::onUser; break;
         default: gmx_incons("Invalid dlbOption enum value");
+    }
+
+    // P2P GPU comm + GPU update leads to case in which we enqueue async work for multiple timesteps
+    // DLB needs to be disabled in that case
+    if (directGpuCommUsedWithGpuUpdate)
+    {
+        std::string reasonStr =
+                "it is not supported with GPU direct communication + GPU update enabled.";
+        return forceDlbOffOrBail(dlbState, reasonStr, mdlog);
     }
 
     /* Reruns don't support DLB: bail or override auto mode */
@@ -2249,6 +2261,7 @@ static void checkDDGridSetup(const DDGridSetup&   ddGridSetup,
 /*! \brief Set the cell size and interaction limits, as well as the DD grid */
 static DDRankSetup getDDRankSetup(const gmx::MDLogger& mdlog,
                                   int                  numNodes,
+                                  const DdRankOrder    rankOrder,
                                   const DDGridSetup&   ddGridSetup,
                                   const t_inputrec&    ir)
 {
@@ -2260,6 +2273,8 @@ static DDRankSetup getDDRankSetup(const gmx::MDLogger& mdlog,
                                  ddGridSetup.numPmeOnlyRanks);
 
     DDRankSetup ddRankSetup;
+
+    ddRankSetup.rankOrder = rankOrder;
 
     ddRankSetup.numPPRanks = numNodes - ddGridSetup.numPmeOnlyRanks;
     copy_ivec(ddGridSetup.numDomains, ddRankSetup.numPPCells);
@@ -2771,7 +2786,8 @@ static void set_ddgrid_parameters(const gmx::MDLogger& mdlog,
 static DDSettings getDDSettings(const gmx::MDLogger&     mdlog,
                                 const DomdecOptions&     options,
                                 const gmx::MdrunOptions& mdrunOptions,
-                                const t_inputrec&        ir)
+                                const t_inputrec&        ir,
+                                const bool               directGpuCommUsedWithGpuUpdate)
 {
     DDSettings ddSettings;
 
@@ -2804,8 +2820,8 @@ static DDSettings getDDSettings(const gmx::MDLogger&     mdlog,
         ddSettings.recordLoad = (wallcycle_have_counter() && recload > 0);
     }
 
-    ddSettings.initialDlbState =
-            determineInitialDlbState(mdlog, options.dlbOption, ddSettings.recordLoad, mdrunOptions, ir);
+    ddSettings.initialDlbState = determineInitialDlbState(
+            mdlog, options.dlbOption, ddSettings.recordLoad, mdrunOptions, ir, directGpuCommUsedWithGpuUpdate);
     GMX_LOG(mdlog.info)
             .appendTextFormatted("Dynamic load balancing: %s",
                                  enumValueToString(ddSettings.initialDlbState));
@@ -2840,7 +2856,8 @@ public:
          real                              maxUpdateGroupRadius,
          ArrayRef<const RVec>              xGlobal,
          bool                              useGpuForNonbonded,
-         bool                              useGpuForPme);
+         bool                              useGpuForPme,
+         bool                              directGpuCommUsedWithGpuUpdate);
 
     //! Build the resulting DD manager
     gmx_domdec_t* build(LocalAtomSetManager* atomSets);
@@ -2895,12 +2912,13 @@ DomainDecompositionBuilder::Impl::Impl(const MDLogger&                   mdlog,
                                        const real                        maxUpdateGroupRadius,
                                        ArrayRef<const RVec>              xGlobal,
                                        bool                              useGpuForNonbonded,
-                                       bool                              useGpuForPme) :
+                                       bool                              useGpuForPme,
+                                       bool directGpuCommUsedWithGpuUpdate) :
     mdlog_(mdlog), cr_(cr), options_(options), mtop_(mtop), ir_(ir), notifiers_(notifiers)
 {
     GMX_LOG(mdlog_.info).appendTextFormatted("\nInitializing Domain Decomposition on %d ranks", cr_->sizeOfDefaultCommunicator);
 
-    ddSettings_ = getDDSettings(mdlog_, options_, mdrunOptions, ir_);
+    ddSettings_ = getDDSettings(mdlog_, options_, mdrunOptions, ir_, directGpuCommUsedWithGpuUpdate);
 
     if (ddSettings_.eFlop > 1)
     {
@@ -2970,7 +2988,8 @@ DomainDecompositionBuilder::Impl::Impl(const MDLogger&                   mdlog,
 
     cr_->npmenodes = ddGridSetup_.numPmeOnlyRanks;
 
-    ddRankSetup_ = getDDRankSetup(mdlog_, cr_->sizeOfDefaultCommunicator, ddGridSetup_, ir_);
+    ddRankSetup_ = getDDRankSetup(
+            mdlog_, cr_->sizeOfDefaultCommunicator, options_.rankOrder, ddGridSetup_, ir_);
 
     /* Generate the group communicator, also decides the duty of each rank */
     cartSetup_ = makeGroupCommunicators(
@@ -3033,7 +3052,8 @@ DomainDecompositionBuilder::DomainDecompositionBuilder(const MDLogger&          
                                                        const real           maxUpdateGroupRadius,
                                                        ArrayRef<const RVec> xGlobal,
                                                        const bool           useGpuForNonbonded,
-                                                       const bool           useGpuForPme) :
+                                                       const bool           useGpuForPme,
+                                                       const bool directGpuCommUsedWithGpuUpdate) :
     impl_(new Impl(mdlog,
                    cr,
                    options,
@@ -3047,7 +3067,8 @@ DomainDecompositionBuilder::DomainDecompositionBuilder(const MDLogger&          
                    maxUpdateGroupRadius,
                    xGlobal,
                    useGpuForNonbonded,
-                   useGpuForPme))
+                   useGpuForPme,
+                   directGpuCommUsedWithGpuUpdate))
 {
 }
 
@@ -3239,4 +3260,43 @@ void dd_init_local_state(const gmx_domdec_t& dd, const t_state* state_global, t_
     init_gtc_state(state_local, buf[1], buf[2], buf[3]);
     init_dfhist_state(state_local, buf[4]);
     state_local->flags = buf[0];
+}
+
+void putUpdateGroupAtomsInSamePeriodicImage(const gmx_domdec_t&      dd,
+                                            const gmx_mtop_t&        mtop,
+                                            const matrix             box,
+                                            gmx::ArrayRef<gmx::RVec> positions)
+{
+    int atomOffset = 0;
+    for (const gmx_molblock_t& molblock : mtop.molblock)
+    {
+        const auto& updateGrouping = dd.comm->systemInfo.updateGroupingsPerMoleculeType[molblock.type];
+
+        for (int mol = 0; mol < molblock.nmol; mol++)
+        {
+            for (int g = 0; g < updateGrouping.numBlocks(); g++)
+            {
+                const auto& block     = updateGrouping.block(g);
+                const int   atomBegin = atomOffset + block.begin();
+                const int   atomEnd   = atomOffset + block.end();
+                for (int a = atomBegin + 1; a < atomEnd; a++)
+                {
+                    // Make sure that atoms in the same update group
+                    // are in the same periodic image after restarts.
+                    for (int d = DIM - 1; d >= 0; d--)
+                    {
+                        while (positions[a][d] - positions[atomBegin][d] > 0.5_real * box[d][d])
+                        {
+                            positions[a] -= box[d];
+                        }
+                        while (positions[a][d] - positions[atomBegin][d] < -0.5_real * box[d][d])
+                        {
+                            positions[a] += box[d];
+                        }
+                    }
+                }
+            }
+            atomOffset += updateGrouping.fullRange().end();
+        }
+    }
 }

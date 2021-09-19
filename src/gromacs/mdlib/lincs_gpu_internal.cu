@@ -64,7 +64,7 @@ constexpr static int c_maxThreadsPerBlock = c_threadsPerBlock;
  *
  * See Hess et al., J. Comput. Chem. 18: 1463-1472 (1997) for the description of the algorithm.
  *
- * In CUDA version, one thread is responsible for all computations for one constraint. The blocks are
+ * In GPU version, one thread is responsible for all computations for one constraint. The blocks are
  * filled in a way that no constraint is coupled to the constraint from the next block. This is achieved
  * by moving active threads to the next block, if the correspondent group of coupled constraints is to big
  * to fit the current thread block. This may leave some 'dummy' threads in the end of the thread block, i.e.
@@ -407,14 +407,14 @@ inline auto getLincsKernelPtr(const bool updateVelocities, const bool computeVir
     return kernelPtr;
 }
 
-void launchLincsGpuKernel(const LincsGpuKernelParameters& kernelParams,
-                          const DeviceBuffer<Float3>&     d_x,
-                          DeviceBuffer<Float3>            d_xp,
-                          const bool                      updateVelocities,
-                          DeviceBuffer<Float3>            d_v,
-                          const real                      invdt,
-                          const bool                      computeVirial,
-                          const DeviceStream&             deviceStream)
+void launchLincsGpuKernel(LincsGpuKernelParameters*   kernelParams,
+                          const DeviceBuffer<Float3>& d_x,
+                          DeviceBuffer<Float3>        d_xp,
+                          const bool                  updateVelocities,
+                          DeviceBuffer<Float3>        d_v,
+                          const real                  invdt,
+                          const bool                  computeVirial,
+                          const DeviceStream&         deviceStream)
 {
 
     auto kernelPtr = getLincsKernelPtr(updateVelocities, computeVirial);
@@ -423,7 +423,7 @@ void launchLincsGpuKernel(const LincsGpuKernelParameters& kernelParams,
     config.blockSize[0] = c_threadsPerBlock;
     config.blockSize[1] = 1;
     config.blockSize[2] = 1;
-    config.gridSize[0] = (kernelParams.numConstraintsThreads + c_threadsPerBlock - 1) / c_threadsPerBlock;
+    config.gridSize[0] = (kernelParams->numConstraintsThreads + c_threadsPerBlock - 1) / c_threadsPerBlock;
     config.gridSize[1] = 1;
     config.gridSize[2] = 1;
 
@@ -445,7 +445,7 @@ void launchLincsGpuKernel(const LincsGpuKernelParameters& kernelParams,
 
     const auto kernelArgs = prepareGpuKernelArguments(kernelPtr,
                                                       config,
-                                                      &kernelParams,
+                                                      kernelParams,
                                                       asFloat3Pointer(&d_x),
                                                       asFloat3Pointer(&d_xp),
                                                       asFloat3Pointer(&d_v),

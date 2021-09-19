@@ -239,12 +239,12 @@ void dd_move_x_and_v_vsites(const gmx_domdec_t& dd, const matrix box, rvec* x, r
  */
 gmx::ArrayRef<const int> dd_constraints_nlocalatoms(const gmx_domdec_t* dd);
 
-/*! Const getter for the local topology checker
+/*! \brief Const getter for the local topology checker
  *
  * \returns Const handle to local topology checker */
 const gmx::LocalTopologyChecker& dd_localTopologyChecker(const gmx_domdec_t& dd);
 
-/*! Getter for the local topology checker
+/*! \brief Getter for the local topology checker
  *
  * \returns Handle to local topology checker */
 gmx::LocalTopologyChecker* dd_localTopologyChecker(gmx_domdec_t* dd);
@@ -290,5 +290,28 @@ void communicateGpuHaloCoordinates(const t_commrec&      cr,
  * \param [in] accumulateForces  True if forces should accumulate, otherwise they are set
  */
 void communicateGpuHaloForces(const t_commrec& cr, bool accumulateForces);
+
+/*! \brief Wraps the \c positions so that atoms from the same
+ * update group share the same periodic image wrt \c box.
+ *
+ * When DD and update groups are in use, the simulation master rank
+ * should call this to ensure that e.g. when restarting a simulation
+ * that did not use update groups that the coordinates satisfy the new
+ * requirements.
+ *
+ * This function can probably be removed when even single-rank
+ * simulations use domain decomposition, because then the choice of
+ * whether update groups are used is probably going to be the same
+ * regardless of the rank count.
+ *
+ * \param[in]    dd         The DD manager
+ * \param[in]    mtop       The system topology
+ * \param[in]    box        The global system box
+ * \param[in]    positions  The global system positions
+ */
+void putUpdateGroupAtomsInSamePeriodicImage(const gmx_domdec_t&      dd,
+                                            const gmx_mtop_t&        mtop,
+                                            const matrix             box,
+                                            gmx::ArrayRef<gmx::RVec> positions);
 
 #endif

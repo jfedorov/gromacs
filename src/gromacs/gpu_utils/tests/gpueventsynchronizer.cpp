@@ -41,6 +41,8 @@
  */
 #include "gmxpre.h"
 
+#include "config.h"
+
 #include "gromacs/gpu_utils/gpueventsynchronizer.h"
 
 #include <gtest/gtest.h>
@@ -85,6 +87,16 @@ TEST(GpuEventSynchronizerTest, BasicFunctionality)
         }
 
         {
+            SCOPED_TRACE("isMarked");
+            GpuEventSynchronizer gpuEventSynchronizer;
+            EXPECT_FALSE(gpuEventSynchronizer.isMarked());
+            gpuEventSynchronizer.markEvent(streamA);
+            EXPECT_TRUE(gpuEventSynchronizer.isMarked());
+            gpuEventSynchronizer.reset();
+            EXPECT_FALSE(gpuEventSynchronizer.isMarked());
+        }
+
+        {
             SCOPED_TRACE("Mark and enqueueWait");
             GpuEventSynchronizer gpuEventSynchronizer;
             gpuEventSynchronizer.markEvent(streamA);
@@ -100,6 +112,53 @@ TEST(GpuEventSynchronizerTest, BasicFunctionality)
             gpuEventSynchronizer.markEvent(streamB);
             gpuEventSynchronizer.waitForEvent();
         }
+
+#    if !GMX_GPU_CUDA // CUDA has very lax rules for event consumption. See Issues #2527 and #3988.
+        {
+            SCOPED_TRACE("Wait before marking");
+            GpuEventSynchronizer gpuEventSynchronizer;
+            EXPECT_THROW(gpuEventSynchronizer.waitForEvent(), gmx::InternalError);
+        }
+        {
+            SCOPED_TRACE("enqueueWait before marking");
+            GpuEventSynchronizer gpuEventSynchronizer;
+            EXPECT_THROW(gpuEventSynchronizer.enqueueWaitEvent(streamA), gmx::InternalError);
+        }
+        {
+            SCOPED_TRACE("Wait twice after marking");
+            GpuEventSynchronizer gpuEventSynchronizer;
+            gpuEventSynchronizer.markEvent(streamA);
+            gpuEventSynchronizer.waitForEvent();
+            EXPECT_THROW(gpuEventSynchronizer.waitForEvent(), gmx::InternalError);
+        }
+        {
+            SCOPED_TRACE("Marking before consuming");
+            GpuEventSynchronizer gpuEventSynchronizer;
+            gpuEventSynchronizer.markEvent(streamA);
+            EXPECT_THROW(gpuEventSynchronizer.markEvent(streamB), gmx::InternalError);
+        }
+        {
+            SCOPED_TRACE("Wait trice after marking");
+            GpuEventSynchronizer gpuEventSynchronizer(0, 2);
+            gpuEventSynchronizer.markEvent(streamA);
+            gpuEventSynchronizer.waitForEvent();
+            gpuEventSynchronizer.waitForEvent();
+            EXPECT_THROW(gpuEventSynchronizer.waitForEvent(), gmx::InternalError);
+        }
+        {
+            SCOPED_TRACE("Allowed underconsume");
+            GpuEventSynchronizer gpuEventSynchronizer(0, 1);
+            gpuEventSynchronizer.markEvent(streamA);
+            gpuEventSynchronizer.markEvent(streamB);
+        }
+        {
+            SCOPED_TRACE("Forbidden underconsume");
+            GpuEventSynchronizer gpuEventSynchronizer(2, 2);
+            gpuEventSynchronizer.markEvent(streamA);
+            gpuEventSynchronizer.waitForEvent();
+            EXPECT_THROW(gpuEventSynchronizer.markEvent(streamB), gmx::InternalError);
+        }
+#    endif
     }
 }
 #endif // GMX_GPU

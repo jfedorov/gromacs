@@ -33,22 +33,171 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 /*! \libinternal \file
- *  \brief Implements a GpuEventSynchronizer class for CUDA.
+ *  \brief Implements a GpuEventSynchronizer class.
  *
+ *  \author Andrey Alekseenko <al42and@gmail.com>
+ *  \author Artem Zhmurov <zhmurov@gmail.com>
  *  \author Aleksei Iupinov <a.yupinov@gmail.com>
- *  \inlibraryapi
+ * \inlibraryapi
  */
 #ifndef GMX_GPU_UTILS_GPUEVENTSYNCHRONIZER_H
 #define GMX_GPU_UTILS_GPUEVENTSYNCHRONIZER_H
 
 #include "config.h"
 
-#if GMX_GPU_CUDA
-#    include "gromacs/gpu_utils/gpueventsynchronizer.cuh"
-#elif GMX_GPU_OPENCL
-#    include "gromacs/gpu_utils/gpueventsynchronizer_ocl.h"
-#elif GMX_GPU_SYCL
-#    include "gromacs/gpu_utils/gpueventsynchronizer_sycl.h"
-#endif
+#include "gromacs/utility/classhelpers.h"
+#include "gromacs/utility/exceptions.h"
+#include "gromacs/utility/gmxassert.h"
 
-#endif // GMX_GPU_UTILS_GPUEVENTSYNCHRONIZER_H
+#include "device_event.h"
+
+/*! \libinternal \brief
+ * A class which allows for CPU thread to mark and wait for certain GPU stream execution point.
+ *
+ * The event can be put into the stream with \ref markEvent and then later waited on with \ref
+ * waitForEvent or \ref enqueueWaitEvent.
+ *
+ * Additionally, this class offers facilities for runtime checking of correctness by counting
+ * how many times each marked event is used as a synchronization point.
+ *
+ * - When the class is constructed, a required minimal (\c minConsumptionCount) and maximal (\c maxConsumptionCount) number of
+ * consumptions can be specified. By default, both are set to 1.
+ * - The event is considered <em>fully consumed</em> if its current number of consumptions \c c equals
+ * \c maxConsumptionCount.
+ * - The event is considered <em>sufficiently consumed</em> if <tt>minConsumptionCount <= c <= maxConsumptionCount</tt>.
+ * - The class is initialized in the <em>fully consumed</em> state, so it can not be consumed right away.
+ * - Consuming the event is only possible if it is not <em>fully consumed</em> (<tt>c < maxConsumptionCount</tt>).
+ * Consuming the event increments \c c by 1. Trying to consume <em>fully consumed</em> event
+ * throws \ref gmx::InternalError.
+ * - \ref reset returns object into the initial <em>fully consumed</em> state.
+ * This function is intended to manually override the consumption limits.
+ * - \ref consume \em consumes the event, without doing anything else.
+ * This function is intended to manually override the consumption limits.
+ * - \ref markEvent enqueues new event into the provided stream, and sets \c to 0. Marking is only
+ * possible if the event is <em>sufficiently consumed</em>, otherwise \ref gmx::InternalError
+ * is thrown.
+ * - \ref waitForEvent \em consumes the event and blocks the host thread until the event
+ * is ready (complete).
+ * - \ref enqueueWaitEvent \em consumes the event and blocks the inserts a blocking barrier
+ * into the provided stream which blocks the execution of all tasks later submitted to this
+ * stream until the event is ready (completes).
+ *
+ * Default <tt>minConsumptionCount=maxConsumptionCount=1</tt> limits mean that each call to \ref markEvent must be followed
+ * by exactly one \ref enqueueWaitEvent or \ref enqueueWaitEvent. This is the recommended pattern
+ * for most use cases. By providing other constructor arguments, this requirement can be relaxed
+ * as needed.
+ */
+class GpuEventSynchronizer
+{
+public:
+    //! A constructor
+    GpuEventSynchronizer(int minConsumptionCount, int maxConsumptionCount) :
+        minConsumptionCount_(minConsumptionCount), maxConsumptionCount_(maxConsumptionCount)
+    {
+        reset();
+    }
+    GpuEventSynchronizer() : GpuEventSynchronizer(1, 1) {}
+    //! A destructor
+    ~GpuEventSynchronizer() = default;
+    //! Remove copy assignment, because we can not copy the underlying event object.
+    GpuEventSynchronizer& operator=(const GpuEventSynchronizer&) = delete;
+    //! Remove copy constructor, because we can not copy the underlying event object.
+    GpuEventSynchronizer(const GpuEventSynchronizer&) = delete;
+    //! Remove move assignment, because we don't allow moving the underlying event object.
+    GpuEventSynchronizer& operator=(GpuEventSynchronizer&&) = delete;
+    //! Remove move constructor, because we don't allow moving the underlying event object.
+    GpuEventSynchronizer(GpuEventSynchronizer&&) = delete;
+
+    /*! \brief Marks the synchronization point in the \p stream and reset the consumption counter.
+     *
+     * Should be called before implicitly consuming actions (\ref waitForEvent() or \ref enqueueWaitEvent()) are executed or explicit \ref consume() calls are made.
+     *
+     * If the event has been marked before and not fully consumed, throws \ref gmx::InternalError.
+     */
+    inline void markEvent(const DeviceStream& deviceStream)
+    {
+#if !GMX_GPU_CUDA // For now, we have relaxed conditions for CUDA
+        if (consumptionCount_ < minConsumptionCount_)
+        {
+            GMX_THROW(gmx::InternalError("Trying to mark event before fully consuming it"));
+        }
+#endif
+        event_.mark(deviceStream);
+        consumptionCount_ = 0;
+    }
+    /*! \brief Synchronizes the host thread on the marked event.
+     *
+     * Consumes the event if able, otherwise throws \ref gmx::InternalError.
+     */
+    inline void waitForEvent()
+    {
+        consume();
+        event_.wait();
+        resetIfFullyConsumed();
+    }
+    //! Checks the completion of the underlying event and consumes the event if it is ready.
+    inline bool isReady()
+    {
+        bool isReady = event_.isReady();
+        if (isReady)
+        {
+            consume();
+            resetIfFullyConsumed();
+        }
+        return isReady;
+    }
+    //! Checks whether the event was marked (and was not reset since then).
+    inline bool isMarked() const { return event_.isMarked(); }
+    /*! \brief Manually consume the event without waiting for it.
+     *
+     * If the event is already fully consumed, throws \ref gmx::InternalError.
+     */
+    inline void consume()
+    {
+#if !GMX_GPU_CUDA // For now, we have relaxed conditions for CUDA
+        if (consumptionCount_ >= maxConsumptionCount_)
+        {
+            GMX_THROW(gmx::InternalError(
+                    "Trying to consume an event before marking it or after fully consuming it"));
+        }
+#endif
+        consumptionCount_++;
+    }
+    //! Helper function to reset the event when it is fully consumed.
+    inline void resetIfFullyConsumed()
+    {
+        if (consumptionCount_ == maxConsumptionCount_)
+        {
+            event_.reset();
+        }
+    }
+    /*! \brief Enqueues a wait for the recorded event in stream \p deviceStream.
+     *
+     * Consumes the event if able, otherwise throws \ref gmx::InternalError.
+     */
+    inline void enqueueWaitEvent(const DeviceStream& deviceStream)
+    {
+        consume();
+        event_.enqueueWait(deviceStream);
+        resetIfFullyConsumed();
+    }
+
+    //! Resets the event to unmarked state, releasing the underlying event object if needed.
+    inline void reset()
+    {
+        // Set such that we can mark new event without triggering an exception, but can not consume.
+        consumptionCount_ = maxConsumptionCount_;
+        event_.reset();
+    }
+
+private:
+    DeviceEvent event_;
+    int         consumptionCount_;
+#if defined(__clang__) && GMX_GPU_CUDA
+    [[maybe_unused]]
+#endif
+    int minConsumptionCount_; // Unused in CUDA builds, yet
+    int maxConsumptionCount_;
+};
+
+#endif

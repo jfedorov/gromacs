@@ -126,6 +126,7 @@
 #include "gromacs/mdtypes/mdrunoptions.h"
 #include "gromacs/mdtypes/multipletimestepping.h"
 #include "gromacs/mdtypes/observableshistory.h"
+#include "gromacs/mdtypes/observablesreducer.h"
 #include "gromacs/mdtypes/pullhistory.h"
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/mdtypes/state.h"
@@ -167,11 +168,10 @@ void gmx::LegacySimulator::do_md()
     // will go away eventually.
     const t_inputrec* ir = inputrec;
 
-    int64_t      step, step_rel;
     double       t, t0 = ir->init_t;
     gmx_bool     bGStatEveryStep, bGStat, bCalcVir, bCalcEnerStep, bCalcEner;
     gmx_bool     bNS = FALSE, bNStList, bStopCM, bFirstStep, bInitStep, bLastStep = FALSE;
-    gmx_bool     bDoDHDL = FALSE, bDoFEP = FALSE, bDoExpanded = FALSE;
+    gmx_bool     bDoExpanded = FALSE;
     gmx_bool     do_ene, do_log, do_verbose;
     gmx_bool     bMasterState;
     unsigned int force_flags;
@@ -277,7 +277,7 @@ void gmx::LegacySimulator::do_md()
     }
     const bool useReplicaExchange = (replExParams.exchangeInterval > 0);
 
-    const t_fcdata& fcdata = *fr->fcdata;
+    t_fcdata& fcdata = *fr->fcdata;
 
     bool simulationsShareState = false;
     int  nstSignalComm         = nstglobalcomm;
@@ -361,7 +361,8 @@ void gmx::LegacySimulator::do_md()
     std::unique_ptr<t_state> stateInstance;
     t_state*                 state;
 
-    gmx_localtop_t top(top_global.ffparams);
+    gmx_localtop_t     top(top_global.ffparams);
+    ObservablesReducer observablesReducer = observablesReducerBuilder->build();
 
     ForceBuffers     f(simulationWork.useMts,
                    ((useGpuForNonbonded && useGpuForBufferOps) || useGpuForUpdate)
@@ -633,6 +634,9 @@ void gmx::LegacySimulator::do_md()
     t_vcm vcm(top_global.groups, *ir);
     reportComRemovalInfo(fplog, vcm);
 
+    int64_t step     = ir->init_step;
+    int64_t step_rel = 0;
+
     /* To minimize communication, compute_globals computes the COM velocity
      * and the kinetic energy for the velocities without COM motion removed.
      * Thus to get the kinetic energy without the COM contribution, we need
@@ -672,7 +676,9 @@ void gmx::LegacySimulator::do_md()
                         &nullSignaller,
                         state->box,
                         &bSumEkinhOld,
-                        cglo_flags_iteration);
+                        cglo_flags_iteration,
+                        step,
+                        &observablesReducer);
         if (cglo_flags_iteration & CGLO_STOPCM)
         {
             /* At initialization, do not pass x with acceleration-correction mode
@@ -719,7 +725,9 @@ void gmx::LegacySimulator::do_md()
                         &nullSignaller,
                         state->box,
                         &bSumEkinhOld,
-                        cglo_flags & ~CGLO_PRESSURE);
+                        cglo_flags & ~CGLO_PRESSURE,
+                        step,
+                        &observablesReducer);
     }
 
     /* Calculate the initial half step temperature, and save the ekinh_old */
@@ -801,9 +809,6 @@ void gmx::LegacySimulator::do_md()
     bSumEkinhOld     = FALSE;
     bExchanged       = FALSE;
     bNeedRepartition = FALSE;
-
-    step     = ir->init_step;
-    step_rel = 0;
 
     auto stopHandler = stopHandlerBuilder->getStopHandlerMD(
             compat::not_null<SimulationSignal*>(&signals[eglsSTOPCOND]),
@@ -891,8 +896,6 @@ void gmx::LegacySimulator::do_md()
             /* find and set the current lambdas */
             state->lambda = currentLambdas(step, *(ir->fepvals), state->fep_state);
 
-            bDoDHDL = do_per_step(step, ir->fepvals->nstdhdl);
-            bDoFEP  = ((ir->efep != FreeEnergyPerturbationType::No) && do_per_step(step, nstfep));
             bDoExpanded = (do_per_step(step, ir->expandedvals->nstexpanded) && (ir->bExpanded)
                            && (!bFirstStep));
         }
@@ -1017,7 +1020,7 @@ void gmx::LegacySimulator::do_md()
         }
 
         // Allocate or re-size GPU halo exchange object, if necessary
-        if (bNS && havePPDomainDecomposition(cr) && simulationWork.useGpuHaloExchange)
+        if (bNS && simulationWork.havePpDomainDecomposition && simulationWork.useGpuHaloExchange)
         {
             GMX_RELEASE_ASSERT(fr->deviceStreamManager != nullptr,
                                "GPU device manager has to be initialized to use GPU "
@@ -1067,7 +1070,9 @@ void gmx::LegacySimulator::do_md()
                             &nullSignaller,
                             state->box,
                             &bSumEkinhOld,
-                            cglo_flags);
+                            cglo_flags,
+                            step,
+                            &observablesReducer);
             if (DOMAINDECOMP(cr))
             {
                 dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
@@ -1104,13 +1109,17 @@ void gmx::LegacySimulator::do_md()
             bCalcEner = TRUE;
         }
 
+        // bCalcEner is only here for when the last step is not a mulitple of nstfep
+        const bool computeDHDL = ((ir->efep != FreeEnergyPerturbationType::No || ir->bSimTemp)
+                                  && (do_per_step(step, nstfep) || bCalcEner));
+
         /* Do we need global communication ? */
         bGStat = (bCalcVir || bCalcEner || bStopCM || do_per_step(step, nstglobalcomm)
                   || (EI_VV(ir->eI) && inputrecNvtTrotter(ir) && do_per_step(step - 1, nstglobalcomm)));
 
         force_flags = (GMX_FORCE_STATECHANGED | ((inputrecDynamicBox(ir)) ? GMX_FORCE_DYNAMICBOX : 0)
                        | GMX_FORCE_ALLFORCES | (bCalcVir ? GMX_FORCE_VIRIAL : 0)
-                       | (bCalcEner ? GMX_FORCE_ENERGY : 0) | (bDoFEP ? GMX_FORCE_DHDL : 0));
+                       | (bCalcEner ? GMX_FORCE_ENERGY : 0) | (computeDHDL ? GMX_FORCE_DHDL : 0));
         if (simulationWork.useMts && !do_per_step(step, ir->nstfout))
         {
             // TODO: merge this with stepWork.useOnlyMtsCombinedForceBuffer
@@ -1219,11 +1228,12 @@ void gmx::LegacySimulator::do_md()
                                  cr,
                                  state,
                                  mdAtoms->mdatoms(),
-                                 fcdata,
+                                 &fcdata,
                                  &MassQ,
                                  &vcm,
                                  top,
                                  enerd,
+                                 &observablesReducer,
                                  ekind,
                                  gstat,
                                  &last_ekin,
@@ -1467,11 +1477,12 @@ void gmx::LegacySimulator::do_md()
                                   cr,
                                   state,
                                   mdAtoms->mdatoms(),
-                                  fcdata,
+                                  &fcdata,
                                   &MassQ,
                                   &vcm,
                                   pull_work,
                                   enerd,
+                                  &observablesReducer,
                                   ekind,
                                   gstat,
                                   &dvdl_constr,
@@ -1511,18 +1522,14 @@ void gmx::LegacySimulator::do_md()
                     /* The velocity copy is redundant if we had Center-of-Mass motion removed on
                      * the previous step. We don't check that now. */
                     stateGpu->copyVelocitiesToGpu(state->v, AtomLocality::Local);
-                    // coordinates have been copied already if PME or buffer ops has not needed it this step.
-                    const bool useGpuPmeOnThisRank = runScheduleWork->simulationWork.useGpuPme
-                                                     && thisRankHasDuty(cr, DUTY_PME)
-                                                     && runScheduleWork->stepWork.computeSlowForces;
-                    if (!useGpuPmeOnThisRank && !runScheduleWork->stepWork.useGpuXBufferOps)
+                    if (!runScheduleWork->stepWork.haveGpuPmeOnThisRank
+                        && !runScheduleWork->stepWork.useGpuXBufferOps)
                     {
                         stateGpu->copyCoordinatesToGpu(state->x, AtomLocality::Local);
                     }
                 }
 
-                if (simulationWork.useGpuPme && !runScheduleWork->simulationWork.useGpuPmePpCommunication
-                    && !thisRankHasDuty(cr, DUTY_PME))
+                if (simulationWork.useGpuPme && simulationWork.useCpuPmePpCommunication)
                 {
                     // The PME forces were recieved to the host, so have to be copied
                     stateGpu->copyForcesToGpu(f.view().force(), AtomLocality::All);
@@ -1604,7 +1611,7 @@ void gmx::LegacySimulator::do_md()
                                   gmx::arrayRefFromArray(md->invMassPerDim, md->nr),
                                   state,
                                   forceCombined,
-                                  fcdata,
+                                  &fcdata,
                                   ekind,
                                   M,
                                   etrtPOSITION,
@@ -1705,7 +1712,9 @@ void gmx::LegacySimulator::do_md()
                                 | (!EI_VV(ir->eI) ? CGLO_PRESSURE : 0) | CGLO_CONSTRAINT
                                 | (DOMAINDECOMP(cr) && dd_localTopologyChecker(*cr->dd).shouldCheckNumberOfBondedInteractions()
                                            ? CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS
-                                           : 0));
+                                           : 0),
+                        step,
+                        &observablesReducer);
                 if (DOMAINDECOMP(cr))
                 {
                     dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
@@ -1835,7 +1844,9 @@ void gmx::LegacySimulator::do_md()
             }
             if (bCalcEner)
             {
-                energyOutput.addDataAtEnergyStep(bDoDHDL,
+                const bool outputDHDL = (computeDHDL && do_per_step(step, ir->fepvals->nstdhdl));
+
+                energyOutput.addDataAtEnergyStep(outputDHDL,
                                                  bCalcEnerStep,
                                                  t,
                                                  md->tmass,
@@ -2035,7 +2046,7 @@ void gmx::LegacySimulator::do_md()
     /* Stop measuring walltime */
     walltime_accounting_end_time(walltime_accounting);
 
-    if (!thisRankHasDuty(cr, DUTY_PME))
+    if (simulationWork.haveSeparatePmeRank)
     {
         /* Tell the PME only node to finish */
         gmx_pme_send_finish(cr);

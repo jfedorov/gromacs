@@ -59,6 +59,7 @@ using cl::sycl::access::target;
 //! Number of work-items in a work-group
 constexpr static int sc_workGroupSize = 256;
 
+//! \brief Function returning the SETTLE kernel lambda.
 template<bool updateVelocities, bool computeVirial>
 auto settleKernel(cl::sycl::handler&                                           cgh,
                   const int                                                    numSettles,
@@ -68,7 +69,7 @@ auto settleKernel(cl::sycl::handler&                                           c
                   DeviceAccessor<Float3, mode::read_write>                     a_xp,
                   float                                                        invdt,
                   OptionalAccessor<Float3, mode::read_write, updateVelocities> a_v,
-                  OptionalAccessor<float, mode_atomic, computeVirial>          a_virialScaled,
+                  OptionalAccessor<float, mode::read_write, computeVirial>     a_virialScaled,
                   PbcAiuc                                                      pbcAiuc)
 {
     cgh.require(a_settles);
@@ -339,7 +340,7 @@ auto settleKernel(cl::sycl::handler&                                           c
             // First 6 threads in the block add the 6 components of virial to the global memory address
             if (threadIdx < 6)
             {
-                atomicFetchAdd(a_virialScaled, threadIdx, sm_threadVirial[threadIdx * blockSize]);
+                atomicFetchAdd(a_virialScaled[threadIdx], sm_threadVirial[threadIdx * blockSize]);
             }
         }
     };
@@ -349,6 +350,7 @@ auto settleKernel(cl::sycl::handler&                                           c
 template<bool updateVelocities, bool computeVirial>
 class SettleKernelName;
 
+//! \brief SETTLE SYCL kernel launch code.
 template<bool updateVelocities, bool computeVirial, class... Args>
 static cl::sycl::event launchSettleKernel(const DeviceStream& deviceStream, int numSettles, Args&&... args)
 {

@@ -43,8 +43,9 @@
 
 #include "gmxpre.h"
 
-#include "gpu_3dfft.h"
+#include "gpu_3dfft_sycl.h"
 
+#include "gromacs/utility/arrayref.h"
 #include "gromacs/utility/exceptions.h"
 
 namespace gmx
@@ -54,26 +55,26 @@ namespace gmx
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wmissing-noreturn"
 
-class Gpu3dFft::Impl
-{
-};
-
-Gpu3dFft::Gpu3dFft(ivec /*realGridSize*/,
-                   ivec /*realGridSizePadded*/,
-                   ivec /*complexGridSizePadded*/,
-                   const bool /*useDecomposition*/,
-                   const bool /*performOutOfPlaceFFT*/,
-                   const DeviceContext& /*context*/,
-                   const DeviceStream& /*pmeStream*/,
-                   DeviceBuffer<float> /*realGrid*/,
-                   DeviceBuffer<float> /*complexGrid*/)
+Gpu3dFft::ImplSycl::ImplSycl(bool /*allocateGrids*/,
+                             MPI_Comm /*comm*/,
+                             ArrayRef<const int> /*gridSizesInXForEachRank*/,
+                             ArrayRef<const int> /*gridSizesInYForEachRank*/,
+                             const int /*nz*/,
+                             bool /*performOutOfPlaceFFT*/,
+                             const DeviceContext& /*context*/,
+                             const DeviceStream& /*pmeStream*/,
+                             ivec /*realGridSize*/,
+                             ivec /*realGridSizePadded*/,
+                             ivec /*complexGridSizePadded*/,
+                             DeviceBuffer<float>* /*realGrid*/,
+                             DeviceBuffer<float>* /*complexGrid*/)
 {
     GMX_THROW(NotImplementedError("GPU 3DFFT is not implemented in SYCL"));
 }
 
-Gpu3dFft::~Gpu3dFft() = default;
+Gpu3dFft::ImplSycl::~ImplSycl() = default;
 
-void Gpu3dFft::perform3dFft(gmx_fft_direction /*dir*/, CommandEvent* /*timingEvent*/)
+void Gpu3dFft::ImplSycl::perform3dFft(gmx_fft_direction /*dir*/, CommandEvent* /*timingEvent*/)
 {
     GMX_THROW(NotImplementedError("Not implemented on SYCL yet"));
 }

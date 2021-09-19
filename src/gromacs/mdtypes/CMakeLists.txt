@@ -48,7 +48,9 @@ file(GLOB MDTYPES_SOURCES
     md_enums.cpp
     multipletimestepping.cpp
     observableshistory.cpp
-    state.cpp)
+    observablesreducer.cpp
+    state.cpp
+    threaded_force_buffer.cpp)
 
 if(GMX_GPU)
     gmx_add_libgromacs_sources(
