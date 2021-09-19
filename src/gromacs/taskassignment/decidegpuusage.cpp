@@ -607,13 +607,9 @@ bool decideWhetherToUseGpuForUpdate(const bool                     isDomainDecom
     {
         errorMessage += "Compatible GPUs must have been found.\n";
     }
-    if (!GMX_GPU_CUDA && !GMX_GPU_SYCL)
+    if (!(GMX_GPU_CUDA || GMX_GPU_SYCL))
     {
         errorMessage += "Only CUDA and SYCL builds are supported.\n";
-    }
-    if (GMX_GPU_SYCL && hasAnyConstraints)
-    {
-        errorMessage += "Constraints are not supported in SYCL build.\n";
     }
     if (inputrec.eI != IntegrationAlgorithm::MD)
     {
