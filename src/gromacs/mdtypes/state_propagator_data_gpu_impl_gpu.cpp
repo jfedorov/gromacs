@@ -333,6 +333,23 @@ void StatePropagatorDataGpu::Impl::copyCoordinatesToGpu(const gmx::ArrayRef<cons
     // TODO: remove this by adding an event-mark free flavor of this function
     if (GMX_GPU_CUDA || GMX_GPU_SYCL)
     {
+        if (atomLocality == AtomLocality::Local)
+        {
+            /* TODO: Refactor the logic to get rid of this reset.
+             * With GPU update, we can copy coordinates twice on the same step:
+             * 1. do_force (sim_util.cpp:1334), called from do_md (md.cpp:1179),
+             * 2. do_md (md.cpp:1491).
+             * Sometimes, there is no waiting on the event inbetween.
+             * This behavior is bad and should be dealt with by properly balancing event marking
+             * and consumption.
+             * For now, we deal with the SYCL implementation failing the
+             * "Do not call markEvent more than once!" assertion by resetting the event here.
+             * Unlike OpenCL, this does not cause any leaks.
+             *
+             * Issue #3988, https://gitlab.com/gromacs/gromacs/-/issues/3988#note_531727030
+             * */
+            xReadyOnDevice_[atomLocality].reset();
+        }
         xReadyOnDevice_[atomLocality].markEvent(*deviceStream);
     }
 
