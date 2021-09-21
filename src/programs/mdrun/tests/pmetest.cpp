@@ -1,7 +1,8 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2016,2017,2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2016,2017,2018,2019,2020, by the GROMACS development team.
+ * Copyright (c) 2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -130,6 +131,14 @@ void PmeTest::runTest(const RunModesList& runModes)
             // This run mode will cause a fatal error from mdrun when
             // it finds an unsuitable device, which is not something
             // we're trying to test here.
+            continue;
+        }
+
+        auto modeTargetsFftOnGpus = (mode.first.find("FftOnGpu") != std::string::npos);
+        if (modeTargetsFftOnGpus && GMX_GPU_SYCL)
+        {
+            // Currently, we only support Pme Mixed mode with SYCL, because neither Solve kernel,
+            // nor FFT are ported yet.
             continue;
         }
 
