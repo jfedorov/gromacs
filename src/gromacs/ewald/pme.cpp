@@ -127,8 +127,6 @@
 #include "pme_spline_work.h"
 #include "pme_spread.h"
 
-bool g_allowPmeWithSyclForTesting = false;
-
 bool pme_gpu_supports_build(std::string* error)
 {
     gmx::MessageStringCollector errorReasons;
@@ -136,7 +134,6 @@ bool pme_gpu_supports_build(std::string* error)
     errorReasons.startContext("PME GPU does not support:");
     errorReasons.appendIf(GMX_DOUBLE, "Double-precision build of GROMACS.");
     errorReasons.appendIf(!GMX_GPU, "Non-GPU build of GROMACS.");
-    errorReasons.appendIf(GMX_GPU_SYCL && !g_allowPmeWithSyclForTesting, "SYCL build."); // SYCL-TODO
     errorReasons.finishContext();
     if (error != nullptr)
     {
@@ -198,7 +195,6 @@ static bool pme_gpu_check_restrictions(const gmx_pme_t* pme, std::string* error)
     errorReasons.appendIf(pme->doLJ, "Lennard-Jones PME.");
     errorReasons.appendIf(GMX_DOUBLE, "Double precision build of GROMACS.");
     errorReasons.appendIf(!GMX_GPU, "Non-GPU build of GROMACS.");
-    errorReasons.appendIf(GMX_GPU_SYCL && !g_allowPmeWithSyclForTesting, "SYCL build of GROMACS."); // SYCL-TODO
     errorReasons.finishContext();
     if (error != nullptr)
     {

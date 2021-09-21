@@ -254,14 +254,7 @@ public:
             }
             s_inputAtomDataSets_[atomCount] = atomData;
         }
-        s_pmeTestHardwareContexts    = createPmeTestHardwareContextList();
-        g_allowPmeWithSyclForTesting = true; // We support PmeGather with SYCL
-    }
-
-    static void TearDownTestSuite()
-    {
-        // Revert the value back.
-        g_allowPmeWithSyclForTesting = false;
+        s_pmeTestHardwareContexts = createPmeTestHardwareContextList();
     }
 
     //! The test

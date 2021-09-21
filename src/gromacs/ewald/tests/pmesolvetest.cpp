@@ -113,7 +113,12 @@ public:
         for (const auto& pmeTestHardwareContext : s_pmeTestHardwareContexts)
         {
             pmeTestHardwareContext->activate();
-            CodePath   codePath       = pmeTestHardwareContext->codePath();
+            CodePath codePath = pmeTestHardwareContext->codePath();
+            // We do not support PME Solve with SYCL yet.
+            if (GMX_GPU_SYCL && codePath == CodePath::GPU)
+            {
+                continue;
+            }
             const bool supportedInput = pmeSupportsInputForMode(
                     *getTestHardwareEnvironment()->hwinfo(), &inputRec, codePath);
             if (!supportedInput)

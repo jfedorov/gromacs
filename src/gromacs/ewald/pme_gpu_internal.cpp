@@ -1320,7 +1320,10 @@ void pme_gpu_spread(const PmeGpu*         pmeGpu,
 
     if (xReadyOnDevice)
     {
-        xReadyOnDevice->enqueueWaitEvent(pmeGpu->archSpecific->pmeStream_);
+        if (!GMX_GPU_SYCL || xReadyOnDevice->isMarked()) // TODO: #3988
+        {
+            xReadyOnDevice->enqueueWaitEvent(pmeGpu->archSpecific->pmeStream_);
+        }
     }
 
     const int blockCount = pmeGpu->nAtomsAlloc / atomsPerBlock;
