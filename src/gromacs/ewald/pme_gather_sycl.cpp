@@ -256,7 +256,7 @@ auto pmeGatherKernel(cl::sycl::handler&                                 cgh,
                      OptionalAccessor<float, mode::read, numGrids == 2> a_gridB,
                      DeviceAccessor<float, mode::read>                  a_coefficientsA,
                      OptionalAccessor<float, mode::read, numGrids == 2> a_coefficientsB,
-                     DeviceAccessor<Float3, mode::read>                 a_coordinates,
+                     OptionalAccessor<Float3, mode::read, !readGlobal>  a_coordinates,
                      DeviceAccessor<Float3, mode::read_write>           a_forces,
                      DeviceAccessor<float, mode::read>                  a_theta,
                      DeviceAccessor<float, mode::read>                  a_dtheta,
@@ -286,7 +286,6 @@ auto pmeGatherKernel(cl::sycl::handler&                                 cgh,
 
     cgh.require(a_gridA);
     cgh.require(a_coefficientsA);
-    cgh.require(a_coordinates);
     cgh.require(a_forces);
 
     if constexpr (numGrids == 2)
@@ -303,6 +302,7 @@ auto pmeGatherKernel(cl::sycl::handler&                                 cgh,
     }
     else
     {
+        cgh.require(a_coordinates);
         cgh.require(a_fractShiftsTable);
         cgh.require(a_gridlineIndicesTable);
     }
