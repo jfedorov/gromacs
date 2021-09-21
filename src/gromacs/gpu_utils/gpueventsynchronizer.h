@@ -154,8 +154,15 @@ public:
     {
         if (consumptionCount_ >= maxConsumptionCount_)
         {
-            GMX_THROW(gmx::InternalError(
-                    "Trying to consume an event before marking it or after fully consuming it"));
+            if (event_.isMarked())
+            {
+                GMX_THROW(
+                        gmx::InternalError("Trying to consume an event after fully consuming it"));
+            }
+            else
+            {
+                GMX_THROW(gmx::InternalError("Trying to consume an event before marking it"));
+            }
         }
         consumptionCount_++;
     }

@@ -102,7 +102,7 @@ struct PmeGpuSpecific
 
     /* Synchronization events */
     /*! \brief Triggered after the PME Force Calculations have been completed */
-    GpuEventSynchronizer pmeForcesReady;
+    GpuEventSynchronizer pmeForcesReady{ 1, 2 };
     /*! \brief Triggered after the grid has been copied to the host (after the spreading stage). */
     GpuEventSynchronizer syncSpreadGridD2H;
 

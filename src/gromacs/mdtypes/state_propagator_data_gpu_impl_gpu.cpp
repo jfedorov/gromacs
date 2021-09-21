@@ -406,9 +406,15 @@ void StatePropagatorDataGpu::Impl::copyCoordinatesFromGpu(gmx::ArrayRef<gmx::RVe
 
 void StatePropagatorDataGpu::Impl::waitCoordinatesReadyOnHost(AtomLocality atomLocality)
 {
-    wallcycle_start(wcycle_, WallCycleCounter::WaitGpuStatePropagatorData);
-    xReadyOnHost_[atomLocality].waitForEvent();
-    wallcycle_stop(wcycle_, WallCycleCounter::WaitGpuStatePropagatorData);
+    // TODO(#3988): Remove this conditional
+    // GMX_TEST_REQUIRED_NUMBER_OF_DEVICES=2 GMX_FORCE_UPDATE_DEFAULT_GPU=1 GMX_USE_GPU_BUFFER_OPS=1
+    //     GMX_GPU_DD_COMMS=1 GMX_GPU_PME_PP_COMMS=1 ./bin/mdrun-vsites-test -ntmpi 2
+    if (xReadyOnHost_[atomLocality].isMarked())
+    {
+        wallcycle_start(wcycle_, WallCycleCounter::WaitGpuStatePropagatorData);
+        xReadyOnHost_[atomLocality].waitForEvent();
+        wallcycle_stop(wcycle_, WallCycleCounter::WaitGpuStatePropagatorData);
+    }
 }
 
 

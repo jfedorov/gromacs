@@ -332,19 +332,19 @@ private:
      *
      * \todo Reconsider naming. It should be xCopiedToDevice or xH2DCopyComplete, etc.
      */
-    EnumerationArray<AtomLocality, GpuEventSynchronizer> xReadyOnDevice_;
+    EnumerationArray<AtomLocality, GpuEventSynchronizer> xReadyOnDevice_{ { { 0, 2 }, { 1, 1 }, { 1, 1 } } };
     //! A pointer to an event that the coordinates are ready after update-constraints execution
     GpuEventSynchronizer* xUpdatedOnDeviceEvent_ = nullptr;
     //! An array of events that indicate D2H copy of coordinates is complete (one event for each atom locality)
-    EnumerationArray<AtomLocality, GpuEventSynchronizer> xReadyOnHost_;
+    EnumerationArray<AtomLocality, GpuEventSynchronizer> xReadyOnHost_{ { { 1, 2 }, { 1, 1 }, { 1, 1 } } };
 
     //! An array of events that indicate D2H copy of velocities is complete (one event for each atom locality)
     EnumerationArray<AtomLocality, GpuEventSynchronizer> vReadyOnHost_;
 
     //! An array of events that indicate H2D copy of forces is complete (one event for each atom locality)
-    EnumerationArray<AtomLocality, GpuEventSynchronizer> fReadyOnDevice_;
+    EnumerationArray<AtomLocality, GpuEventSynchronizer> fReadyOnDevice_{ { { 0, 1 }, { 0, 1 }, { 0, 1 } } };
     //! An event that the forces were reduced on the GPU
-    GpuEventSynchronizer fReducedOnDevice_;
+    GpuEventSynchronizer fReducedOnDevice_{ 0, 1 };
     //! An array of events that indicate D2H copy of forces is complete (one event for each atom locality)
     EnumerationArray<AtomLocality, GpuEventSynchronizer> fReadyOnHost_;
 

@@ -128,7 +128,14 @@ void GpuForceReduction::Impl::execute()
     // Enqueue wait on all dependencies passed
     for (auto* synchronizer : dependencyList_)
     {
-        synchronizer->enqueueWaitEvent(deviceStream_);
+        // TODO(#3988): Remove this conditional.
+        // Occasionally we wait here for unmarked PmeGpuSpecific::pmeForcesReady synchronizer.
+        // GMX_TEST_REQUIRED_NUMBER_OF_DEVICES=2 GMX_FORCE_UPDATE_DEFAULT_GPU=1 GMX_USE_GPU_BUFFER_OPS=1
+        //   ./bin/mdrun-test --gtest_filter=MultipleTimeSteppingIsNearSingleTimeStepping/MtsComparisonTest.WithinTolerances/0
+        if (synchronizer->isMarked())
+        {
+            synchronizer->enqueueWaitEvent(deviceStream_);
+        }
     }
 
     const bool addRvecForce = static_cast<bool>(rvecForceToAdd_); // True iff initialized

@@ -92,7 +92,11 @@ void UpdateConstrainGpu::Impl::integrate(GpuEventSynchronizer*             fRead
     clear_mat(virial);
 
     // Make sure that the forces are ready on device before proceeding with the update.
-    fReadyOnDevice->enqueueWaitEvent(deviceStream_);
+    // TODO(#3988): This check should not be needed.
+    if (fReadyOnDevice->isMarked())
+    {
+        fReadyOnDevice->enqueueWaitEvent(deviceStream_);
+    }
 
     // The integrate should save a copy of the current coordinates in d_xp_ and write updated
     // once into d_x_. The d_xp_ is only needed by constraints.
