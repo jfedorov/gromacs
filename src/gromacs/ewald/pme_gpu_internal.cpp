@@ -1314,16 +1314,13 @@ void pme_gpu_spread(const PmeGpu*         pmeGpu,
     // Ensure that coordinates are ready on the device before launching spread;
     // only needed with CUDA on PP+PME ranks, not on separate PME ranks, in unit tests
     // nor in OpenCL as these cases use a single stream (hence xReadyOnDevice == nullptr).
-    GMX_ASSERT(!GMX_GPU_CUDA || xReadyOnDevice != nullptr || pmeGpu->common->isRankPmeOnly
-                       || pme_gpu_settings(pmeGpu).copyAllOutputs,
+    GMX_ASSERT((!GMX_GPU_CUDA && !GMX_GPU_SYCL) || xReadyOnDevice != nullptr
+                       || pmeGpu->common->isRankPmeOnly || pme_gpu_settings(pmeGpu).copyAllOutputs,
                "Need a valid coordinate synchronizer on PP+PME ranks with CUDA.");
 
     if (xReadyOnDevice)
     {
-        if (!GMX_GPU_SYCL || xReadyOnDevice->isMarked()) // TODO: #3988
-        {
-            xReadyOnDevice->enqueueWaitEvent(pmeGpu->archSpecific->pmeStream_);
-        }
+        xReadyOnDevice->enqueueWaitEvent(pmeGpu->archSpecific->pmeStream_);
     }
 
     const int blockCount = pmeGpu->nAtomsAlloc / atomsPerBlock;

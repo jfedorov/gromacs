@@ -93,6 +93,7 @@ inline void reduceAtomForces(cl::sycl::nd_item<3>        itemIdx,
 
     static_assert(atomDataSize <= subGroupSize,
                   "TODO: rework for atomDataSize > subGroupSize (order 8 or larger)");
+    static_assert(gmx::isPowerOfTwo(atomDataSize));
 
     fx += sycl_2020::shift_left(sg, fx, 1);
     fy += sycl_2020::shift_right(sg, fy, 1);
@@ -107,6 +108,7 @@ inline void reduceAtomForces(cl::sycl::nd_item<3>        itemIdx,
     {
         fx = fz;
     }
+    static_assert(atomDataSize >= 4);
     // We have to just further reduce those groups of 4
     for (int delta = 4; delta < atomDataSize; delta *= 2)
     {
@@ -224,6 +226,8 @@ inline void calculateAndStoreGridForces(cl::sycl::local_ptr<Float3>       sm_for
                                         const float                       scale,
                                         const cl::sycl::global_ptr<float> gm_coefficients)
 {
+    assert(scale >= 0.0F);
+    assert(scale <= 1.0F);
     const Float3 atomForces     = sm_forces[forceIndexLocal];
     float        negCoefficient = -scale * gm_coefficients[forceIndexGlobal];
     Float3       result;

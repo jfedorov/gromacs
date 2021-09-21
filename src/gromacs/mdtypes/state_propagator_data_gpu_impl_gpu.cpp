@@ -331,7 +331,7 @@ void StatePropagatorDataGpu::Impl::copyCoordinatesToGpu(const gmx::ArrayRef<cons
     //   - it's not needed, copy is done in the same stream as the only consumer task (PME)
     //   - we don't consume the events in OpenCL which is not allowed by GpuEventSynchronizer (would leak memory).
     // TODO: remove this by adding an event-mark free flavor of this function
-    if (GMX_GPU_CUDA)
+    if (GMX_GPU_CUDA || GMX_GPU_SYCL)
     {
         xReadyOnDevice_[atomLocality].markEvent(*deviceStream);
     }
