@@ -100,9 +100,11 @@ __global__ void packSendBufKernel(float3* __restrict__ dataPacked,
 }
 
 /*! \brief unpack non-local force data buffer on the GPU using pre-populated "map" containing index
- * information \param[out] data        full array of force values \param[in]  dataPacked  packed
- * array of force values to be transferred \param[in]  map         array of indices defining mapping
- * from full to packed array \param[in]  mapSize     number of elements in map array
+ * information
+ * \param[out] data        full array of force values
+ * \param[in]  dataPacked  packed array of force values to be transferred
+ * \param[in]  map         array of indices defining mapping from full to packed array
+ * \param[in]  mapSize     number of elements in map array
  */
 template<bool accumulate>
 __global__ void unpackRecvBufKernel(float3* __restrict__ data,

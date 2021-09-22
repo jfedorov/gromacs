@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -82,7 +82,8 @@ public:
      * \brief Check if the session is (still) running.
      *
      * When a session is launched, it should be returned in an "open" state by the launcher
-     * function. \return True if running, false if already closed.
+     * function.
+     * \return True if running, false if already closed.
      */
     bool isOpen() const noexcept;
 

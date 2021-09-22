@@ -151,7 +151,8 @@ private:
                                         int     recvRank);
 
     /*! \brief Exchange coordinate-ready event with neighbor ranks and enqueue wait in non-local
-     * stream \param [in] eventSync    event recorded when coordinates/forces are ready to device
+     * stream
+     * \param [in] eventSync    event recorded when coordinates/forces are ready to device
      */
     void enqueueWaitRemoteCoordinatesReadyEvent(GpuEventSynchronizer* coordinatesReadyOnDeviceEvent);
 

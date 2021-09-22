@@ -323,7 +323,8 @@ public:
      * The API function for the transformation of the coordinates from one layout to another.
      *
      * \param[in] locality     Whether coordinates for local or non-local atoms should be
-     * transformed. \param[in] coordinates  Coordinates in plain rvec format to be transformed.
+     *                         transformed.
+     * \param[in] coordinates  Coordinates in plain rvec format to be transformed.
      */
     void convertCoordinates(gmx::AtomLocality locality, gmx::ArrayRef<const gmx::RVec> coordinates);
 
