@@ -117,7 +117,6 @@ void UpdateConstrainGpu::Impl::integrate(GpuEventSynchronizer*             fRead
         }
     }
 
-    xUpdatedOnDeviceEvent_.reset(); // Workaround for #3988.
     xUpdatedOnDeviceEvent_.markEvent(deviceStream_);
 
     wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LaunchGpuUpdateConstrain);

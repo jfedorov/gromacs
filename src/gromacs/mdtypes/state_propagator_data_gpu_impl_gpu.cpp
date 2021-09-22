@@ -383,6 +383,14 @@ StatePropagatorDataGpu::Impl::getCoordinatesReadyOnDeviceEvent(AtomLocality atom
     }
     else
     {
+        if (stepWork.doNeighborSearch && xUpdatedOnDeviceEvent_)
+        {
+            /* On search steps, we do not consume the result of the GPU update
+             * but rather that of a H2D transfer. So, we reset the event triggered after
+             * update to avoid leaving it unconsumed.
+             * See Issue #3988. */
+            xUpdatedOnDeviceEvent_->reset();
+        }
         return &xReadyOnDevice_[atomLocality];
     }
 }
