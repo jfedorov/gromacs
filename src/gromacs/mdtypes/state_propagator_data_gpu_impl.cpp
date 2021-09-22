@@ -118,6 +118,13 @@ void StatePropagatorDataGpu::waitCoordinatesCopiedToDevice(AtomLocality /* atomL
                "GPU implementation.");
 }
 
+void StatePropagatorDataGpu::resetCoordinatesCopiedToDeviceEvent(AtomLocality /*atomLocality*/)
+{
+    GMX_ASSERT(!impl_,
+               "A CPU stub method from GPU state propagator data was called instead of one from "
+               "GPU implementation.");
+}
+
 void StatePropagatorDataGpu::setXUpdatedOnDeviceEvent(GpuEventSynchronizer* /* xUpdatedOnDeviceEvent */)
 {
     GMX_ASSERT(!impl_,

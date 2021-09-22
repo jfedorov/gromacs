@@ -1343,6 +1343,12 @@ void do_force(FILE*                               fplog,
         {
             GMX_ASSERT(stateGpu != nullptr, "stateGpu should not be null");
             stateGpu->copyCoordinatesToGpu(x.unpaddedArrayRef(), AtomLocality::Local);
+            if (stepWork.doNeighborSearch && !stepWork.haveGpuPmeOnThisRank)
+            {
+                /* On NS steps, we skip X buffer ops. So, unless we use PME, we don't wait
+                 * for coordinates on the device. Issue #3988. */
+                stateGpu->resetCoordinatesCopiedToDeviceEvent(AtomLocality::Local);
+            }
         }
     }
 

@@ -190,6 +190,14 @@ public:
      */
     void waitCoordinatesCopiedToDevice(AtomLocality atomLocality);
 
+    /*! \brief Reset the event for copying coordinates to the device.
+     *
+     * Used for manual event consumption. Does nothing except resetting the event.
+     *
+     *  \param[in] atomLocality  Locality of the particles.
+     */
+    void resetCoordinatesCopiedToDeviceEvent(AtomLocality atomLocality);
+
     /*! \brief Setter for the event synchronizer for the update is done on th GPU
      *
      *  \param[in] xUpdatedOnDeviceEvent  The event to synchronize the stream coordinates wre updated on device.
