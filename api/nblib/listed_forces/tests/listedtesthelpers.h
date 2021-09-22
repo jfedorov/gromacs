@@ -74,14 +74,6 @@ std::vector<InteractionIndex<Interaction>> indexVector()
     return { { 0, 1, 2, 3, 0 } };
 }
 
-//! \brief Sets up the calculation fixtures for both Nblib and GMX and compares the resultant forces
-void compareNblibAndGmxListedImplementations(const ListedInteractionData&  interactionData,
-                                             const std::vector<gmx::RVec>& coordinates,
-                                             size_t                        numParticles,
-                                             int                           numThreads,
-                                             const Box&                    box,
-                                             real                          tolerance);
-
 } // namespace nblib
 
 #endif // NBLIB_LISTEDFORCES_LISTEDTESTHELPERS_H
