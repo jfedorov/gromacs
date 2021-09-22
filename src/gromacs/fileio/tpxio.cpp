@@ -885,14 +885,19 @@ static void do_swapcoords_tpx(gmx::ISerializer* serializer, t_swapcoords* swap, 
         /* The total number of swap groups is the sum of the fixed groups
          * (split0, split1, solvent), and the user-defined groups (2+ types of ions)
          */
-        serializer->doInt(&swap->ngrp);
+        int ngrp = swap->requiredGroups.size() + swap->ionGroups.size();
+        serializer->doInt(&ngrp);
         if (serializer->reading())
         {
-            snew(swap->grp, swap->ngrp);
+            swap->ionGroups.resize(ngrp - swap->requiredGroups.size());
         }
-        for (int ig = 0; ig < swap->ngrp; ig++)
+        for (t_swapGroup& group : swap->requiredGroups)
         {
-            do_swapgroup(serializer, &swap->grp[ig]);
+            do_swapgroup(serializer, &group);
+        }
+        for (t_swapGroup& ionGroup : swap->ionGroups)
+        {
+            do_swapgroup(serializer, &ionGroup);
         }
         serializer->doBool(&swap->massw_split[eChannel0]);
         serializer->doBool(&swap->massw_split[eChannel1]);
@@ -910,22 +915,22 @@ static void do_swapcoords_tpx(gmx::ISerializer* serializer, t_swapcoords* swap, 
     {
         /*** Support reading older CompEl .tpr files ***/
 
-        /* In the original CompEl .tpr files, we always have 5 groups: */
-        swap->ngrp = 5;
-        snew(swap->grp, swap->ngrp);
+        /* In the original CompEl .tpr files, we always have 5 groups including 2 for ions: */
+        swap->ionGroups.resize(2);
 
-        swap->grp[static_cast<int>(SwapGroupSplittingType::Split0)].molname = gmx_strdup("split0"); // group 0: split0
-        swap->grp[static_cast<int>(SwapGroupSplittingType::Split1)].molname = gmx_strdup("split1"); // group 1: split1
-        swap->grp[static_cast<int>(SwapGroupSplittingType::Solvent)].molname =
-                gmx_strdup("solvent");                // group 2: solvent
-        swap->grp[3].molname = gmx_strdup("anions");  // group 3: anions
-        swap->grp[4].molname = gmx_strdup("cations"); // group 4: cations
+        swap->requiredGroups[SwapGroupSplittingType::Split0].molname =
+                gmx_strdup("split0"); // group 0: split0
+        swap->requiredGroups[SwapGroupSplittingType::Split1].molname =
+                gmx_strdup("split1"); // group 1: split1
+        swap->requiredGroups[SwapGroupSplittingType::Solvent].molname = gmx_strdup("solvent");
+        swap->ionGroups[0].molname = gmx_strdup("anions");  // anions
+        swap->ionGroups[1].molname = gmx_strdup("cations"); // cations
 
-        serializer->doInt(&swap->grp[3].nat);
-        serializer->doInt(&swap->grp[static_cast<int>(SwapGroupSplittingType::Solvent)].nat);
-        serializer->doInt(&swap->grp[static_cast<int>(SwapGroupSplittingType::Split0)].nat);
+        serializer->doInt(&swap->ionGroups[0].nat);
+        serializer->doInt(&swap->requiredGroups[SwapGroupSplittingType::Solvent].nat);
+        serializer->doInt(&swap->requiredGroups[SwapGroupSplittingType::Split0].nat);
         serializer->doBool(&swap->massw_split[eChannel0]);
-        serializer->doInt(&swap->grp[static_cast<int>(SwapGroupSplittingType::Split1)].nat);
+        serializer->doInt(&swap->requiredGroups[SwapGroupSplittingType::Split1].nat);
         serializer->doBool(&swap->massw_split[eChannel1]);
         serializer->doInt(&swap->nstswap);
         serializer->doInt(&swap->nAverage);
@@ -940,23 +945,21 @@ static void do_swapcoords_tpx(gmx::ISerializer* serializer, t_swapcoords* swap, 
         // The order[] array keeps compatibility with older .tpr files
         // by reading in the groups in the classic order
         {
-            const int order[4] = { 3,
-                                   static_cast<int>(SwapGroupSplittingType::Solvent),
-                                   static_cast<int>(SwapGroupSplittingType::Split0),
-                                   static_cast<int>(SwapGroupSplittingType::Split1) };
-
-            for (int ig = 0; ig < 4; ig++)
-            {
-                int g = order[ig];
-                snew(swap->grp[g].ind, swap->grp[g].nat);
-                serializer->doIntArray(swap->grp[g].ind, swap->grp[g].nat);
-            }
+            snew(swap->ionGroups[0].ind, swap->ionGroups[0].nat);
+            serializer->doIntArray(swap->ionGroups[0].ind, swap->ionGroups[0].nat);
         }
-
+        for (const SwapGroupSplittingType groupType : { SwapGroupSplittingType::Solvent,
+                                                        SwapGroupSplittingType::Split0,
+                                                        SwapGroupSplittingType::Split1 })
+        {
+            t_swapGroup& group = swap->requiredGroups[groupType];
+            snew(group.ind, group.nat);
+            serializer->doIntArray(group.ind, group.nat);
+        }
         for (int j = eCompA; j <= eCompB; j++)
         {
-            serializer->doInt(&swap->grp[3].nmolReq[j]); // group 3 = anions
-            serializer->doInt(&swap->grp[4].nmolReq[j]); // group 4 = cations
+            serializer->doInt(&swap->ionGroups[0].nmolReq[j]); // group 3 = anions
+            serializer->doInt(&swap->ionGroups[1].nmolReq[j]); // group 4 = cations
         }
     } /* End support reading older CompEl .tpr files */
 
@@ -1649,9 +1652,9 @@ static void do_inputrec(gmx::ISerializer* serializer, t_inputrec* ir, int file_v
         {
             if (serializer->reading())
             {
-                snew(ir->swap, 1);
+                ir->swap = std::make_unique<t_swapcoords>();
             }
-            do_swapcoords_tpx(serializer, ir->swap, file_version);
+            do_swapcoords_tpx(serializer, ir->swap.get(), file_version);
         }
     }
 

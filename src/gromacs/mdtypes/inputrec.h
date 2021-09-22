@@ -271,11 +271,11 @@ struct t_IMD
 struct t_swapGroup
 {
     //! Name of the swap group, e.g. NA, CL, SOL
-    char* molname;
+    char* molname = nullptr;
     //! Number of atoms in this group
-    int nat;
+    int nat = 0;
     //! The global ion group atoms numbers
-    int* ind;
+    int* ind = nullptr;
     //! Requested number of molecules of this type per compartment
     gmx::EnumerationArray<Compartment, int> nmolReq;
 };
@@ -283,27 +283,27 @@ struct t_swapGroup
 struct t_swapcoords
 {
     //! Period between when a swap is attempted
-    int nstswap;
+    int nstswap = 0;
     //! Use mass-weighted positions in split group
-    bool massw_split[2];
+    bool massw_split[2] = { false, false };
     /*! \brief Split cylinders defined by radius, upper and lower
      * extension. The split cylinders define the channels and are
      * each anchored in the center of the split group */
     /**@{*/
-    real cyl0r, cyl1r;
-    real cyl0u, cyl1u;
-    real cyl0l, cyl1l;
+    real cyl0r = 0, cyl1r = 0;
+    real cyl0u = 0, cyl1u = 0;
+    real cyl0l = 0, cyl1l = 0;
     /**@}*/
     //! Coupling constant (number of swap attempt steps)
-    int nAverage;
+    int nAverage = 0;
     //! Ion counts may deviate from the requested values by +-threshold before a swap is done
-    real threshold;
+    real threshold = 0;
     //! Offset of the swap layer (='bulk') with respect to the compartment-defining layers
-    gmx::EnumerationArray<Compartment, real> bulkOffset;
-    //! Number of groups to be controlled
-    int ngrp;
-    //! All swap groups, including split and solvent
-    t_swapGroup* grp;
+    gmx::EnumerationArray<Compartment, real> bulkOffset = { { 0 } };
+    //! All required swap groups, including split and solvent
+    gmx::EnumerationArray<SwapGroupSplittingType, t_swapGroup> requiredGroups;
+    //! Addition swap groups for ions to actually swap
+    std::vector<t_swapGroup> ionGroups;
 };
 
 struct t_inputrec // NOLINT (clang-analyzer-optin.performance.Padding)
@@ -527,9 +527,9 @@ struct t_inputrec // NOLINT (clang-analyzer-optin.performance.Padding)
     t_rot* rot;
 
     //! Whether to do ion/water position exchanges (CompEL)
-    SwapType eSwapCoords;
+    SwapType eSwapCoords = SwapType::Default;
     //! Swap data structure.
-    t_swapcoords* swap;
+    std::unique_ptr<t_swapcoords> swap;
 
     //! Whether the tpr makes an interactive MD session possible.
     bool bIMD;

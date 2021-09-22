@@ -310,13 +310,16 @@ static void done_t_swapCoords(t_swapcoords* swapCoords)
     {
         return;
     }
-    for (int i = 0; i < swapCoords->ngrp; i++)
+    for (t_swapGroup& group : swapCoords->requiredGroups)
     {
-        sfree(swapCoords->grp[i].ind);
-        sfree(swapCoords->grp[i].molname);
+        sfree(group.ind);
+        sfree(group.molname);
     }
-    sfree(swapCoords->grp);
-    sfree(swapCoords);
+    for (t_swapGroup& ionGroup : swapCoords->ionGroups)
+    {
+        sfree(ionGroup.ind);
+        sfree(ionGroup.molname);
+    }
 }
 
 void done_inputrec(t_inputrec* ir)
@@ -336,7 +339,7 @@ void done_inputrec(t_inputrec* ir)
     sfree(ir->opts.nFreeze);
     sfree(ir->opts.egp_flags);
 
-    done_t_swapCoords(ir->swap);
+    done_t_swapCoords(ir->swap.get());
     done_t_rot(ir->rot);
     delete ir->params;
 }
@@ -748,31 +751,30 @@ static void pr_swap(FILE* fp, int indent, const t_swapcoords* swap)
     PI("swap-frequency", swap->nstswap);
 
     /* The split groups that define the compartments */
-    for (int j = 0; j < 2; j++)
+    for (const SwapGroupSplittingType groupType :
+         { SwapGroupSplittingType::Split0, SwapGroupSplittingType::Split1 })
     {
-        snprintf(str, STRLEN, "massw_split%d", j);
-        PS(str, EBOOL(swap->massw_split[j]));
-        snprintf(str, STRLEN, "split atoms group %d", j);
-        pr_ivec_block(fp, indent, str, swap->grp[j].ind, swap->grp[j].nat, TRUE);
+        snprintf(str, STRLEN, "massw_split%d", int(groupType));
+        PS(str, EBOOL(swap->massw_split[int(groupType)]));
+        snprintf(str, STRLEN, "split atoms group %d", int(groupType));
+        const t_swapGroup& group = swap->requiredGroups[groupType];
+        pr_ivec_block(fp, indent, str, group.ind, group.nat, TRUE);
     }
 
     /* The solvent group */
-    snprintf(str,
-             STRLEN,
-             "solvent group %s",
-             swap->grp[static_cast<int>(SwapGroupSplittingType::Solvent)].molname);
+    snprintf(str, STRLEN, "solvent group %s", swap->requiredGroups[SwapGroupSplittingType::Solvent].molname);
     pr_ivec_block(fp,
                   indent,
                   str,
-                  swap->grp[static_cast<int>(SwapGroupSplittingType::Solvent)].ind,
-                  swap->grp[static_cast<int>(SwapGroupSplittingType::Solvent)].nat,
+                  swap->requiredGroups[SwapGroupSplittingType::Solvent].ind,
+                  swap->requiredGroups[SwapGroupSplittingType::Solvent].nat,
                   TRUE);
 
     /* Now print the indices for all the ion groups: */
-    for (int ig = static_cast<int>(SwapGroupSplittingType::Count); ig < swap->ngrp; ig++)
+    for (const t_swapGroup& ionGroup : swap->ionGroups)
     {
-        snprintf(str, STRLEN, "ion group %s", swap->grp[ig].molname);
-        pr_ivec_block(fp, indent, str, swap->grp[ig].ind, swap->grp[ig].nat, TRUE);
+        snprintf(str, STRLEN, "ion group %s", ionGroup.molname);
+        pr_ivec_block(fp, indent, str, ionGroup.ind, ionGroup.nat, TRUE);
     }
 
     PR("cyl0-r", swap->cyl0r);
@@ -786,10 +788,10 @@ static void pr_swap(FILE* fp, int indent, const t_swapcoords* swap)
     /* Print the requested ion counts for both compartments */
     for (int ic = eCompA; ic <= eCompB; ic++)
     {
-        for (int ig = static_cast<int>(SwapGroupSplittingType::Count); ig < swap->ngrp; ig++)
+        for (const t_swapGroup& ionGroup : swap->ionGroups)
         {
-            snprintf(str, STRLEN, "%s-in-%c", swap->grp[ig].molname, 'A' + ic);
-            PI(str, swap->grp[ig].nmolReq[ic]);
+            snprintf(str, STRLEN, "%s-in-%c", ionGroup.molname, 'A' + ic);
+            PI(str, ionGroup.nmolReq[ic]);
         }
     }
 
@@ -1043,7 +1045,7 @@ void pr_inputrec(FILE* fp, int indent, const char* title, const t_inputrec* ir, 
         PS("swapcoords", enumValueToString(ir->eSwapCoords));
         if (ir->eSwapCoords != SwapType::No)
         {
-            pr_swap(fp, indent, ir->swap);
+            pr_swap(fp, indent, ir->swap.get());
         }
 
         /* USER-DEFINED THINGIES */
