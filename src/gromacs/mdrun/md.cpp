@@ -1643,7 +1643,7 @@ void gmx::LegacySimulator::do_md()
             if (bGStat || needHalfStepKineticEnergy || doInterSimSignal)
             {
                 // Copy coordinates when needed to stop the CM motion.
-                if (useGpuForUpdate && (bDoReplEx || (!EI_VV(ir->eI) && bStopCM)))
+                if (useGpuForUpdate && (!EI_VV(ir->eI) && bStopCM))
                 {
                     stateGpu->copyCoordinatesFromGpu(state->x, AtomLocality::Local);
                     stateGpu->waitCoordinatesReadyOnHost(AtomLocality::Local);
@@ -1922,7 +1922,22 @@ void gmx::LegacySimulator::do_md()
         bExchanged = FALSE;
         if (bDoReplEx)
         {
+            if (useGpuForUpdate)
+            {
+                stateGpu->copyCoordinatesFromGpu(state->x, AtomLocality::Local);
+                stateGpu->copyVelocitiesFromGpu(state->v, AtomLocality::Local);
+                stateGpu->waitCoordinatesReadyOnHost(AtomLocality::Local);
+                stateGpu->waitVelocitiesReadyOnHost(AtomLocality::Local);
+            }
+
             bExchanged = replica_exchange(fplog, cr, ms, repl_ex, state_global, enerd, state, step, t);
+
+            if (useGpuForUpdate)
+            {
+                integrator->setPbc(PbcType::Xyz, state->box);
+                stateGpu->copyCoordinatesToGpu(state->x, AtomLocality::Local);
+                stateGpu->copyVelocitiesToGpu(state->v, AtomLocality::Local);
+            }
         }
 
         if ((bExchanged || bNeedRepartition) && haveDDAtomOrdering(*cr))
