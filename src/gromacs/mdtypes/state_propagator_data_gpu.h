@@ -310,6 +310,9 @@ public:
      */
     GpuEventSynchronizer* fReducedOnDevice();
 
+    //! \brief Reset the event synchronizer for the forces reduced on device.
+    void resetForcesReducedOnDeviceEvent();
+
     /*! \brief Copy forces from the GPU memory.
      *
      *  \param[in] h_f           Forces buffer in the host memory.

@@ -2283,6 +2283,13 @@ void do_force(FILE*                               fplog,
                 || (simulationWork.useGpuUpdate && DOMAINDECOMP(cr) && simulationWork.useCpuPmePpCommunication)
                 || vsite)
             {
+                if (stepWork.computeNonbondedForces)
+                {
+                    /* We have previously issued force reduction on the GPU, but we will
+                     * not use this event, instead relying on the stream being in-order.
+                     * Issue #3988. */
+                    stateGpu->resetForcesReducedOnDeviceEvent();
+                }
                 stateGpu->copyForcesFromGpu(forceWithShift, AtomLocality::Local);
                 stateGpu->waitForcesReadyOnHost(AtomLocality::Local);
             }

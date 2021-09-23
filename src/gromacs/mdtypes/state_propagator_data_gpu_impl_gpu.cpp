@@ -550,6 +550,11 @@ GpuEventSynchronizer* StatePropagatorDataGpu::Impl::fReducedOnDevice()
     return &fReducedOnDevice_;
 }
 
+void StatePropagatorDataGpu::Impl::resetForcesReducedOnDeviceEvent()
+{
+    fReducedOnDevice_.reset();
+}
+
 void StatePropagatorDataGpu::Impl::copyForcesFromGpu(gmx::ArrayRef<gmx::RVec> h_f, AtomLocality atomLocality)
 {
     GMX_ASSERT(atomLocality < AtomLocality::Count, "Wrong atom locality.");
@@ -721,6 +726,11 @@ void StatePropagatorDataGpu::resetForcesReadyOnDeviceEvent(AtomLocality atomLoca
 GpuEventSynchronizer* StatePropagatorDataGpu::fReducedOnDevice()
 {
     return impl_->fReducedOnDevice();
+}
+
+void StatePropagatorDataGpu::resetForcesReducedOnDeviceEvent()
+{
+    return impl_->resetForcesReducedOnDeviceEvent();
 }
 
 void StatePropagatorDataGpu::copyForcesFromGpu(gmx::ArrayRef<RVec> h_f, AtomLocality atomLocality)

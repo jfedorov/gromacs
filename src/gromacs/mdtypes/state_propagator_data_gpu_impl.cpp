@@ -235,6 +235,13 @@ GpuEventSynchronizer* StatePropagatorDataGpu::fReducedOnDevice()
     return nullptr;
 }
 
+void StatePropagatorDataGpu::resetForcesReducedOnDeviceEvent()
+{
+    GMX_ASSERT(!impl_,
+               "A CPU stub method from GPU state propagator data was called instead of one from "
+               "GPU implementation.");
+}
+
 void StatePropagatorDataGpu::copyForcesFromGpu(gmx::ArrayRef<gmx::RVec> /* h_f          */,
                                                AtomLocality /* atomLocality */)
 {
