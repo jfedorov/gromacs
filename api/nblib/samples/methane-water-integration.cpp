@@ -174,7 +174,7 @@ int main()
     SimulationState simulationState(coordinates, velocities, forces, box, topology);
 
     // The non-bonded force calculator contains all the data needed to compute forces
-    auto forceCalculator = setupGmxForceCalculatorCpu(topology, options);
+    auto forceCalculator = setupGmxForceCalculatorCpu(simulationState.topology(), options);
 
     // build the pair list
     forceCalculator->updatePairlist(simulationState.coordinates(), simulationState.box());
@@ -185,7 +185,7 @@ int main()
 
     // Integrator is initialized with an array of inverse masses (constructed from topology) and
     // the bounding box
-    LeapFrog integrator(topology, box);
+    LeapFrog integrator(simulationState.topology(), simulationState.box());
 
     // Print some diagnostic info
     printf("initial position of particle 0: x %4f y %4f z %4f\n",
