@@ -174,8 +174,10 @@ int main()
     SimulationState simulationState(coordinates, velocities, forces, box, topology);
 
     // The non-bonded force calculator contains all the data needed to compute forces
-    auto forceCalculator = nblib::setupGmxForceCalculator(
-            simulationState.topology(), simulationState.coordinates(), simulationState.box(), options);
+    auto forceCalculator = setupGmxForceCalculatorCpu(topology, options);
+
+    // build the pair list
+    forceCalculator->updatePairlist(simulationState.coordinates(), simulationState.box());
 
     // The listed force calculator is also initialized with the required arguments
     ListedForceCalculator listedForceCalculator(
@@ -198,7 +200,8 @@ int main()
     {
         zeroCartesianArray(simulationState.forces());
 
-        forceCalculator->compute(simulationState.coordinates(), simulationState.forces());
+        forceCalculator->compute(
+                simulationState.coordinates(), simulationState.box(), simulationState.forces());
 
         listedForceCalculator.compute(simulationState.coordinates(), simulationState.forces());
 
