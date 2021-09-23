@@ -220,6 +220,13 @@ GpuEventSynchronizer* StatePropagatorDataGpu::getForcesReadyOnDeviceEvent(AtomLo
     return nullptr;
 }
 
+void StatePropagatorDataGpu::resetForcesReadyOnDeviceEvent(AtomLocality /* atomLocality */)
+{
+    GMX_ASSERT(!impl_,
+               "A CPU stub method from GPU state propagator data was called instead of one from "
+               "GPU implementation.");
+}
+
 GpuEventSynchronizer* StatePropagatorDataGpu::fReducedOnDevice()
 {
     GMX_ASSERT(!impl_,

@@ -280,6 +280,12 @@ public:
      */
     GpuEventSynchronizer* getForcesReadyOnDeviceEvent(AtomLocality atomLocality, bool useGpuFBufferOps);
 
+    /*! \brief Reset the event synchronizer for the forces ready on device.
+     *
+     *  \param[in] atomLocality      Locality of the force buffer.
+     */
+    void resetForcesReadyOnDeviceEvent(AtomLocality atomLocality);
+
     /*! \brief Getter for the event synchronizer for the forces are reduced on the GPU.
      *
      *  \returns  The event to mark when forces are reduced on the GPU.

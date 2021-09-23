@@ -2052,8 +2052,10 @@ void do_force(FILE*                               fplog,
                 {
                     stateGpu->copyForcesToGpu(forceOutMtsLevel0.forceWithShiftForces().force(),
                                               AtomLocality::NonLocal);
+                    /* We rely on stream in-orderedness, so we do not use the event.
+                     * Issue #3988 */
+                    stateGpu->resetForcesReadyOnDeviceEvent(AtomLocality::NonLocal);
                 }
-
 
                 fr->gpuForceReduction[gmx::AtomLocality::NonLocal]->execute();
 
@@ -2258,6 +2260,12 @@ void do_force(FILE*                               fplog,
                                                                          : AtomLocality::All;
 
                 stateGpu->copyForcesToGpu(forceWithShift, locality);
+                if (stepWork.computeNonbondedForces && locality == AtomLocality::Local)
+                {
+                    /* We rely on stream in-orderedness, so we do not use the event.
+                     * Issue #3988 */
+                    stateGpu->resetForcesReadyOnDeviceEvent(AtomLocality::Local);
+                }
             }
 
             if (stepWork.computeNonbondedForces)

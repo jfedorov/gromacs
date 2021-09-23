@@ -503,7 +503,6 @@ void StatePropagatorDataGpu::Impl::copyForcesToGpu(const gmx::ArrayRef<const gmx
 
     copyToDevice(d_f_, h_f, d_fSize_, atomLocality, *deviceStream);
 
-    fReadyOnDevice_[atomLocality].reset(); // TODO: Remove this workaround, #3988
     fReadyOnDevice_[atomLocality].markEvent(*deviceStream);
 
     wallcycle_sub_stop(wcycle_, WallCycleSubCounter::LaunchStatePropagatorData);
@@ -538,6 +537,13 @@ GpuEventSynchronizer* StatePropagatorDataGpu::Impl::getForcesReadyOnDeviceEvent(
         return &fReadyOnDevice_[atomLocality];
     }
 }
+
+void StatePropagatorDataGpu::Impl::resetForcesReadyOnDeviceEvent(AtomLocality atomLocality)
+{
+    GMX_ASSERT(atomLocality < AtomLocality::Count, "Wrong atom locality.");
+    fReadyOnDevice_[atomLocality].reset();
+}
+
 
 GpuEventSynchronizer* StatePropagatorDataGpu::Impl::fReducedOnDevice()
 {
@@ -705,6 +711,11 @@ GpuEventSynchronizer* StatePropagatorDataGpu::getForcesReadyOnDeviceEvent(AtomLo
                                                                           bool useGpuFBufferOps)
 {
     return impl_->getForcesReadyOnDeviceEvent(atomLocality, useGpuFBufferOps);
+}
+
+void StatePropagatorDataGpu::resetForcesReadyOnDeviceEvent(AtomLocality atomLocality)
+{
+    return impl_->resetForcesReadyOnDeviceEvent(atomLocality);
 }
 
 GpuEventSynchronizer* StatePropagatorDataGpu::fReducedOnDevice()
