@@ -1006,9 +1006,8 @@ void setPrevStepPullComFromState(struct pull_t* pull, const t_state* state)
  */
 enum class PullBackupCOM
 {
-    Yes,  //<! Save a copy of the previous step COM to state
-    No,   //<! Don't save a copy of the previous step COM to state
-    Count //<! The number of entries
+    Yes, //<! Save a copy of the previous step COM to state
+    No,  //<! Don't save a copy of the previous step COM to state
 };
 
 /*! \brief Sets the previous step COM in pull to the current COM and optionally
@@ -1021,7 +1020,7 @@ enum class PullBackupCOM
 template<PullBackupCOM pullBackupToState>
 static void updatePrevStepPullComImpl(pull_t* pull, gmx::ArrayRef<double> comPreviousStep)
 {
-    for (size_t g = 0; g < pull->group.size(); g++)
+    for (gmx::index g = 0; g < gmx::ssize(pull->group); g++)
     {
         if (pull->group[g].needToCalcCom)
         {
@@ -1052,7 +1051,7 @@ void updatePrevStepPullCom(pull_t* pull, std::optional<gmx::ArrayRef<double>> co
 std::vector<double> prevStepPullCom(const pull_t* pull)
 {
     std::vector<double> pullCom(pull->group.size() * DIM, 0.0);
-    for (size_t g = 0; g < pull->group.size(); g++)
+    for (gmx::index g = 0; g < gmx::ssize(pull->group); g++)
     {
         for (int j = 0; j < DIM; j++)
         {
@@ -1066,7 +1065,7 @@ void setPrevStepPullCom(pull_t* pull, gmx::ArrayRef<const double> prevStepPullCo
 {
     GMX_RELEASE_ASSERT(prevStepPullCom.size() >= pull->group.size() * DIM,
                        "Pull COM vector size mismatch.");
-    for (size_t g = 0; g < pull->group.size(); g++)
+    for (gmx::index g = 0; g < gmx::ssize(pull->group); g++)
     {
         for (int j = 0; j < DIM; j++)
         {
