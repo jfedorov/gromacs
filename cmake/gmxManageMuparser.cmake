@@ -69,6 +69,9 @@ function(gmx_manage_muparser)
         add_library(muparser INTERFACE)
         target_sources(muparser INTERFACE $<TARGET_OBJECTS:muparser_objlib>)
         target_include_directories(muparser SYSTEM INTERFACE $<BUILD_INTERFACE:${BUNDLED_MUPARSER_DIR}>)
+        if (WIN32)
+            target_compile_definitions(muparser INTERFACE MUPARSER_STATIC)
+        endif()
         # Add the muparser interface library to the libgromacs Export name, even though
         # we will not be installing any content.
         install(TARGETS muparser EXPORT libgromacs)
