@@ -1446,6 +1446,10 @@ void gmx::LegacySimulator::do_md()
         const bool doParrinelloRahman = (ir->epc == PressureCoupling::ParrinelloRahman
                                          && do_per_step(step + ir->nstpcouple - 1, ir->nstpcouple));
 
+
+        bool localCoordinatesCopiedFromGpu = false;
+        bool localVelocitiesCopiedFromGpu  = false;
+
         if (EI_VV(ir->eI))
         {
             GMX_ASSERT(!useGpuForUpdate, "GPU update is not supported with VVAK integrator.");
@@ -1541,6 +1545,7 @@ void gmx::LegacySimulator::do_md()
                 {
                     stateGpu->copyVelocitiesFromGpu(state->v, AtomLocality::Local);
                     stateGpu->waitVelocitiesReadyOnHost(AtomLocality::Local);
+                    localVelocitiesCopiedFromGpu = true;
                 }
             }
             else
@@ -1647,6 +1652,7 @@ void gmx::LegacySimulator::do_md()
                 {
                     stateGpu->copyCoordinatesFromGpu(state->x, AtomLocality::Local);
                     stateGpu->waitCoordinatesReadyOnHost(AtomLocality::Local);
+                    localCoordinatesCopiedFromGpu = true;
                 }
                 // Since we're already communicating at this step, we
                 // can propagate intra-simulation signals. Note that
@@ -1922,11 +1928,14 @@ void gmx::LegacySimulator::do_md()
         bExchanged = FALSE;
         if (bDoReplEx)
         {
-            if (useGpuForUpdate)
+            if (useGpuForUpdate && !localCoordinatesCopiedFromGpu)
             {
                 stateGpu->copyCoordinatesFromGpu(state->x, AtomLocality::Local);
-                stateGpu->copyVelocitiesFromGpu(state->v, AtomLocality::Local);
                 stateGpu->waitCoordinatesReadyOnHost(AtomLocality::Local);
+            }
+            if (useGpuForUpdate && !localVelocitiesCopiedFromGpu)
+            {
+                stateGpu->copyVelocitiesFromGpu(state->v, AtomLocality::Local);
                 stateGpu->waitVelocitiesReadyOnHost(AtomLocality::Local);
             }
 
