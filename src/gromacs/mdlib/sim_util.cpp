@@ -1144,7 +1144,8 @@ static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
 
     if (runScheduleWork->simulationWork.useGpuPme
         && (!runScheduleWork->simulationWork.haveSeparatePmeRank
-            || runScheduleWork->simulationWork.useGpuPmePpCommunication))
+            || runScheduleWork->simulationWork.useGpuPmePpCommunication)
+        && runScheduleWork->stepWork.computeSlowForces)
     {
         DeviceBuffer<gmx::RVec> forcePtr =
                 runScheduleWork->simulationWork.haveSeparatePmeRank
@@ -1474,11 +1475,6 @@ void do_force(FILE*                               fplog,
         {
             nbv->atomdata_init_copy_x_to_nbat_x_gpu();
         }
-
-        if (simulationWork.useGpuBufferOps)
-        {
-            setupGpuForceReductions(runScheduleWork, cr, fr);
-        }
     }
     else if (!EI_TPI(inputrec.eI) && stepWork.computeNonbondedForces)
     {
@@ -1498,6 +1494,11 @@ void do_force(FILE*                               fplog,
             }
             nbv->convertCoordinates(AtomLocality::Local, x.unpaddedArrayRef());
         }
+    }
+
+    if (simulationWork.useGpuBufferOps)
+    {
+        setupGpuForceReductions(runScheduleWork, cr, fr);
     }
 
     if (simulationWork.useGpuNonbonded && (stepWork.computeNonbondedForces || domainWork.haveGpuBondedWork))
