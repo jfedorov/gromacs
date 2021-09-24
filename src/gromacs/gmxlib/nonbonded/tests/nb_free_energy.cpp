@@ -252,7 +252,12 @@ public:
         ljPmeC6Grid_ = makeLJPmeC6GridCorrectionParameters(idef.atnr, idef.iparams, LongRangeVdW::Geom);
     }
 
-    void setSoftcoreAlpha(const real scAlpha) { fepVals_.sc_alpha = scAlpha; }
+    void setSoftcoreAlpha(const real scBeutlerAlphaOrGapsysLinpointScaling)
+    {
+        fepVals_.sc_alpha                = scBeutlerAlphaOrGapsysLinpointScaling;
+        fepVals_.scScaleLinpointLJGapsys = scBeutlerAlphaOrGapsysLinpointScaling;
+        fepVals_.scScaleLinpointQGapsys  = scBeutlerAlphaOrGapsysLinpointScaling;
+    }
     void setSoftcoreCoulomb(const bool scCoulomb) { fepVals_.bScCoul = scCoulomb; }
     void setSoftcoreType(const SoftcoreType softcoreType)
     {
@@ -504,10 +509,10 @@ std::vector<ListInput> c_interaction = {
 };
 
 //! test parameters
-std::vector<real> c_fepLambdas      = { 0.0, 0.5, 1.0 };
-std::vector<real> c_softcoreAlphas  = { 0.0, 0.3 };
-std::vector<bool> c_softcoreCoulomb = { true, false };
-std::vector<SoftcoreType> c_softcoreType = { SoftcoreType::Beutler, SoftcoreType::Gapsys, SoftcoreType::None };
+std::vector<real>         c_fepLambdas                                  = { 0.0, 0.5, 1.0 };
+std::vector<real>         c_softcoreBeutlerAlphaOrGapsysLinpointScaling = { 0.0, 0.3 };
+std::vector<bool>         c_softcoreCoulomb                             = { true, false };
+std::vector<SoftcoreType> c_softcoreType = { SoftcoreType::Beutler, SoftcoreType::Gapsys };
 
 //! Coordinates for testing
 std::vector<PaddedVector<RVec>> c_coordinates = {
@@ -520,7 +525,7 @@ INSTANTIATE_TEST_SUITE_P(NBInteraction,
                                             ::testing::ValuesIn(c_interaction),
                                             ::testing::ValuesIn(c_coordinates),
                                             ::testing::ValuesIn(c_fepLambdas),
-                                            ::testing::ValuesIn(c_softcoreAlphas),
+                                            ::testing::ValuesIn(c_softcoreBeutlerAlphaOrGapsysLinpointScaling),
                                             ::testing::ValuesIn(c_softcoreCoulomb)));
 
 } // namespace

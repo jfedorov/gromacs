@@ -66,37 +66,6 @@
             </Vector>
           </Shift-Forces>
         </Sofcore>
-        <Sofcore Name="none">
-          <Real Name="Epot Coulomb14">0.1445520414957524</Real>
-          <Real Name="Epot LJ14">-0.3979723893321509</Real>
-          <Real Name="dVdlCoul ">-0.1445520414957524</Real>
-          <Real Name="dVdlVdw ">0.3979723893321509</Real>
-          <Sequence Name="Forces">
-            <Int Name="Length">3</Int>
-            <Vector>
-              <Real Name="X">0.010987624164811038</Real>
-              <Real Name="Y">0.021975248329622051</Real>
-              <Real Name="Z">0.14283911414254338</Real>
-            </Vector>
-            <Vector>
-              <Real Name="X">0.89301764058624677</Real>
-              <Real Name="Y">1.7860352811724916</Real>
-              <Real Name="Z">2.6790529217587382</Real>
-            </Vector>
-            <Vector>
-              <Real Name="X">-0.9040052647510578</Real>
-              <Real Name="Y">-1.8080105295021136</Real>
-              <Real Name="Z">-2.8218920359012816</Real>
-            </Vector>
-          </Sequence>
-          <Shift-Forces Name="Shift-forces">
-            <Vector Name="Central">
-              <Real Name="X">-0.010987624164811038</Real>
-              <Real Name="Y">-0.021975248329622051</Real>
-              <Real Name="Z">-0.14283911414254338</Real>
-            </Vector>
-          </Shift-Forces>
-        </Sofcore>
       </Lambda>
       <Lambda Name="0.5">
         <Sofcore Name="beutler">
@@ -161,37 +130,6 @@
             </Vector>
           </Shift-Forces>
         </Sofcore>
-        <Sofcore Name="none">
-          <Real Name="Epot Coulomb14">0.072276020747876202</Real>
-          <Real Name="Epot LJ14">-0.19898619466607545</Real>
-          <Real Name="dVdlCoul ">-0.1445520414957524</Real>
-          <Real Name="dVdlVdw ">0.3979723893321509</Real>
-          <Sequence Name="Forces">
-            <Int Name="Length">3</Int>
-            <Vector>
-              <Real Name="X">0.0054938120824055189</Real>
-              <Real Name="Y">0.010987624164811026</Real>
-              <Real Name="Z">0.071419557071271692</Real>
-            </Vector>
-            <Vector>
-              <Real Name="X">0.44650882029312339</Real>
-              <Real Name="Y">0.89301764058624578</Real>
-              <Real Name="Z">1.3395264608793691</Real>
-            </Vector>
-            <Vector>
-              <Real Name="X">-0.4520026323755289</Real>
-              <Real Name="Y">-0.9040052647510568</Real>
-              <Real Name="Z">-1.4109460179506408</Real>
-            </Vector>
-          </Sequence>
-          <Shift-Forces Name="Shift-forces">
-            <Vector Name="Central">
-              <Real Name="X">-0.0054938120824055189</Real>
-              <Real Name="Y">-0.010987624164811026</Real>
-              <Real Name="Z">-0.071419557071271692</Real>
-            </Vector>
-          </Shift-Forces>
-        </Sofcore>
       </Lambda>
       <Lambda Name="1">
         <Sofcore Name="beutler">
@@ -229,37 +167,6 @@
           <Real Name="Epot Coulomb14">0</Real>
           <Real Name="Epot LJ14">0</Real>
           <Real Name="dVdlCoul ">-0.069201006672157006</Real>
-          <Real Name="dVdlVdw ">0.3979723893321509</Real>
-          <Sequence Name="Forces">
-            <Int Name="Length">3</Int>
-            <Vector>
-              <Real Name="X">0</Real>
-              <Real Name="Y">0</Real>
-              <Real Name="Z">0</Real>
-            </Vector>
-            <Vector>
-              <Real Name="X">0</Real>
-              <Real Name="Y">0</Real>
-              <Real Name="Z">0</Real>
-            </Vector>
-            <Vector>
-              <Real Name="X">0</Real>
-              <Real Name="Y">0</Real>
-              <Real Name="Z">0</Real>
-            </Vector>
-          </Sequence>
-          <Shift-Forces Name="Shift-forces">
-            <Vector Name="Central">
-              <Real Name="X">0</Real>
-              <Real Name="Y">0</Real>
-              <Real Name="Z">0</Real>
-            </Vector>
-          </Shift-Forces>
-        </Sofcore>
-        <Sofcore Name="none">
-          <Real Name="Epot Coulomb14">0</Real>
-          <Real Name="Epot LJ14">0</Real>
-          <Real Name="dVdlCoul ">-0.1445520414957524</Real>
           <Real Name="dVdlVdw ">0.3979723893321509</Real>
           <Sequence Name="Forces">
             <Int Name="Length">3</Int>
