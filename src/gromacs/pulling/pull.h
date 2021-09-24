@@ -332,6 +332,12 @@ bool pull_have_potential(const pull_t& pull);
  */
 bool pull_have_constraint(const pull_t& pull);
 
+/*! \brief Returns if we have any transformation pull coordinates.
+ *
+ * \param[in] pull     The pull data structure.
+ */
+bool pull_have_transformation(const pull_t& pull);
+
 /*! \brief Returns if inputrec has pull coordinates with constraint pulling.
  *
  * \param[in] pullParameters  Pulling input parameters from input record.

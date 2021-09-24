@@ -253,9 +253,10 @@ struct pull_t
     /* Global parameters */
     pull_params_t params; /* The pull parameters, from inputrec */
 
-    gmx_bool bPotential;  /* Are there coordinates with potential? */
-    gmx_bool bConstraint; /* Are there constrained coordinates? */
-    gmx_bool bAngle;      /* Are there angle geometry coordinates? */
+    gmx_bool bPotential;      /* Are there coordinates with potential? */
+    gmx_bool bConstraint;     /* Are there constrained coordinates? */
+    gmx_bool bAngle;          /* Are there angle geometry coordinates? */
+    gmx_bool bTransformation; /* Are there transformation pull coordinates? */
 
     PbcType  pbcType;   /* the boundary conditions */
     int      npbcdim;   /* do pbc in dims 0 <= dim < npbcdim */

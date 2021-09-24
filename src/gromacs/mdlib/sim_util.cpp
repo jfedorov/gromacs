@@ -1664,8 +1664,11 @@ void do_force(FILE*                               fplog,
     // this wait ensures that the D2H transfer is complete.
     if (simulationWork.useGpuUpdate && !stepWork.doNeighborSearch)
     {
-        const bool needCoordsOnHost  = (runScheduleWork->domainWork.haveCpuLocalForceWork
-                                       || stepWork.computeVirial || simulationWork.computeMuTot);
+        const bool havePullingWithTransformationPullCoordinates =
+                inputrec.bPull && pull_have_potential(*pull_work) && pull_have_transformation(*pull_work);
+        const bool needCoordsOnHost =
+                (runScheduleWork->domainWork.haveCpuLocalForceWork || stepWork.computeVirial
+                 || simulationWork.computeMuTot || havePullingWithTransformationPullCoordinates);
         const bool haveAlreadyWaited = simulationWork.useCpuHaloExchange;
         if (needCoordsOnHost && !haveAlreadyWaited)
         {

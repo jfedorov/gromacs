@@ -2062,12 +2062,13 @@ struct pull_t* init_pull(FILE*                     fplog,
         }
     }
 
-    pull->bPotential   = FALSE;
-    pull->bConstraint  = FALSE;
-    pull->bCylinder    = FALSE;
-    pull->bAngle       = FALSE;
-    pull->bXOutAverage = pull_params->bXOutAverage;
-    pull->bFOutAverage = pull_params->bFOutAverage;
+    pull->bPotential      = FALSE;
+    pull->bConstraint     = FALSE;
+    pull->bCylinder       = FALSE;
+    pull->bAngle          = FALSE;
+    pull->bTransformation = FALSE;
+    pull->bXOutAverage    = pull_params->bXOutAverage;
+    pull->bFOutAverage    = pull_params->bFOutAverage;
 
     GMX_RELEASE_ASSERT(pull->group[0].params.ind.empty(),
                        "pull group 0 is an absolute reference group and should not contain atoms");
@@ -2154,6 +2155,10 @@ struct pull_t* init_pull(FILE*                     fplog,
                  || pcrd->params.eGeom == PullGroupGeometry::AngleAxis)
         {
             pull->bAngle = TRUE;
+        }
+        else if (pcrd->params.eGeom == PullGroupGeometry::Transformation)
+        {
+            pull->bTransformation = TRUE;
         }
 
         /* We only need to calculate the plain COM of a group
@@ -2511,6 +2516,11 @@ bool pull_have_potential(const pull_t& pull)
 bool pull_have_constraint(const pull_t& pull)
 {
     return pull.bConstraint;
+}
+
+bool pull_have_transformation(const pull_t& pull)
+{
+    return pull.bTransformation;
 }
 
 bool pull_have_constraint(const pull_params_t& pullParameters)
