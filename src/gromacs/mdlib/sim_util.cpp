@@ -1860,7 +1860,8 @@ void do_force(FILE*                               fplog,
     }
 
     // TODO Force flags should include haveFreeEnergyWork for this domain
-    if (stepWork.useGpuXHalo && (domainWork.haveCpuBondedWork || domainWork.haveFreeEnergyWork))
+    if (!stepWork.doNeighborSearch && stepWork.useGpuXHalo
+        && (domainWork.haveCpuBondedWork || domainWork.haveFreeEnergyWork))
     {
         wallcycle_stop(wcycle, WallCycleCounter::Force);
         /* Wait for non-local coordinate data to be copied from device */
