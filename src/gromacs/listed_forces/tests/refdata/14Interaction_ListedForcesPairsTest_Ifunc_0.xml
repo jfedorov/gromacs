@@ -112,14 +112,14 @@
               <Real Name="Z">0.017988952507630541</Real>
             </Vector>
             <Vector>
-              <Real Name="X">0.61465102353521561</Real>
-              <Real Name="Y">1.2293020470704299</Real>
-              <Real Name="Z">1.8439530706056453</Real>
+              <Real Name="X">0.51699272598635493</Real>
+              <Real Name="Y">1.0339854519727087</Real>
+              <Real Name="Z">1.5509781779590635</Real>
             </Vector>
             <Vector>
-              <Real Name="X">-0.62987244488782612</Real>
-              <Real Name="Y">-1.2459072340005504</Real>
-              <Real Name="Z">-1.8619420231132757</Real>
+              <Real Name="X">-0.53221414733896544</Real>
+              <Real Name="Y">-1.0505906389028292</Real>
+              <Real Name="Z">-1.5689671304666939</Real>
             </Vector>
           </Sequence>
           <Shift-Forces Name="Shift-forces">

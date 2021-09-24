@@ -107,26 +107,26 @@
           <Sequence Name="Forces">
             <Int Name="Length">3</Int>
             <Vector>
-              <Real Name="X">0.48344354533118644</Real>
-              <Real Name="Y">0.96688709066237177</Real>
-              <Real Name="Z">1.4503306359935582</Real>
+              <Real Name="X">0.64820020419038404</Real>
+              <Real Name="Y">1.2964004083807668</Real>
+              <Real Name="Z">1.9446006125711506</Real>
             </Vector>
             <Vector>
-              <Real Name="X">0.61465102353521561</Real>
-              <Real Name="Y">1.2293020470704299</Real>
-              <Real Name="Z">1.8439530706056453</Real>
+              <Real Name="X">0.51699272598635493</Real>
+              <Real Name="Y">1.0339854519727087</Real>
+              <Real Name="Z">1.5509781779590635</Real>
             </Vector>
             <Vector>
-              <Real Name="X">-1.0980945688664021</Real>
-              <Real Name="Y">-2.1961891377328016</Real>
-              <Real Name="Z">-3.2942837065992032</Real>
+              <Real Name="X">-1.165192930176739</Real>
+              <Real Name="Y">-2.3303858603534753</Real>
+              <Real Name="Z">-3.4955787905302138</Real>
             </Vector>
           </Sequence>
           <Shift-Forces Name="Shift-forces">
             <Vector Name="Central">
-              <Real Name="X">-0.48344354533118644</Real>
-              <Real Name="Y">-0.96688709066237177</Real>
-              <Real Name="Z">-1.4503306359935582</Real>
+              <Real Name="X">-0.64820020419038404</Real>
+              <Real Name="Y">-1.2964004083807668</Real>
+              <Real Name="Z">-1.9446006125711506</Real>
             </Vector>
           </Shift-Forces>
         </Sofcore>
