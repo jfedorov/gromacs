@@ -1113,8 +1113,7 @@ static void combineMtsForces(const int      numAtoms,
     }
 }
 
-/*! \brief Setup for the local and non-local GPU force reductions:
- * reinitialization plus the registration of forces and dependencies.
+/*! \brief Setup for the local and non-local GPU force reductions.
  *
  * \param [in] runScheduleWork               Schedule workload flag structure
  * \param [in] cr                            Communication record object
@@ -1152,7 +1151,47 @@ static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
                         ? fr->pmePpCommGpu->getGpuForceStagingPtr() // buffer received from other GPU
                         : pme_gpu_get_device_f(fr->pmedata);        // PME force buffer on same GPU
         fr->gpuForceReduction[gmx::AtomLocality::Local]->registerRvecForce(forcePtr);
+    }
 
+    if (runScheduleWork->simulationWork.havePpDomainDecomposition)
+    {
+        // (re-)initialize non-local GPU force reduction
+        const bool accumulate = runScheduleWork->domainWork.haveCpuBondedWork
+                                || runScheduleWork->domainWork.haveFreeEnergyWork;
+        const int atomStart = dd_numHomeAtoms(*cr->dd);
+        fr->gpuForceReduction[gmx::AtomLocality::NonLocal]->reinit(stateGpu->getForces(),
+                                                                   nbv->getNumAtoms(AtomLocality::NonLocal),
+                                                                   nbv->getGridIndices(),
+                                                                   atomStart,
+                                                                   accumulate);
+
+        // register forces and add dependencies
+        // in the DD case we use the same stream for H2D and reduction, hence no explicit dependency needed
+        fr->gpuForceReduction[gmx::AtomLocality::NonLocal]->registerNbnxmForce(
+                Nbnxm::gpu_get_f(nbv->gpu_nbv));
+    }
+}
+
+
+/*! \brief Reinitialize dependencies for the GPU force reductions.
+ *
+ * \param [in] runScheduleWork               Schedule workload flag structure
+ * \param [in] cr                            Communication record object
+ * \param [in] fr                            Force record object
+ */
+static void setupGpuForceReductionDependencies(gmx::MdrunScheduleWorkload* runScheduleWork,
+                                               const t_commrec*            cr,
+                                               t_forcerec*                 fr)
+{
+    fr->gpuForceReduction[gmx::AtomLocality::Local]->clearDependencies();
+
+    gmx::StatePropagatorDataGpu* stateGpu = fr->stateGpu;
+
+    if (runScheduleWork->simulationWork.useGpuPme
+        && (!runScheduleWork->simulationWork.haveSeparatePmeRank
+            || runScheduleWork->simulationWork.useGpuPmePpCommunication)
+        && runScheduleWork->stepWork.computeSlowForces)
+    {
         GpuEventSynchronizer* const pmeSynchronizer =
                 (runScheduleWork->simulationWork.haveSeparatePmeRank
                          ? fr->pmePpCommGpu->getForcesReadySynchronizer() // buffer received from other GPU
@@ -1179,24 +1218,6 @@ static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
     {
         fr->gpuForceReduction[gmx::AtomLocality::Local]->addDependency(
                 cr->dd->gpuHaloExchange[0][0]->getForcesReadyOnDeviceEvent());
-    }
-
-    if (runScheduleWork->simulationWork.havePpDomainDecomposition)
-    {
-        // (re-)initialize non-local GPU force reduction
-        const bool accumulate = runScheduleWork->domainWork.haveCpuBondedWork
-                                || runScheduleWork->domainWork.haveFreeEnergyWork;
-        const int atomStart = dd_numHomeAtoms(*cr->dd);
-        fr->gpuForceReduction[gmx::AtomLocality::NonLocal]->reinit(stateGpu->getForces(),
-                                                                   nbv->getNumAtoms(AtomLocality::NonLocal),
-                                                                   nbv->getGridIndices(),
-                                                                   atomStart,
-                                                                   accumulate);
-
-        // register forces and add dependencies
-        // in the DD case we use the same stream for H2D and reduction, hence no explicit dependency needed
-        fr->gpuForceReduction[gmx::AtomLocality::NonLocal]->registerNbnxmForce(
-                Nbnxm::gpu_get_f(nbv->gpu_nbv));
     }
 }
 
@@ -1475,6 +1496,11 @@ void do_force(FILE*                               fplog,
         {
             nbv->atomdata_init_copy_x_to_nbat_x_gpu();
         }
+
+        if (simulationWork.useGpuBufferOps)
+        {
+            setupGpuForceReductions(runScheduleWork, cr, fr);
+        }
     }
     else if (!EI_TPI(inputrec.eI) && stepWork.computeNonbondedForces)
     {
@@ -1498,7 +1524,7 @@ void do_force(FILE*                               fplog,
 
     if (simulationWork.useGpuBufferOps)
     {
-        setupGpuForceReductions(runScheduleWork, cr, fr);
+        setupGpuForceReductionDependencies(runScheduleWork, cr, fr);
     }
 
     if (simulationWork.useGpuNonbonded && (stepWork.computeNonbondedForces || domainWork.haveGpuBondedWork))

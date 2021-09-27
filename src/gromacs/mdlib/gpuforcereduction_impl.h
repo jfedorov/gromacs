@@ -98,6 +98,9 @@ public:
      */
     void addDependency(GpuEventSynchronizer* dependency);
 
+    //! Clear the list of dependencies
+    void clearDependencies();
+
     /*! \brief Reinitialize the GPU force reduction
      *
      * \param [in] baseForcePtr     Pointer to force to be used as a base

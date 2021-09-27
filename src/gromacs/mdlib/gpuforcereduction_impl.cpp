@@ -113,6 +113,11 @@ void GpuForceReduction::Impl::addDependency(GpuEventSynchronizer* dependency)
     dependencyList_.push_back(dependency);
 }
 
+void GpuForceReduction::Impl::clearDependencies()
+{
+    dependencyList_.clear();
+}
+
 void GpuForceReduction::Impl::execute()
 {
     wallcycle_start_nocount(wcycle_, WallCycleCounter::LaunchGpu);
@@ -173,6 +178,11 @@ void GpuForceReduction::registerRvecForce(DeviceBuffer<RVec> forcePtr)
 void GpuForceReduction::addDependency(GpuEventSynchronizer* dependency)
 {
     impl_->addDependency(dependency);
+}
+
+void GpuForceReduction::clearDependencies()
+{
+    impl_->clearDependencies();
 }
 
 void GpuForceReduction::reinit(DeviceBuffer<RVec>    baseForcePtr,

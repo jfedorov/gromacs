@@ -94,6 +94,12 @@ void GpuForceReduction::addDependency(GpuEventSynchronizer* const /* dependency 
 }
 
 // NOLINTNEXTLINE readability-convert-member-functions-to-static
+void GpuForceReduction::clearDependencies()
+{
+    GMX_RELEASE_ASSERT(false, "A CPU stub has been called instead of the correct implementation.");
+}
+
+// NOLINTNEXTLINE readability-convert-member-functions-to-static
 void GpuForceReduction::execute()
 {
     GMX_RELEASE_ASSERT(false, "A CPU stub has been called instead of the correct implementation.");
