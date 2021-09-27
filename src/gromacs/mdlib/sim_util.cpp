@@ -1143,8 +1143,7 @@ static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
 
     if (runScheduleWork->simulationWork.useGpuPme
         && (!runScheduleWork->simulationWork.haveSeparatePmeRank
-            || runScheduleWork->simulationWork.useGpuPmePpCommunication)
-        && runScheduleWork->stepWork.computeSlowForces)
+            || runScheduleWork->simulationWork.useGpuPmePpCommunication))
     {
         DeviceBuffer<gmx::RVec> forcePtr =
                 runScheduleWork->simulationWork.haveSeparatePmeRank
