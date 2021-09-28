@@ -59,7 +59,8 @@ namespace gmx
 class SimdFloat
 {
 private:
-    typedef svfloat32_t simdInternalType_ __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+    typedef svfloat32_t simdInternalType_
+            __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
 
 public:
     SimdFloat() {}
@@ -74,7 +75,8 @@ public:
 class SimdFInt32
 {
 private:
-    typedef svint32_t simdInternalType_ __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+    typedef svint32_t simdInternalType_
+            __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
 
 public:
     SimdFInt32() {}
@@ -89,15 +91,13 @@ public:
 class SimdFBool
 {
 private:
-    typedef svbool_t simdInternalType_ __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+    typedef svbool_t simdInternalType_
+            __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
 
 public:
     SimdFBool() {}
 
-    SimdFBool(const bool b)
-    {
-        this->simdInternal_ = svdup_n_b32(b);
-    }
+    SimdFBool(const bool b) { this->simdInternal_ = svdup_n_b32(b); }
 
     SimdFBool(svbool_t simd) : simdInternal_(simd) {}
 
@@ -107,15 +107,13 @@ public:
 class SimdFIBool
 {
 private:
-    typedef svbool_t simdInternalType_ __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+    typedef svbool_t simdInternalType_
+            __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
 
 public:
     SimdFIBool() {}
 
-    SimdFIBool(const bool b)
-    {
-        this->simdInternal_ = svdup_n_b32(b);
-    }
+    SimdFIBool(const bool b) { this->simdInternal_ = svdup_n_b32(b); }
 
     SimdFIBool(svbool_t simd) : simdInternal_(simd) {}
 
@@ -388,7 +386,7 @@ static inline SimdFloat gmx_simdcall frexp(SimdFloat value, SimdFInt32* exponent
     const svint32_t exponentMask = svdup_n_s32(0x7F800000);
     const svint32_t mantissaMask = svdup_n_s32(0x807FFFFF);
     const svint32_t exponentBias = svdup_n_s32(126); // add 1 to make our definition identical to frexp()
-    const svfloat32_t half       = svdup_n_f32(0.5f);
+    const svfloat32_t half = svdup_n_f32(0.5f);
     svint32_t         iExponent;
 
     iExponent = svand_s32_x(pg, svreinterpret_s32_f32(value.simdInternal_), exponentMask);

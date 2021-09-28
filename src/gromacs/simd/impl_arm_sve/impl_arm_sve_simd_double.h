@@ -60,7 +60,8 @@ namespace gmx
 class SimdDouble
 {
 private:
-    typedef svfloat64_t simdInternalType_ __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+    typedef svfloat64_t simdInternalType_
+            __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
 
 public:
     SimdDouble() {}
@@ -75,7 +76,8 @@ public:
 class SimdDInt32
 {
 private:
-    typedef svint64_t simdInternalType_ __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+    typedef svint64_t simdInternalType_
+            __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
 
 public:
     SimdDInt32() {}
@@ -90,15 +92,13 @@ public:
 class SimdDBool
 {
 private:
-    typedef svbool_t simdInternalType_ __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+    typedef svbool_t simdInternalType_
+            __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
 
 public:
     SimdDBool() {}
 
-    SimdDBool(const bool b)
-    {
-        this->simdInternal_ = svdup_n_b64(b);
-    }
+    SimdDBool(const bool b) { this->simdInternal_ = svdup_n_b64(b); }
 
     SimdDBool(svbool_t simd) : simdInternal_(simd) {}
 
@@ -108,15 +108,13 @@ public:
 class SimdDIBool
 {
 private:
-    typedef svbool_t simdInternalType_ __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+    typedef svbool_t simdInternalType_
+            __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
 
 public:
     SimdDIBool() {}
 
-    SimdDIBool(const bool b)
-    {
-        this->simdInternal_ = svdup_n_b64(b);
-    }
+    SimdDIBool(const bool b) { this->simdInternal_ = svdup_n_b64(b); }
 
     SimdDIBool(svbool_t simd) : simdInternal_(simd) {}
 
@@ -179,8 +177,7 @@ static inline void gmx_simdcall store(std::int32_t* m, SimdDInt32 a)
 {
     assert(0 == (std::size_t(m) % GMX_SIMD_ALIGNMENT));
     svbool_t pg = SVE_SIMD_FLOAT_HALF_DOUBLE_MASK;
-    svst1_s32(pg, m,
-              svuzp1(svreinterpret_s32_s64(a.simdInternal_), svreinterpret_s32_s64(a.simdInternal_)));
+    svst1_s32(pg, m, svuzp1(svreinterpret_s32_s64(a.simdInternal_), svreinterpret_s32_s64(a.simdInternal_)));
 }
 
 static inline SimdDInt32 gmx_simdcall simdLoadU(const std::int32_t* m, SimdDInt32Tag)
@@ -192,10 +189,9 @@ static inline SimdDInt32 gmx_simdcall simdLoadU(const std::int32_t* m, SimdDInt3
 static inline void gmx_simdcall storeU(std::int32_t* m, SimdDInt32 a)
 {
     svbool_t pg = SVE_SIMD_FLOAT_HALF_DOUBLE_MASK;
-    svst1_s32(pg, m,
-              svuzp1(svreinterpret_s32_s64(a.simdInternal_), svreinterpret_s32_s64(a.simdInternal_)));
+    svst1_s32(pg, m, svuzp1(svreinterpret_s32_s64(a.simdInternal_), svreinterpret_s32_s64(a.simdInternal_)));
 }
- 
+
 static inline SimdDInt32 gmx_simdcall setZeroDI()
 {
     return { svdup_n_s64(0) };

@@ -2,7 +2,7 @@
  * This file is part of the GROMACS molecular simulation package.
  *
  * Copyright (c) 2020 Research Organization for Information Science and Technology (RIST).
- * Copyright (c) 2020, by the GROMACS development team, led by
+ * Copyright (c) 2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -55,13 +55,14 @@
 namespace gmx
 {
 
-#define SVE_SIMD3_DOUBLE_MASK svwhilelt_b64(0,3)
-#define SVE_SIMD4_DOUBLE_MASK svwhilelt_b64(0,4)
+#define SVE_SIMD3_DOUBLE_MASK svwhilelt_b64(0, 3)
+#define SVE_SIMD4_DOUBLE_MASK svwhilelt_b64(0, 4)
 
 class Simd4Double
 {
 private:
-    typedef svfloat64_t simdInternalType_ __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+    typedef svfloat64_t simdInternalType_
+            __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
 
 public:
     Simd4Double() {}
@@ -76,7 +77,8 @@ public:
 class Simd4DBool
 {
 private:
-    typedef svbool_t simdInternalType_ __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+    typedef svbool_t simdInternalType_
+            __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
 
 public:
     Simd4DBool() {}
