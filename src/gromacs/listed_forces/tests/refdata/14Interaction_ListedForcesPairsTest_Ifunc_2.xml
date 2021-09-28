@@ -100,33 +100,33 @@
           </Shift-Forces>
         </Sofcore>
         <Sofcore Name="gapsys">
-          <Real Name="Epot Coulomb14">-0.12262214526217577</Real>
+          <Real Name="Epot Coulomb14">-0.16703827619523909</Real>
           <Real Name="Epot LJ14">-0.39769566147710511</Real>
-          <Real Name="dVdlCoul ">0.27046205463933159</Real>
+          <Real Name="dVdlCoul ">0.33407655239047818</Real>
           <Real Name="dVdlVdw ">0.79539132295421022</Real>
           <Sequence Name="Forces">
             <Int Name="Length">3</Int>
             <Vector>
-              <Real Name="X">0.64820020419038404</Real>
-              <Real Name="Y">1.2964004083807668</Real>
-              <Real Name="Z">1.9446006125711506</Real>
+              <Real Name="X">0.80444798369610893</Real>
+              <Real Name="Y">1.6088959673922161</Real>
+              <Real Name="Z">2.4133439510883252</Real>
             </Vector>
             <Vector>
-              <Real Name="X">0.51699272598635493</Real>
-              <Real Name="Y">1.0339854519727087</Real>
-              <Real Name="Z">1.5509781779590635</Real>
+              <Real Name="X">0.44650882029312339</Real>
+              <Real Name="Y">0.89301764058624578</Real>
+              <Real Name="Z">1.3395264608793691</Real>
             </Vector>
             <Vector>
-              <Real Name="X">-1.165192930176739</Real>
-              <Real Name="Y">-2.3303858603534753</Real>
-              <Real Name="Z">-3.4955787905302138</Real>
+              <Real Name="X">-1.2509568039892323</Real>
+              <Real Name="Y">-2.5019136079784619</Real>
+              <Real Name="Z">-3.7528704119676943</Real>
             </Vector>
           </Sequence>
           <Shift-Forces Name="Shift-forces">
             <Vector Name="Central">
-              <Real Name="X">-0.64820020419038404</Real>
-              <Real Name="Y">-1.2964004083807668</Real>
-              <Real Name="Z">-1.9446006125711506</Real>
+              <Real Name="X">-0.80444798369610893</Real>
+              <Real Name="Y">-1.6088959673922161</Real>
+              <Real Name="Z">-2.4133439510883252</Real>
             </Vector>
           </Shift-Forces>
         </Sofcore>
@@ -166,7 +166,7 @@
         <Sofcore Name="gapsys">
           <Real Name="Epot Coulomb14">0</Real>
           <Real Name="Epot LJ14">0</Real>
-          <Real Name="dVdlCoul ">0.24565017842507153</Real>
+          <Real Name="dVdlCoul ">0.33407654503379003</Real>
           <Real Name="dVdlVdw ">0.79539132295421022</Real>
           <Sequence Name="Forces">
             <Int Name="Length">3</Int>
