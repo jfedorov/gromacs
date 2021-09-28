@@ -54,140 +54,151 @@
 
 #include "impl_arm_sve_simd_float.h"
 
-#define SVE_DOUBLE_MASK svptrue_b64()
-#define SVE_DINT32_MASK svptrue_b64()
-
 namespace gmx
 {
 
 class SimdDouble
 {
+private:
+    typedef svfloat64_t simdInternalType_ __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+
 public:
     SimdDouble() {}
 
-    SimdDouble(const double d) { this->simdInternal_ = svdup_f64(d); }
+    SimdDouble(const double d) { this->simdInternal_ = svdup_n_f64(d); }
 
     SimdDouble(svfloat64_t simd) : simdInternal_(simd) {}
 
-    sve_vec_double simdInternal_;
+    simdInternalType_ simdInternal_;
 };
 
 class SimdDInt32
 {
+private:
+    typedef svint64_t simdInternalType_ __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+
 public:
     SimdDInt32() {}
 
-    SimdDInt32(const int32_t i) { this->simdInternal_ = svdup_s64(i); }
+    SimdDInt32(const int32_t i) { this->simdInternal_ = svdup_n_s64(i); }
 
     SimdDInt32(svint64_t simd) : simdInternal_(simd) {}
 
-    sve_vec_int64 simdInternal_;
+    simdInternalType_ simdInternal_;
 };
 
 class SimdDBool
 {
+private:
+    typedef svbool_t simdInternalType_ __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+
 public:
     SimdDBool() {}
 
     SimdDBool(const bool b)
     {
-        this->simdInternal_ = svdup_b64(b);
+        this->simdInternal_ = svdup_n_b64(b);
     }
 
-    SimdDBool(svbool_t simd) { this->simdInternal_ = simd; }
+    SimdDBool(svbool_t simd) : simdInternal_(simd) {}
 
-    sve_pred simdInternal_;
+    simdInternalType_ simdInternal_;
 };
 
 class SimdDIBool
 {
+private:
+    typedef svbool_t simdInternalType_ __attribute__((arm_sve_vector_bits(GMX_SIMD_ARM_SVE_LENGTH_VALUE)));
+
 public:
     SimdDIBool() {}
 
     SimdDIBool(const bool b)
     {
-        this->simdInternal_ = svdup_b64(b);
+        this->simdInternal_ = svdup_n_b64(b);
     }
 
-    SimdDIBool(svbool_t simd) { this->simdInternal_ = simd; }
+    SimdDIBool(svbool_t simd) : simdInternal_(simd) {}
 
-    sve_pred simdInternal_;
+    simdInternalType_ simdInternal_;
 };
 
 static inline SimdDouble gmx_simdcall simdLoad(const double* m, SimdDoubleTag = {})
 {
     assert(0 == (std::size_t(m) % GMX_SIMD_ALIGNMENT));
-    svbool_t pg = SVE_DOUBLE_MASK;
+    svbool_t pg = svptrue_b64();
     return { svld1_f64(pg, m) };
 }
 
 static inline SimdDouble gmx_simdcall simdLoad(SimdDouble* m, int offset, SimdDoubleTag = {})
 {
     assert(0 == (std::size_t(m) % GMX_SIMD_ALIGNMENT));
-    svbool_t pg = SVE_DOUBLE_MASK;
+    svbool_t pg = svptrue_b64();
     return { svld1_f64(pg, reinterpret_cast<double*>(m) + offset * svcntd()) };
 }
 
 static inline SimdDouble gmx_simdcall simdLoadDouble(const double* m)
 {
     assert(0 == (std::size_t(m) % GMX_SIMD_ALIGNMENT));
-    svbool_t pg = SVE_DOUBLE_MASK;
+    svbool_t pg = svptrue_b64();
     return { svld1_f64(pg, m) };
 }
 
 static inline void gmx_simdcall store(double* m, SimdDouble a)
 {
     assert(0 == (std::size_t(m) % GMX_SIMD_ALIGNMENT));
-    svbool_t pg = SVE_DOUBLE_MASK;
+    svbool_t pg = svptrue_b64();
     svst1_f64(pg, m, a.simdInternal_);
 }
 
 static inline SimdDouble gmx_simdcall simdLoadU(const double* m, SimdDoubleTag = {})
 {
-    svbool_t pg = SVE_DOUBLE_MASK;
+    svbool_t pg = svptrue_b64();
     return { svld1_f64(pg, m) };
 }
 
 static inline void gmx_simdcall storeU(double* m, SimdDouble a)
 {
-    svbool_t pg = SVE_DOUBLE_MASK;
+    svbool_t pg = svptrue_b64();
     svst1_f64(pg, m, a.simdInternal_);
 }
 
 static inline SimdDouble gmx_simdcall setZeroD()
 {
-    return { svdup_f64(0.0) };
+    return { svdup_n_f64(0.0) };
 }
 
 static inline SimdDInt32 gmx_simdcall simdLoad(const std::int32_t* m, SimdDInt32Tag)
 {
     assert(0 == (std::size_t(m) % GMX_SIMD_ALIGNMENT));
-    svbool_t pg = svwhilelt_b32(0, (int32_t)GMX_SIMD_DINT32_WIDTH);
+    svbool_t pg = SVE_SIMD_FLOAT_HALF_DOUBLE_MASK;
     return { svunpklo_s64(svld1_s32(pg, m)) };
 }
 
 static inline void gmx_simdcall store(std::int32_t* m, SimdDInt32 a)
 {
     assert(0 == (std::size_t(m) % GMX_SIMD_ALIGNMENT));
-    svbool_t pg = svwhilelt_b32(0, (int32_t)GMX_SIMD_DINT32_WIDTH);
-    svst1_s32(pg, m, svuzp1(svreinterpret_s32_s64(a.simdInternal_), svreinterpret_s32_s64(a.simdInternal_)));
+    svbool_t pg = SVE_SIMD_FLOAT_HALF_DOUBLE_MASK;
+    svst1_s32(pg, m,
+              svuzp1(svreinterpret_s32_s64(a.simdInternal_), svreinterpret_s32_s64(a.simdInternal_)));
 }
 
 static inline SimdDInt32 gmx_simdcall simdLoadU(const std::int32_t* m, SimdDInt32Tag)
 {
-    svbool_t pg = svwhilelt_b32(0, (int32_t)GMX_SIMD_DINT32_WIDTH);
+    svbool_t pg = SVE_SIMD_FLOAT_HALF_DOUBLE_MASK;
     return { svunpklo_s64(svld1_s32(pg, m)) };
 }
 
 static inline void gmx_simdcall storeU(std::int32_t* m, SimdDInt32 a)
 {
-    svbool_t pg = svwhilelt_b32(0, (int32_t)GMX_SIMD_DINT32_WIDTH);
-    svst1_s32(pg, m, svuzp1(svreinterpret_s32_s64(a.simdInternal_), svreinterpret_s32_s64(a.simdInternal_)));
+    svbool_t pg = SVE_SIMD_FLOAT_HALF_DOUBLE_MASK;
+    svst1_s32(pg, m,
+              svuzp1(svreinterpret_s32_s64(a.simdInternal_), svreinterpret_s32_s64(a.simdInternal_)));
 }
-
+ 
 static inline SimdDInt32 gmx_simdcall setZeroDI()
 {
-    return { svdup_s64(0) };
+    return { svdup_n_s64(0) };
 }
 
 template<int index>
@@ -329,7 +340,7 @@ static inline SimdDouble gmx_simdcall maskzRsqrt(SimdDouble x, SimdDBool m)
 #ifndef NDEBUG
     x.simdInternal_ = svsel_f64(m.simdInternal_, x.simdInternal_, svdup_n_f64(1.0));
 #endif
-    return { svsel_f64(m.simdInternal_, svrsqrte_f64(x.simdInternal_), svdup_f64(0.0f)) };
+    return { svsel_f64(m.simdInternal_, svrsqrte_f64(x.simdInternal_), svdup_n_f64(0.0)) };
 }
 
 static inline SimdDouble gmx_simdcall maskzRcp(SimdDouble x, SimdDBool m)
@@ -339,7 +350,7 @@ static inline SimdDouble gmx_simdcall maskzRcp(SimdDouble x, SimdDBool m)
 #ifndef NDEBUG
     x.simdInternal_ = svsel_f64(m.simdInternal_, x.simdInternal_, svdup_n_f64(1.0));
 #endif
-    return { svsel_f64(m.simdInternal_, svrecpe_f64(x.simdInternal_), svdup_f64(0.0f)) };
+    return { svsel_f64(m.simdInternal_, svrecpe_f64(x.simdInternal_), svdup_n_f64(0.0)) };
 }
 
 static inline SimdDouble gmx_simdcall abs(SimdDouble x)
@@ -386,7 +397,7 @@ static inline SimdDouble gmx_simdcall frexp(SimdDouble value, SimdDInt32* expone
     if (opt == MathOptimization::Safe)
     {
         svbool_t valueIsZero = svcmpeq_n_f64(pg, value.simdInternal_, 0.0);
-        iExponent            = svsel_s64(valueIsZero, svdup_s64(0), iExponent);
+        iExponent            = svsel_s64(valueIsZero, svdup_n_s64(0), iExponent);
         result               = svsel_f64(valueIsZero, value.simdInternal_, result);
     }
 
@@ -415,7 +426,7 @@ static inline SimdDouble gmx_simdcall ldexp(SimdDouble value, SimdDInt32 exponen
 static inline double gmx_simdcall reduce(SimdDouble a)
 {
     svbool_t pg = svptrue_b64();
-    return svadda_f64(pg, 0.0f, a.simdInternal_);
+    return svadda_f64(pg, 0.0, a.simdInternal_);
 }
 
 static inline SimdDBool gmx_simdcall operator==(SimdDouble a, SimdDouble b)
@@ -457,7 +468,7 @@ static inline SimdDBool gmx_simdcall operator&&(SimdDBool a, SimdDBool b)
 static inline SimdDBool gmx_simdcall operator||(SimdDBool a, SimdDBool b)
 {
     svbool_t pg = svptrue_b64();
-    return { svorr_z(pg, a.simdInternal_, b.simdInternal_) };
+    return { svorr_b_z(pg, a.simdInternal_, b.simdInternal_) };
 }
 
 static inline bool gmx_simdcall anyTrue(SimdDBool a)
@@ -474,12 +485,12 @@ static inline bool gmx_simdcall extractFirst(SimdDBool a)
 
 static inline SimdDouble gmx_simdcall selectByMask(SimdDouble a, SimdDBool m)
 {
-    return { svsel_f64(m.simdInternal_, a.simdInternal_, svdup_f64(0.0f)) };
+    return { svsel_f64(m.simdInternal_, a.simdInternal_, svdup_n_f64(0.0)) };
 }
 
 static inline SimdDouble gmx_simdcall selectByNotMask(SimdDouble a, SimdDBool m)
 {
-    return { svsel_f64(m.simdInternal_, svdup_f64(0.0f), a.simdInternal_) };
+    return { svsel_f64(m.simdInternal_, svdup_n_f64(0.0), a.simdInternal_) };
 }
 
 static inline SimdDouble gmx_simdcall blend(SimdDouble a, SimdDouble b, SimdDBool sel)
@@ -550,13 +561,13 @@ static inline SimdDIBool gmx_simdcall operator<(SimdDInt32 a, SimdDInt32 b)
 static inline SimdDIBool gmx_simdcall operator&&(SimdDIBool a, SimdDIBool b)
 {
     svbool_t pg = svptrue_b64();
-    return { svand_z(pg, a.simdInternal_, b.simdInternal_) };
+    return { svand_b_z(pg, a.simdInternal_, b.simdInternal_) };
 }
 
 static inline SimdDIBool gmx_simdcall operator||(SimdDIBool a, SimdDIBool b)
 {
     svbool_t pg = svptrue_b64();
-    return { svorr_z(pg, a.simdInternal_, b.simdInternal_) };
+    return { svorr_b_z(pg, a.simdInternal_, b.simdInternal_) };
 }
 
 static inline bool gmx_simdcall anyTrue(SimdDIBool a)
@@ -567,12 +578,12 @@ static inline bool gmx_simdcall anyTrue(SimdDIBool a)
 
 static inline SimdDInt32 gmx_simdcall selectByMask(SimdDInt32 a, SimdDIBool m)
 {
-    return { svsel_s64(m.simdInternal_, a.simdInternal_, svdup_s64(0)) };
+    return { svsel_s64(m.simdInternal_, a.simdInternal_, svdup_n_s64(0)) };
 }
 
 static inline SimdDInt32 gmx_simdcall selectByNotMask(SimdDInt32 a, SimdDIBool m)
 {
-    return { svsel_s64(m.simdInternal_, svdup_s64(0), a.simdInternal_) };
+    return { svsel_s64(m.simdInternal_, svdup_n_s64(0), a.simdInternal_) };
 }
 
 static inline SimdDInt32 gmx_simdcall blend(SimdDInt32 a, SimdDInt32 b, SimdDIBool sel)

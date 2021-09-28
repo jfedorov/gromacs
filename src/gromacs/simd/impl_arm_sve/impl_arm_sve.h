@@ -62,4 +62,5 @@
  * We use fixed-size SVE types with __atributte__((arm_sve_vector_bits(...)))
  * to set the size. (See Arm C Language Extensions for SVE - version 6, chapter 3.7.3.)
  */
+
 #endif // GMX_SIMD_IMPL_ARM_SVE_H
