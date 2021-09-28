@@ -82,6 +82,20 @@
 #    define LJ_COMB
 #endif
 
+/*! \brief Jm loop unroll
+ * 
+ * On architectures with sufficiently large instruction cache, further unrolling
+ * the jm loop can have major performance benefits as long as the kernel fits in
+ * the cache.
+ * - On CC 8.6 (GA102) all flavors of the kernel are faster with 4-way unroll
+ * - On CC 8.0 (A100) only the "smaller" kernels: RF, cutoff, and potential shift kernels benefit from 4-way unroll.
+ *   (TODO test 2-way unroll)
+ * 
+ */
+#if (GMX_PTX_ARCH == 860)
+#define JM_UNROLL 4
+#endif
+
 /*
    Kernel launch parameters:
     - #blocks   = #pair lists, blockId = pair list Id
@@ -391,10 +405,11 @@ __launch_bounds__(THREADS_PER_BLOCK)
             }
             __syncwarp(c_fullWarpMask);
 
-            /* Unrolling this loop
-               - with pruning leads to register spilling;
-               - on Kepler and later it is much slower;
-               Tested with up to nvcc 7.5 */
+            // On architectures with large enough instructions caches we can unroll
+            // this loop. See the definition of JM_UNROLL 
+#if defined JM_UNROLL
+#pragma unroll JM_UNROLL
+#endif
             for (jm = 0; jm < c_nbnxnGpuJgroupSize; jm++)
             {
                 if (imask & (superClInteractionMask << (jm * c_nbnxnGpuNumClusterPerSupercluster)))
@@ -665,5 +680,7 @@ __launch_bounds__(THREADS_PER_BLOCK)
 #undef EL_EWALD_ANY
 #undef EXCLUSION_FORCES
 #undef LJ_EWALD
+
+#undef JM_UNROLL
 
 #undef LJ_COMB
