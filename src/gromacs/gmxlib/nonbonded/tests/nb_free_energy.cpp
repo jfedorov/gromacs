@@ -235,7 +235,7 @@ public:
         fepVals_.sc_sigma                = 0.3;
         fepVals_.sc_sigma_min            = 0.3;
         fepVals_.bScCoul                 = true;
-        fepVals_.scGapsysScaleLinpointLJ = 0.3;
+        fepVals_.scGapsysScaleLinpointLJ = 0.85;
         fepVals_.scGapsysScaleLinpointQ  = 0.3;
         fepVals_.scGapsysSigmaLJ         = 0.3;
         fepVals_.softcoreFunction        = SoftcoreType::Beutler;
