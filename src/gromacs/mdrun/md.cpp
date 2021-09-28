@@ -1446,10 +1446,6 @@ void gmx::LegacySimulator::do_md()
         const bool doParrinelloRahman = (ir->epc == PressureCoupling::ParrinelloRahman
                                          && do_per_step(step + ir->nstpcouple - 1, ir->nstpcouple));
 
-
-        bool localCoordinatesCopiedFromGpu = false;
-        bool localVelocitiesCopiedFromGpu  = false;
-
         if (EI_VV(ir->eI))
         {
             GMX_ASSERT(!useGpuForUpdate, "GPU update is not supported with VVAK integrator.");
@@ -1537,16 +1533,6 @@ void gmx::LegacySimulator::do_md()
                                       doParrinelloRahman,
                                       ir->nstpcouple * ir->delta_t,
                                       M);
-
-                // Copy velocities D2H after update if:
-                // - Globals are computed this step (includes the energy output steps).
-                // - Temperature is needed for the next step.
-                if (bGStat || needHalfStepKineticEnergy)
-                {
-                    stateGpu->copyVelocitiesFromGpu(state->v, AtomLocality::Local);
-                    stateGpu->waitVelocitiesReadyOnHost(AtomLocality::Local);
-                    localVelocitiesCopiedFromGpu = true;
-                }
             }
             else
             {
@@ -1644,16 +1630,28 @@ void gmx::LegacySimulator::do_md()
             // Organize to do inter-simulation signalling on steps if
             // and when algorithms require it.
             const bool doInterSimSignal = (simulationsShareState && do_per_step(step, nstSignalComm));
+            const bool coordinatesRequiredForStopCM =
+                    (bGStat || needHalfStepKineticEnergy || doInterSimSignal) && !EI_VV(ir->eI) && bStopCM;
+
+            // Copy coordinates when needed to stop the CM motion or for replica exchange
+            if (useGpuForUpdate && (coordinatesRequiredForStopCM || bDoReplEx))
+            {
+                stateGpu->copyCoordinatesFromGpu(state->x, AtomLocality::Local);
+                stateGpu->waitCoordinatesReadyOnHost(AtomLocality::Local);
+            }
+
+            // Copy velocities if:
+            // - Globals are computed this step (includes the energy output steps).
+            // - Temperature is needed for the next step.
+            // - This is a replica exchange step
+            if (useGpuForUpdate && (bGStat || needHalfStepKineticEnergy || bDoReplEx))
+            {
+                stateGpu->copyVelocitiesFromGpu(state->v, AtomLocality::Local);
+                stateGpu->waitVelocitiesReadyOnHost(AtomLocality::Local);
+            }
 
             if (bGStat || needHalfStepKineticEnergy || doInterSimSignal)
             {
-                // Copy coordinates when needed to stop the CM motion.
-                if (useGpuForUpdate && (!EI_VV(ir->eI) && bStopCM))
-                {
-                    stateGpu->copyCoordinatesFromGpu(state->x, AtomLocality::Local);
-                    stateGpu->waitCoordinatesReadyOnHost(AtomLocality::Local);
-                    localCoordinatesCopiedFromGpu = true;
-                }
                 // Since we're already communicating at this step, we
                 // can propagate intra-simulation signals. Note that
                 // check_nstglobalcomm has the responsibility for
@@ -1928,19 +1926,7 @@ void gmx::LegacySimulator::do_md()
         bExchanged = FALSE;
         if (bDoReplEx)
         {
-            if (useGpuForUpdate && !localCoordinatesCopiedFromGpu)
-            {
-                stateGpu->copyCoordinatesFromGpu(state->x, AtomLocality::Local);
-                stateGpu->waitCoordinatesReadyOnHost(AtomLocality::Local);
-            }
-            if (useGpuForUpdate && !localVelocitiesCopiedFromGpu)
-            {
-                stateGpu->copyVelocitiesFromGpu(state->v, AtomLocality::Local);
-                stateGpu->waitVelocitiesReadyOnHost(AtomLocality::Local);
-            }
-
             bExchanged = replica_exchange(fplog, cr, ms, repl_ex, state_global, enerd, state, step, t);
-
             if (useGpuForUpdate)
             {
                 integrator->setPbc(PbcType::Xyz, state->box);
