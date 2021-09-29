@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2020,2021, by the GROMACS development team, led by
+ * Copyright (c) 2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -33,48 +33,40 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 /*! \internal \file
- * \brief Implements nblib ForceCalculator
+ * \brief
+ * Declares fabrique structure for QMMM MDModule class
  *
- * \author Victor Holanda <victor.holanda@cscs.ch>
- * \author Joe Jordan <ejjordan@kth.se>
- * \author Prashanth Kanduri <kanduri@cscs.ch>
- * \author Sebastian Keller <keller@cscs.ch>
+ * \author Dmitry Morozov <dmitry.morozov@jyu.fi>
+ * \author Christian Blau <blau@kth.se>
+ * \ingroup module_applied_forces
  */
-#include "nblib/exception.h"
-#include "nblib/forcecalculator.h"
-#include "nblib/gmxcalculator.h"
-#include "nblib/gmxsetup.h"
-#include "gromacs/utility/arrayref.h"
+#ifndef GMX_APPLIED_FORCES_QMMM_H
+#define GMX_APPLIED_FORCES_QMMM_H
 
-namespace nblib
+#include <memory>
+#include <string>
+
+namespace gmx
 {
 
-ForceCalculator::~ForceCalculator() = default;
+class IMDModule;
+struct MdModulesNotifier;
 
-ForceCalculator::ForceCalculator(const SimulationState& system, const NBKernelOptions& options)
+/*! \libinternal \brief Information about the QM/MM module.
+ *
+ * Provides name and method to create a QM/MM module.
+ */
+struct QMMMModuleInfo
 {
-    if (options.useGpu)
-    {
-        throw InputException("GPUs are not supported for force calculations yet.");
-    }
-    gmxForceCalculator_ = GmxSetupDirector::setupGmxForceCalculator(system, options);
-}
+    /*! \brief
+     * Creates a module for applying forces according to a QM/MM.
+     *
+     */
+    static std::unique_ptr<IMDModule> create();
+    //! The name of the module
+    static const std::string name_;
+};
 
-void ForceCalculator::compute(gmx::ArrayRef<const Vec3> coordinates, gmx::ArrayRef<Vec3> forces)
-{
-    if (coordinates.size() != forces.size())
-    {
-        throw InputException("Coordinates array and force buffer size mismatch");
-    }
+} // namespace gmx
 
-    gmxForceCalculator_->compute(coordinates, forces);
-}
-
-void ForceCalculator::updatePairList(gmx::ArrayRef<const int64_t> particleInfoAllVdW,
-                                     gmx::ArrayRef<Vec3>          coordinates,
-                                     const Box&                   box)
-{
-    gmxForceCalculator_->setParticlesOnGrid(particleInfoAllVdW, coordinates, box);
-}
-
-} // namespace nblib
+#endif

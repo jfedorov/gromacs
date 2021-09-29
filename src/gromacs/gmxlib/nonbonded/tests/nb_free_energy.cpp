@@ -156,7 +156,9 @@ public:
         // initialize correction tables
         interaction_const_t tmp;
         tmp.ewaldcoeff_q       = calc_ewaldcoeff_q(1.0, 1.0e-5);
+        coulEwaldCoeff_        = tmp.ewaldcoeff_q;
         tmp.ewaldcoeff_lj      = calc_ewaldcoeff_lj(1.0, 1.0e-5);
+        vdwEwaldCoeff_         = tmp.ewaldcoeff_lj;
         tmp.eeltype            = coulType;
         tmp.vdwtype            = vdwType;
         tmp.coulombEwaldTables = std::make_unique<EwaldCorrectionTables>();
@@ -192,6 +194,8 @@ public:
         ic->epsfac                   = gmx::c_one4PiEps0 * 0.25;
         ic->reactionFieldCoefficient = 0.0; // former k_rf
         ic->reactionFieldShift       = 1.0; // former c_rf
+        ic->ewaldcoeff_q             = coulEwaldCoeff_;
+        ic->ewaldcoeff_lj            = vdwEwaldCoeff_;
         ic->sh_ewald                 = 1.0e-5;
         ic->sh_lj_ewald              = -1.0;
         ic->dispersion_shift.cpot    = -1.0;
@@ -205,8 +209,10 @@ private:
 
     //! coulomb and vdw type specifiers
     CoulombInteractionType coulType_;
+    real                   coulEwaldCoeff_;
     VanDerWaalsType        vdwType_;
     InteractionModifiers   vdwMod_;
+    real                   vdwEwaldCoeff_;
 };
 
 
@@ -405,8 +411,12 @@ protected:
         softcoreAlpha_   = std::get<3>(GetParam());
         softcoreCoulomb_ = std::get<4>(GetParam());
 
+        // Note that the reference data for Ewald type interactions has been generated
+        // with accurate analytical approximations for the long-range corrections.
+        // When the free-energy kernel switches from tabulated to analytical corrections,
+        // the double precision tolerance can be tightend to 1e-11.
         test::FloatingPointTolerance tolerance(
-                input_.floatToler, input_.doubleToler, 1.0e-6, 1.0e-12, 10000, 100, false);
+                input_.floatToler, input_.doubleToler, 1.0e-6, 1.0e-11, 10000, 100, false);
         checker_.setDefaultTolerance(tolerance);
     }
 
@@ -444,8 +454,7 @@ protected:
 
         // run fep kernel
         gmx_nb_free_energy_kernel(nbl,
-                                  x_.arrayRefWithPadding().unpaddedArrayRef(),
-                                  &forces,
+                                  x_.arrayRefWithPadding(),
                                   fr.use_simd_kernels,
                                   fr.ntype,
                                   fr.rlist,
@@ -459,10 +468,12 @@ protected:
                                   input_.atoms.typeB,
                                   doNBFlags,
                                   lambdas,
-                                  output.dvdLambda,
+                                  &nrnb,
+                                  output.f.arrayRefWithPadding().paddedArrayRef().data(),
+                                  as_rvec_array(output.fShift.data()),
                                   output.energy.energyGroupPairTerms[NonBondedEnergyTerms::CoulombSR],
                                   output.energy.energyGroupPairTerms[NonBondedEnergyTerms::LJSR],
-                                  &nrnb);
+                                  output.dvdLambda);
 
         checkOutput(&checker_, output);
     }

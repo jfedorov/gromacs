@@ -739,7 +739,7 @@ static void finish_run(FILE*                     fplog,
         print_flop(fplog, nrnb_tot, &nbfs, &mflop);
     }
 
-    if (thisRankHasDuty(cr, DUTY_PP) && DOMAINDECOMP(cr))
+    if (thisRankHasDuty(cr, DUTY_PP) && haveDDAtomOrdering(*cr))
     {
         print_dd_statistics(cr, inputrec, fplog);
     }
@@ -974,12 +974,17 @@ int Mdrunner::mdrunner()
             "Linear acceleration has been removed in GROMACS 2022, and was broken for many years "
             "before that. Use GROMACS 4.5 or earlier if you need this feature.");
 
+    // Now we decide whether to use the domain decomposition machinery.
+    // Note that this does not necessarily imply actually using multiple domains.
     // Now the number of ranks is known to all ranks, and each knows
     // the inputrec read by the master rank. The ranks can now all run
     // the task-deciding functions and will agree on the result
     // without needing to communicate.
+    // The LBFGS minimizer, test-particle insertion, normal modes and shell dynamics don't support DD
     const bool useDomainDecomposition =
-            (PAR(cr) && !(EI_TPI(inputrec->eI) || inputrec->eI == IntegrationAlgorithm::NM));
+            !(inputrec->eI == IntegrationAlgorithm::LBFGS || EI_TPI(inputrec->eI)
+              || inputrec->eI == IntegrationAlgorithm::NM
+              || gmx_mtop_particletype_count(mtop)[ParticleType::Shell] > 0);
 
     // Note that these variables describe only their own node.
     //
@@ -1108,7 +1113,7 @@ int Mdrunner::mdrunner()
             globalState = std::make_unique<t_state>();
         }
         broadcastStateWithoutDynamics(
-                cr->mpiDefaultCommunicator, DOMAINDECOMP(cr), PAR(cr), globalState.get());
+                cr->mpiDefaultCommunicator, haveDDAtomOrdering(*cr), PAR(cr), globalState.get());
     }
 
     /* A parallel command line option consistency check that we can
@@ -1425,15 +1430,33 @@ int Mdrunner::mdrunner()
     // requires it (e.g. pull, CompEl, density fitting), so that we
     // don't update the local atom sets unilaterally every step.
     LocalAtomSetManager atomSets;
+
+    // Local state and topology are declared (and perhaps constructed)
+    // now, because DD needs them for the LocalTopologyChecker, but
+    // they do not contain valid data until after the first DD
+    // partition.
+    std::unique_ptr<t_state> localStateInstance;
+    t_state*                 localState;
+    gmx_localtop_t           localTopology(mtop.ffparams);
+
     if (ddBuilder)
     {
+        localStateInstance = std::make_unique<t_state>();
+        localState         = localStateInstance.get();
         // TODO Pass the GPU streams to ddBuilder to use in buffer
         // transfers (e.g. halo exchange)
-        cr->dd = ddBuilder->build(&atomSets);
+        cr->dd = ddBuilder->build(&atomSets, localTopology, *localState, &observablesReducerBuilder);
         // The builder's job is done, so destruct it
         ddBuilder.reset(nullptr);
         // Note that local state still does not exist yet.
     }
+    else
+    {
+        // Without DD, the local state is merely an alias to the global state,
+        // so we don't need to allocate anything.
+        localState = globalState.get();
+    }
+
     // Ensure that all atoms within the same update group are in the
     // same periodic image. Otherwise, a simulation that did not use
     // update groups (e.g. a single-rank simulation) cannot always be
@@ -1484,7 +1507,7 @@ int Mdrunner::mdrunner()
 
     if (deviceInfo != nullptr)
     {
-        if (DOMAINDECOMP(cr) && thisRankHasDuty(cr, DUTY_PP))
+        if (runScheduleWork.simulationWork.havePpDomainDecomposition && thisRankHasDuty(cr, DUTY_PP))
         {
             dd_setup_dlb_resource_sharing(cr, deviceId);
         }
@@ -1572,7 +1595,7 @@ int Mdrunner::mdrunner()
     // Enable Peer access between GPUs where available
     // Only for DD, only master PP rank needs to perform setup, and only if thread MPI plus
     // any of the GPU communication features are active.
-    if (DOMAINDECOMP(cr) && MASTER(cr) && thisRankHasDuty(cr, DUTY_PP) && GMX_THREAD_MPI
+    if (haveDDAtomOrdering(*cr) && MASTER(cr) && thisRankHasDuty(cr, DUTY_PP) && GMX_THREAD_MPI
         && (runScheduleWork.simulationWork.useGpuHaloExchange
             || runScheduleWork.simulationWork.useGpuPmePpCommunication))
     {
@@ -1712,6 +1735,16 @@ int Mdrunner::mdrunner()
                     deviceStreamManager->bondedStream(havePPDomainDecomposition(cr)),
                     wcycle.get());
         }
+        fr->longRangeNonbondeds = std::make_unique<CpuPpLongRangeNonbondeds>(fr->n_tpi,
+                                                                             fr->ic->ewaldcoeff_q,
+                                                                             fr->ic->epsilon_r,
+                                                                             fr->qsum,
+                                                                             fr->ic->eeltype,
+                                                                             fr->ic->vdwtype,
+                                                                             *inputrec,
+                                                                             &nrnb,
+                                                                             wcycle.get(),
+                                                                             fplog);
 
         /* Initialize the mdAtoms structure.
          * mdAtoms is not filled with atom data,
@@ -1755,7 +1788,7 @@ int Mdrunner::mdrunner()
             }
         }
         // Make the DD reverse topology, now that any vsites that are present are available
-        if (DOMAINDECOMP(cr))
+        if (haveDDAtomOrdering(*cr))
         {
             dd_make_reverse_top(fplog, cr->dd, mtop, vsite.get(), *inputrec, domdecOptions.ddBondedChecking);
         }
@@ -1942,7 +1975,8 @@ int Mdrunner::mdrunner()
                                       ms,
                                       &nrnb,
                                       wcycle.get(),
-                                      fr->bMolPBC);
+                                      fr->bMolPBC,
+                                      &observablesReducerBuilder);
 
         /* Energy terms and groups */
         gmx_enerdata_t enerd(mtop.groups.groups[SimulationAtomGroupType::EnergyOutput].size(),
@@ -1973,7 +2007,7 @@ int Mdrunner::mdrunner()
                                          mdrunOptions.imdOptions,
                                          startingBehavior);
 
-        if (DOMAINDECOMP(cr))
+        if (haveDDAtomOrdering(*cr))
         {
             GMX_RELEASE_ASSERT(fr, "fr was NULL while cr->duty was DUTY_PP");
             /* This call is not included in init_domain_decomposition
@@ -2013,7 +2047,8 @@ int Mdrunner::mdrunner()
         GMX_ASSERT(stopHandlerBuilder_, "Runner must provide StopHandlerBuilder to simulator.");
         SimulatorBuilder simulatorBuilder;
 
-        simulatorBuilder.add(SimulatorStateData(globalState.get(), &observablesHistory, &enerd, &ekind));
+        simulatorBuilder.add(SimulatorStateData(
+                globalState.get(), localState, &observablesHistory, &enerd, &ekind));
         simulatorBuilder.add(std::move(membedHolder));
         simulatorBuilder.add(std::move(stopHandlerBuilder_));
         simulatorBuilder.add(SimulatorConfig(mdrunOptions, startingBehavior, &runScheduleWork));
@@ -2032,7 +2067,7 @@ int Mdrunner::mdrunner()
         simulatorBuilder.add(CenterOfMassPulling(pull_work));
         // Todo move to an MDModule
         simulatorBuilder.add(IonSwapping(swap));
-        simulatorBuilder.add(TopologyData(mtop, mdAtoms.get()));
+        simulatorBuilder.add(TopologyData(mtop, &localTopology, mdAtoms.get()));
         simulatorBuilder.add(BoxDeformationHandle(deform.get()));
         simulatorBuilder.add(std::move(modularSimulatorCheckpointData));
 
@@ -2099,6 +2134,7 @@ int Mdrunner::mdrunner()
     // As soon as we destroy GPU contexts after mdrunner() exits, these lines should go.
     mdAtoms.reset(nullptr);
     globalState.reset(nullptr);
+    localStateInstance.reset(nullptr);
     mdModules_.reset(nullptr); // destruct force providers here as they might also use the GPU
     fr.reset(nullptr);         // destruct forcerec before gpu
     // TODO convert to C++ so we can get rid of these frees

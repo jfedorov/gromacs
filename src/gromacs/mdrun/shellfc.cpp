@@ -287,7 +287,7 @@ gmx_shellfc_t* init_shell_flexcon(FILE*             fplog,
                   "not supported in combination with shell particles.\nPlease make a new tpr file.",
                   nstcalcenergy);
     }
-    if (usingDomainDecomposition)
+    if (nshell > 0 && usingDomainDecomposition)
     {
         gmx_fatal(
                 FARGS,
@@ -540,7 +540,7 @@ void gmx::make_local_shells(const t_commrec* cr, const t_mdatoms& md, gmx_shellf
     int           a0, a1;
     gmx_domdec_t* dd = nullptr;
 
-    if (DOMAINDECOMP(cr))
+    if (haveDDAtomOrdering(*cr))
     {
         dd = cr->dd;
         a0 = 0;
@@ -833,7 +833,7 @@ static void init_adir(gmx_shellfc_t*            shfc,
     double dt, w_dt;
     int    n, d;
 
-    if (DOMAINDECOMP(cr))
+    if (haveDDAtomOrdering(*cr))
     {
         n = dd_ac1;
     }
@@ -956,6 +956,7 @@ void relax_shell_flexcon(FILE*                         fplog,
                          gmx::ForceBuffersView*        f,
                          tensor                        force_vir,
                          const t_mdatoms&              md,
+                         CpuPpLongRangeNonbondeds*     longRangeNonbondeds,
                          t_nrnb*                       nrnb,
                          gmx_wallcycle*                wcycle,
                          gmx_shellfc_t*                shfc,
@@ -982,7 +983,7 @@ void relax_shell_flexcon(FILE*                         fplog,
     ArrayRef<t_shell> shells       = shfc->shells;
     const int         nflexcon     = shfc->nflexcon;
 
-    if (DOMAINDECOMP(cr))
+    if (haveDDAtomOrdering(*cr))
     {
         nat = dd_natoms_vsite(*cr->dd);
         if (nflexcon > 0)
@@ -1018,7 +1019,7 @@ void relax_shell_flexcon(FILE*                         fplog,
     ArrayRef<RVec> x = xPadded.unpaddedArrayRef();
     ArrayRef<RVec> v = vPadded.unpaddedArrayRef();
 
-    if (bDoNS && inputrec->pbcType != PbcType::No && !DOMAINDECOMP(cr))
+    if (bDoNS && inputrec->pbcType != PbcType::No && !haveDDAtomOrdering(*cr))
     {
         /* This is the only time where the coordinates are used
          * before do_force is called, which normally puts all
@@ -1084,6 +1085,7 @@ void relax_shell_flexcon(FILE*                         fplog,
              mu_tot,
              t,
              nullptr,
+             longRangeNonbondeds,
              (bDoNS ? GMX_FORCE_NS : 0) | shellfc_flags,
              ddBalanceRegionHandler);
 
@@ -1224,6 +1226,7 @@ void relax_shell_flexcon(FILE*                         fplog,
                  mu_tot,
                  t,
                  nullptr,
+                 longRangeNonbondeds,
                  shellfc_flags,
                  ddBalanceRegionHandler);
         accumulatePotentialEnergies(enerd, lambda, inputrec->fepvals.get());

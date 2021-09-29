@@ -52,9 +52,6 @@
 
 using namespace nblib;
 
-// Main function to write the MD program.
-int main(); // Keep the compiler happy
-
 int main()
 {
     // Create the particles
@@ -177,7 +174,8 @@ int main()
     SimulationState simulationState(coordinates, velocities, forces, box, topology);
 
     // The non-bonded force calculator contains all the data needed to compute forces
-    ForceCalculator forceCalculator(simulationState, options);
+    auto forceCalculator = nblib::setupGmxForceCalculator(
+            simulationState.topology(), simulationState.coordinates(), simulationState.box(), options);
 
     // The listed force calculator is also initialized with the required arguments
     ListedForceCalculator listedForceCalculator(
@@ -200,7 +198,7 @@ int main()
     {
         zeroCartesianArray(simulationState.forces());
 
-        forceCalculator.compute(simulationState.coordinates(), simulationState.forces());
+        forceCalculator->compute(simulationState.coordinates(), simulationState.forces());
 
         listedForceCalculator.compute(simulationState.coordinates(), simulationState.forces());
 

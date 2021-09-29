@@ -987,7 +987,7 @@ static StepWorkload setupStepWorkload(const int                     legacyFlags,
     const bool rankHasGpuPmeTask = simulationWork.useGpuPme && !simulationWork.haveSeparatePmeRank;
     flags.useGpuPmeFReduction    = flags.computeSlowForces && flags.useGpuFBufferOps
                                 && (rankHasGpuPmeTask || simulationWork.useGpuPmePpCommunication);
-    flags.useGpuXHalo          = simulationWork.useGpuHaloExchange;
+    flags.useGpuXHalo          = simulationWork.useGpuHaloExchange && !flags.doNeighborSearch;
     flags.useGpuFHalo          = simulationWork.useGpuHaloExchange && flags.useGpuFBufferOps;
     flags.haveGpuPmeOnThisRank = rankHasGpuPmeTask && flags.computeSlowForces;
     flags.combineMtsForcesBeforeHaloExchange =
@@ -1236,6 +1236,7 @@ void do_force(FILE*                               fplog,
               rvec                                muTotal,
               double                              t,
               gmx_edsam*                          ed,
+              CpuPpLongRangeNonbondeds*           longRangeNonbondeds,
               int                                 legacyFlags,
               const DDBalanceRegionHandler&       ddBalanceRegionHandler)
 {
@@ -1276,7 +1277,7 @@ void do_force(FILE*                               fplog,
         }
 
         const bool fillGrid = (stepWork.doNeighborSearch && stepWork.stateChanged);
-        const bool calcCGCM = (fillGrid && !DOMAINDECOMP(cr));
+        const bool calcCGCM = (fillGrid && !haveDDAtomOrdering(*cr));
         if (calcCGCM)
         {
             put_atoms_in_box_omp(fr->pbcType,
@@ -1399,7 +1400,7 @@ void do_force(FILE*                               fplog,
         }
 
         wallcycle_start(wcycle, WallCycleCounter::NS);
-        if (!DOMAINDECOMP(cr))
+        if (!haveDDAtomOrdering(*cr))
         {
             const rvec vzero       = { 0.0_real, 0.0_real, 0.0_real };
             const rvec boxDiagonal = { box[XX][XX], box[YY][YY], box[ZZ][ZZ] };
@@ -1639,6 +1640,15 @@ void do_force(FILE*                               fplog,
         }
     }
 
+    // With FEP we set up the reduction over threads for local+non-local simultaneously,
+    // so we need to do that here after the local and non-local pairlist construction.
+    if (stepWork.doNeighborSearch && fr->efep != FreeEnergyPerturbationType::No)
+    {
+        wallcycle_sub_start(wcycle, WallCycleSubCounter::NonbondedFep);
+        nbv->setupFepThreadedForceBuffer(fr->natoms_force_constr);
+        wallcycle_sub_stop(wcycle, WallCycleSubCounter::NonbondedFep);
+    }
+
     if (simulationWork.useGpuNonbonded && stepWork.computeNonbondedForces)
     {
         /* launch D2H copy-back F */
@@ -1709,7 +1719,7 @@ void do_force(FILE*                               fplog,
     /* Reset energies */
     reset_enerdata(enerd);
 
-    if (DOMAINDECOMP(cr) && simulationWork.haveSeparatePmeRank)
+    if (haveDDAtomOrdering(*cr) && simulationWork.haveSeparatePmeRank)
     {
         wallcycle_start(wcycle, WallCycleCounter::PpDuringPme);
         dd_force_flop_start(cr->dd, nrnb);
@@ -1781,9 +1791,8 @@ void do_force(FILE*                               fplog,
         /* Calculate the local and non-local free energy interactions here.
          * Happens here on the CPU both with and without GPU.
          */
-        nbv->dispatchFreeEnergyKernel(
-                InteractionLocality::Local,
-                x.unpaddedArrayRef(),
+        nbv->dispatchFreeEnergyKernels(
+                x,
                 &forceOutNonbonded->forceWithShiftForces(),
                 fr->use_simd_kernels,
                 fr->ntype,
@@ -1805,34 +1814,6 @@ void do_force(FILE*                               fplog,
                 enerd,
                 stepWork,
                 nrnb);
-
-        if (simulationWork.havePpDomainDecomposition)
-        {
-            nbv->dispatchFreeEnergyKernel(
-                    InteractionLocality::NonLocal,
-                    x.unpaddedArrayRef(),
-                    &forceOutNonbonded->forceWithShiftForces(),
-                    fr->use_simd_kernels,
-                    fr->ntype,
-                    fr->rlist,
-                    *fr->ic,
-                    fr->shift_vec,
-                    fr->nbfp,
-                    fr->ljpme_c6grid,
-                    mdatoms->chargeA ? gmx::arrayRefFromArray(mdatoms->chargeA, mdatoms->nr)
-                                     : gmx::ArrayRef<real>{},
-                    mdatoms->chargeB ? gmx::arrayRefFromArray(mdatoms->chargeB, mdatoms->nr)
-                                     : gmx::ArrayRef<real>{},
-                    mdatoms->typeA ? gmx::arrayRefFromArray(mdatoms->typeA, mdatoms->nr)
-                                   : gmx::ArrayRef<int>{},
-                    mdatoms->typeB ? gmx::arrayRefFromArray(mdatoms->typeB, mdatoms->nr)
-                                   : gmx::ArrayRef<int>{},
-                    inputrec.fepvals.get(),
-                    lambda,
-                    enerd,
-                    stepWork,
-                    nrnb);
-        }
     }
 
     if (stepWork.computeNonbondedForces && !useOrEmulateGpuNb)
@@ -1916,7 +1897,7 @@ void do_force(FILE*                               fplog,
             /* Since all atoms are in the rectangular or triclinic unit-cell,
              * only single box vector shifts (2 in x) are required.
              */
-            set_pbc_dd(&pbc, fr->pbcType, DOMAINDECOMP(cr) ? cr->dd->numCells : nullptr, TRUE, box);
+            set_pbc_dd(&pbc, fr->pbcType, haveDDAtomOrdering(*cr) ? cr->dd->numCells : nullptr, TRUE, box);
         }
 
         for (int mtsIndex = 0; mtsIndex < (simulationWork.useMts && stepWork.computeSlowForces ? 2 : 1);
@@ -1940,27 +1921,23 @@ void do_force(FILE*                               fplog,
                                    nrnb,
                                    lambda,
                                    mdatoms,
-                                   DOMAINDECOMP(cr) ? cr->dd->globalAtomIndices.data() : nullptr,
+                                   haveDDAtomOrdering(*cr) ? cr->dd->globalAtomIndices.data() : nullptr,
                                    stepWork);
         }
     }
 
     if (stepWork.computeSlowForces)
     {
-        calculateLongRangeNonbondeds(fr,
-                                     inputrec,
-                                     cr,
-                                     nrnb,
-                                     wcycle,
-                                     mdatoms,
-                                     x.unpaddedConstArrayRef(),
-                                     &forceOutMtsLevel1->forceWithVirial(),
-                                     enerd,
-                                     box,
-                                     lambda,
-                                     dipoleData.muStateAB,
-                                     stepWork,
-                                     ddBalanceRegionHandler);
+        longRangeNonbondeds->calculate(fr->pmedata,
+                                       cr,
+                                       x.unpaddedConstArrayRef(),
+                                       &forceOutMtsLevel1->forceWithVirial(),
+                                       enerd,
+                                       box,
+                                       lambda,
+                                       dipoleData.muStateAB,
+                                       stepWork,
+                                       ddBalanceRegionHandler);
     }
 
     wallcycle_stop(wcycle, WallCycleCounter::Force);
@@ -2138,8 +2115,9 @@ void do_force(FILE*                               fplog,
     // With both nonbonded and PME offloaded a GPU on the same rank, we use
     // an alternating wait/reduction scheme.
     bool alternateGpuWait =
-            (!c_disableAlternatingWait && stepWork.haveGpuPmeOnThisRank
-             && simulationWork.useGpuNonbonded && !DOMAINDECOMP(cr) && !stepWork.useGpuFBufferOps);
+            (!c_disableAlternatingWait && stepWork.haveGpuPmeOnThisRank && simulationWork.useGpuNonbonded
+             && !simulationWork.havePpDomainDecomposition && !stepWork.useGpuFBufferOps);
+
     if (alternateGpuWait)
     {
         alternatePmeNbGpuWaitReduce(fr->nbv.get(),
@@ -2207,7 +2185,7 @@ void do_force(FILE*                               fplog,
                      enerd,
                      stepWork,
                      InteractionLocality::Local,
-                     DOMAINDECOMP(cr) ? enbvClearFNo : enbvClearFYes,
+                     haveDDAtomOrdering(*cr) ? enbvClearFNo : enbvClearFYes,
                      step,
                      nrnb,
                      wcycle);
@@ -2280,7 +2258,7 @@ void do_force(FILE*                               fplog,
             // NOTE: If there are virtual sites, the forces are modified on host after this D2H copy. Hence,
             //       they should not be copied in do_md(...) for the output.
             if (!simulationWork.useGpuUpdate
-                || (simulationWork.useGpuUpdate && DOMAINDECOMP(cr) && simulationWork.useCpuPmePpCommunication)
+                || (simulationWork.useGpuUpdate && haveDDAtomOrdering(*cr) && simulationWork.useCpuPmePpCommunication)
                 || vsite)
             {
                 if (stepWork.computeNonbondedForces)
@@ -2304,7 +2282,7 @@ void do_force(FILE*                               fplog,
     launchGpuEndOfStepTasks(
             nbv, fr->listedForcesGpu.get(), fr->pmedata, enerd, *runScheduleWork, step, wcycle);
 
-    if (DOMAINDECOMP(cr))
+    if (haveDDAtomOrdering(*cr))
     {
         dd_force_flop_stop(cr->dd, nrnb);
     }

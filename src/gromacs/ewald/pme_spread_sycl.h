@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2014,2015,2018,2019,2021, by the GROMACS development team, led by
+ * Copyright (c) 2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -33,20 +33,35 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 
-#ifndef GMX_MDLIB_FORCEREC_THREADING_H
-#define GMX_MDLIB_FORCEREC_THREADING_H
+/*! \internal \file
+ *  \brief Implements PME GPU spline calculation and charge spreading in SYCL.
+ *  TODO: consider always pre-sorting particles (as in DD case).
+ *
+ *  \author Andrey Alekseenko <al42and@gmail.com>
+ */
 
-#include "gromacs/math/vectypes.h"
-#include "gromacs/mdtypes/md_enums.h"
-#include "gromacs/utility/enumerationhelpers.h"
+#include "gromacs/gpu_utils/gmxsycl.h"
 
-struct ewald_corr_thread_t
+#include "gromacs/gpu_utils/syclutils.h"
+
+#include "pme_grid.h"
+#include "pme_gpu_types_host.h"
+
+struct PmeGpuGridParams;
+struct PmeGpuAtomParams;
+struct PmeGpuDynamicParams;
+
+template<int order, bool computeSplines, bool spreadCharges, bool wrapX, bool wrapY, int numGrids, bool writeGlobal, ThreadsPerAtom threadsPerAtom, int subGroupSize>
+class PmeSplineAndSpreadKernel : public ISyclKernelFunctor
 {
-    real                                                            Vcorr_q;
-    real                                                            Vcorr_lj;
-    gmx::EnumerationArray<FreeEnergyPerturbationCouplingType, real> dvdl;
-    tensor                                                          vir_q;
-    tensor                                                          vir_lj;
-};
+public:
+    PmeSplineAndSpreadKernel();
+    void            setArg(size_t argIndex, void* arg) override;
+    cl::sycl::event launch(const KernelLaunchConfig& config, const DeviceStream& deviceStream) override;
 
-#endif
+private:
+    PmeGpuGridParams*    gridParams_;
+    PmeGpuAtomParams*    atomParams_;
+    PmeGpuDynamicParams* dynamicParams_;
+    void                 reset();
+};

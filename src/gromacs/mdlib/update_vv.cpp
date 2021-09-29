@@ -43,7 +43,6 @@
 
 #include <algorithm>
 
-#include "gromacs/domdec/domdec.h"
 #include "gromacs/domdec/localtopologychecker.h"
 #include "gromacs/gmxlib/nrnb.h"
 #include "gromacs/math/vec.h"
@@ -82,7 +81,6 @@ void integrateVVFirstStep(int64_t                   step,
                           t_fcdata*                 fcdata,
                           t_extmass*                MassQ,
                           t_vcm*                    vcm,
-                          const gmx_localtop_t&     top,
                           gmx_enerdata_t*           enerd,
                           gmx::ObservablesReducer*  observablesReducer,
                           gmx_ekindata_t*           ekind,
@@ -191,10 +189,6 @@ void integrateVVFirstStep(int64_t                   step,
                     ((bGStat ? CGLO_GSTAT : 0) | (bCalcEner ? CGLO_ENERGY : 0)
                      | (bTemp ? CGLO_TEMPERATURE : 0) | (bPres ? CGLO_PRESSURE : 0)
                      | (bPres ? CGLO_CONSTRAINT : 0) | (bStopCM ? CGLO_STOPCM : 0) | CGLO_SCALEEKIN);
-            if (DOMAINDECOMP(cr) && dd_localTopologyChecker(*cr->dd).shouldCheckNumberOfBondedInteractions())
-            {
-                cglo_flags |= CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS;
-            }
             compute_globals(gstat,
                             cr,
                             ir,
@@ -212,7 +206,6 @@ void integrateVVFirstStep(int64_t                   step,
                             shake_vir,
                             total_vir,
                             pres,
-                            (bCalcEner && constr != nullptr) ? constr->rmsdData() : gmx::ArrayRef<real>{},
                             nullSignaller,
                             state->box,
                             bSumEkinhOld,
@@ -226,11 +219,6 @@ void integrateVVFirstStep(int64_t                   step,
                 time step kinetic energy for the pressure (always true now, since we want accurate statistics).
                 b) If we are using EkinAveEkin for the kinetic energy for the temperature control, we still feed in
                 EkinAveVel because it's needed for the pressure */
-            if (DOMAINDECOMP(cr))
-            {
-                dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
-                        &top, makeConstArrayRef(state->x), state->box);
-            }
             if (bStopCM)
             {
                 process_and_stopcm_grp(
@@ -299,7 +287,6 @@ void integrateVVFirstStep(int64_t                   step,
                                 nullptr,
                                 nullptr,
                                 nullptr,
-                                gmx::ArrayRef<real>{},
                                 nullSignaller,
                                 state->box,
                                 bSumEkinhOld,
@@ -463,7 +450,6 @@ void integrateVVSecondStep(int64_t                   step,
                         shake_vir,
                         total_vir,
                         pres,
-                        gmx::ArrayRef<real>{},
                         nullSignaller,
                         lastbox,
                         bSumEkinhOld,

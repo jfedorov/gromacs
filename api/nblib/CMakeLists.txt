@@ -89,7 +89,6 @@ endif()
 target_sources(nblib
         PRIVATE
         box.cpp
-        forcecalculator.cpp
         gmxcalculator.cpp
         gmxsetup.cpp
         integrator.cpp
@@ -132,16 +131,18 @@ if(GMX_INSTALL_NBLIB_API)
             basicdefinitions.h
             box.h
             exception.h
-            forcecalculator.h
+            gmxcalculator.h
             integrator.h
             interactions.h
             molecules.h
             kerneloptions.h
             nblib.h
+            nbnxmsetuphelpers.h
             particlesequencer.h
             particletype.h
             simulationstate.h
             topology.h
+            vector.h
             DESTINATION include/nblib)
 endif()
 

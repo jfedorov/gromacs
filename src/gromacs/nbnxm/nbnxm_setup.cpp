@@ -62,6 +62,7 @@
 #include "gromacs/utility/fatalerror.h"
 #include "gromacs/utility/logger.h"
 
+#include "freeenergydispatch.h"
 #include "grid.h"
 #include "nbnxm_geometry.h"
 #include "nbnxm_simd.h"
@@ -223,7 +224,7 @@ const char* lookup_kernel_name(const KernelType kernelType)
         case KernelType::Cpu4xN_Simd_2xNN:
 #if GMX_SIMD
             return "SIMD";
-#else // GMX_SIMD
+#else  // GMX_SIMD
             return "not available";
 #endif // GMX_SIMD
         case KernelType::Gpu8x8x8: return "GPU";
@@ -458,15 +459,15 @@ std::unique_ptr<nonbonded_verlet_t> init_nb_verlet(const gmx::MDLogger& mdlog,
     auto pairlistSets = std::make_unique<PairlistSets>(
             pairlistParams, haveMultipleDomains, minimumIlistCountForGpuBalancing);
 
-    auto pairSearch =
-            std::make_unique<PairSearch>(inputrec.pbcType,
-                                         EI_TPI(inputrec.eI),
-                                         DOMAINDECOMP(commrec) ? &commrec->dd->numCells : nullptr,
-                                         DOMAINDECOMP(commrec) ? domdec_zones(commrec->dd) : nullptr,
-                                         pairlistParams.pairlistType,
-                                         bFEP_NonBonded,
-                                         gmx_omp_nthreads_get(ModuleMultiThread::Pairsearch),
-                                         pinPolicy);
+    auto pairSearch = std::make_unique<PairSearch>(
+            inputrec.pbcType,
+            EI_TPI(inputrec.eI),
+            haveDDAtomOrdering(*commrec) ? &commrec->dd->numCells : nullptr,
+            haveDDAtomOrdering(*commrec) ? domdec_zones(commrec->dd) : nullptr,
+            pairlistParams.pairlistType,
+            bFEP_NonBonded,
+            gmx_omp_nthreads_get(ModuleMultiThread::Pairsearch),
+            pinPolicy);
 
     return std::make_unique<nonbonded_verlet_t>(
             std::move(pairlistSets), std::move(pairSearch), std::move(nbat), kernelSetup, gpu_nbv, wcycle);
@@ -485,12 +486,16 @@ nonbonded_verlet_t::nonbonded_verlet_t(std::unique_ptr<PairlistSets>     pairlis
     nbat(std::move(nbat_in)),
     kernelSetup_(kernelSetup),
     wcycle_(wcycle),
-    foreignEnergyGroups_(std::make_unique<gmx_grppairener_t>(nbat->params().nenergrp)),
     gpu_nbv(gpu_nbv_ptr)
 {
     GMX_RELEASE_ASSERT(pairlistSets_, "Need valid pairlistSets");
     GMX_RELEASE_ASSERT(pairSearch_, "Need valid search object");
     GMX_RELEASE_ASSERT(nbat, "Need valid atomdata object");
+
+    if (pairlistSets_->params().haveFep)
+    {
+        freeEnergyDispatch_ = std::make_unique<FreeEnergyDispatch>(nbat->params().nenergrp);
+    }
 }
 
 nonbonded_verlet_t::~nonbonded_verlet_t()
