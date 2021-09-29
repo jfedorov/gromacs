@@ -255,8 +255,8 @@ public:
     void setSoftcoreAlpha(const real scBeutlerAlphaOrGapsysLinpointScaling)
     {
         fepVals_.sc_alpha                = scBeutlerAlphaOrGapsysLinpointScaling;
-        fepVals_.scScaleLinpointLJGapsys = scBeutlerAlphaOrGapsysLinpointScaling;
-        fepVals_.scScaleLinpointQGapsys  = scBeutlerAlphaOrGapsysLinpointScaling;
+        fepVals_.scGapsysScaleLinpointLJ = scBeutlerAlphaOrGapsysLinpointScaling;
+        fepVals_.scGapsysScaleLinpointQ  = scBeutlerAlphaOrGapsysLinpointScaling;
     }
     void setSoftcoreCoulomb(const bool scCoulomb) { fepVals_.bScCoul = scCoulomb; }
     void setSoftcoreType(const SoftcoreType softcoreType)
