@@ -1631,7 +1631,7 @@ void gmx::LegacySimulator::do_md()
             // and when algorithms require it.
             const bool doInterSimSignal = (simulationsShareState && do_per_step(step, nstSignalComm));
             const bool coordinatesRequiredForStopCM =
-                    (bGStat || needHalfStepKineticEnergy || doInterSimSignal) && !EI_VV(ir->eI) && bStopCM;
+                    bStopCM && (bGStat || needHalfStepKineticEnergy || doInterSimSignal) && !EI_VV(ir->eI);
 
             // Copy coordinates when needed to stop the CM motion or for replica exchange
             if (useGpuForUpdate && (coordinatesRequiredForStopCM || bDoReplEx))
