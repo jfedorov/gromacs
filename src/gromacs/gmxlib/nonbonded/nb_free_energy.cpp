@@ -290,6 +290,15 @@ static void nb_free_energy_kernel(const t_nblist&                               
     const bool            doShiftForces = ((flags & GMX_NONBONDED_DO_SHIFTFORCE) != 0);
     const bool            doPotential   = ((flags & GMX_NONBONDED_DO_POTENTIAL) != 0);
 
+    if (doForces)
+    {
+        GMX_ASSERT(!threadForceBuffer.empty(), "need a valid threadForceBuffer");
+    }
+    if (doShiftForces)
+    {
+        GMX_ASSERT(threadForceShiftBuffer != nullptr, "need a valid threadForceShiftBuffer");
+    }
+
     // Extract data from interaction_const_t
     const real            facel           = ic.epsfac;
     const real            rCoulomb        = ic.rcoulomb;
