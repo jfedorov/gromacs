@@ -401,8 +401,8 @@ static void nb_free_energy_kernel(const t_nblist&                               
     }
 
     // We need pointers to real for SIMD access
-    const real* gmx_restrict x            = coords.paddedConstArrayRef().data()[0];
-    real* gmx_restrict       forceRealPtr = doForces ? threadForceBuffer.paddedArrayRef().data()[0] : nullptr;
+    const real* gmx_restrict x      = coords.paddedConstArrayRef().data()[0];
+    real* gmx_restrict forceRealPtr = doForces ? threadForceBuffer.paddedArrayRef().data()[0] : nullptr;
 
     const real rlistSquared = gmx::square(rlist);
 
