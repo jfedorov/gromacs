@@ -144,6 +144,37 @@ static inline float shift_right(sycl_2020::sub_group sg, float var, sycl_2020::s
     return sg.shuffle_up(var, delta);
 }
 #endif
+
+#if GMX_SYCL_HIPSYCL
+template<typename Real>
+__device__ __host__ static inline bool isFinite(Real value)
+{
+    // This is not yet implemented in hipSYCL pending
+    // https://github.com/illuhad/hipSYCL/issues/636
+#    ifdef SYCL_DEVICE_ONLY
+#        if defined(HIPSYCL_PLATFORM_CUDA) && defined(__HIPSYCL_ENABLE_CUDA_TARGET__)
+    return isfinite(value);
+#        elif defined(HIPSYCL_PLATFORM_ROCM) && defined(__HIPSYCL_ENABLE_HIP_TARGET__)
+    return isfinite(value);
+#        else
+#            error "Unsupported hipSYCL target"
+#        endif
+#    else
+    // Should never be called
+    assert(false);
+    GMX_UNUSED_VALUE(value);
+    return false;
+#    endif
+}
+#elif GMX_SYCL_DPCPP
+template<typename Real>
+__device__ __host__ static inline bool isFinite(Real value)
+{
+    return cl::sycl::isfinite(value);
+}
+
+#endif
+
 } // namespace sycl_2020
 
 #endif /* GMX_GPU_UTILS_SYCL_KERNEL_UTILS_H */
