@@ -1785,7 +1785,7 @@ void BiasState::normalizePmf(int numSharingSims)
     double numSamples = histogramSize_.histogramSize() / numSharingSims;
 
     /* Renormalize */
-    double logRenorm = std::log(numSamples * expSumF / expSumPmf);
+    double logRenorm = std::log(std::max(numSamples * expSumF / expSumPmf, GMX_DOUBLE_MIN)); // avoid log(0)
     for (PointState& pointState : points_)
     {
         if (pointState.inTargetRegion())
