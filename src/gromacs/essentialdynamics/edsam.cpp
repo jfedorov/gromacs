@@ -3074,10 +3074,11 @@ std::unique_ptr<gmx::EssentialDynamics> init_edsam(const gmx::MDLogger&        m
         /* Loop over all ED data sets (usually only one, though) */
         for (auto edi = ed->edpar.begin(); edi != ed->edpar.end(); ++edi)
         {
-            edi->sref.anrs_loc = edi->sref.anrs;
-            edi->sav.anrs_loc  = edi->sav.anrs;
-            edi->star.anrs_loc = edi->star.anrs;
-            edi->sori.anrs_loc = edi->sori.anrs;
+            edi->sref.nalloc_loc = 0;
+            edi->sav.nalloc_loc  = 0;
+            edi->star.nalloc_loc = 0;
+            edi->sori.nalloc_loc = 0;
+
             /* For the same reason as above, make a dummy c_ind array: */
             snew(edi->sav.c_ind, edi->sav.nr);
             /* Initialize the array */
@@ -3097,11 +3098,6 @@ std::unique_ptr<gmx::EssentialDynamics> init_edsam(const gmx::MDLogger&        m
             /* Point to the very same array in case of other structures: */
             edi->star.c_ind = edi->sav.c_ind;
             edi->sori.c_ind = edi->sav.c_ind;
-            /* In the serial case, the local number of atoms is the global one: */
-            edi->sref.nr_loc = edi->sref.nr;
-            edi->sav.nr_loc  = edi->sav.nr;
-            edi->star.nr_loc = edi->star.nr;
-            edi->sori.nr_loc = edi->sori.nr;
         }
     }
 
