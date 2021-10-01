@@ -224,11 +224,6 @@ struct PmeGpuKernelParamsBase
      * before launching spreading.
      */
     struct PmeGpuDynamicParams current;
-    /* These texture objects are only used in CUDA and are related to the grid size. */
-    /*! \brief Texture object for accessing grid.d_fractShiftsTable */
-    HIDE_FROM_OPENCL_COMPILER(DeviceTexture) fractShiftsTableTexture;
-    /*! \brief Texture object for accessing grid.d_gridlineIndicesTable */
-    HIDE_FROM_OPENCL_COMPILER(DeviceTexture) gridlineIndicesTableTexture;
 
     /*! \brief Whether pipelining with PP communications is active */
     bool usePipeline = false;
@@ -236,6 +231,12 @@ struct PmeGpuKernelParamsBase
     int pipelineAtomStart = 0;
     /*! \brief End atom for this stage of pipeline */
     int pipelineAtomEnd = 0;
+
+    /* These texture objects are only used in CUDA and are related to the grid size. */
+    /*! \brief Texture object for accessing grid.d_fractShiftsTable */
+    HIDE_FROM_OPENCL_COMPILER(DeviceTexture) fractShiftsTableTexture;
+    /*! \brief Texture object for accessing grid.d_gridlineIndicesTable */
+    HIDE_FROM_OPENCL_COMPILER(DeviceTexture) gridlineIndicesTableTexture;
 };
 
 #endif
