@@ -230,7 +230,7 @@ auto makeSolveKernel(cl::sycl::handler&                                 cgh,
                 float denom = m2k * float(M_PI) * a_solveKernelParams[0].boxVolume
                               * gm_splineValueMajor[kMajor] * gm_splineValueMiddle[kMiddle]
                               * gm_splineValueMinor[kMinor];
-                assert(sycl_2020::isfinite(denom));
+                assert(sycl_2020::isFinite(denom));
                 assert(denom != 0.0F);
 
                 const float tmp1   = expf(-a_solveKernelParams[0].ewaldFactor * m2k);
@@ -363,7 +363,7 @@ auto makeSolveKernel(cl::sycl::handler&                                 cgh,
                 /* Final output */
                 if (validComponentIndex)
                 {
-                    assert(sycl_2020::isfinite(output));
+                    assert(sycl_2020::isFinite(output));
                     atomicFetchAdd(a_virialAndEnergy[componentIndex], output);
                 }
             }
