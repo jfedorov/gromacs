@@ -71,7 +71,7 @@ public:
     PmeCoordinateReceiverGpu(MPI_Comm comm, const DeviceContext& deviceContext, gmx::ArrayRef<PpRanks> ppRanks);
     ~PmeCoordinateReceiverGpu();
 
-     /*! \brief
+    /*! \brief
      * Re-initialize: set atom ranges and, for thread-MPI case,
      * send coordinates buffer address to PP rank
      * \param[in] d_x   coordinates buffer in GPU memory

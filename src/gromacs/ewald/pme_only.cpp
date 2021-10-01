@@ -439,8 +439,7 @@ static int gmx_pme_recv_coeffs_coords(struct gmx_pme_t*            pme,
                                "but PME run mode is not PmeRunMode::GPU\n");
 
                     // This rank will have its data accessed directly by PP rank, so needs to send the remote addresses and re-set atom ranges associated with transfers.
-                    pme_pp->pmeCoordinateReceiverGpu->reinitCoordinateReceiver(
-                            stateGpu->getCoordinates());
+                    pme_pp->pmeCoordinateReceiverGpu->reinitCoordinateReceiver(stateGpu->getCoordinates());
                     pme_pp->pmeForceSenderGpu->setForceSendBuffer(pme_gpu_get_device_f(pme));
                 }
             }
