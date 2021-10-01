@@ -587,6 +587,10 @@ static void pme_gpu_init_internal(PmeGpu* pmeGpu, const DeviceContext& deviceCon
     pmeGpu->archSpecific.reset(new PmeGpuSpecific(deviceContext, deviceStream));
     pmeGpu->kernelParams.reset(new PmeGpuKernelParams());
 
+    pmeGpu->kernelParams->usePipeline = false;
+    pmeGpu->kernelParams->pipelineAtomStart = 0;
+    pmeGpu->kernelParams->pipelineAtomEnd = 0;
+
     pmeGpu->archSpecific->performOutOfPlaceFFT = true;
     /* This should give better performance, according to the cuFFT documentation.
      * The performance seems to be the same though.

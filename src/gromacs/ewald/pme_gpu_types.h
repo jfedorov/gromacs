@@ -226,11 +226,11 @@ struct PmeGpuKernelParamsBase
     struct PmeGpuDynamicParams current;
 
     /*! \brief Whether pipelining with PP communications is active */
-    bool usePipeline = false;
+    bool usePipeline;
     /*! \brief Start atom for this stage of pipeline */
-    int pipelineAtomStart = 0;
+    int pipelineAtomStart;
     /*! \brief End atom for this stage of pipeline */
-    int pipelineAtomEnd = 0;
+    int pipelineAtomEnd;
 
     /* These texture objects are only used in CUDA and are related to the grid size. */
     /*! \brief Texture object for accessing grid.d_fractShiftsTable */
