@@ -258,7 +258,6 @@ void EnergyData::doStep(Step step, Time time, bool isEnergyCalculationStep, bool
             mdAtoms_->mdatoms()->tmass,
             enerd_,
             inputrec_->fepvals.get(),
-            inputrec_->expandedvals.get(),
             statePropagatorData_->constPreviousBox(),
             PTCouplingArrays({ parrinelloRahmanBoxVelocities_ ? parrinelloRahmanBoxVelocities_() : nullMatrix,
                                {},

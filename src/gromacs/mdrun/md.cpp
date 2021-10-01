@@ -1817,7 +1817,6 @@ void gmx::LegacySimulator::do_md()
                                                  md->tmass,
                                                  enerd,
                                                  ir->fepvals.get(),
-                                                 ir->expandedvals.get(),
                                                  lastbox,
                                                  PTCouplingArrays{ state->boxv,
                                                                    state->nosehoover_xi,
