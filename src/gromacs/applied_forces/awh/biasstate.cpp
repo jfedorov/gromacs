@@ -176,7 +176,7 @@ void sumPmf(gmx::ArrayRef<PointState> pointState,
     {
         if (pointState[i].inTargetRegion())
         {
-            pointState[i].setLogPmfSum(std::log(buffer[i] * normFac));
+            pointState[i].setLogPmfSum(std::log(std::max(buffer[i] * normFac, GMX_DOUBLE_MIN))); // avoid log(0)
         }
     }
 }
