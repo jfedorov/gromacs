@@ -126,9 +126,9 @@ const char* enumValueToString(NonBondedEnergyTerms enumValue)
 
 static bool haveFepLambdaMoves(const t_inputrec& inputrec)
 {
-    return (inputrec.efep != FreeEnergyPerturbationType::No
-            && ((inputrec.bExpanded && inputrec.expandedvals->elmcmove > LambdaMoveCalculation::No)
-                || (inputrec.bDoAwh && awhHasFepLambdaDimension(*inputrec.awhParams))));
+    return (inputrec.bExpanded && inputrec.expandedvals->elmcmove > LambdaMoveCalculation::No)
+           || (inputrec.efep != FreeEnergyPerturbationType::No && inputrec.bDoAwh
+               && awhHasFepLambdaDimension(*inputrec.awhParams));
 }
 
 namespace gmx
