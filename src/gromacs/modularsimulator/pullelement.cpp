@@ -147,7 +147,7 @@ void PullElement::restoreCheckpointState(std::optional<ReadCheckpointData> check
     {
         doCheckpointData<CheckpointDataOperation::Read>(&checkpointData.value(), previousStepCom);
     }
-    if (DOMAINDECOMP(cr))
+    if (haveDDAtomOrdering(cr))
     {
         gmx_bcast(sizeof(double) * previousStepCom.size(), previousStepCom.data(), cr->mpi_comm_mygroup);
     }
