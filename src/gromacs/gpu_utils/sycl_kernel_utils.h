@@ -168,7 +168,7 @@ __device__ __host__ static inline bool isFinite(Real value)
 }
 #elif GMX_SYCL_DPCPP
 template<typename Real>
-__device__ __host__ static inline bool isFinite(Real value)
+static inline bool isFinite(Real value)
 {
     return cl::sycl::isfinite(value);
 }
