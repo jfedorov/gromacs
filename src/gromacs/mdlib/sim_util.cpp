@@ -1152,12 +1152,20 @@ static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
                         : pme_gpu_get_device_f(fr->pmedata);        // PME force buffer on same GPU
         fr->gpuForceReduction[gmx::AtomLocality::Local]->registerRvecForce(forcePtr);
 
-        GpuEventSynchronizer* const pmeSynchronizer =
-                (runScheduleWork->simulationWork.haveSeparatePmeRank
-                         ? fr->pmePpCommGpu->getForcesReadySynchronizer() // buffer received from other GPU
-                         : pme_gpu_get_f_ready_synchronizer(fr->pmedata)); // PME force buffer on same GPU
-        if (pmeSynchronizer != nullptr) // can be null in case of process-mpi with PP-PME on separate rank
+        if (runScheduleWork->simulationWork.haveSeparatePmeRank)
         {
+            // event synchronizer received from other GPU only in case of thread-mpi
+            if (GMX_THREAD_MPI)
+            {
+                GpuEventSynchronizer* const pmeSynchronizer =
+                        fr->pmePpCommGpu->getForcesReadySynchronizer();
+                fr->gpuForceReduction[gmx::AtomLocality::Local]->addDependency(pmeSynchronizer);
+            }
+        }
+        else
+        {
+            // PME force buffer on same GPU - add dependency on PME force computation
+            GpuEventSynchronizer* const pmeSynchronizer = pme_gpu_get_f_ready_synchronizer(fr->pmedata);
             fr->gpuForceReduction[gmx::AtomLocality::Local]->addDependency(pmeSynchronizer);
         }
     }
