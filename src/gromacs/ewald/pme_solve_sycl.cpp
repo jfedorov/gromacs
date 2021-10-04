@@ -134,8 +134,8 @@ auto makeSolveKernel(cl::sycl::handler&                                 cgh,
         const int gridLineCellIndex = threadLocalId - gridLineSize * gridLineIndex;
         const int gridLinesPerBlock =
                 cl::sycl::max(itemIdx.get_local_range(2) / size_t(gridLineSize), size_t(1));
-        const int activeWarps = (itemIdx.get_local_range().get(2) / subGroupSize);
-        const int indexMinor = itemIdx.get_group(2) * itemIdx.get_local_range().get(2) + gridLineCellIndex;
+        const int activeWarps = (itemIdx.get_local_range(2) / subGroupSize);
+        const int indexMinor = itemIdx.get_group(2) * itemIdx.get_local_range(2) + gridLineCellIndex;
         const int indexMiddle = itemIdx.get_group(1) * gridLinesPerBlock + gridLineIndex;
         const int indexMajor  = itemIdx.get_group(0);
 
@@ -233,7 +233,7 @@ auto makeSolveKernel(cl::sycl::handler&                                 cgh,
                 assert(sycl_2020::isFinite(denom));
                 assert(denom != 0.0F);
 
-                const float tmp1   = expf(-a_solveKernelParams[0].ewaldFactor * m2k);
+                const float tmp1   = cl::sycl::exp(-a_solveKernelParams[0].ewaldFactor * m2k);
                 const float etermk = a_solveKernelParams[0].elFactor * tmp1 / denom;
 
                 cl::sycl::float2       gridValue    = a_fourierGrid[gridThreadIndex];
@@ -271,6 +271,7 @@ auto makeSolveKernel(cl::sycl::handler&                                 cgh,
 
             /* We can only reduce warp-wise */
             const int width = subGroupSize;
+            static_assert(subGroupSize >= 8); 
 
             sycl_2020::sub_group sg = itemIdx.get_sub_group();
 

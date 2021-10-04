@@ -64,7 +64,7 @@ struct SolveKernelParams
     /*! \brief Offsets for X/Y/Z components of d_splineModuli */
     gmx::IVec splineValuesOffset;
     /*! \brief Reciprocal (inverted unit cell) box. */
-    gmx::BasicVector<float> recipBox[DIM];
+    gmx::RVec recipBox[DIM];
     /*! \brief The unit cell volume for solving. */
     float boxVolume;
     /*! \brief Electrostatics coefficient = c_one4PiEps0 / pme->epsilon_r */
