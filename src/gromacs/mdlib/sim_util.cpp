@@ -1156,9 +1156,8 @@ static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
                 (runScheduleWork->simulationWork.haveSeparatePmeRank
                          ? fr->pmePpCommGpu->getForcesReadySynchronizer() // buffer received from other GPU
                          : pme_gpu_get_f_ready_synchronizer(fr->pmedata)); // PME force buffer on same GPU
-        if (GMX_THREAD_MPI)
+        if (pmeSynchronizer != nullptr) // can be null in case of process-mpi with PP-PME on separate rank
         {
-            GMX_ASSERT(pmeSynchronizer != nullptr, "PME force ready cuda event should not be NULL");
             fr->gpuForceReduction[gmx::AtomLocality::Local]->addDependency(pmeSynchronizer);
         }
     }
