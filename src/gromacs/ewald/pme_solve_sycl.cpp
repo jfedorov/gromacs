@@ -116,7 +116,7 @@ auto makeSolveKernel(cl::sycl::handler&                                 cgh,
                 a_splineModuli.get_pointer() + a_solveKernelParams[0].splineValuesOffset[minorDim];
 
         /* Various grid sizes and indices */
-        const int localOffsetMinor = 0, localOffsetMajor = 0, localOffsetMiddle = 0; // unused
+        const int localOffsetMinor = 0, localOffsetMajor = 0, localOffsetMiddle = 0;
         const int localSizeMinor   = a_solveKernelParams[0].complexGridSizePadded[minorDim];
         const int localSizeMiddle  = a_solveKernelParams[0].complexGridSizePadded[middleDim];
         const int localCountMiddle = a_solveKernelParams[0].complexGridSize[middleDim];
