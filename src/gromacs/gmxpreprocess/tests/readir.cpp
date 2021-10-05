@@ -291,7 +291,7 @@ TEST_F(GetIrTest, AcceptsTransformationCoord)
         "pull-ncoords = 2",
         "pull-coord1-geometry = distance",
         "pull-coord1-groups = 1 2",
-        "pull-coord1-k = 0",
+        "pull-coord1-k = 1",
         "pull-coord2-geometry = transformation",
         "pull-coord2-expression = 1/(1+x1)",
         "pull-coord2-k = 10",
@@ -299,6 +299,54 @@ TEST_F(GetIrTest, AcceptsTransformationCoord)
     runTest(joinStrings(inputMdpFile, "\n"));
 }
 
+TEST_F(GetIrTest, InvalidTransformationCoordWithConstraint)
+{
+    const char* inputMdpFile[] = {
+        "pull = yes",
+        "pull-ncoords = 1",
+        "pull-coord1-geometry = transformation",
+        "pull-coord1-type = constraint", //INVALID
+        "pull-coord1-expression = 10",
+    };
+    runTest(joinStrings(inputMdpFile, "\n"), TestBehavior::ErrorAndDoNotCompareOutput);
+}
+
+TEST_F(GetIrTest, InvalidPullCoordWithConstraintInTransformationExpression)
+{
+    const char* inputMdpFile[] = {
+        "pull = yes",
+        "pull-ngroups = 2",
+        "pull-ncoords = 2",
+        "pull-coord1-geometry = distance",
+        "pull-coord1-type = constraint", //INVALID
+        "pull-coord1-groups = 1 2",
+        "pull-coord2-geometry = transformation",
+        "pull-coord2-expression = x1",
+    };
+    runTest(joinStrings(inputMdpFile, "\n"), TestBehavior::ErrorAndDoNotCompareOutput);
+}
+
+TEST_F(GetIrTest, InvalidTransformationCoordDxValue)
+{
+    const char* inputMdpFile[] = {
+        "pull = yes",
+        "pull-ncoords = 1",
+        "pull-coord1-geometry = transformation",
+        "pull-coord1-expression = 10",
+        "pull-coord1-dx = 0", //INVALID
+    };
+    runTest(joinStrings(inputMdpFile, "\n"), TestBehavior::ErrorAndDoNotCompareOutput);
+}
+
+TEST_F(GetIrTest, MissingTransformationCoordExpression)
+{
+    const char* inputMdpFile[] = {
+        "pull = yes",
+        "pull-ncoords = 1",
+        "pull-coord1-geometry = transformation",
+    };
+    runTest(joinStrings(inputMdpFile, "\n"), TestBehavior::ErrorAndDoNotCompareOutput);
+}
 #endif // HAVE_MUPARSER
 
 } // namespace test
