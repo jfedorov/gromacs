@@ -122,18 +122,14 @@ else()
     find_package(pybind11 2.2 REQUIRED)
 endif()
 
-set(GMXAPI_PYTHON_EXTENSION_SOURCES
-    gmxapi/module.cpp
-    gmxapi/export_context.cpp
-    gmxapi/export_exceptions.cpp
-    gmxapi/export_system.cpp
-    gmxapi/export_tprfile.cpp
-    gmxapi/pycontext.cpp
-    gmxapi/pysystem.cpp
-    )
-
 pybind11_add_module(_gmxapi
-                    ${GMXAPI_PYTHON_EXTENSION_SOURCES}
+                    gmxapi/module.cpp
+                    gmxapi/export_context.cpp
+                    gmxapi/export_exceptions.cpp
+                    gmxapi/export_system.cpp
+                    gmxapi/export_tprfile.cpp
+                    gmxapi/pycontext.cpp
+                    gmxapi/pysystem.cpp
                     )
 
 if (gmxapi_VERSION VERSION_GREATER_EQUAL 0.2.1)
