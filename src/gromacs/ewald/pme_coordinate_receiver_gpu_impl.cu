@@ -59,19 +59,13 @@ namespace gmx
 PmeCoordinateReceiverGpu::Impl::Impl(MPI_Comm               comm,
                                      const DeviceContext&   deviceContext,
                                      gmx::ArrayRef<PpRanks> ppRanks) :
-    comm_(comm), ppRanks_(ppRanks), deviceContext_(deviceContext)
+    comm_(comm), ppRanks_(ppRanks), deviceContext_(deviceContext), ppCommManager_(ppRanks.size())
 {
-    request_.resize(ppRanks.size());
-    ppSync_.resize(ppRanks.size());
-
     // Create streams to manage pipelining
-    DeviceStream* stream;
-    size_t        i = 0;
-    while (i < ppRanks_.size())
+    for (auto& ppCommManager : ppCommManager_)
     {
-        stream = new DeviceStream(deviceContext_, DeviceStreamPriority::High, false);
-        ppCommStream_.push_back(std::make_unique<DeviceStream>(deviceContext_, DeviceStreamPriority::High, false));
-        i++;
+        ppCommManager.stream =
+                std::make_unique<DeviceStream>(deviceContext_, DeviceStreamPriority::High, false);
     }
 }
 
@@ -79,24 +73,21 @@ PmeCoordinateReceiverGpu::Impl::~Impl() = default;
 
 void PmeCoordinateReceiverGpu::Impl::reinitCoordinateReceiver(DeviceBuffer<RVec> d_x)
 {
-    atomStart_.resize(ppRanks_.size());
-    atomEnd_.resize(ppRanks_.size());
-    int ind_start = 0;
-    int ind_end   = 0;
-    int i         = 0;
+    int indStart = 0;
+    int indEnd   = 0;
+    int i        = 0;
     for (const auto& receiver : ppRanks_)
     {
-        ind_start = ind_end;
-        ind_end   = ind_start + receiver.numAtoms;
+        indStart = indEnd;
+        indEnd   = indStart + receiver.numAtoms;
 
-        atomStart_[i] = ind_start;
-        atomEnd_[i]   = ind_end;
+        ppCommManager_[i].atomRange = std::make_tuple(indStart, indEnd);
 
         // Need to send address to PP rank only for thread-MPI as PP rank pushes data using cudamemcpy
         if (GMX_THREAD_MPI)
         {
             // Data will be transferred directly from GPU.
-            void* sendBuf = reinterpret_cast<void*>(&d_x[ind_start]);
+            void* sendBuf = reinterpret_cast<void*>(&d_x[indStart]);
 #if GMX_MPI
             MPI_Send(&sendBuf, sizeof(void**), MPI_BYTE, receiver.rankId, 0, comm_);
 #else
@@ -119,7 +110,13 @@ void PmeCoordinateReceiverGpu::Impl::receiveCoordinatesSynchronizerFromPpCudaDir
 #if GMX_MPI
     // Receive event from PP task
     // NOLINTNEXTLINE(bugprone-sizeof-expression)
-    MPI_Irecv(&ppSync_[ppRank], sizeof(GpuEventSynchronizer*), MPI_BYTE, ppRank, 0, comm_, &request_[ppRank]);
+    MPI_Irecv(&ppCommManager_[ppRank].sync,
+              sizeof(GpuEventSynchronizer*),
+              MPI_BYTE,
+              ppRank,
+              0,
+              comm_,
+              &(ppCommManager_[ppRank].request));
 #else
     GMX_UNUSED_VALUE(ppRank);
 #endif
@@ -135,7 +132,13 @@ void PmeCoordinateReceiverGpu::Impl::launchReceiveCoordinatesFromPpCudaMpi(Devic
                "launchReceiveCoordinatesFromPpCudaMpi is expected to be called only for Lib-MPI");
 
 #if GMX_MPI
-    MPI_Irecv(&recvbuf[numAtoms], numBytes, MPI_BYTE, ppRank, eCommType_COORD_GPU, comm_, &request_[ppRank]);
+    MPI_Irecv(&recvbuf[numAtoms],
+              numBytes,
+              MPI_BYTE,
+              ppRank,
+              eCommType_COORD_GPU,
+              comm_,
+              &(ppCommManager_[ppRank].request));
 #else
     GMX_UNUSED_VALUE(recvbuf);
     GMX_UNUSED_VALUE(numAtoms);
@@ -167,8 +170,8 @@ int PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesFromPpRanks(int pipe
     // host-side improvements should be investigated as tracked in
     // issue #4047
     senderRank = pipelineStage;
-    MPI_Wait(&request_[senderRank], MPI_STATUS_IGNORE);
-    ppSync_[senderRank]->enqueueWaitEvent(deviceStream);
+    MPI_Wait(&(ppCommManager_[senderRank].request), MPI_STATUS_IGNORE);
+    ppCommManager_[senderRank].sync->enqueueWaitEvent(deviceStream);
 #    endif
     return senderRank;
 #endif
@@ -176,12 +179,12 @@ int PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesFromPpRanks(int pipe
 
 DeviceStream* PmeCoordinateReceiverGpu::Impl::ppCommStream(int senderIndex)
 {
-    return ppCommStream_[senderIndex];
+    return ppCommManager_[senderIndex].stream.get();
 }
 
 std::tuple<int, int> PmeCoordinateReceiverGpu::Impl::ppCommAtomRange(int senderIndex)
 {
-    return std::make_tuple(atomStart_[senderIndex], atomEnd_[senderIndex]);
+    return ppCommManager_[senderIndex].atomRange;
 }
 
 int PmeCoordinateReceiverGpu::Impl::ppCommNumSenderRanks()

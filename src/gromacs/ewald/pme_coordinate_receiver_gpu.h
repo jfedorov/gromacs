@@ -64,6 +64,15 @@ class PmeCoordinateReceiverGpu
 
 public:
     /*! \brief Creates PME GPU coordinate receiver object
+     *
+     * For multi-GPU runs, the PME GPU can receive coordinates from
+     * multiple PP GPUs. Data from these distinct communications can
+     * be handled separately in the PME spline/spread kernel, allowing
+     * pipelining which overlaps computation and communication. The
+     * class methods are designed to called seperately for each remote
+     * PP rank, and internally a different stream is used for each
+     * remote PP rank to allow overlapping.
+     *
      * \param[in] comm            Communicator used for simulation
      * \param[in] deviceContext   GPU context
      * \param[in] ppRanks         List of PP ranks
@@ -74,6 +83,8 @@ public:
     /*! \brief
      * Re-initialize: set atom ranges and, for thread-MPI case,
      * send coordinates buffer address to PP rank
+     * This is required after repartitioning since atom ranges and
+     * buffer allocations may have changed.
      * \param[in] d_x   coordinates buffer in GPU memory
      */
     void reinitCoordinateReceiver(DeviceBuffer<RVec> d_x);

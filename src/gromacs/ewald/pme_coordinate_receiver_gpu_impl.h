@@ -52,8 +52,17 @@ class GpuEventSynchronizer;
 
 namespace gmx
 {
-/*! \internal \brief Class with interfaces and data for CUDA version of PME coordinate receiving functionality */
 
+/*! \brief Object to manage communications to a specific PP rank */
+typedef struct ppCommManager
+{
+    std::unique_ptr<DeviceStream> stream;    //! stream used communication with for PP rank
+    MPI_Request                   request;   //! MPI request corresponding to PP rank
+    GpuEventSynchronizer*         sync;      //! synchronization event to receive from PP rank
+    std::tuple<int, int>          atomRange; //! range of atoms corresponding to PP rank
+} ppCommManager;
+
+/*! \internal \brief Class with interfaces and data for CUDA version of PME coordinate receiving functionality */
 class PmeCoordinateReceiverGpu::Impl
 {
 
@@ -68,7 +77,9 @@ public:
 
     /*! \brief
      * Re-initialize: set atom ranges and, for thread-MPI case,
-     * send coordinates buffer address to PP rank
+     * send coordinates buffer address to PP rank.
+     * This is required after repartitioning since atom ranges and
+     * buffer allocations may have changed.
      * \param[in] d_x   coordinates buffer in GPU memory
      */
     void reinitCoordinateReceiver(DeviceBuffer<RVec> d_x);
@@ -120,18 +131,10 @@ private:
     MPI_Comm comm_;
     //! list of PP ranks
     gmx::ArrayRef<PpRanks> ppRanks_;
-    //! vector of MPI requests
-    std::vector<MPI_Request> request_;
-    //! vector of synchronization events to receive from PP tasks
-    std::vector<GpuEventSynchronizer*> ppSync_;
-    //! Streams used for managing pipelining
-    std::vector<DeviceStream*> ppCommStream_;
     //! GPU context handle (not used in CUDA)
     const DeviceContext& deviceContext_;
-    //! vector of atom start indices corresponding to multiple receiving PP ranks
-    std::vector<int> atomStart_;
-    //! vector of atom end indices corresponding to multiple receiving PP ranks
-    std::vector<int> atomEnd_;
+    //! vector communication manager objects corresponding to multiple receiving PP ranks
+    std::vector<ppCommManager> ppCommManager_;
 };
 
 } // namespace gmx
