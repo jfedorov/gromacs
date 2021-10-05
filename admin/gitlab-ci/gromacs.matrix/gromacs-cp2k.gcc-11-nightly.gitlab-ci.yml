@@ -1,44 +1,44 @@
-# Test goal: Clang build with CP2K
+# Test goal: GCC build with CP2K
 # Test intents (should change rarely and conservatively):
 #   OS: Ubuntu oldest supported
-#   Compiler: Clang
+#   Compiler: GCC
 #   GPU: no
 #   Scope: install dependencies, configure, build, test
 # Test implementation choices (free to change as needed):
 #   OS: Ubuntu 20.04
 #   Build type: Debug
-#   Compiler: Clang 8
-#   MPI: thread_MPI and OpenMPI
+#   Compiler: GCC 11
+#   MPI: thread_MPI
 #   SIMD: AVX2_256
 #   FFT: FFTW3
 #   Parallelism nt/ntomp: 4/2
 
-gromacs-cp2k:clang-8-nightly:
+gromacs-cp2k:gcc-11-nightly:
   extends:
     - .variables:default
-    - .use-clang:base
+    - .use-gcc:base
     - .rules:nightly-not-for-release
     - .before_script:default
     - .use-ccache
-  stage: build
+  stage: pre-build
   cache: {}
-  image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-20.04-llvm-8-cuda-11.0
+  image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-20.04-gcc-9
   variables:
-    KUBERNETES_CPU_LIMIT: 1
-    KUBERNETES_CPU_REQUEST: 1
+    KUBERNETES_CPU_LIMIT: 4
+    KUBERNETES_CPU_REQUEST: 4
     KUBERNETES_MEMORY_REQUEST: 2Gi
     CMAKE_COMPILER_SCRIPT: ""
     CMAKE_SIMD_OPTIONS: "-DGMX_SIMD=AVX2_256"
     CMAKE_MPI_OPTIONS: "-DGMX_THREAD_MPI=ON"
-    CMAKE_PRECISION_OPTIONS: "-DGMX_DOUBLE=OFF"
+    CMAKE_PRECISION_OPTIONS: "-DGMX_DOUBLE=ON"
     CMAKE_BUILD_TYPE_OPTIONS: "-DCMAKE_BUILD_TYPE=Debug"
     CMAKE_GPU_OPTIONS: "-DGMX_GPU=OFF"
     CTEST_RUN_MODE: "ExperimentalTest"
-    COMPILER_MAJOR_VERSION: 8
-    CMAKE_EXTRA_OPTIONS: -DGMX_INSTALL_LEGACY_API=ON
+    COMPILER_MAJOR_VERSION: 11
+    CMAKE_EXTRA_OPTIONS: "-DBUILD_SHARED_LIBS=OFF -DGMXAPI=OFF -DGMX_INSTALL_NBLIB_API=OFF"
   script:
     # TODO: fill in this script:
-    - INSTALL_DIR=$PWD/$INSTALL_DIR bash admin/ci-scripts/build-and-install-cp2k.sh
+    - INSTALL_DIR=$PWD/$INSTALL_DIR 
     # From .gromacs:base:configure:
     - CMAKE=${CMAKE:-$(which cmake)}
     - echo $CMAKE_COMPILER_SCRIPT
@@ -55,6 +55,7 @@ gromacs-cp2k:clang-8-nightly:
       echo "Preparing new build directory" ;
       mkdir $BUILD_DIR ;
       fi
+    - CP2K_DIR=${PWD}/cp2k bash admin/ci-scripts/build-and-install-cp2k.sh
     - cd $BUILD_DIR
     - $CMAKE ..
       -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
