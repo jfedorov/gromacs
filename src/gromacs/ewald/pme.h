@@ -382,7 +382,8 @@ GPU_FUNC_QUALIFIER void pme_gpu_prepare_computation(gmx_pme_t*     GPU_FUNC_ARGU
  * \param[in] lambdaQ                        The Coulomb lambda of the current state of the
  *                                           system. Only used if FEP of Coulomb is active.
  * \param[in] useGpuDirectComm               Whether direct GPU PME-PP communication is active
- * \param[in] pmeCoordinateReceiverGpu       Coordinate receiver object.
+ * \param[in]  pmeCoordinateReceiverGpu      Coordinate receiver object, which must be valid when
+ *                                           direct GPU PME-PP communication is active
  */
 GPU_FUNC_QUALIFIER void pme_gpu_launch_spread(
         gmx_pme_t*                     GPU_FUNC_ARGUMENT(pme),

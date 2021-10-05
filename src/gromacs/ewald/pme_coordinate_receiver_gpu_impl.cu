@@ -70,7 +70,7 @@ PmeCoordinateReceiverGpu::Impl::Impl(MPI_Comm               comm,
     while (i < ppRanks_.size())
     {
         stream = new DeviceStream(deviceContext_, DeviceStreamPriority::High, false);
-        ppCommStream_.push_back(stream);
+        ppCommStream_.push_back(std::make_unique<DeviceStream>(deviceContext_, DeviceStreamPriority::High, false));
         i++;
     }
 }

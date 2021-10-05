@@ -352,7 +352,8 @@ void pme_gpu_destroy_3dfft(const PmeGpu* pmeGpu);
  * \param[in]  spreadCharges             Should the charges/coefficients be spread on the grid.
  * \param[in]  lambda                    The lambda value of the current system state.
  * \param[in]  useGpuDirectComm          Whether direct GPU PME-PP communication is active
- * \param[in]  pmeCoordinateReceiverGpu  Coordinate receiver object.
+ * \param[in]  pmeCoordinateReceiverGpu  Coordinate receiver object, which must be valid when
+ *                                       direct GPU PME-PP communication is active
  */
 GPU_FUNC_QUALIFIER void
 pme_gpu_spread(const PmeGpu*                  GPU_FUNC_ARGUMENT(pmeGpu),
