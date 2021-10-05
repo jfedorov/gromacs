@@ -70,6 +70,7 @@ namespace gmx
  * \param accumulate When \c false, the previous values of \p d_baseForce are discarded.
  * \param d_nbnxmForceToAdd Buffer containing Nbnxm forces in Nbnxm layout.
  * \param d_rvecForceToAdd Optional buffer containing arbitrary forces in linear layout.
+ * \param[in] rvecForceMtsFactor The MTS factor for \p d_rvecForceToAdd
  * \param d_baseForce Destination buffer for forces in linear layout.
  * \param d_cell Atom index to Nbnxm cell index.
  * \param deviceStream Device stream for kernel submission.
@@ -80,6 +81,7 @@ void launchForceReductionKernel(int                  numAtoms,
                                 bool                 accumulate,
                                 DeviceBuffer<Float3> d_nbnxmForceToAdd,
                                 DeviceBuffer<Float3> d_rvecForceToAdd,
+                                float                rvecForceMtsFactor,
                                 DeviceBuffer<Float3> d_baseForce,
                                 DeviceBuffer<int>    d_cell,
                                 const DeviceStream&  deviceStream);

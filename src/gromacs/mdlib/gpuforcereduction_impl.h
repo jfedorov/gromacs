@@ -89,8 +89,9 @@ public:
     /*! \brief Register a rvec-format force to be reduced
      *
      * \param [in] forcePtr  Pointer to force to be reduced
+     * \param[in]  mtsFactor The factor between the level0 and level1 time step
      */
-    void registerRvecForce(DeviceBuffer<Float3> forcePtr);
+    void registerRvecForce(DeviceBuffer<Float3> forcePtr, const real mtsFactor);
 
     /*! \brief Add a dependency for this force reduction
      *
@@ -115,7 +116,7 @@ public:
                 GpuEventSynchronizer* completionMarker = nullptr);
 
     /*! \brief Execute the force reduction */
-    void execute();
+    void execute(bool skipRvecForceAtMtsFastStep);
 
 private:
     //! force to be used as a base for this reduction
@@ -138,6 +139,8 @@ private:
     DeviceBuffer<RVec> nbnxmForceToAdd_;
     //! Rvec-format force to be added in this reduction
     DeviceBuffer<RVec> rvecForceToAdd_;
+    //! MTS factor for \p rvecForceToAdd_ between the level0 and level1 time step
+    real rvecForceMtsFactor_;
     //! event to be marked when reduction launch has been completed
     GpuEventSynchronizer* completionMarker_ = nullptr;
     //! The wallclock counter

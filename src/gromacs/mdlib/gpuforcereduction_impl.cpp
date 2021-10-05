@@ -102,10 +102,11 @@ void GpuForceReduction::Impl::registerNbnxmForce(DeviceBuffer<RVec> forcePtr)
     nbnxmForceToAdd_ = forcePtr;
 };
 
-void GpuForceReduction::Impl::registerRvecForce(DeviceBuffer<RVec> forcePtr)
+void GpuForceReduction::Impl::registerRvecForce(DeviceBuffer<RVec> forcePtr, const real mtsFactor)
 {
     GMX_ASSERT(forcePtr, "Input force for reduction has no data");
-    rvecForceToAdd_ = forcePtr;
+    rvecForceToAdd_     = forcePtr;
+    rvecForceMtsFactor_ = mtsFactor;
 };
 
 void GpuForceReduction::Impl::addDependency(GpuEventSynchronizer* dependency)
@@ -113,7 +114,7 @@ void GpuForceReduction::Impl::addDependency(GpuEventSynchronizer* dependency)
     dependencyList_.push_back(dependency);
 }
 
-void GpuForceReduction::Impl::execute()
+void GpuForceReduction::Impl::execute(bool skipRvecForceAtMtsFastStep)
 {
     wallcycle_start_nocount(wcycle_, WallCycleCounter::LaunchGpu);
     wallcycle_sub_start(wcycle_, WallCycleSubCounter::LaunchGpuNBFBufOps);
@@ -131,7 +132,7 @@ void GpuForceReduction::Impl::execute()
         synchronizer->enqueueWaitEvent(deviceStream_);
     }
 
-    const bool addRvecForce = static_cast<bool>(rvecForceToAdd_); // True iff initialized
+    const bool addRvecForce = static_cast<bool>(rvecForceToAdd_) && skipRvecForceAtMtsFastStep; // True iff initialized
 
     launchForceReductionKernel(numAtoms_,
                                atomStart_,
@@ -139,6 +140,7 @@ void GpuForceReduction::Impl::execute()
                                accumulate_,
                                nbnxmForceToAdd_,
                                rvecForceToAdd_,
+                               rvecForceMtsFactor_,
                                baseForce_,
                                cellInfo_.d_cell,
                                deviceStream_);
@@ -165,9 +167,9 @@ void GpuForceReduction::registerNbnxmForce(DeviceBuffer<RVec> forcePtr)
     impl_->registerNbnxmForce(forcePtr);
 }
 
-void GpuForceReduction::registerRvecForce(DeviceBuffer<RVec> forcePtr)
+void GpuForceReduction::registerRvecForce(DeviceBuffer<RVec> forcePtr, const real mtsFactor)
 {
-    impl_->registerRvecForce(forcePtr);
+    impl_->registerRvecForce(forcePtr, mtsFactor);
 }
 
 void GpuForceReduction::addDependency(GpuEventSynchronizer* dependency)
@@ -184,9 +186,9 @@ void GpuForceReduction::reinit(DeviceBuffer<RVec>    baseForcePtr,
 {
     impl_->reinit(baseForcePtr, numAtoms, cell, atomStart, accumulate, completionMarker);
 }
-void GpuForceReduction::execute()
+void GpuForceReduction::execute(bool skipRvecForceAtMtsFastStep)
 {
-    impl_->execute();
+    impl_->execute(skipRvecForceAtMtsFastStep);
 }
 
 GpuForceReduction::~GpuForceReduction() = default;

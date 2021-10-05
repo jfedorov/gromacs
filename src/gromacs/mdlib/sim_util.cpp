@@ -1120,9 +1120,10 @@ static void combineMtsForces(const int      numAtoms,
  * \param [in] cr                            Communication record object
  * \param [in] fr                            Force record object
  */
-static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
-                                    const t_commrec*            cr,
-                                    t_forcerec*                 fr)
+static void setupGpuForceReductions(gmx::MdrunScheduleWorkload*   runScheduleWork,
+                                    const t_commrec*              cr,
+                                    t_forcerec*                   fr,
+                                    ArrayRef<const gmx::MtsLevel> mtsLevels)
 {
 
     nonbonded_verlet_t*          nbv      = fr->nbv.get();
@@ -1150,7 +1151,8 @@ static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
                 runScheduleWork->simulationWork.haveSeparatePmeRank
                         ? fr->pmePpCommGpu->getGpuForceStagingPtr() // buffer received from other GPU
                         : pme_gpu_get_device_f(fr->pmedata);        // PME force buffer on same GPU
-        fr->gpuForceReduction[gmx::AtomLocality::Local]->registerRvecForce(forcePtr);
+        const real pmeMtsFactor = runScheduleWork->simulationWork.useMts ? mtsLevels[1].stepFactor : 1;
+        fr->gpuForceReduction[gmx::AtomLocality::Local]->registerRvecForce(forcePtr, pmeMtsFactor);
 
         GpuEventSynchronizer* const pmeSynchronizer =
                 (runScheduleWork->simulationWork.haveSeparatePmeRank
@@ -1477,7 +1479,7 @@ void do_force(FILE*                               fplog,
 
         if (simulationWork.useGpuBufferOps)
         {
-            setupGpuForceReductions(runScheduleWork, cr, fr);
+            setupGpuForceReductions(runScheduleWork, cr, fr, inputrec.mtsLevels);
         }
     }
     else if (!EI_TPI(inputrec.eI) && stepWork.computeNonbondedForces)
@@ -2026,7 +2028,7 @@ void do_force(FILE*                               fplog,
                 }
 
 
-                fr->gpuForceReduction[gmx::AtomLocality::NonLocal]->execute();
+                fr->gpuForceReduction[gmx::AtomLocality::NonLocal]->execute(!stepWork.computeSlowForces);
 
                 if (!stepWork.useGpuFHalo)
                 {
@@ -2234,7 +2236,7 @@ void do_force(FILE*                               fplog,
 
             if (stepWork.computeNonbondedForces)
             {
-                fr->gpuForceReduction[gmx::AtomLocality::Local]->execute();
+                fr->gpuForceReduction[gmx::AtomLocality::Local]->execute(!stepWork.computeSlowForces);
             }
 
             // Copy forces to host if they are needed for update or if virtual sites are enabled.

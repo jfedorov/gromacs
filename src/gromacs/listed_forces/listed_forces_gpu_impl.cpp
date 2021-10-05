@@ -123,7 +123,8 @@ bool inputSupportsListedForcesGpu(const t_inputrec& ir, const gmx_mtop_t& mtop, 
             "Cannot compute bonded interactions on a GPU, because GPU implementation requires "
             "a dynamical integrator (md, sd, etc).");
     errorReasons.appendIf(EI_MIMIC(ir.eI), "MiMiC");
-    errorReasons.appendIf(ir.useMts, "Cannot run with multiple time stepping");
+    // TODO: check if bondeds are level 1
+    // errorReasons.appendIf(ir.useMts, "Cannot run with multiple time stepping");
     errorReasons.appendIf((ir.opts.ngener > 1), "Cannot run with multiple energy groups");
     errorReasons.finishContext();
     if (error != nullptr)

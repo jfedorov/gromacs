@@ -94,9 +94,13 @@ public:
 
     /*! \brief Register a rvec-format force to be reduced
      *
+     * Allow this force to be used with MTS by passing >1 \p mtsFactor.
+     *
+     *
      * \param [in] forcePtr  Pointer to force to be reduced
+     * \param[in]  mtsFactor The factor between the level0 and level1 time step
      */
-    void registerRvecForce(DeviceBuffer<RVec> forcePtr);
+    void registerRvecForce(DeviceBuffer<RVec> forcePtr, const real mtsFactor);
 
     /*! \brief Add a dependency for this force reduction
      *
@@ -121,7 +125,7 @@ public:
                 GpuEventSynchronizer* completionMarker = nullptr);
 
     /*! \brief Execute the force reduction */
-    void execute();
+    void execute(bool skipRvecForceAtMtsFastStep);
 
 private:
     class Impl;

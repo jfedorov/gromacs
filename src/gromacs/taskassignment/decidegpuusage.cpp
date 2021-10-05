@@ -585,7 +585,9 @@ bool decideWhetherToUseGpuForUpdate(const bool                     isDomainDecom
         }
     }
 
-    if (inputrec.useMts)
+    // FIXME: check that only LongrangeNonbonded of MtsForceGroups is in MTS level 1 using forceGroupMtsLevel()
+    // if (inputrec.useMts)
+    if (false)
     {
         errorMessage += "Multiple time stepping is not supported.\n";
     }

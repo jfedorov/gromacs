@@ -82,7 +82,7 @@ void GpuForceReduction::registerNbnxmForce(DeviceBuffer<RVec> /* forcePtr */)
 }
 
 // NOLINTNEXTLINE readability-convert-member-functions-to-static
-void GpuForceReduction::registerRvecForce(DeviceBuffer<gmx::RVec> /* forcePtr */)
+void GpuForceReduction::registerRvecForce(DeviceBuffer<gmx::RVec> /* forcePtr */, const real /* mtsLevel */)
 {
     GMX_RELEASE_ASSERT(false, "A CPU stub has been called instead of the correct implementation.");
 }
