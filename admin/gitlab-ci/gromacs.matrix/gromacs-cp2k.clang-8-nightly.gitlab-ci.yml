@@ -1,0 +1,128 @@
+# Test goal: Clang build with CP2K
+# Test intents (should change rarely and conservatively):
+#   OS: Ubuntu oldest supported
+#   Compiler: Clang
+#   GPU: no
+#   Scope: install dependencies, configure, build, test
+# Test implementation choices (free to change as needed):
+#   OS: Ubuntu 20.04
+#   Build type: Debug
+#   Compiler: Clang 8
+#   MPI: thread_MPI and OpenMPI
+#   SIMD: AVX2_256
+#   FFT: FFTW3
+#   Parallelism nt/ntomp: 4/2
+
+gromacs-cp2k:clang-8-nightly:
+  extends:
+    - .variables:default
+    - .use-clang:base
+    - .rules:nightly-not-for-release
+    - .before_script:default
+    - .use-ccache
+  stage: build
+  cache: {}
+  image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-20.04-llvm-8-cuda-11.0
+  variables:
+    KUBERNETES_CPU_LIMIT: 1
+    KUBERNETES_CPU_REQUEST: 1
+    KUBERNETES_MEMORY_REQUEST: 2Gi
+    CMAKE_COMPILER_SCRIPT: ""
+    CMAKE_SIMD_OPTIONS: "-DGMX_SIMD=AVX2_256"
+    CMAKE_MPI_OPTIONS: "-DGMX_THREAD_MPI=ON"
+    CMAKE_PRECISION_OPTIONS: "-DGMX_DOUBLE=OFF"
+    CMAKE_BUILD_TYPE_OPTIONS: "-DCMAKE_BUILD_TYPE=Debug"
+    CMAKE_GPU_OPTIONS: "-DGMX_GPU=OFF"
+    CTEST_RUN_MODE: "ExperimentalTest"
+    COMPILER_MAJOR_VERSION: 8
+    CMAKE_EXTRA_OPTIONS: -DGMX_INSTALL_LEGACY_API=ON
+  script:
+    # TODO: fill in this script:
+    - INSTALL_DIR=$PWD/$INSTALL_DIR bash admin/ci-scripts/build-and-install-cp2k.sh
+    # From .gromacs:base:configure:
+    - CMAKE=${CMAKE:-$(which cmake)}
+    - echo $CMAKE_COMPILER_SCRIPT
+    - echo $CMAKE_EXTRA_OPTIONS
+    - echo $CMAKE_SIMD_OPTIONS
+    - echo $CMAKE_GPU_OPTIONS
+    - echo $CMAKE_MPI_OPTIONS
+    - echo $CMAKE_PRECISION_OPTIONS
+    - echo $CMAKE_BUILD_TYPE_OPTIONS
+    - echo $CMAKE_GMXAPI_OPTIONS
+    - if [[ -d $BUILD_DIR ]] ; then
+      rm -rf $BUILD_DIR && mkdir $BUILD_DIR ;
+      else
+      echo "Preparing new build directory" ;
+      mkdir $BUILD_DIR ;
+      fi
+    - cd $BUILD_DIR
+    - $CMAKE ..
+      -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+      $CMAKE_COMPILER_SCRIPT
+      $CMAKE_EXTRA_OPTIONS
+      $CMAKE_SIMD_OPTIONS
+      $CMAKE_MPI_OPTIONS
+      $CMAKE_PRECISION_OPTIONS
+      $CMAKE_BUILD_TYPE_OPTIONS
+      $CMAKE_GPU_OPTIONS
+      $CMAKE_GMXAPI_OPTIONS
+      -DCMAKE_INSTALL_PREFIX=../$INSTALL_DIR -DGMX_COMPILER_WARNINGS=ON
+      2>&1 | tee cmakeLog.log
+    - awk '/CMake Warning/,/^--|^$/' cmakeLog.log | tee cmakeErrors.log
+    - if [ -s cmakeErrors.log  ] ; then echo "Found CMake warning while processing build"; cat cmakeErrors.log ; exit 1; fi
+    - cd ..
+    # From .gromacs:base:build:
+    - CMAKE=${CMAKE:-$(which cmake)}
+    - cd $BUILD_DIR
+    - $CMAKE --build . -- -j$KUBERNETES_CPU_LIMIT 2>&1 | tee buildLogFile.log
+    - $CMAKE --build . --target tests -- -j$KUBERNETES_CPU_LIMIT 2>&1 | tee testBuildLogFile.log
+    - awk '/warning/,/warning.*generated|^$/' buildLogFile.log testBuildLogFile.log
+      | grep -v "CMake" | tee buildErrors.log || true
+    - grep "cannot be built" buildLogFile.log testBuildLogFile.log | tee -a buildErrors.log || true
+    - $CMAKE --build . --target install 2>&1 | tee installBuildLogFile.log
+    - if [ -s buildErrors.log ] ; then echo "Found compiler warning during build"; cat buildErrors.log; exit 1; fi
+    - for file in `find . -mindepth 1 -name "*.o" ! -type l` ; do echo $file ; rm $file ; done 2>&1 > remove-build-objects.log
+    - cd ..
+    # From .gromacs:base:test:
+    - CMAKE=${CMAKE:-$(which cmake)}
+    - cd $BUILD_DIR
+    - export UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1:suppressions=$CI_PROJECT_DIR/admin/ubsan-suppressions.txt
+    # Needed to run MPI enabled code in the docker images, until we set up different users
+    - export OMPI_ALLOW_RUN_AS_ROOT=1
+    - export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+    - export ASAN_OPTIONS="check_initialization_order=1:detect_invalid_pointer_pairs=1:strict_init_order=true:strict_string_checks=true:detect_stack_use_after_return=true"
+    # If $GMX_TEST_REQUIRED_NUMBER_OF_DEVICES is not set and we have GPUs, set it
+    - if [ -z $GMX_TEST_REQUIRED_NUMBER_OF_DEVICES ] && [ -n $KUBERNETES_EXTENDED_RESOURCE_NAME ] ; then
+      if grep -q '/gpu$' <<< "$KUBERNETES_EXTENDED_RESOURCE_NAME"; then
+      echo "export GMX_TEST_REQUIRED_NUMBER_OF_DEVICES=\"$KUBERNETES_EXTENDED_RESOURCE_LIMIT\"";
+      export GMX_TEST_REQUIRED_NUMBER_OF_DEVICES="$KUBERNETES_EXTENDED_RESOURCE_LIMIT";
+      fi
+      fi
+    - if grep -qF 'nvidia.com/gpu' <<< "$KUBERNETES_EXTENDED_RESOURCE_NAME"; then
+      nvidia-smi || true;
+      fi
+    - if grep -qF 'amd.com/gpu' <<< "$KUBERNETES_EXTENDED_RESOURCE_NAME"; then
+      clinfo -l || true;
+      fi
+    - if grep -qF 'intel.com/gpu' <<< "$KUBERNETES_EXTENDED_RESOURCE_NAME"; then
+      sycl-ls || true;
+      fi
+    - ctest -D $CTEST_RUN_MODE --output-on-failure | tee ctestLog.log || true
+    - awk '/The following tests FAILED/,/^Errors while running CTest|^$/'
+      ctestLog.log | tee ctestErrors.log
+    - xsltproc $CI_PROJECT_DIR/scripts/CTest2JUnit.xsl Testing/`head -n 1 < Testing/TAG`/*.xml > JUnitTestResults.xml
+    - if [ -s ctestErrors.log ] ; then
+      echo "Error during running ctest";
+      exit 1;
+      fi
+    - cd ..
+  artifacts:
+    when: always
+    paths:
+      - $BUILD_DIR
+      - $INSTALL_DIR/
+      - $BUILD_DIR/Testing
+      - $BUILD_DIR/tests
+    reports:
+      junit: $BUILD_DIR/JUnitTestResults.xml
+    expire_in: 1 week
