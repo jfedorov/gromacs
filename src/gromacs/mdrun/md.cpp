@@ -924,11 +924,10 @@ void gmx::LegacySimulator::do_md()
 
         if (useGpuForUpdate && !bFirstStep && bNS)
         {
-            if (bExchanged)
-            {
-                integrator->setPbc(PbcType::Xyz, state->box);
-            }
-            else
+            // Copy velocities and coordinates from device to host.
+            // If there was a replica exchange on the previous step then
+            // the host already has up-to-date buffers.
+            if (!bExchanged)
             {
                 // Copy velocities from the GPU on search steps to keep a copy on host (device buffers are reinitialized).
                 stateGpu->copyVelocitiesFromGpu(state->v, AtomLocality::Local);
@@ -958,6 +957,13 @@ void gmx::LegacySimulator::do_md()
                                      ? VSiteOperation::PositionsAndVelocities
                                      : VSiteOperation::Positions);
             wallcycle_stop(wcycle, WallCycleCounter::VsiteConstr);
+        }
+
+        if (useGpuForUpdate && bExchanged)
+        {
+            // There was a replica exchange on the previous step so the box needs reset
+            // on the GPU integrator object
+            integrator->setPbc(PbcType::Xyz, state->box);
         }
 
         if (bNS && !(bFirstStep && ir->bContinuation))
