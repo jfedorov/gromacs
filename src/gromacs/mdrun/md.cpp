@@ -959,13 +959,6 @@ void gmx::LegacySimulator::do_md()
             wallcycle_stop(wcycle, WallCycleCounter::VsiteConstr);
         }
 
-        if (useGpuForUpdate && bExchanged)
-        {
-            // There was a replica exchange on the previous step so the box needs reset
-            // on the GPU integrator object
-            integrator->setPbc(PbcType::Xyz, state->box);
-        }
-
         if (bNS && !(bFirstStep && ir->bContinuation))
         {
             bMasterState = FALSE;
@@ -975,12 +968,14 @@ void gmx::LegacySimulator::do_md()
                 if (correct_box(fplog, step, state->box))
                 {
                     bMasterState = TRUE;
-                    // If update is offloaded, it should be informed about the box size change
-                    if (useGpuForUpdate)
-                    {
-                        integrator->setPbc(PbcType::Xyz, state->box);
-                    }
                 }
+            }
+            // If update is offloaded, and the box was changed above
+            // or in a replica exchange on the previous step, the GPU
+            // copy should be informed
+            if (useGpuForUpdate && (bMasterState || bExchanged))
+            {
+                integrator->setPbc(PbcType::Xyz, state->box);
             }
             if (haveDDAtomOrdering(*cr) && bMasterState)
             {
