@@ -60,8 +60,6 @@ struct PpCommManager
     const PpRanks& ppRank;
     //! Stream used communication with for PP rank
     std::unique_ptr<DeviceStream> stream;
-    //! MPI request corresponding to PP rank
-    MPI_Request request = MPI_REQUEST_NULL;
     //! Synchronization event to receive from PP rank
     GpuEventSynchronizer* sync = nullptr;
     //! Range of atoms corresponding to PP rank
@@ -135,6 +133,8 @@ public:
 private:
     //! communicator for simulation
     MPI_Comm comm_;
+    //! MPI requests, one per PP rank
+    std::vector<MPI_Request> requests_;
     //! GPU context handle (not used in CUDA)
     const DeviceContext& deviceContext_;
     //! Communication manager objects corresponding to multiple sending PP ranks

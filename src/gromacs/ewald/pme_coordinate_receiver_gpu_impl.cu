@@ -59,7 +59,7 @@ namespace gmx
 PmeCoordinateReceiverGpu::Impl::Impl(MPI_Comm                     comm,
                                      const DeviceContext&         deviceContext,
                                      gmx::ArrayRef<const PpRanks> ppRanks) :
-    comm_(comm), deviceContext_(deviceContext)
+    comm_(comm), requests_(ppRanks.size(), MPI_REQUEST_NULL), deviceContext_(deviceContext)
 {
     // Create streams to manage pipelining
     ppCommManagers_.reserve(ppRanks.size());
@@ -68,7 +68,6 @@ PmeCoordinateReceiverGpu::Impl::Impl(MPI_Comm                     comm,
         ppCommManagers_.emplace_back(PpCommManager{
                 ppRank,
                 std::make_unique<DeviceStream>(deviceContext_, DeviceStreamPriority::High, false),
-                MPI_REQUEST_NULL,
                 nullptr,
                 { 0, 0 } });
     }
@@ -118,7 +117,7 @@ void PmeCoordinateReceiverGpu::Impl::receiveCoordinatesSynchronizerFromPpCudaDir
               ppRank,
               0,
               comm_,
-              &(ppCommManagers_[ppRank].request));
+              &(requests_[ppRank]));
 #else
     GMX_UNUSED_VALUE(ppRank);
 #endif
@@ -140,7 +139,7 @@ void PmeCoordinateReceiverGpu::Impl::launchReceiveCoordinatesFromPpCudaMpi(Devic
               ppRank,
               eCommType_COORD_GPU,
               comm_,
-              &(ppCommManagers_[ppRank].request));
+              &(requests_[ppRank]));
 #else
     GMX_UNUSED_VALUE(recvbuf);
     GMX_UNUSED_VALUE(numAtoms);
@@ -156,7 +155,7 @@ int PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesFromPpRanks(int pipe
     int senderRank = -1; // Rank of PP task that is associated with this invocation.
 #    if (!GMX_THREAD_MPI)
     // Wait on data from any one of the PP sender GPUs
-    MPI_Waitany(request_.size(), request_.data(), &senderRank, MPI_STATUS_IGNORE);
+    MPI_Waitany(requests_.size(), requests_.data(), &senderRank, MPI_STATUS_IGNORE);
     GMX_ASSERT(senderRank >= 0, "Rank of sending PP task must be 0 or greater");
     GMX_UNUSED_VALUE(pipelineStage);
     GMX_UNUSED_VALUE(deviceStream);
@@ -172,7 +171,7 @@ int PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesFromPpRanks(int pipe
     // host-side improvements should be investigated as tracked in
     // issue #4047
     senderRank = pipelineStage;
-    MPI_Wait(&(ppCommManagers_[senderRank].request), MPI_STATUS_IGNORE);
+    MPI_Wait(&(requests_[senderRank]), MPI_STATUS_IGNORE);
     ppCommManagers_[senderRank].sync->enqueueWaitEvent(deviceStream);
 #    endif
     return senderRank;
