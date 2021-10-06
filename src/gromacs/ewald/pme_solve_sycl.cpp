@@ -417,9 +417,16 @@ cl::sycl::event PmeSolveKernel<gridOrdering, computeEnergyAndVirial, gridIndex, 
     cl::sycl::queue q = deviceStream.stream();
 
     cl::sycl::buffer<SolveKernelParams, 1> d_solveKernelParams(&solveKernelParams_, 1);
+    // The Fourier grid contains complex values but is allocated as
+    // twice as many floats. Its capacity can be larger than the size,
+    // so we need to recompute the size of the Fourier grid in complex
+    // so we can reinterpret as float2.
     cl::sycl::buffer<float, 1>& d_fourierGridAsFloat = *gridParams_->d_fourierGrid[gridIndex].buffer_;
+    const int                   fourierGridAsFloat2Size = gridParams_->complexGridSizePadded[XX]
+                                        * gridParams_->complexGridSizePadded[YY]
+                                        * gridParams_->complexGridSizePadded[ZZ];
     auto d_fourierGridAsFloat2 = d_fourierGridAsFloat.reinterpret<cl::sycl::float2>(
-            cl::sycl::range<1>(d_fourierGridAsFloat.get_range()[0] / 2));
+            cl::sycl::range<1>(fourierGridAsFloat2Size));
     cl::sycl::event e = q.submit([&](cl::sycl::handler& cgh) {
         auto kernel = makeSolveKernel<gridOrdering, computeEnergyAndVirial, subGroupSize>(
                 cgh,
