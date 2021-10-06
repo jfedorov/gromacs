@@ -53,14 +53,20 @@ class GpuEventSynchronizer;
 namespace gmx
 {
 
-/*! \brief Object to manage communications to a specific PP rank */
-typedef struct ppCommManager
+/*! \brief Object to manage communications with a specific PP rank */
+struct PpCommManager
 {
-    std::unique_ptr<DeviceStream> stream;    //! stream used communication with for PP rank
-    MPI_Request                   request;   //! MPI request corresponding to PP rank
-    GpuEventSynchronizer*         sync;      //! synchronization event to receive from PP rank
-    std::tuple<int, int>          atomRange; //! range of atoms corresponding to PP rank
-} ppCommManager;
+    //! Details of PP rank that may be updated after repartitioning
+    const PpRanks& ppRank;
+    //! Stream used communication with for PP rank
+    std::unique_ptr<DeviceStream> stream;
+    //! MPI request corresponding to PP rank
+    MPI_Request request = MPI_REQUEST_NULL;
+    //! Synchronization event to receive from PP rank
+    GpuEventSynchronizer* sync = nullptr;
+    //! Range of atoms corresponding to PP rank
+    std::tuple<int, int> atomRange = { 0, 0 };
+};
 
 /*! \internal \brief Class with interfaces and data for CUDA version of PME coordinate receiving functionality */
 class PmeCoordinateReceiverGpu::Impl
@@ -72,7 +78,7 @@ public:
      * \param[in] deviceContext   GPU context
      * \param[in] ppRanks         List of PP ranks
      */
-    Impl(MPI_Comm comm, const DeviceContext& deviceContext, gmx::ArrayRef<PpRanks> ppRanks);
+    Impl(MPI_Comm comm, const DeviceContext& deviceContext, gmx::ArrayRef<const PpRanks> ppRanks);
     ~Impl();
 
     /*! \brief
@@ -129,12 +135,10 @@ public:
 private:
     //! communicator for simulation
     MPI_Comm comm_;
-    //! list of PP ranks
-    gmx::ArrayRef<PpRanks> ppRanks_;
     //! GPU context handle (not used in CUDA)
     const DeviceContext& deviceContext_;
-    //! vector communication manager objects corresponding to multiple receiving PP ranks
-    std::vector<ppCommManager> ppCommManager_;
+    //! Communication manager objects corresponding to multiple sending PP ranks
+    std::vector<PpCommManager> ppCommManagers_;
 };
 
 } // namespace gmx
