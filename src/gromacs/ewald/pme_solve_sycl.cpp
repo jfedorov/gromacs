@@ -325,10 +325,7 @@ auto makeSolveKernel(cl::sycl::handler&                                 cgh,
                 const int warpIndex = threadLocalId / subGroupSize;
                 sm_virialAndEnergy[warpIndex * stride + componentIndex] = virxx;
             }
-            /*
-            DPCT1065:0: Consider replacing sycl::nd_item::barrier() with sycl::nd_item::barrier(sycl::access::fence_space::local_space) for better performance if there is no access to global memory.
-            */
-            itemIdx.barrier();
+            itemIdx.barrier(cl::sycl::access::fence_space::local_space);
 
             /* Reduce to the single warp size */
             const int targetIndex = threadLocalId;
@@ -341,10 +338,7 @@ auto makeSolveKernel(cl::sycl::handler&                                 cgh,
                 {
                     sm_virialAndEnergy[targetIndex] += sm_virialAndEnergy[sourceIndex];
                 }
-                /*
-                DPCT1065:15: Consider replacing sycl::nd_item::barrier() with sycl::nd_item::barrier(sycl::access::fence_space::local_space) for better performance if there is no access to global memory.
-                */
-                itemIdx.barrier();
+                itemIdx.barrier(cl::sycl::access::fence_space::local_space);
             }
 
             /* Now use shuffle again */
