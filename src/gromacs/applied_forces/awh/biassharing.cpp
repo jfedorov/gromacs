@@ -269,22 +269,22 @@ void sumOverSimulations(ArrayRef<T>      data,
 #endif // GMX_MPI
 }
 
-void BiasSharing::sumOverMasterRanks(ArrayRef<int> data, const int biasIndex) const
+void BiasSharing::sumOverSharingMasterRanks(ArrayRef<int> data, const int biasIndex) const
 {
     sumOverSimulations(data, multiSimCommPerBias_[biasIndex], false, commRecord_);
 }
 
-void BiasSharing::sumOverMasterRanks(ArrayRef<long> data, const int biasIndex) const
+void BiasSharing::sumOverSharingMasterRanks(ArrayRef<long> data, const int biasIndex) const
 {
     sumOverSimulations(data, multiSimCommPerBias_[biasIndex], false, commRecord_);
 }
 
-void BiasSharing::sum(ArrayRef<int> data, const int biasIndex) const
+void BiasSharing::sumOverSharingSimulations(ArrayRef<int> data, const int biasIndex) const
 {
     sumOverSimulations(data, multiSimCommPerBias_[biasIndex], true, commRecord_);
 }
 
-void BiasSharing::sum(ArrayRef<double> data, const int biasIndex) const
+void BiasSharing::sumOverSharingSimulations(ArrayRef<double> data, const int biasIndex) const
 {
     sumOverSimulations(data, multiSimCommPerBias_[biasIndex], true, commRecord_);
 }
@@ -333,7 +333,7 @@ void biasesAreCompatibleForSharingBetweenSimulations(const AwhParams&       awhP
             std::vector<int> intervals(numSim * 2);
             intervals[numSim * 0 + simIndex] = awhParams.nstSampleCoord();
             intervals[numSim * 1 + simIndex] = awhParams.numSamplesUpdateFreeEnergy();
-            biasSharing.sumOverMasterRanks(intervals, b);
+            biasSharing.sumOverSharingMasterRanks(intervals, b);
             for (int sim = 1; sim < numSim; sim++)
             {
                 if (intervals[sim] != intervals[0])
@@ -351,7 +351,7 @@ void biasesAreCompatibleForSharingBetweenSimulations(const AwhParams&       awhP
 
             std::vector<long> pointSizes(numSim);
             pointSizes[simIndex] = pointSize[b];
-            biasSharing.sumOverMasterRanks(pointSizes, b);
+            biasSharing.sumOverSharingMasterRanks(pointSizes, b);
             for (int sim = 1; sim < numSim; sim++)
             {
                 if (pointSizes[sim] != pointSizes[0])

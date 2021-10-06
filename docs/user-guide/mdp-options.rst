@@ -2097,7 +2097,7 @@ AWH adaptive biasing
 
       Share the bias and PMF estimates within and/or between simulations.
       Within a simulation, the bias will be shared between biases that have the
-      same :mdp:`awh1-share-group` index (note that the current code does not support this).
+      same :mdp:`awh1-share-group` value (note that the current code does not support this).
       With :mdp-value:`awh-share-multisim=yes` and
       :ref:`gmx mdrun` option ``-multidir`` the bias will also be shared across simulations.
       Sharing may increase convergence initially, although the starting configurations
