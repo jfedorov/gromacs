@@ -271,7 +271,7 @@ auto makeSolveKernel(cl::sycl::handler&                                 cgh,
 
             /* We can only reduce warp-wise */
             const int width = subGroupSize;
-            static_assert(subGroupSize >= 8); 
+            static_assert(subGroupSize >= 8);
 
             sycl_2020::sub_group sg = itemIdx.get_sub_group();
 
