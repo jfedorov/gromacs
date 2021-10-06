@@ -1502,7 +1502,7 @@ int Mdrunner::mdrunner()
 
     if (deviceInfo != nullptr)
     {
-        if (DOMAINDECOMP(cr) && thisRankHasDuty(cr, DUTY_PP))
+        if (haveDDAtomOrdering(*cr) && thisRankHasDuty(cr, DUTY_PP))
         {
             dd_setup_dlb_resource_sharing(cr, deviceId);
         }

@@ -2136,7 +2136,7 @@ void do_force(FILE*                               fplog,
     // an alternating wait/reduction scheme.
     bool alternateGpuWait =
             (!c_disableAlternatingWait && stepWork.haveGpuPmeOnThisRank
-             && simulationWork.useGpuNonbonded && !DOMAINDECOMP(cr) && !stepWork.useGpuFBufferOps);
+             && simulationWork.useGpuNonbonded && !haveDDAtomOrdering(*cr) && !stepWork.useGpuFBufferOps);
     if (alternateGpuWait)
     {
         alternatePmeNbGpuWaitReduce(fr->nbv.get(),
