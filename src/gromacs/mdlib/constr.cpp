@@ -491,7 +491,7 @@ bool Constraints::Impl::apply(bool                      bLog,
     /* Communicate the coordinates required for the non-local constraints
      * for LINCS and/or SETTLE.
      */
-    if (havePPDomainDecomposition(cr))
+    if (cr->dd)
     {
         dd_move_x_constraints(cr->dd,
                               box,

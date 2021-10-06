@@ -280,16 +280,9 @@ void dd_gather(const gmx_domdec_t gmx_unused* dd,
                void gmx_unused* dest)
 {
 #if GMX_MPI
-    if (dd->nnodes > 1)
-    {
-        /* Some MPI implementions don't specify const */
-        MPI_Gather(const_cast<void*>(src), nbytes, MPI_BYTE, dest, nbytes, MPI_BYTE, DDMASTERRANK(dd), dd->mpi_comm_all);
-    }
-    else
+    /* Some MPI implementions don't specify const */
+    MPI_Gather(const_cast<void*>(src), nbytes, MPI_BYTE, dest, nbytes, MPI_BYTE, DDMASTERRANK(dd), dd->mpi_comm_all);
 #endif
-    {
-        memcpy(dest, src, nbytes);
-    }
 }
 
 void dd_scatterv(const gmx_domdec_t gmx_unused* dd,
@@ -332,22 +325,15 @@ void dd_gatherv(const gmx_domdec_t gmx_unused* dd,
                 void gmx_unused* rbuf)
 {
 #if GMX_MPI
-    if (dd->nnodes > 1)
-    {
-        int dum;
+    int dum = 0;
 
-        if (scount == 0)
-        {
-            /* MPI does not allow NULL pointers */
-            sbuf = &dum;
-        }
-        /* Some MPI implementions don't specify const */
-        MPI_Gatherv(
-                const_cast<void*>(sbuf), scount, MPI_BYTE, rbuf, rcounts, disps, MPI_BYTE, DDMASTERRANK(dd), dd->mpi_comm_all);
-    }
-    else
-#endif
+    if (scount == 0)
     {
-        memcpy(rbuf, sbuf, rcounts[0]);
+        /* MPI does not allow NULL pointers */
+        sbuf = &dum;
     }
+    /* Some MPI implementions don't specify const */
+    MPI_Gatherv(
+            const_cast<void*>(sbuf), scount, MPI_BYTE, rbuf, rcounts, disps, MPI_BYTE, DDMASTERRANK(dd), dd->mpi_comm_all);
+#endif
 }

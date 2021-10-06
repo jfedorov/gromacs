@@ -106,9 +106,7 @@ public:
 
     /*! \brief Set that the local topology should be checked via
      * observables reduction whenever that reduction is required by
-     * another module. In case of a single domain a direct assertion
-     * is performed instead.
-     */
+     * another module. */
     void scheduleCheckOfLocalTopology(int numBondedInteractionsToReduce);
 
 private:

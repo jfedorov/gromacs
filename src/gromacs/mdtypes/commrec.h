@@ -77,14 +77,11 @@ struct t_commrec
      * All communication within some simulation should happen
      * in mpi_comm_mysim, or its subset mpi_comm_mygroup.
      */
-    //! The rank-id in mpi_comm_mysim;
-    int sim_nodeid;
-    //! The number of ranks in mpi_comm_mysim
-    int nnodes;
-    //! The number of separate PME ranks, 0 when no separate PME ranks are used
-    int npmenodes;
+    int sim_nodeid, nnodes, npmenodes;
 
-    //! The rank-id in mpi_comm_mygroup;
+    /* thread numbers: */
+    /* Not used yet: int threadid, nthreads; */
+    /* The nodeid in the PP/PME, PP or PME group */
     int nodeid;
 
     /* MPI communicators within a single simulation
@@ -94,9 +91,6 @@ struct t_commrec
                                   a single simulation */
     MPI_Comm mpi_comm_mygroup; /* subset of mpi_comm_mysim including only
                                   the ranks in the same group (PP or PME) */
-    //! The number of ranks in mpi_comm_mygroup
-    int sizeOfMyGroupCommunicator;
-
     //! The communicator used before DD was initialized
     MPI_Comm mpiDefaultCommunicator;
     int      sizeOfDefaultCommunicator;
