@@ -651,7 +651,7 @@ void check_resource_division_efficiency(const gmx_hw_info_t* hwinfo,
             }
         }
     }
-#else  // !GMX_OPENMP || ! GMX_MPI
+#else // !GMX_OPENMP || ! GMX_MPI
     GMX_UNUSED_VALUE(bNtOmpOptionSet);
     GMX_UNUSED_VALUE(willUsePhysicalGpu);
     GMX_UNUSED_VALUE(cr);

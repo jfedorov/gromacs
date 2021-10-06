@@ -2134,9 +2134,9 @@ void do_force(FILE*                               fplog,
 
     // With both nonbonded and PME offloaded a GPU on the same rank, we use
     // an alternating wait/reduction scheme.
-    bool alternateGpuWait =
-            (!c_disableAlternatingWait && stepWork.haveGpuPmeOnThisRank
-             && simulationWork.useGpuNonbonded && !haveDDAtomOrdering(*cr) && !stepWork.useGpuFBufferOps);
+    bool alternateGpuWait = (!c_disableAlternatingWait && stepWork.haveGpuPmeOnThisRank
+                             && simulationWork.useGpuNonbonded && !haveDDAtomOrdering(*cr)
+                             && !stepWork.useGpuFBufferOps);
     if (alternateGpuWait)
     {
         alternatePmeNbGpuWaitReduce(fr->nbv.get(),
