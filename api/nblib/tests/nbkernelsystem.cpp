@@ -67,7 +67,7 @@ TEST(NBlibTest, SpcMethanolForcesAreCorrect)
 
     SpcMethanolSimulationStateBuilder spcMethanolSystemBuilder;
 
-    auto simState        = spcMethanolSystemBuilder.setupSimulationState();
+    auto simState = spcMethanolSystemBuilder.setupSimulationState();
 
     auto forceCalculator = setupGmxForceCalculatorCpu(simState.topology(), options);
 
@@ -87,7 +87,7 @@ TEST(NBlibTest, ExpectedNumberOfForces)
 
     SpcMethanolSimulationStateBuilder spcMethanolSystemBuilder;
 
-    auto simState        = spcMethanolSystemBuilder.setupSimulationState();
+    auto simState = spcMethanolSystemBuilder.setupSimulationState();
 
     auto forceCalculator = setupGmxForceCalculatorCpu(simState.topology(), options);
 
@@ -106,7 +106,7 @@ TEST(NBlibTest, CanIntegrateSystem)
 
     SpcMethanolSimulationStateBuilder spcMethanolSystemBuilder;
 
-    auto simState        = spcMethanolSystemBuilder.setupSimulationState();
+    auto simState = spcMethanolSystemBuilder.setupSimulationState();
 
     auto forceCalculator = setupGmxForceCalculatorCpu(simState.topology(), options);
 
@@ -143,7 +143,7 @@ TEST(NBlibTest, UpdateChangesForces)
 
     SpcMethanolSimulationStateBuilder spcMethanolSystemBuilder;
 
-    auto simState        = spcMethanolSystemBuilder.setupSimulationState();
+    auto simState = spcMethanolSystemBuilder.setupSimulationState();
 
     auto forceCalculator = setupGmxForceCalculatorCpu(simState.topology(), options);
 
@@ -205,7 +205,7 @@ TEST(NBlibTest, ArgonOplsaForcesAreCorrect)
 
     ArgonSimulationStateBuilder argonSystemBuilder(fftypes::OPLSA);
 
-    auto simState        = argonSystemBuilder.setupSimulationState();
+    auto simState = argonSystemBuilder.setupSimulationState();
 
     auto forceCalculator = setupGmxForceCalculatorCpu(simState.topology(), options);
 
@@ -226,7 +226,7 @@ TEST(NBlibTest, ArgonGromos43A1ForcesAreCorrect)
 
     ArgonSimulationStateBuilder argonSystemBuilder(fftypes::GROMOS43A1);
 
-    auto simState        = argonSystemBuilder.setupSimulationState();
+    auto simState = argonSystemBuilder.setupSimulationState();
 
     auto forceCalculator = setupGmxForceCalculatorCpu(simState.topology(), options);
 
