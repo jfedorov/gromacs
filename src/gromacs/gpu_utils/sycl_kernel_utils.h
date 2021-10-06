@@ -146,8 +146,12 @@ static inline float shift_right(sycl_2020::sub_group sg, float var, sycl_2020::s
 #endif
 
 #if GMX_SYCL_HIPSYCL
+/*! \brief Polyfill for sycl::isfinite missing from hipSYCL
+ *
+ * Does not follow GROMACS style because it should follow the name for
+ * which it is a polyfill. */
 template<typename Real>
-__device__ __host__ static inline bool isFinite(Real value)
+__device__ __host__ static inline bool isfinite(Real value)
 {
     // This is not yet implemented in hipSYCL pending
     // https://github.com/illuhad/hipSYCL/issues/636
@@ -168,7 +172,7 @@ __device__ __host__ static inline bool isFinite(Real value)
 }
 #elif GMX_SYCL_DPCPP
 template<typename Real>
-static inline bool isFinite(Real value)
+static inline bool isfinite(Real value)
 {
     return cl::sycl::isfinite(value);
 }
