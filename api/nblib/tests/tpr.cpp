@@ -85,9 +85,9 @@ TEST_F(TprReaderTest, SimDBTprIsCreated)
     EXPECT_NO_THROW(makeTPRfromSimulationDatabase("argon12"));
 }
 
-TEST_F(TprReaderTest, NonanolVacReads)
+TEST_F(TprReaderTest, Spc2Reads)
 {
-    TprReader tprReader = makeTPRfromSimulationDatabase("nonanol_vacuo");
+    TprReader tprReader = makeTPRfromSimulationDatabase("spc2");
 
     EXPECT_NO_THROW(tprReader.coordinates_.size());
 }
@@ -116,10 +116,10 @@ TEST_F(TprReaderTest, ArgonImportedDataIsCorrect)
     dataImportTest.testArrays<real>(tprReader.nonbondedParameters_, "nbparams");
 
     // check exclusion elements
-    dataImportTest.testArrays<int>(tprReader.exclusionListElements, "exclusion elements");
+    dataImportTest.testArrays<int>(tprReader.exclusionListElements_, "exclusion elements");
 
     // check exclusion ranges
-    dataImportTest.testArrays<int>(tprReader.exclusionListRanges, "exclusion ranges");
+    dataImportTest.testArrays<int>(tprReader.exclusionListRanges_, "exclusion ranges");
 }
 
 TEST_F(TprReaderTest, FCfromTprDataWorks)

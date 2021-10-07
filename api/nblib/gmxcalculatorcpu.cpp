@@ -344,8 +344,8 @@ std::unique_ptr<GmxNBForceCalculatorCpu> setupGmxForceCalculatorCpu(TprReader& t
                                                      tprReader.nonbondedParameters_,
                                                      tprReader.charges_,
                                                      tprReader.particleInteractionFlags_,
-                                                     tprReader.exclusionListRanges,
-                                                     tprReader.exclusionListElements,
+                                                     tprReader.exclusionListRanges_,
+                                                     tprReader.exclusionListElements_,
                                                      options);
 }
 

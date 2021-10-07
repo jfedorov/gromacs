@@ -76,9 +76,9 @@ public:
     std::vector<real> inverseMasses_;
     //! stores information about particles pairs to be excluded from the non-bonded force
     //! calculation exclusion list ranges
-    std::vector<int> exclusionListRanges;
+    std::vector<int> exclusionListRanges_;
     //! exclusion list elements
-    std::vector<int> exclusionListElements;
+    std::vector<int> exclusionListElements_;
     //! coordinates
     std::vector<Vec3> coordinates_;
     //! velocities

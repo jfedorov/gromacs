@@ -71,6 +71,7 @@ TprReader::TprReader(std::string filename)
     gmx_mtop_t              molecularTopology;
     gmx::SimulationWorkload simulationWorkload;
 
+    // If the file does not exist, this function will throw
     PartialDeserializedTprFile partialDeserializedTpr =
             read_tpx_state(filename.c_str(), &inputRecord, &globalState, &molecularTopology);
 
@@ -103,10 +104,10 @@ TprReader::TprReader(std::string filename)
 
     gmx_localtop_t localtop(molecularTopology.ffparams);
     gmx_mtop_generate_local_top(molecularTopology, &localtop, false);
-    exclusionListElements = std::vector<int>(localtop.excls.elementsView().begin(),
-                                             localtop.excls.elementsView().end());
-    exclusionListRanges   = std::vector<int>(localtop.excls.listRangesView().begin(),
-                                           localtop.excls.listRangesView().end());
+    exclusionListElements_ = std::vector<int>(localtop.excls.elementsView().begin(),
+                                              localtop.excls.elementsView().end());
+    exclusionListRanges_   = std::vector<int>(localtop.excls.listRangesView().begin(),
+                                            localtop.excls.listRangesView().end());
 
     int                           ntopatoms = molecularTopology.natoms;
     std::unique_ptr<gmx::MDAtoms> mdAtoms =
@@ -117,7 +118,7 @@ TprReader::TprReader(std::string filename)
     charges_.resize(numParticles);
     particleTypeIdOfAllParticles_.resize(numParticles);
     inverseMasses_.resize(numParticles);
-    for (int i = 0; i < mdAtoms->mdatoms()->nr; i++)
+    for (int i = 0; i < numParticles; i++)
     {
         charges_[i]                      = mdAtoms->mdatoms()->chargeA[i];
         particleTypeIdOfAllParticles_[i] = mdAtoms->mdatoms()->typeA[i];
@@ -125,6 +126,10 @@ TprReader::TprReader(std::string filename)
     }
     particleInteractionFlags_ = forceRecord.atomInfo;
 
+    if (TRICLINIC(globalState.box))
+    {
+        throw InputException("Only rectangular unit-cells are supported here");
+    }
     boxX_ = globalState.box[XX][XX];
     boxY_ = globalState.box[YY][YY];
     boxZ_ = globalState.box[ZZ][ZZ];
