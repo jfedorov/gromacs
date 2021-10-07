@@ -972,7 +972,7 @@ void gmx::LegacySimulator::do_md()
             }
             // If update is offloaded, and the box was changed above
             // or in a replica exchange on the previous step, the GPU
-            // copy should be informed
+            // Update object should be informed
             if (useGpuForUpdate && (bMasterState || bExchanged))
             {
                 integrator->setPbc(PbcType::Xyz, state->box);
