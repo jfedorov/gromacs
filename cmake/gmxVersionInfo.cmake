@@ -231,13 +231,13 @@ set(GMX_VERSION_STRING "${GMX_VERSION}${GMX_VERSION_SUFFIX}")
 
 set(REGRESSIONTEST_VERSION "${GMX_VERSION_STRING}")
 set(REGRESSIONTEST_BRANCH "master")
-# Follow the release checklist (at
-# https://gitlab.com/gromacs/gromacs/-/wikis/Release-checklist) and in
-# particular the instructions under "How to build a regressiontests
-# tarball" in order to have it build the regressiontests tarball with
-# all the right version naming. The version number and suffix affects
-# the md5sum that has to go here, and if it isn't right the real
-# release workflow will report a failure.
+# Follow the relevant part of the release checklist at
+# https://gitlab.com/gromacs/gromacs/-/wikis/Release-checklist#how-to-build-a-regressiontests-tarball
+# in order to have it build the regressiontests tarball with all the
+# right version naming. The version number and suffix goes into the
+# directory name within the regressiontests tarball, which affects the
+# md5sum of the tarball. The matching md5sum has to go here, and if it
+# isn't right the real release workflow will report a failure.
 set(REGRESSIONTEST_MD5SUM "TODO" CACHE INTERNAL "MD5 sum of the regressiontests tarball for this GROMACS version")
 
 # If you are making a custom fork of GROMACS, please describe your
