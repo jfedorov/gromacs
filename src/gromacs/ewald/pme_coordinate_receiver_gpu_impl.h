@@ -113,6 +113,12 @@ public:
      */
     int synchronizeOnCoordinatesFromPpRanks(int pipelineStage, const DeviceStream& deviceStream);
 
+    /*! \brief Perform above synchronizeOnCoordinatesFromPpRanks for all PP ranks,
+     * enqueueing all events to a single stream
+     * \param[in] deviceStream   stream in which to enqueue the wait events.
+     */
+    void synchronizeOnCoordinatesFromAllPpRanks(const DeviceStream& deviceStream);
+
     /*! \brief
      * Return pointer to stream associated with specific PP rank sender index
      * \param[in] senderIndex    Index of sender PP rank.

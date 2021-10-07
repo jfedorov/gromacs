@@ -133,13 +133,7 @@ void PmeCoordinateReceiverGpu::Impl::launchReceiveCoordinatesFromPpCudaMpi(Devic
                "launchReceiveCoordinatesFromPpCudaMpi is expected to be called only for Lib-MPI");
 
 #if GMX_MPI
-    MPI_Irecv(&recvbuf[numAtoms],
-              numBytes,
-              MPI_BYTE,
-              ppRank,
-              eCommType_COORD_GPU,
-              comm_,
-              &(requests_[ppRank]));
+    MPI_Irecv(&recvbuf[numAtoms], numBytes, MPI_BYTE, ppRank, eCommType_COORD_GPU, comm_, &(requests_[ppRank]));
 #else
     GMX_UNUSED_VALUE(recvbuf);
     GMX_UNUSED_VALUE(numAtoms);
@@ -178,6 +172,13 @@ int PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesFromPpRanks(int pipe
 #endif
 }
 
+void PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesFromAllPpRanks(const DeviceStream& deviceStream)
+{
+    for (int i = 0; i < static_cast<int>(ppCommManagers_.size()); i++)
+    {
+        synchronizeOnCoordinatesFromPpRanks(i, deviceStream);
+    }
+}
 DeviceStream* PmeCoordinateReceiverGpu::Impl::ppCommStream(int senderIndex)
 {
     return ppCommManagers_[senderIndex].stream.get();
@@ -224,6 +225,11 @@ int PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromPpRanks(int           
                                                                   const DeviceStream& deviceStream)
 {
     return impl_->synchronizeOnCoordinatesFromPpRanks(senderIndex, deviceStream);
+}
+
+void PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromAllPpRanks(const DeviceStream& deviceStream)
+{
+    impl_->synchronizeOnCoordinatesFromAllPpRanks(deviceStream);
 }
 
 DeviceStream* PmeCoordinateReceiverGpu::ppCommStream(int senderIndex)

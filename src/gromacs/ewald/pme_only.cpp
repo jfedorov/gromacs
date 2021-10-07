@@ -219,6 +219,9 @@ static gmx_pme_t* gmx_pmeonly_switch(std::vector<gmx_pme_t*>* pmedata,
 
 /*! \brief Called by PME-only ranks to receive coefficients and coordinates
  *
+ * Note that with GPU direct communication the transfer is only initiated, it is the responsibility
+ * of the caller to synchronize prior to launching spread.
+ *
  * \param[in] pme                     PME data structure.
  * \param[in,out] pme_pp              PME-PP communication structure.
  * \param[out] natoms                 Number of received atoms.

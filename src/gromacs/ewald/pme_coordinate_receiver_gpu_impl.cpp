@@ -108,6 +108,13 @@ int PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromPpRanks(int /* pipelin
     return 0;
 }
 
+void PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromAllPpRanks(const DeviceStream& /* deviceStream */)
+{
+    GMX_ASSERT(!impl_,
+               "A CPU stub for PME-PP GPU communication was called instead of the correct "
+               "implementation.");
+}
+
 DeviceStream* PmeCoordinateReceiverGpu::ppCommStream(int /* senderIndex */)
 {
     GMX_ASSERT(!impl_,
