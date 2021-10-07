@@ -209,7 +209,13 @@ gmx_option_multichoice(
     "AUTO"
     AUTO None SSE2 SSE4.1 AVX_128_FMA AVX_256 AVX2_256 AVX2_128 AVX_512 AVX_512_KNL ARM_NEON_ASIMD ARM_SVE IBM_VSX Reference)
 
-set(GMX_FFT_LIBRARY_DEFAULT "fftw3")
+include(gmxTestIntelLLVM)
+
+if (GMX_INTEL_LLVM)
+    set(GMX_FFT_LIBRARY_DEFAULT "mkl")
+else()
+    set(GMX_FFT_LIBRARY_DEFAULT "fftw3")
+endif()
 
 gmx_option_multichoice(
     GMX_FFT_LIBRARY
@@ -295,7 +301,6 @@ include(gmxManageOpenMP)
 # These need to be done early (before further tests).
 #####################################################################
 
-include(gmxTestIntelLLVM)
 include(gmxCFlags)
 gmx_c_flags()
 
