@@ -922,22 +922,16 @@ void gmx::LegacySimulator::do_md()
         do_verbose = mdrunOptions.verbose
                      && (step % mdrunOptions.verboseStepPrintInterval == 0 || bFirstStep || bLastStep);
 
-        if (useGpuForUpdate && !bFirstStep && bNS)
+        // On search steps, when doing the update on the GPU, copy
+        // the coordinates and velocities to the host unless they are
+        // already there (ie on the first step and after replica
+        // exchange).
+        if (useGpuForUpdate && bNS && !bFirstStep && !bExchanged)
         {
-            // Copy velocities and coordinates from device to host.
-            // If there was a replica exchange on the previous step then
-            // the host already has up-to-date buffers.
-            if (!bExchanged)
-            {
-                // Copy velocities from the GPU on search steps to keep a copy on host (device buffers are reinitialized).
-                stateGpu->copyVelocitiesFromGpu(state->v, AtomLocality::Local);
-                stateGpu->waitVelocitiesReadyOnHost(AtomLocality::Local);
-                // Copy coordinate from the GPU when needed at the search step.
-                // NOTE: The cases when coordinates needed on CPU for force evaluation are handled in sim_utils.
-                // NOTE: If the coordinates are to be written into output file they are also copied separately before the output.
-                stateGpu->copyCoordinatesFromGpu(state->x, AtomLocality::Local);
-                stateGpu->waitCoordinatesReadyOnHost(AtomLocality::Local);
-            }
+            stateGpu->copyVelocitiesFromGpu(state->v, AtomLocality::Local);
+            stateGpu->copyCoordinatesFromGpu(state->x, AtomLocality::Local);
+            stateGpu->waitVelocitiesReadyOnHost(AtomLocality::Local);
+            stateGpu->waitCoordinatesReadyOnHost(AtomLocality::Local);
         }
 
         // We only need to calculate virtual velocities if we are writing them in the current step
@@ -970,9 +964,9 @@ void gmx::LegacySimulator::do_md()
                     bMasterState = TRUE;
                 }
             }
-            // If update is offloaded, and the box was changed above
-            // or in a replica exchange on the previous step, the GPU
-            // Update object should be informed
+            // If update is offloaded, and the box was changed either
+            // above or in a replica exchange on the previous step,
+            // the GPU Update object should be informed
             if (useGpuForUpdate && (bMasterState || bExchanged))
             {
                 integrator->setPbc(PbcType::Xyz, state->box);
@@ -1497,6 +1491,7 @@ void gmx::LegacySimulator::do_md()
         {
             if (useGpuForUpdate)
             {
+                // On search steps, update handles to device vectors
                 if (bNS && (bFirstStep || haveDDAtomOrdering(*cr) || bExchanged))
                 {
                     integrator->set(stateGpu->getCoordinates(),
@@ -1639,25 +1634,30 @@ void gmx::LegacySimulator::do_md()
             // Organize to do inter-simulation signalling on steps if
             // and when algorithms require it.
             const bool doInterSimSignal = (simulationsShareState && do_per_step(step, nstSignalComm));
-            const bool coordinatesRequiredForStopCM =
-                    bStopCM && (bGStat || needHalfStepKineticEnergy || doInterSimSignal)
-                    && !EI_VV(ir->eI);
 
-            // Copy coordinates when needed to stop the CM motion or for replica exchange
-            if (useGpuForUpdate && (coordinatesRequiredForStopCM || bDoReplEx))
+            if (useGpuForUpdate)
             {
-                stateGpu->copyCoordinatesFromGpu(state->x, AtomLocality::Local);
-                stateGpu->waitCoordinatesReadyOnHost(AtomLocality::Local);
-            }
+                const bool coordinatesRequiredForStopCM =
+                        bStopCM && (bGStat || needHalfStepKineticEnergy || doInterSimSignal)
+                        && !EI_VV(ir->eI);
 
-            // Copy velocities if:
-            // - Globals are computed this step (includes the energy output steps).
-            // - Temperature is needed for the next step.
-            // - This is a replica exchange step
-            if (useGpuForUpdate && (bGStat || needHalfStepKineticEnergy || bDoReplEx))
-            {
-                stateGpu->copyVelocitiesFromGpu(state->v, AtomLocality::Local);
-                stateGpu->waitVelocitiesReadyOnHost(AtomLocality::Local);
+                // Copy coordinates when needed to stop the CM motion or for replica exchange
+                if (coordinatesRequiredForStopCM || bDoReplEx)
+                {
+                    stateGpu->copyCoordinatesFromGpu(state->x, AtomLocality::Local);
+                    stateGpu->waitCoordinatesReadyOnHost(AtomLocality::Local);
+                }
+
+                // Copy velocities back to the host if:
+                // - Globals are computed this step (includes the energy output steps).
+                // - Temperature is needed for the next step.
+                // - This is a replica exchange step (even though we will only need
+                //     the velocities if an exchange succeeds)
+                if (bGStat || needHalfStepKineticEnergy || bDoReplEx)
+                {
+                    stateGpu->copyVelocitiesFromGpu(state->v, AtomLocality::Local);
+                    stateGpu->waitVelocitiesReadyOnHost(AtomLocality::Local);
+                }
             }
 
             if (bGStat || needHalfStepKineticEnergy || doInterSimSignal)
