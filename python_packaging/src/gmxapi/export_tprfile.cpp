@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -66,6 +66,7 @@ void detail::export_tprfile(pybind11::module& module)
     namespace py = pybind11;
     using gmxapicompat::GmxMdParams;
     using gmxapicompat::readTprFile;
+    using gmxapicompat::StructureSource;
     using gmxapicompat::TprReadHandle;
 
     py::class_<GmxMdParams> mdparams(module, "SimulationParameters");
@@ -129,16 +130,87 @@ void detail::export_tprfile(pybind11::module& module)
             "set",
             [](GmxMdParams* self, const std::string& key, py::none) {
                 // unsetParam(self, key);
+                throw gmxapi::NotImplementedError(
+                        "Un-setting parameters is not currently supported.");
             },
             py::arg("key").none(false),
             py::arg("value"),
             "Use a dictionary to update simulation parameters.");
+
+    py::class_<StructureSource> structureSource(module, "SimulationStructure", py::buffer_protocol());
+    // Note that Python extends the life of the buffer provider while the buffer_info is held,
+    // with corresponding side effects for any resources held by the StructureSource object.
+    structureSource.def_buffer([](StructureSource& source) -> py::buffer_info {
+        gmxapicompat::CoordinatesBuffer buf;
+        try
+        {
+            buf = gmxapicompat::coordinates(source, float());
+        }
+        catch (gmxapicompat::PrecisionError&)
+        {
+            buf = gmxapicompat::coordinates(source, double());
+        }
+
+        std::string format_descriptor;
+        if (buf.itemType != gmxapi::GmxapiType::FLOAT64 || (buf.itemSize != 4 && buf.itemSize != 8)
+            || buf.shape.size() != 2)
+        {
+            throw gmxapi::ProtocolError("Bug: Expected Nx3 floating point numbers.");
+        }
+        if (buf.itemSize == 4)
+        {
+            format_descriptor = py::format_descriptor<float>::format();
+        }
+        else
+        {
+            assert(buf.itemSize == 8);
+            format_descriptor = py::format_descriptor<double>::format();
+        }
+        // Reference: https://pybind11.readthedocs.io/en/stable/advanced/pycpp/numpy.html#buffer-protocol
+        return py::buffer_info(buf.ptr,
+                               buf.itemSize,
+                               format_descriptor,
+                               2,
+                               { buf.shape[0], buf.shape[1] },
+                               { buf.strides[0], buf.itemSize },
+                               true // readonly
+        );
+    });
+
+    py::class_<gmxapicompat::TprBuilder> tprBuilder(module, "TprBuilder");
+    tprBuilder.def(py::init(&gmxapicompat::editTprFile));
+    tprBuilder.def("set_coordinates", [](gmxapicompat::TprBuilder* self, py::buffer buf) {
+        // "Acquire" the buffer. (Destructor "release"s the buffer.)
+        py::buffer_info info     = buf.request();
+        const size_t    itemSize = info.itemsize;
+
+        // Confirm that the buffer is an Nx3 array of floating point numbers of
+        // appropriate precision.
+        if (info.format != py::format_descriptor<float>::format() || info.itemsize != self->get_precision()
+            || info.shape.size() != 2 || info.shape[0] == 0 || info.shape[1] != 3)
+        {
+            py::value_error("Input is not compatible with existing simulation input data.");
+        }
+
+        auto shape   = { static_cast<size_t>(info.shape[0]), static_cast<size_t>(info.shape[1]) };
+        auto strides = { static_cast<size_t>(info.strides[0]), static_cast<size_t>(info.strides[1]) };
+
+        // Re-wrap the buffer as a CoordinatesBuffer and pass to
+        // ::gmxapicompat to update the structure data.
+        self->set(gmxapicompat::CoordinatesBuffer{
+                info.ptr, gmxapi::GmxapiType::FLOAT64, itemSize, 2, shape, strides });
+    });
+    tprBuilder.def("write", &gmxapicompat::TprBuilder::write);
 
 
     py::class_<TprReadHandle> tprfile(module, "TprFile");
     tprfile.def("params", [](const TprReadHandle& self) {
         auto params = gmxapicompat::getMdParams(self);
         return params;
+    });
+    tprfile.def("coordinates", [](const TprReadHandle& self) {
+        auto structure = gmxapicompat::getStructureSource(self);
+        return structure;
     });
 
     module.def("read_tprfile",

@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -271,6 +271,8 @@
 #include <memory>
 #include <string>
 
+#include <cstdint>
+
 /*! \brief Contains the external C++ Gromacs API.
  *
  * High-level interfaces for client code is provided in the gmxapi namespace.
@@ -507,7 +509,6 @@ private:
  *
  * \todo The spec should explicitly map these to types in APIs already used.
  * e.g. MPI, Python, numpy, GROMACS, JSON, etc.
- * \todo Actually check the size of the types.
  *
  * \see https://gitlab.com/gromacs/gromacs/-/issues/2993 for discussion.
  */
@@ -521,6 +522,31 @@ enum class GmxapiType
     STRING,   //! string with metadata
     NDARRAY,  //! multi-dimensional array with metadata
 };
+
+template<GmxapiType, class Enable = void>
+struct native_type
+{
+};
+
+template<>
+struct native_type<GmxapiType::BOOL>
+{
+    using type = bool;
+};
+
+template<>
+struct native_type<GmxapiType::INT64>
+{
+    using type = int64_t;
+};
+
+template<>
+struct native_type<GmxapiType::FLOAT64>
+{
+    static_assert(sizeof(double) == 8, "Broken assumption about IEEE-754 binary64 typing.");
+    using type = double;
+};
+
 } // end namespace gmxapi
 
 #endif // header guard

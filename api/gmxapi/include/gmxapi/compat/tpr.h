@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -92,7 +92,7 @@ public:
      *
      * \return Reference-counted handle to data container.
      */
-    std::shared_ptr<TprContents> get() const;
+    [[nodiscard]] std::shared_ptr<TprContents> get() const;
 
 private:
     std::shared_ptr<TprContents> tprContents_;
@@ -123,6 +123,117 @@ class SimulationState
 {
 public:
     std::shared_ptr<TprContents> tprFile_;
+};
+
+/*!
+ * \brief Buffer descriptor for GROMACS coordinates data.
+ *
+ * This structure should be sufficient to map a GROMACS managed coordinates buffer to common
+ * buffer protocols for API array data exchange.
+ *
+ * \warning The coordinates may be internally stored as 32-bit floating point numbers, but
+ * GROMACS developers have not yet agreed to include 32-bit floating point data in the gmxapi
+ * data typing specification.
+ */
+struct CoordinatesBuffer
+{
+    void*               ptr;
+    gmxapi::GmxapiType  itemType;
+    size_t              itemSize;
+    size_t              ndim;
+    std::vector<size_t> shape;
+    std::vector<size_t> strides;
+};
+
+template<typename T, class Enable = void>
+struct is_gmxapi_data_buffer : std::false_type
+{
+};
+
+template<typename T>
+struct is_gmxapi_data_buffer<
+        T,
+        std::enable_if_t<
+                std::is_pointer_v<decltype(
+                        T::ptr)> && std::is_same_v<decltype(T::itemType), gmxapi::GmxapiType> && std::is_convertible_v<decltype(T::itemSize), size_t> && std::is_convertible_v<decltype(T::ndim), size_t> && std::is_convertible_v<decltype(T::shape), std::vector<size_t>> && std::is_convertible_v<decltype(T::strides), std::vector<size_t>>>> :
+    std::true_type
+{
+};
+
+static_assert(is_gmxapi_data_buffer<CoordinatesBuffer>::value,
+              "Interface cannot support buffer protocols.");
+
+/*!
+ * \brief Floating point precision mismatch.
+ *
+ * Operation cannot be performed at the requested precision for the provided input.
+ *
+ * \ingroup gmxapi_exceptions
+ */
+class PrecisionError : public gmxapi::BasicException<PrecisionError>
+{
+public:
+    using BasicException<PrecisionError>::BasicException;
+};
+
+/*!
+ * \brief Get buffer description for coordinates from a source of structure data.
+ *
+ * \param structure
+ * \param tag type tag for dispatching
+ * \return Buffer description.
+ *
+ * Caller is responsible for keeping the source alive while the buffer is in use.
+ *
+ * \throws PrecisionError if template parameter does not match the available data.
+ */
+/*! \{ */
+CoordinatesBuffer coordinates(const StructureSource& structure, const float& tag);
+CoordinatesBuffer coordinates(const StructureSource& structure, const double& tag);
+/*! \} */
+
+class TprBuilder
+{
+public:
+    explicit TprBuilder(std::unique_ptr<TprContents> tprFile);
+    explicit TprBuilder(TprContents&& tprFile);
+    // Multiple write handles to the same resource is not supported, and we don't have a good way
+    // to copy the resource.
+    TprBuilder(const TprBuilder&) = delete;
+    TprBuilder& operator=(const TprBuilder&) = delete;
+    // Move semantics should be straighforward.
+    TprBuilder(TprBuilder&&) noexcept = default;
+    TprBuilder& operator=(TprBuilder&&) noexcept = default;
+    ~TprBuilder();
+
+    /*!
+     * \brief Get the floating point precision for the TPR contents being edited.
+     *
+     * \return Number of bytes for floating point numbers in fields described as "real".
+     */
+    [[nodiscard]] size_t get_precision() const;
+
+    /*!
+     * \brief Replace particle coordinates.
+     *
+     * \param coordinates
+     * \return Reference to the same builder.
+     * \throws PrecisionError if provided CoordinatesBuffer does not match current contents
+     * precision.
+     * \throws ProtocolError if CoordinatesBuffer contains data that is inconsistent with
+     * documented usage.
+     */
+    TprBuilder& set(const CoordinatesBuffer& coordinates);
+
+    /*!
+     * \brief Write contents to the specified filename.
+     *
+     * \param filename
+     */
+    void write(const std::string& filename);
+
+private:
+    std::unique_ptr<TprContents> tprContents_;
 };
 
 /*!

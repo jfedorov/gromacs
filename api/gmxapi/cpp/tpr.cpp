@@ -70,16 +70,38 @@ namespace gmxapicompat
 class TprContents
 {
 public:
+    /*!
+     * \brief Initialize from an input file by name.
+     *
+     * \param infile Local filesystem path to a TPR file.
+     */
     explicit TprContents(const std::string& infile) :
-        irInstance_{ std::make_unique<t_inputrec>() },
-        mtop_{ std::make_unique<gmx_mtop_t>() },
-        state_{ std::make_unique<t_state>() }
+        TprContents{ std::make_unique<t_inputrec>(),
+                     std::make_unique<gmx_mtop_t>(),
+                     std::make_unique<t_state>() }
     {
         read_tpx_state(infile.c_str(), irInstance_.get(), state_.get(), mtop_.get());
     }
     ~TprContents()                             = default;
     TprContents(TprContents&& source) noexcept = default;
     TprContents& operator=(TprContents&&) noexcept = default;
+    // Legacy member structures may not be copyable.
+    TprContents(const TprContents& source) noexcept = delete;
+    TprContents& operator=(const TprContents&) noexcept = delete;
+
+    /*!
+     * \brief Wrap constituent data structures into a new instance.
+     *
+     * \param irInstance
+     * \param mtop
+     * \param state
+     */
+    TprContents(std::unique_ptr<t_inputrec> irInstance,
+                std::unique_ptr<gmx_mtop_t> mtop,
+                std::unique_ptr<t_state>    state) :
+        irInstance_{ std::move(irInstance) }, mtop_{ std::move(mtop) }, state_{ std::move(state) }
+    {
+    }
 
     /*!
      * \brief Get a reference to the input record in the TPR file.
@@ -87,7 +109,7 @@ public:
      * Note that this implementation allows different objects to share ownership
      * of the TprFile and does not provide access restrictions to prevent multiple
      * code blocks writing to the input record. This should be resolved with a
-     * combination of managed access controlled handles and through better
+     * combination of managed access-controlled handles and through better
      * management of the data structures in the TPR file. I.e. the t_inputrec is
      * not copyable, moveable, nor default constructable (at least, to produce a
      * valid record), and it does not necessarily make sense to map the library
@@ -98,23 +120,30 @@ public:
      *
      * \return
      */
-    t_inputrec& inputRecord() const
+    [[nodiscard]] t_inputrec& inputRecord() const
     {
         assert(irInstance_);
         return *irInstance_;
     }
 
-    gmx_mtop_t& molecularTopology() const
+    [[nodiscard]] gmx_mtop_t& molecularTopology() const
     {
         assert(mtop_);
         return *mtop_;
     }
 
-    t_state& state() const
+    [[nodiscard]] t_state& state() const
     {
         assert(state_);
         return *state_;
     }
+
+    /*!
+     * \brief Get the number of bytes of precision for variably-sized floating point data.
+     *
+     * \return Number of bytes of floating point precision.
+     */
+    static size_t bytesPrecision() { return sizeof(real); }
 
 private:
     // These types are not moveable in GROMACS 2019, so we use unique_ptr as a
@@ -329,7 +358,7 @@ public:
      *
      * \return
      */
-    std::vector<std::string> keys() const
+    [[nodiscard]] std::vector<std::string> keys() const
     {
         std::vector<std::string> keyList;
         for (auto&& entry : int64Params_)
@@ -417,7 +446,7 @@ public:
         }
     };
 
-    TprReadHandle getSource() const
+    [[nodiscard]] TprReadHandle getSource() const
     {
         // Note: might return a null handle. Need to decide what that means and how to address it.
         return TprReadHandle(source_);
@@ -640,6 +669,13 @@ std::unique_ptr<TprReadHandle> readTprFile(const std::string& filename)
     return handle;
 }
 
+std::unique_ptr<TprBuilder> editTprFile(const std::string& filename)
+{
+    auto tprfile = gmxapicompat::TprContents(filename);
+    auto handle  = std::make_unique<gmxapicompat::TprBuilder>(std::move(tprfile));
+    return handle;
+}
+
 std::unique_ptr<GmxMdParams> getMdParams(const TprReadHandle& handle)
 {
     auto tprfile = handle.get();
@@ -679,6 +715,63 @@ TprReadHandle::TprReadHandle(std::shared_ptr<TprContents> tprFile) :
 TprReadHandle getSourceFileHandle(const GmxMdParams& params)
 {
     return params.params_->getSource();
+}
+
+TprBuilder::TprBuilder(std::unique_ptr<TprContents> tprFile) : tprContents_{ std::move(tprFile) } {}
+TprBuilder::TprBuilder(TprContents&& tprFile) :
+    TprBuilder(std::make_unique<TprContents>(std::move(tprFile)))
+{
+}
+
+size_t TprBuilder::get_precision() const
+{
+    return tprContents_->bytesPrecision();
+}
+
+TprBuilder& TprBuilder::set(const CoordinatesBuffer& coordinates)
+{
+    if (coordinates.itemSize != this->get_precision())
+    {
+        std::string message = std::string("Expected item size ");
+        message += std::to_string(this->get_precision());
+        message += ". Got ";
+        message += std::to_string(coordinates.itemSize);
+        throw PrecisionError(message);
+    }
+    if (coordinates.itemType != gmxapi::GmxapiType::FLOAT64 || coordinates.shape.size() != 2
+        || static_cast<int>(coordinates.shape[0]) != this->tprContents_->state().natoms
+        || coordinates.shape[1] != 3)
+    {
+        throw gmxapi::ProtocolError(
+                "Coordinates not compatible with existing simulation input data.");
+    }
+    if constexpr (sizeof(float) != 4)
+    {
+        if (coordinates.itemSize == 4)
+        {
+            throw PrecisionError("No float32 format available.");
+        }
+    }
+
+    // Iterate over atoms and set the new RVec.
+    real* src = reinterpret_cast<real*>(coordinates.ptr);
+    for (auto i = 0; i < tprContents_->state().natoms; ++i)
+    {
+        // Currently, the TPR file is written from a t_state object, which has RVec precision
+        // determined at library compile time, regardless of source or destination TPR file
+        // contents.
+        tprContents_->state().x[i] = gmx::RVec{ src[0], src[1], src[2] };
+        src += 3;
+    }
+    return *this;
+}
+
+void TprBuilder::write(const std::string& filename)
+{
+    write_tpx_state(filename.c_str(),
+                    &this->tprContents_->inputRecord(),
+                    &this->tprContents_->state(),
+                    this->tprContents_->molecularTopology());
 }
 
 void writeTprFile(const std::string&     filename,
@@ -721,6 +814,7 @@ std::shared_ptr<TprContents> TprReadHandle::get() const
 
 // defaulted here to delay definition until after member types are defined.
 TprReadHandle::~TprReadHandle() = default;
+TprBuilder::~TprBuilder()       = default;
 
 GmxMdParams::~GmxMdParams() = default;
 
@@ -778,6 +872,52 @@ bool rewrite_tprfile(const std::string& inFile, const std::string& outFile, doub
 
     success = true;
     return success;
+}
+
+template<class Scalar>
+CoordinatesBuffer coordinates(const StructureSource& structure)
+{
+    constexpr const int requested = sizeof(Scalar);
+    const int           found     = structure.tprFile_->bytesPrecision();
+    std::string         message   = "Requested precision of ";
+    message += std::to_string(requested);
+    message += " bytes. StructureSource has ";
+    message += std::to_string(found);
+    message += " bytes precision.";
+    throw PrecisionError(message);
+}
+
+template<>
+CoordinatesBuffer coordinates<real>(const StructureSource& structure)
+{
+    if (structure.tprFile_->state().x.empty())
+    {
+        throw gmxapi::ProtocolError("");
+    };
+    static_assert(sizeof(decltype(structure.tprFile_->state().x[0])) == 3 * sizeof(real),
+                  "Expected coordinates elements to be trivially convertible to real[3].");
+
+    auto* ptr = structure.tprFile_->state().x.data()->as_vec();
+
+    auto coordinates = CoordinatesBuffer{
+        ptr,
+        gmxapi::GmxapiType::FLOAT64,
+        sizeof(real),
+        2,
+        { size_t(structure.tprFile_->state().natoms), 3 }, // shape
+        { sizeof(gmx::RVec), sizeof(real) }                // strides
+    };
+    return coordinates;
+}
+
+CoordinatesBuffer coordinates(const StructureSource& structure, const float&)
+{
+    return coordinates<float>(structure);
+}
+
+CoordinatesBuffer coordinates(const StructureSource& structure, const double&)
+{
+    return coordinates<double>(structure);
 }
 
 } // end namespace gmxapicompat

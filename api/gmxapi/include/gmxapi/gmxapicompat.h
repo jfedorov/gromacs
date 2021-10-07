@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -36,9 +36,7 @@
 /*! \file
  * \brief Compatibility header for functionality differences in gmxapi releases.
  *
- * Also handle the transitioning installed headers from GROMACS 2019 moving forward.
- *
- * \todo Configure for gmxapi 0.0.7, 0.0.8, GROMACS 2019, GROMACS master...
+ * Also handle transitioning installed headers from GROMACS 2019 moving forward.
  *
  * \defgroup gmxapi_compat
  * \author M. Eric Irrgang <ericirrgang@gmail.com>
@@ -147,7 +145,7 @@ class SimulationState;
 class GmxMdParams;
 
 /*!
- * \brief Handle for a TPR data resource.
+ * \brief Handle for a read-only TPR data resource.
  *
  * Can provide StructureSource, TopologySource, GmxMdParams, and SimulationState.
  *
@@ -167,6 +165,20 @@ class TprReadHandle;
  * \return handle that may share ownership of TPR file resource.
  */
 std::unique_ptr<TprReadHandle> readTprFile(const std::string& filename);
+
+/*!
+ * \brief Handle to TPR contents in preparation for writing.
+ *
+ */
+class TprBuilder;
+
+/*!
+ * \brief Prepare TPR file contents for writing by reading and existing file.
+ *
+ * \param filename
+ * \return Handle with unique and writable access to TPR file contents in memory.
+ */
+std::unique_ptr<TprBuilder> editTprFile(const std::string& filename);
 
 /*!
  * \brief Write a new TPR file to the filesystem with the provided contents.
@@ -192,7 +204,6 @@ void writeTprFile(const std::string&     filename,
  *
  * \todo replace with a helper template on T::topologySource() member function existence.
  */
-
 std::unique_ptr<TopologySource> getTopologySource(const TprReadHandle& handle);
 
 /*!
