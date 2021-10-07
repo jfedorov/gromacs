@@ -1371,6 +1371,12 @@ void do_force(FILE*                               fplog,
         {
             GMX_ASSERT(stateGpu != nullptr, "stateGpu should not be null");
             stateGpu->copyCoordinatesToGpu(x.unpaddedArrayRef(), AtomLocality::Local);
+            if (stepWork.doNeighborSearch && !stepWork.haveGpuPmeOnThisRank)
+            {
+                /* On NS steps, we skip X buffer ops. So, unless we use PME, we don't wait
+                 * for coordinates on the device. Issue #3988. */
+                stateGpu->consumeCoordinatesCopiedToDeviceEvent(AtomLocality::Local);
+            }
         }
     }
 
@@ -2060,6 +2066,10 @@ void do_force(FILE*                               fplog,
 
                 if (!stepWork.useGpuFHalo)
                 {
+                    /* We don't explicitly wait for the forces to be reduced on device,
+                     * but wait for them to finish copying to CPU intead.
+                     * So, we manually consume the event, see Issue #3988. */
+                    stateGpu->consumeForcesReducedOnDeviceEvent(AtomLocality::NonLocal);
                     // copy from GPU input for dd_move_f()
                     stateGpu->copyForcesFromGpu(forceOutMtsLevel0.forceWithShiftForces().force(),
                                                 AtomLocality::NonLocal);
@@ -2267,6 +2277,13 @@ void do_force(FILE*                               fplog,
                 || (simulationWork.useGpuUpdate && haveDDAtomOrdering(*cr) && simulationWork.useCpuPmePpCommunication)
                 || vsite)
             {
+                if (stepWork.computeNonbondedForces)
+                {
+                    /* We have previously issued force reduction on the GPU, but we will
+                     * not use this event, instead relying on the stream being in-order.
+                     * Issue #3988. */
+                    stateGpu->consumeForcesReducedOnDeviceEvent(AtomLocality::Local);
+                }
                 stateGpu->copyForcesFromGpu(forceWithShift, AtomLocality::Local);
                 stateGpu->waitForcesReadyOnHost(AtomLocality::Local);
             }

@@ -120,6 +120,18 @@ void GpuForceReduction::Impl::execute()
 
     if (numAtoms_ == 0)
     {
+        /* In case we have nothing to do, but still have dependencies, we need
+         * to consume them and mark our own event.
+         * Happens sometimes in MdrunVsitesTest.
+         * Issue #3988. */
+        for (auto* synchronizer : dependencyList_)
+        {
+            synchronizer->consume();
+        }
+        if (completionMarker_ != nullptr)
+        {
+            completionMarker_->markEvent(deviceStream_);
+        }
         return;
     }
 
