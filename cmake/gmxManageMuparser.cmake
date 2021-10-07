@@ -68,6 +68,8 @@ function(gmx_manage_muparser)
         if (WIN32)
             gmx_target_warning_suppression(muparser /wd4310 HAS_NO_MSVC_CAST_TRUNCATES_CONSTANT_VALUE)
         endif()
+        # With fast FP mode, there are no NaN's, so clang complains about checking for them
+        gmx_target_warning_suppression(muparser "-Wno-tautological-constant-compare" HAVE_NO_TAUTOLOGICAL_CONSTANT_COMPARE)
 
         set(HAVE_MUPARSER 1 CACHE INTERNAL "Is muparser found?")
     elseif(GMX_USE_MUPARSER STREQUAL "EXTERNAL")
