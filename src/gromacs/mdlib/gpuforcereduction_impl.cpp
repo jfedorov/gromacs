@@ -132,7 +132,7 @@ void GpuForceReduction::Impl::execute(bool skipRvecForceAtMtsFastStep)
         synchronizer->enqueueWaitEvent(deviceStream_);
     }
 
-    const bool addRvecForce = static_cast<bool>(rvecForceToAdd_) && skipRvecForceAtMtsFastStep; // True iff initialized
+    const bool addRvecForce = static_cast<bool>(rvecForceToAdd_) && !skipRvecForceAtMtsFastStep; // True iff initialized
 
     launchForceReductionKernel(numAtoms_,
                                atomStart_,
