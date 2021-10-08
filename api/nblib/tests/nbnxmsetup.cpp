@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2021, by the GROMACS development team, led by
+ * Copyright (c) 2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -43,21 +43,20 @@
  */
 #include <cmath>
 
+#include "gromacs/hardware/device_management.h"
 #include "gromacs/mdtypes/forcerec.h"
 #include "gromacs/mdtypes/interaction_const.h"
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/nbnxm/nbnxm_simd.h"
+#include "gromacs/utility/arrayref.h"
 #include "nblib/box.h"
 #include "nblib/nbnxmsetuphelpers.h"
 
 #include "testutils/testasserts.h"
+#include "testutils/test_hardware_environment.h"
 
 namespace nblib
-{
-namespace test
-{
-namespace
 {
 
 TEST(NbnxmSetupTest, findNumEnergyGroups)
@@ -191,6 +190,65 @@ TEST(NbnxmSetupTest, CanCreateNbnxmCPU)
     EXPECT_NO_THROW(createNbnxmCPU(numParticles, nbKernelOptions, numEnergyGroups, nonbondedParameters));
 }
 
-} // namespace
-} // namespace test
+#ifdef GMX_GPU_CUDA
+TEST(NbnxmSetupTest, canCreateKernelSetupGPU)
+{
+    NBKernelOptions    nbKernelOptions;
+    Nbnxm::KernelSetup kernelSetup = createKernelSetupGPU(nbKernelOptions.useTabulatedEwaldCorr);
+    EXPECT_EQ(kernelSetup.kernelType, Nbnxm::KernelType::Gpu8x8x8);
+    EXPECT_EQ(kernelSetup.ewaldExclusionType, Nbnxm::EwaldExclusionType::Analytical);
+}
+
+TEST(NbnxmSetupTest, CanCreateDeviceStreamManager)
+{
+    const auto& testDeviceList = gmx::test::getTestHardwareEnvironment()->getTestDeviceList();
+    for (const auto& testDevice : testDeviceList)
+    {
+        const DeviceInformation& deviceInfo = testDevice->deviceInfo();
+        setActiveDevice(deviceInfo);
+        gmx::SimulationWorkload simulationWork = createSimulationWorkloadGpu();
+        EXPECT_NO_THROW(createDeviceStreamManager(deviceInfo, simulationWork));
+    }
+}
+
+TEST(NbnxmSetupTest, CanCreateNbnxmGPU)
+{
+    const auto& testDeviceList = gmx::test::getTestHardwareEnvironment()->getTestDeviceList();
+    for (const auto& testDevice : testDeviceList)
+    {
+        const DeviceInformation& deviceInfo = testDevice->deviceInfo();
+        setActiveDevice(deviceInfo);
+        size_t                  numParticles = 1;
+        NBKernelOptions         nbKernelOptions;
+        std::vector<real>       nonbondedParameters = { 1, 1 };
+        gmx::SimulationWorkload simulationWork      = createSimulationWorkloadGpu();
+        interaction_const_t     interactionConst    = createInteractionConst(nbKernelOptions);
+        // set DeviceInformation and create the DeviceStreamManager
+        auto deviceStreamManager = createDeviceStreamManager(deviceInfo, simulationWork);
+        EXPECT_NO_THROW(createNbnxmGPU(
+                numParticles, nbKernelOptions, nonbondedParameters, interactionConst, deviceStreamManager));
+    }
+}
+
+TEST(NbnxmSetupTest, CreateNbnxmGPUThrowsInvalidKernelChoice)
+{
+    const auto& testDeviceList = gmx::test::getTestHardwareEnvironment()->getTestDeviceList();
+    for (const auto& testDevice : testDeviceList)
+    {
+        const DeviceInformation& deviceInfo = testDevice->deviceInfo();
+        setActiveDevice(deviceInfo);
+        size_t          numParticles = 1;
+        NBKernelOptions nbKernelOptions;
+        nbKernelOptions.nbnxmSimd                   = SimdKernels::SimdNo;
+        std::vector<real>       nonbondedParameters = { 1, 1 };
+        gmx::SimulationWorkload simulationWork      = createSimulationWorkloadGpu();
+        interaction_const_t     interactionConst    = createInteractionConst(nbKernelOptions);
+        // set DeviceInformation and create the DeviceStreamManager
+        auto deviceStreamManager = createDeviceStreamManager(deviceInfo, simulationWork);
+        EXPECT_ANY_THROW(createNbnxmGPU(
+                numParticles, nbKernelOptions, nonbondedParameters, interactionConst, deviceStreamManager));
+    }
+}
+#endif
+
 } // namespace nblib
