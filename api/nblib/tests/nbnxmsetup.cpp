@@ -49,7 +49,6 @@
 #include "gromacs/mdtypes/simulation_workload.h"
 #include "gromacs/nbnxm/nbnxm.h"
 #include "gromacs/nbnxm/nbnxm_simd.h"
-#include "gromacs/utility/arrayref.h"
 #include "nblib/box.h"
 #include "nblib/nbnxmsetuphelpers.h"
 
