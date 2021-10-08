@@ -34,8 +34,7 @@
  */
 
 #include "gmxapi/status.h"
-
-#include <gtest/gtest.h>
+#include "testingconfiguration.h"
 
 namespace gmxapi
 {
@@ -48,7 +47,7 @@ namespace
 /*!
  * \brief Test construction and conversion of boolean success status.
  */
-TEST(GmxApiBasicTest, Status)
+TEST_F(GmxApiTest, Status)
 {
     {
         auto status = gmxapi::Status();

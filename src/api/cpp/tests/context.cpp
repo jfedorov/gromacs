@@ -39,14 +39,11 @@
  * Provides additional test coverage of template headers only used by client code.
  */
 
-#include "config.h"
-
-#include <gtest/gtest.h>
-
 #include "gromacs/utility/gmxmpi.h"
 
 #include "gmxapi/context.h"
 #include "gmxapi/mpi/gmxapi_mpi.h"
+#include "testingconfiguration.h"
 
 
 namespace gmxapi
@@ -58,20 +55,20 @@ namespace testing
 namespace
 {
 
-TEST(GmxApiMpiTest, AllContext)
+TEST_F(GmxApiTest, AllContext)
 {
     // Default Implicit COMM_WORLD for MPI builds.
-    auto context = createContext();
+    EXPECT_NO_THROW(auto context = createContext());
 }
 
 #if GMX_LIB_MPI
-TEST(GmxApiMpiTest, NullContext)
+TEST_F(GmxApiTest, NullContext)
 {
     // Explicit COMM_NULL is not supported.
     EXPECT_ANY_THROW(assignResource(MPI_COMM_NULL));
 }
 
-TEST(GmxApiMpiTest, MpiWorldContext)
+TEST_F(GmxApiTest, MpiWorldContext)
 {
     // Note that this test is only compiled when GMX_MPI is enabled for the
     // build tree, so we cannot unit test the behavior of non-MPI GROMACS
@@ -89,7 +86,7 @@ TEST(GmxApiMpiTest, MpiWorldContext)
     auto context = createContext(*resources);
 }
 
-TEST(GmxApiMpiTest, MpiSplitContext)
+TEST_F(GmxApiTest, MpiSplitContext)
 {
     // Explicit sub-communicator.
     MPI_Comm communicator = MPI_COMM_NULL;
@@ -97,7 +94,7 @@ TEST(GmxApiMpiTest, MpiSplitContext)
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     // Run each rank as a separate ensemble member.
     MPI_Comm_split(MPI_COMM_WORLD, rank, rank, &communicator);
-    auto context = createContext(*assignResource(communicator));
+    EXPECT_NO_THROW(auto context = createContext(*assignResource(communicator)));
 }
 #endif
 
