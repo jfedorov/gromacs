@@ -1371,11 +1371,20 @@ void do_force(FILE*                               fplog,
         {
             GMX_ASSERT(stateGpu != nullptr, "stateGpu should not be null");
             stateGpu->copyCoordinatesToGpu(x.unpaddedArrayRef(), AtomLocality::Local);
-            if (stepWork.doNeighborSearch && !stepWork.haveGpuPmeOnThisRank)
+            if (stepWork.doNeighborSearch)
             {
-                /* On NS steps, we skip X buffer ops. So, unless we use PME, we don't wait
-                 * for coordinates on the device. Issue #3988. */
-                stateGpu->consumeCoordinatesCopiedToDeviceEvent(AtomLocality::Local);
+                /* On NS steps, we skip X buffer ops. So, unless we use PME or direct GPU
+                 * communications, we don't wait for the coordinates on the device,
+                 * and we must consume the event here.
+                 * Issue #3988. */
+                const bool eventWillBeConsumedByGpuPme = stepWork.haveGpuPmeOnThisRank;
+                const bool eventWillBeConsumedByGpuPmePPComm =
+                        (simulationWork.haveSeparatePmeRank && stepWork.computeSlowForces)
+                        && simulationWork.useGpuPmePpCommunication;
+                if (!eventWillBeConsumedByGpuPme && !eventWillBeConsumedByGpuPmePPComm)
+                {
+                    stateGpu->consumeCoordinatesCopiedToDeviceEvent(AtomLocality::Local);
+                }
             }
         }
     }
