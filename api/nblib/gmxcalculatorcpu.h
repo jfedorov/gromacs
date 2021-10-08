@@ -63,7 +63,7 @@ namespace nblib
 {
 struct NBKernelOptions;
 class Topology;
-class TprReader;
+struct TprReader;
 
 class GmxNBForceCalculatorCpu final
 {

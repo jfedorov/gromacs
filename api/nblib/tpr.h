@@ -59,7 +59,15 @@ template<typename T>
 struct ExclusionLists;
 class Box;
 
-class TprReader
+/*! \brief Reads in data from tpr which can be used in construction of force calculators
+ *
+ *  This object reads data such as topology and coordinates from a tpr file, with the
+ *  intent of using that data for construction of nblib force calculator objects. To
+ *  allow for maximum flexibility in the calling code, it is the responsibility of the
+ *  caller to, e.g., make copies if they want to preserve initial state information or
+ *  use the data to construct multiple force calculator objects.
+ */
+struct TprReader
 {
 public:
     TprReader(std::string filename);
