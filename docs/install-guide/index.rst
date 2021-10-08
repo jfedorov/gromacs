@@ -586,7 +586,7 @@ lead to performance loss, e.g. on Intel Skylake-X/SP and AMD Zen.
     length is automatically detected, and this can be changed via the
     ``GMX_SIMD_ARM_SVE_LENGTH`` CMake variable. For maximum performance we strongly 
     suggest the latest gcc compilers, or LLVM 14 (when released). 
-    Lower performance has been observed with LLVM 12 & 13 and Arm compiler 21.1.
+    Lower performance has been observed with LLVM 13 and Arm compiler 21.1.
 
 The CMake configure system will check that the compiler you have
 chosen can target the architecture you have chosen. mdrun will check
