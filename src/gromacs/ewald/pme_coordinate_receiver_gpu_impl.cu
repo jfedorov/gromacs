@@ -142,8 +142,8 @@ void PmeCoordinateReceiverGpu::Impl::launchReceiveCoordinatesFromPpCudaMpi(Devic
 #endif
 }
 
-int PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesFromPpRanks(int pipelineStage,
-                                                                        const DeviceStream& deviceStream)
+int PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesFromPpRank(int pipelineStage,
+                                                                       const DeviceStream& deviceStream)
 {
 #if GMX_MPI
     int senderRank = -1; // Rank of PP task that is associated with this invocation.
@@ -176,7 +176,7 @@ void PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesFromAllPpRanks(cons
 {
     for (int i = 0; i < static_cast<int>(ppCommManagers_.size()); i++)
     {
-        synchronizeOnCoordinatesFromPpRanks(i, deviceStream);
+        synchronizeOnCoordinatesFromPpRank(i, deviceStream);
     }
 }
 DeviceStream* PmeCoordinateReceiverGpu::Impl::ppCommStream(int senderIndex)
@@ -221,10 +221,10 @@ void PmeCoordinateReceiverGpu::launchReceiveCoordinatesFromPpCudaMpi(DeviceBuffe
     impl_->launchReceiveCoordinatesFromPpCudaMpi(recvbuf, numAtoms, numBytes, ppRank);
 }
 
-int PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromPpRanks(int                 senderIndex,
-                                                                  const DeviceStream& deviceStream)
+int PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromPpRank(int                 senderIndex,
+                                                                 const DeviceStream& deviceStream)
 {
-    return impl_->synchronizeOnCoordinatesFromPpRanks(senderIndex, deviceStream);
+    return impl_->synchronizeOnCoordinatesFromPpRank(senderIndex, deviceStream);
 }
 
 void PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromAllPpRanks(const DeviceStream& deviceStream)

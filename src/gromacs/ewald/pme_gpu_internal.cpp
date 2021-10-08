@@ -1393,7 +1393,7 @@ void pme_gpu_spread(const PmeGpu*                  pmeGpu,
             int senderRank;
             if (useGpuDirectComm)
             {
-                senderRank = pmeCoordinateReceiverGpu->synchronizeOnCoordinatesFromPpRanks(
+                senderRank = pmeCoordinateReceiverGpu->synchronizeOnCoordinatesFromPpRank(
                         i, *(pmeCoordinateReceiverGpu->ppCommStream(i)));
             }
             else

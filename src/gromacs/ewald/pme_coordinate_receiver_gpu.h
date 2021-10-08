@@ -113,7 +113,7 @@ public:
      * \param[in] deviceStream   stream in which to enqueue the wait event.
      * \returns                  rank of sending PP task
      */
-    int synchronizeOnCoordinatesFromPpRanks(int pipelineStage, const DeviceStream& deviceStream);
+    int synchronizeOnCoordinatesFromPpRank(int pipelineStage, const DeviceStream& deviceStream);
 
     /*! \brief Perform above synchronizeOnCoordinatesFromPpRanks for all PP ranks,
      * enqueueing all events to a single stream

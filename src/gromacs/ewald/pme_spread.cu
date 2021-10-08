@@ -276,9 +276,7 @@ __launch_bounds__(c_spreadMaxThreadsPerBlock) CLANG_DISABLE_OPTIMIZATION_ATTRIBU
     if (spreadCharges)
     {
 
-        if (!kernelParams.usePipeline
-            || ((atomIndexGlobal >= kernelParams.pipelineAtomStart)
-                && (atomIndexGlobal < kernelParams.pipelineAtomEnd)))
+        if (!kernelParams.usePipeline || (atomIndexGlobal < kernelParams.pipelineAtomEnd))
         {
             spread_charges<order, wrapX, wrapY, 0, threadsPerAtom>(
                     kernelParams, &atomCharge, sm_gridlineIndices, sm_theta);
@@ -300,9 +298,7 @@ __launch_bounds__(c_spreadMaxThreadsPerBlock) CLANG_DISABLE_OPTIMIZATION_ATTRIBU
         }
         if (spreadCharges)
         {
-            if (!kernelParams.usePipeline
-                || ((atomIndexGlobal >= kernelParams.pipelineAtomStart)
-                    && (atomIndexGlobal < kernelParams.pipelineAtomEnd)))
+            if (!kernelParams.usePipeline || (atomIndexGlobal < kernelParams.pipelineAtomEnd))
             {
                 spread_charges<order, wrapX, wrapY, 1, threadsPerAtom>(
                         kernelParams, &atomCharge, sm_gridlineIndices, sm_theta);
