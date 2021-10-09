@@ -114,7 +114,7 @@ Build system requirements
 
 gmxapi can be built for Python 3.7 and higher.
 
-You will need a C++ 14 compatible compiler and a reasonably up-to-date version
+You will need a C++ 17 compatible compiler and a reasonably up-to-date version
 of CMake.
 Full gmxapi functionality may also require an MPI compiler (e.g. :command:`mpicc`).
 
@@ -495,6 +495,19 @@ To build the full gmxapi documentation with GROMACS, configure GROMACS with
 This will first build the *gmxapi* Python package and install it to a temporary
 location in the build tree. Sphinx can then import the package to automatically
 extract Python docstrings.
+
+Note that this is an entirely CMake-driven installation and Python dependencies
+will not be installed automatically. You can update your Python environment
+(before configuring with CMake) using the :file:`requirements.txt` files provided
+in the :file:`python_packaging/` directory of the repository. Example::
+
+    pip install -r python_packaging/requirements-docs.txt
+
+or
+
+::
+
+    pip install -r python_packaging/requirements-test.txt
 
 Sometimes the build environment can choose a different Python interpreter than
 the one you intended.
