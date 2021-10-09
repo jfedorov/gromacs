@@ -46,13 +46,30 @@ if(GMXAPI_EXTENSION_MASTER_PROJECT)
             endif()
             add_subdirectory(${CMAKE_CURRENT_BINARY_DIR}/pybind-src)
         else()
-            find_package(pybind11 2.2 REQUIRED)
+            find_package(pybind11 2.6 CONFIG
+                         HINTS
+                         ${Python3_SITELIB}/pybind11
+                         ${Python3_SITEARCH}/pybind11
+                         ${Python3_STDLIB}/pybind11
+                         ${Python3_STDARCH}/pybind11
+                         )
         endif()
     endif()
 else()
-    # If configuring as part of the GROMACS project, pybind11 2.2 has already been found.
+    if(NOT pybind11_FOUND)
+        find_package(pybind11 2.6 CONFIG
+                     HINTS
+                     ${Python3_SITELIB}/pybind11
+                     ${Python3_SITEARCH}/pybind11
+                     ${Python3_STDLIB}/pybind11
+                     ${Python3_STDARCH}/pybind11
+                     )
+    endif()
 endif()
 
+if(NOT pybind11_FOUND)
+    message(FATAL_ERROR "pybind11 is required to build gmxapi extension code.")
+endif()
 
 # This project requires a GROMACS supporting gmxapi 0.0.8 or higher. It should
 # be sufficient to source the GMXRC, but you can also set the GROMACS_DIR or

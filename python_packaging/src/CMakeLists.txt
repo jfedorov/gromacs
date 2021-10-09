@@ -76,6 +76,7 @@ if(POLICY CMP0074) #3.12
 endif()
 
 if(GMXAPI_MASTER_PROJECT)
+    find_package(Python3 3.7 COMPONENTS Interpreter Development)
     find_package(gmxapi 0.2 REQUIRED
                  HINTS "$ENV{GROMACS_DIR}"
                  )
@@ -83,7 +84,14 @@ if(GMXAPI_MASTER_PROJECT)
         message(WARNING "Your GROMACS installation does not support custom MD plugins. "
                 "If you need this feature, please install GROMACS 2021.3 or higher.")
     endif ()
+else()
+    # Building as part of the GROMACS master project. GROMACS CMake logic should
+    # not be processing this unless Python3 was appropriately detected.
+    if (NOT Python3_FOUND)
+        message(FATAL_ERROR "Error in CMake script. Please report GROMACS bug.")
+    endif ()
 endif()
+
 if(gmxapi_FOUND)
     set(_suffix "")
     # GROMACS master branch and development branches may have divergent
@@ -103,7 +111,7 @@ if (NOT TARGET Gromacs::gmxapi)
     message(FATAL_ERROR "Cannot build Python package without GROMACS gmxapi support.")
 endif ()
 
-# TODO: Provide user hints for mpi4py installation.
+# TODO(#3279): Provide user hints for mpi4py installation.
 # Note that neither the Python package nor the Gromacs::gmxapi CMake target are
 # built with MPI in any case, but they _should_ be built with a C++ compiler
 # that is compatible with the available MPI compiler wrappers, and technically
@@ -112,15 +120,14 @@ endif ()
 # For convenience, it is fine if libgmxapi and _gmxapi are built with the mpi
 # compiler wrapper.
 
-option(GMXAPI_USE_BUNDLED_PYBIND
-       "Use pybind11 headers bundled with this repository. If OFF, CMake does `find_package(pybind11)`."
-       ON)
-if(GMXAPI_USE_BUNDLED_PYBIND)
-    add_subdirectory(external/pybind)
-else()
-    # Reference https://gitlab.com/gromacs/gromacs/-/issues/2896
-    find_package(pybind11 2.2 REQUIRED)
-endif()
+# TODO: Check if there are additional scikit-build helpers.
+find_package(pybind11 2.6 CONFIG
+             HINTS
+             ${Python3_SITELIB}/pybind11
+             ${Python3_SITEARCH}/pybind11
+             ${Python3_STDLIB}/pybind11
+             ${Python3_STDARCH}/pybind11
+             )
 
 set(GMXAPI_PYTHON_EXTENSION_SOURCES
     gmxapi/module.cpp
