@@ -233,25 +233,6 @@ TEST(NbnxmSetupTest, CanCreateNbnxmGPU)
     }
 }
 
-TEST(NbnxmSetupTest, CreateNbnxmGPUThrowsInvalidKernelChoice)
-{
-    const auto& testDeviceList = gmx::test::getTestHardwareEnvironment()->getTestDeviceList();
-    for (const auto& testDevice : testDeviceList)
-    {
-        const DeviceInformation& deviceInfo = testDevice->deviceInfo();
-        setActiveDevice(deviceInfo);
-        size_t          numParticles = 1;
-        NBKernelOptions nbKernelOptions;
-        nbKernelOptions.nbnxmSimd                   = SimdKernels::SimdNo;
-        std::vector<real>       nonbondedParameters = { 1, 1 };
-        gmx::SimulationWorkload simulationWork      = createSimulationWorkloadGpu();
-        interaction_const_t     interactionConst    = createInteractionConst(nbKernelOptions);
-        // set DeviceInformation and create the DeviceStreamManager
-        auto deviceStreamManager = createDeviceStreamManager(deviceInfo, simulationWork);
-        EXPECT_ANY_THROW(createNbnxmGPU(
-                numParticles, nbKernelOptions, nonbondedParameters, interactionConst, deviceStreamManager));
-    }
-}
 #endif
 
 } // namespace
