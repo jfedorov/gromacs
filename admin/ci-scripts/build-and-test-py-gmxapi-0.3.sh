@@ -19,21 +19,14 @@ set -e
 
 # Create "sdist" source distribution archive.
 pushd python_packaging/src
-  # TODO: Remove extraneous environment variable with resolution of #3273
-  # Ref: https://redmine.gromacs.org/issues/3273
-  GMXTOOLCHAINDIR=$INSTALL_DIR/share/cmake/gromacs \
-      python setup.py sdist
-  SDIST=dist/gmxapi*
-
-  # Build and install from sdist.
-  # Note that tool chain may be provided differently in GROMACS 2020 and 2021.
+  # TODO(#3273): Reduce requirements for `setup.py` `sdist` command and provide build artifact.
   GMXTOOLCHAINDIR=$INSTALL_DIR/share/cmake/gromacs \
       python -m pip install \
           --no-cache-dir \
           --no-deps \
           --no-index \
           --no-build-isolation \
-          $SDIST
+          .
 
 popd
 
