@@ -65,9 +65,6 @@ elseif (NOT GMX_THREAD_MPI)
     set(GMX_CAN_RUN_MPI_TESTS 0)
 endif()
 
-set(GMX_CAN_RUN_MPI_TESTS ${GMX_CAN_RUN_MPI_TESTS} CACHE BOOL
-    "Whether testutils has enough information to run MPI tests.")
-
 function (gmx_add_unit_test_library NAME)
     if (GMX_BUILD_UNITTESTS AND BUILD_TESTING)
         add_library(${NAME} STATIC ${UNITTEST_TARGET_OPTIONS} ${ARGN})
