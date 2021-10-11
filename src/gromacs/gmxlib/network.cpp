@@ -102,14 +102,6 @@ CommrecHandle init_commrec(MPI_Comm communicator)
 
 void done_commrec(t_commrec* cr)
 {
-    if (MASTER(cr))
-    {
-        if (nullptr != cr->dd)
-        {
-            // TODO: implement
-            // done_domdec(cr->dd);
-        }
-    }
 #if GMX_MPI
     // TODO We need to be able to free communicators, but the
     // structure of the commrec and domdec initialization code makes
