@@ -97,9 +97,6 @@ gmx_add_gtest_executable(
         integrator.cpp
 )
 target_link_libraries(${exename} PRIVATE nblib_test_infrastructure nblib)
-if(GMX_GPU_CUDA)
-    target_link_libraries(${exename} PRIVATE nblib_test_infrastructure)
-endif()
 target_include_directories(${exename} PRIVATE ${PROJECT_SOURCE_DIR}/api)
 gmx_register_gtest_test(${testname} ${exename} INTEGRATION_TEST)
 add_dependencies(nblib-tests ${exename})
