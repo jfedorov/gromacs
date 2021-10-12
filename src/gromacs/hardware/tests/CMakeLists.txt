@@ -1,7 +1,7 @@
 #
 # This file is part of the GROMACS molecular simulation package.
 #
-# Copyright (c) 2015,2020, by the GROMACS development team, led by
+# Copyright (c) 2015,2020,2021, by the GROMACS development team, led by
 # Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
 # and including many others, as listed in the AUTHORS file in the
 # top-level source directory and at http://www.gromacs.org.
@@ -32,10 +32,11 @@
 # To help us fund GROMACS development, we humbly ask that you cite
 # the research papers on the package. Check out http://www.gromacs.org.
 
-gmx_add_unit_test(HardwareUnitTests hardware-test
+gmx_add_unit_test(
+    HardwareUnitTests
+    hardware-test
     CPP_SOURCE_FILES
-        cpuinfo.cpp
-        hardwaretopology.cpp
+    cpuinfo.cpp
+    hardwaretopology.cpp
     GPU_CPP_SOURCE_FILES
-        device_management.cpp
-        )
+    device_management.cpp)

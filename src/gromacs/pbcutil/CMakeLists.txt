@@ -1,7 +1,7 @@
 #
 # This file is part of the GROMACS molecular simulation package.
 #
-# Copyright (c) 2014,2015,2019,2020, by the GROMACS development team, led by
+# Copyright (c) 2014,2015,2019,2020,2021, by the GROMACS development team, led by
 # Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
 # and including many others, as listed in the AUTHORS file in the
 # top-level source directory and at http://www.gromacs.org.
@@ -35,7 +35,9 @@
 # Set up the module library
 add_library(pbcutil INTERFACE)
 file(GLOB PBCUTIL_SOURCES *.cpp)
-set(LIBGROMACS_SOURCES ${LIBGROMACS_SOURCES} ${PBCUTIL_SOURCES} PARENT_SCOPE)
+set(LIBGROMACS_SOURCES
+    ${LIBGROMACS_SOURCES} ${PBCUTIL_SOURCES}
+    PARENT_SCOPE)
 
 # Source files have the following dependencies on library infrastructure.
 #target_link_libraries(pbcutil PRIVATE
@@ -45,12 +47,10 @@ set(LIBGROMACS_SOURCES ${LIBGROMACS_SOURCES} ${PBCUTIL_SOURCES} PARENT_SCOPE)
 
 # Public interface for modules, including dependencies and interfaces
 #target_include_directories(pbcutil PUBLIC
-target_include_directories(pbcutil INTERFACE
-                           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_include_directories(
+    pbcutil INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 #target_link_libraries(pbcutil PUBLIC
-target_link_libraries(pbcutil INTERFACE
-                      legacy_api
-                      )
+target_link_libraries(pbcutil INTERFACE legacy_api)
 
 # TODO: when pbcutil is an OBJECT target
 #target_link_libraries(pbcutil PUBLIC legacy_api)
@@ -59,20 +59,16 @@ target_link_libraries(pbcutil INTERFACE
 # Module dependencies
 # pbcutil interfaces convey transitive dependence on these modules.
 #target_link_libraries(pbcutil PUBLIC
-target_link_libraries(pbcutil INTERFACE
-                      utility
-                      )
+target_link_libraries(pbcutil INTERFACE utility)
 # Source files have the following private module dependencies.
 #target_link_libraries(pbcutil PRIVATE NOTHING)
 # TODO: Explicitly link specific modules.
 #target_link_libraries(pbcutil PRIVATE legacy_modules)
 
 if(GMX_INSTALL_LEGACY_API)
-  install(FILES
-          pbc.h
-          DESTINATION include/gromacs/pbcutil)
+    install(FILES pbc.h DESTINATION include/gromacs/pbcutil)
 endif()
 
-if (BUILD_TESTING)
+if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()

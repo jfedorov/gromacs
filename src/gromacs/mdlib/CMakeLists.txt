@@ -37,7 +37,9 @@ add_library(mdlib INTERFACE)
 
 file(GLOB MDLIB_SOURCES *.cpp)
 # To avoid listing all the necessary files manually, we will remove SYCL-specific files here:
-list(REMOVE_ITEM MDLIB_SOURCES
+list(
+    REMOVE_ITEM
+    MDLIB_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/gpuforcereduction_impl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/gpuforcereduction_impl_internal_sycl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/leapfrog_gpu.cpp
@@ -49,27 +51,24 @@ list(REMOVE_ITEM MDLIB_SOURCES
     ${CMAKE_CURRENT_SOURCE_DIR}/update_constrain_gpu_impl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/update_constrain_gpu_internal_sycl.cpp)
 
-set(MDLIB_SOURCES ${MDLIB_SOURCES} PARENT_SCOPE)
+set(MDLIB_SOURCES
+    ${MDLIB_SOURCES}
+    PARENT_SCOPE)
 if(GMX_GPU_CUDA)
     gmx_add_libgromacs_sources(
-       gpuforcereduction_impl.cpp
-       gpuforcereduction_impl_internal.cu
-       leapfrog_gpu.cpp
-       leapfrog_gpu_internal.cu
-       lincs_gpu.cpp
-       lincs_gpu_internal.cu
-       settle_gpu.cpp
-       settle_gpu_internal.cu
-       update_constrain_gpu_impl.cpp
-       update_constrain_gpu_internal.cu
-       )
-    _gmx_add_files_to_property(CUDA_SOURCES
-       gpuforcereduction_impl.cpp
-       leapfrog_gpu.cpp
-       lincs_gpu.cpp
-       settle_gpu.cpp
-       update_constrain_gpu_impl.cpp
-       )
+        gpuforcereduction_impl.cpp
+        gpuforcereduction_impl_internal.cu
+        leapfrog_gpu.cpp
+        leapfrog_gpu_internal.cu
+        lincs_gpu.cpp
+        lincs_gpu_internal.cu
+        settle_gpu.cpp
+        settle_gpu_internal.cu
+        update_constrain_gpu_impl.cpp
+        update_constrain_gpu_internal.cu)
+    _gmx_add_files_to_property(
+        CUDA_SOURCES gpuforcereduction_impl.cpp leapfrog_gpu.cpp lincs_gpu.cpp
+        settle_gpu.cpp update_constrain_gpu_impl.cpp)
 endif()
 
 if(GMX_GPU_SYCL)
@@ -83,10 +82,10 @@ if(GMX_GPU_SYCL)
         settle_gpu.cpp
         settle_gpu_internal_sycl.cpp
         update_constrain_gpu_impl.cpp
-        update_constrain_gpu_internal_sycl.cpp
-    )
+        update_constrain_gpu_internal_sycl.cpp)
 
-    _gmx_add_files_to_property(SYCL_SOURCES
+    _gmx_add_files_to_property(
+        SYCL_SOURCES
         gpuforcereduction_impl.cpp
         gpuforcereduction_impl_internal_sycl.cpp
         leapfrog_gpu.cpp
@@ -96,26 +95,24 @@ if(GMX_GPU_SYCL)
         settle_gpu.cpp
         settle_gpu_internal_sycl.cpp
         update_constrain_gpu_impl.cpp
-        update_constrain_gpu_internal_sycl.cpp
-    )
+        update_constrain_gpu_internal_sycl.cpp)
 endif()
 
 # Source files have the following private module dependencies.
-target_link_libraries(mdlib PRIVATE
-#                      gmxlib
-#                      math
-#                      mdtypes
-#                      tng_io
-                      )
+target_link_libraries(
+    mdlib
+    PRIVATE #                      gmxlib
+            #                      math
+            #                      mdtypes
+            #                      tng_io
+)
 
 # Public interface for modules, including dependencies and interfaces
 #target_include_directories(mdlib PUBLIC
-target_include_directories(mdlib INTERFACE
-                           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_include_directories(
+    mdlib INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 #target_link_libraries(mdlib PUBLIC
-target_link_libraries(mdlib INTERFACE
-                      legacy_api
-                      )
+target_link_libraries(mdlib INTERFACE legacy_api)
 
 # TODO: when mdlib is an OBJECT target
 #target_link_libraries(mdlib PUBLIC legacy_api)
@@ -124,14 +121,12 @@ target_link_libraries(mdlib INTERFACE
 # Module dependencies
 # mdlib interfaces convey transitive dependence on these modules.
 #target_link_libraries(mdlib PUBLIC
-target_link_libraries(mdlib INTERFACE
-                      utility
-                      )
+target_link_libraries(mdlib INTERFACE utility)
 # Source files have the following private module dependencies.
 #target_link_libraries(mdlib PRIVATE tng_io)
 # TODO: Explicitly link specific modules.
 #target_link_libraries(mdlib PRIVATE legacy_modules)
 
-if (BUILD_TESTING)
+if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()

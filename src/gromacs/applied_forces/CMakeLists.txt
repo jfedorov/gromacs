@@ -36,21 +36,21 @@
 add_library(applied_forces INTERFACE)
 
 # Source files have the following private module dependencies.
-target_link_libraries(applied_forces PRIVATE
-                      #                      gmxlib
-                      #                      math
-                      #                      mdtypes
-                      #                      tng_io
-                      )
+target_link_libraries(
+    applied_forces
+    PRIVATE #                      gmxlib
+            #                      math
+            #                      mdtypes
+            #                      tng_io
+)
 
 # Public interface for modules, including dependencies and interfaces
 #target_include_directories(applied_forces PUBLIC
-target_include_directories(applied_forces INTERFACE
-                           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_include_directories(
+    applied_forces
+    INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 #target_link_libraries(applied_forces PUBLIC
-target_link_libraries(applied_forces INTERFACE
-                      legacy_api
-                      )
+target_link_libraries(applied_forces INTERFACE legacy_api)
 
 # TODO: when fileio is an OBJECT target
 #target_link_libraries(applied_forces PUBLIC legacy_api)
@@ -59,22 +59,19 @@ target_link_libraries(applied_forces INTERFACE
 # Module dependencies
 # This module convey transitive dependence on these modules.
 #target_link_libraries(applied_forces PUBLIC
-target_link_libraries(applied_forces INTERFACE
-                      #                      utility
-                      )
+target_link_libraries(applied_forces INTERFACE #                      utility
+)
 # Source files have the following private module dependencies.
 #target_link_libraries(applied_forces PRIVATE tng_io)
 # TODO: Explicitly link specific modules.
 #target_link_libraries(applied_forces PRIVATE legacy_modules)
 
-gmx_add_libgromacs_sources(
-    electricfield.cpp
-    )
+gmx_add_libgromacs_sources(electricfield.cpp)
 
 add_subdirectory(awh)
 add_subdirectory(densityfitting)
 add_subdirectory(qmmm)
 
-if (BUILD_TESTING)
+if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()

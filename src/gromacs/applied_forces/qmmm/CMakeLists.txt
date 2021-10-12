@@ -32,25 +32,17 @@
 # To help us fund GROMACS development, we humbly ask that you cite
 # the research papers on the package. Check out http://www.gromacs.org.
 
-gmx_add_libgromacs_sources(
-    qmmminputgenerator.cpp
-    qmmmtopologypreprocessor.cpp
-    qmmmoptions.cpp
-    qmmm.cpp
-    )
+gmx_add_libgromacs_sources(qmmminputgenerator.cpp qmmmtopologypreprocessor.cpp
+                           qmmmoptions.cpp qmmm.cpp)
 
 # If we have libcp2k linked then compile qmmmforceprovider.cpp
 # In other case compile stub implementation qmmmforceprovider_stub.cpp
-if (GMX_CP2K)
-gmx_add_libgromacs_sources(
-    qmmmforceprovider.cpp
-    )
+if(GMX_CP2K)
+    gmx_add_libgromacs_sources(qmmmforceprovider.cpp)
 else()
-gmx_add_libgromacs_sources(
-    qmmmforceprovider_stub.cpp
-    )
+    gmx_add_libgromacs_sources(qmmmforceprovider_stub.cpp)
 endif()
 
-if (BUILD_TESTING)
+if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()

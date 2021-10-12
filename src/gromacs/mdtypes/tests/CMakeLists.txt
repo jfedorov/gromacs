@@ -32,10 +32,11 @@
 # To help us fund GROMACS development, we humbly ask that you cite
 # the research papers on the package. Check out http://www.gromacs.org.
 
-gmx_add_unit_test(MdtypesUnitTest mdtypes-test
+gmx_add_unit_test(
+    MdtypesUnitTest
+    mdtypes-test
     CPP_SOURCE_FILES
-        observablesreducer.cpp
-        checkpointdata.cpp
-        forcebuffers.cpp
-        multipletimestepping.cpp
-        )
+    observablesreducer.cpp
+    checkpointdata.cpp
+    forcebuffers.cpp
+    multipletimestepping.cpp)

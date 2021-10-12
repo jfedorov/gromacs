@@ -38,7 +38,9 @@ add_library(nbnxm INTERFACE)
 add_subdirectory(kernels_simd_4xm)
 add_subdirectory(kernels_simd_2xmm)
 
-file(GLOB NBNXM_SOURCES
+file(
+    GLOB
+    NBNXM_SOURCES
     # Source files
     atomdata.cpp
     freeenergydispatch.cpp
@@ -62,45 +64,43 @@ file(GLOB NBNXM_SOURCES
     # Benchmark source files
     # TODO these should not be in libgromacs
     benchmark/bench_setup.cpp
-    benchmark/bench_system.cpp
-    )
+    benchmark/bench_system.cpp)
 
 if(GMX_GPU_CUDA)
     add_subdirectory(cuda)
     gmx_add_libgromacs_sources(nbnxm_gpu_data_mgmt.cpp nbnxm_gpu_buffer_ops.cpp)
-    _gmx_add_files_to_property(CUDA_SOURCES
-        nbnxm_gpu_data_mgmt.cpp
-        nbnxm_gpu_buffer_ops.cpp
-        )
+    _gmx_add_files_to_property(CUDA_SOURCES nbnxm_gpu_data_mgmt.cpp
+                               nbnxm_gpu_buffer_ops.cpp)
 endif()
 
 if(GMX_GPU_OPENCL)
     add_subdirectory(opencl)
-    set(NBNXM_OPENCL_KERNELS ${NBNXM_OPENCL_KERNELS} PARENT_SCOPE)
+    set(NBNXM_OPENCL_KERNELS
+        ${NBNXM_OPENCL_KERNELS}
+        PARENT_SCOPE)
     gmx_add_libgromacs_sources(nbnxm_gpu_data_mgmt.cpp nbnxm_gpu_buffer_ops.cpp)
 endif()
 
 if(GMX_GPU_SYCL)
     add_subdirectory(sycl)
     gmx_add_libgromacs_sources(nbnxm_gpu_data_mgmt.cpp nbnxm_gpu_buffer_ops.cpp)
-    _gmx_add_files_to_property(SYCL_SOURCES nbnxm_gpu_data_mgmt.cpp nbnxm_gpu_buffer_ops.cpp nbnxm.cpp)
+    _gmx_add_files_to_property(SYCL_SOURCES nbnxm_gpu_data_mgmt.cpp
+                               nbnxm_gpu_buffer_ops.cpp nbnxm.cpp)
 endif()
 
-set(LIBGROMACS_SOURCES ${LIBGROMACS_SOURCES} ${NBNXM_SOURCES} PARENT_SCOPE)
-
+set(LIBGROMACS_SOURCES
+    ${LIBGROMACS_SOURCES} ${NBNXM_SOURCES}
+    PARENT_SCOPE)
 
 # Source files have the following private module dependencies.
-target_link_libraries(nbnxm PRIVATE
-        )
+target_link_libraries(nbnxm PRIVATE)
 
 # Public interface for modules, including dependencies and interfaces
 #target_include_directories(nbnxm PUBLIC
-target_include_directories(nbnxm INTERFACE
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_include_directories(
+    nbnxm INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 #target_link_libraries(nbnxm PUBLIC
-target_link_libraries(nbnxm INTERFACE
-        legacy_api
-        )
+target_link_libraries(nbnxm INTERFACE legacy_api)
 
 # TODO: when nbnxm is an OBJECT target
 #target_link_libraries(nbnxm PUBLIC legacy_api)
@@ -109,10 +109,8 @@ target_link_libraries(nbnxm INTERFACE
 # Module dependencies
 # nbnxm interfaces convey transitive dependence on these modules.
 #target_link_libraries(nbnxm PUBLIC
-target_link_libraries(nbnxm INTERFACE
-        utility
-        )
+target_link_libraries(nbnxm INTERFACE utility)
 
-if (BUILD_TESTING)
+if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()

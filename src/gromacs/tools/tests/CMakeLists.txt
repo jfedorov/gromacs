@@ -32,12 +32,12 @@
 # To help us fund GROMACS development, we humbly ask that you cite
 # the research papers on the package. Check out http://www.gromacs.org.
 
-gmx_add_gtest_executable(tool-test
+gmx_add_gtest_executable(
+    tool-test
     CPP_SOURCE_FILES
-        dump.cpp
-        helpwriting.cpp
-        report_methods.cpp
-        trjconv.cpp
-        convert-tpr.cpp
-        )
+    dump.cpp
+    helpwriting.cpp
+    report_methods.cpp
+    trjconv.cpp
+    convert-tpr.cpp)
 gmx_register_gtest_test(ToolUnitTests tool-test SLOW_TEST)

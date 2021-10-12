@@ -1,7 +1,7 @@
 #
 # This file is part of the GROMACS molecular simulation package.
 #
-# Copyright (c) 2018,2019,2020, by the GROMACS development team, led by
+# Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
 # Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
 # and including many others, as listed in the AUTHORS file in the
 # top-level source directory and at http://www.gromacs.org.
@@ -49,25 +49,23 @@ gmx_add_libgromacs_sources(
     simulationinput.cpp
     simulationinputhandle.cpp
     simulatorbuilder.cpp
-    tpi.cpp
-    )
+    tpi.cpp)
 
 # Source files have the following private module dependencies.
-target_link_libraries(mdrun PRIVATE
-#                      gmxlib
-#                      math
-#                      mdtypes
-#                      tng_io
-                      )
+target_link_libraries(
+    mdrun
+    PRIVATE #                      gmxlib
+            #                      math
+            #                      mdtypes
+            #                      tng_io
+)
 
 # Public interface for modules, including dependencies and interfaces
 #target_include_directories(mdrun PUBLIC
-target_include_directories(mdrun INTERFACE
-                           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_include_directories(
+    mdrun INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 #target_link_libraries(mdrun PUBLIC
-target_link_libraries(mdrun INTERFACE
-                      legacy_api
-                      )
+target_link_libraries(mdrun INTERFACE legacy_api)
 
 # TODO: when mdrun is an OBJECT target
 #target_link_libraries(mdrun PUBLIC legacy_api)
@@ -76,9 +74,7 @@ target_link_libraries(mdrun INTERFACE
 # Module dependencies
 # mdrun interfaces convey transitive dependence on these modules.
 #target_link_libraries(mdrun PUBLIC
-target_link_libraries(mdrun INTERFACE
-                      utility
-                      )
+target_link_libraries(mdrun INTERFACE utility)
 # Source files have the following private module dependencies.
 #target_link_libraries(mdrun PRIVATE tng_io)
 # TODO: Explicitly link specific modules.
@@ -92,10 +88,9 @@ target_link_libraries(mdrun INTERFACE
 # between the libraries. It can be moved to a separate interface-only target,
 # but that is beyond the scope of issue #3379, which introduces the header.
 # Ref #3152 and #3652
-install(FILES simulationinputhandle.h
-        DESTINATION include/gromacs/mdrun)
+install(FILES simulationinputhandle.h DESTINATION include/gromacs/mdrun)
 
-if (BUILD_TESTING)
-# TODO import this from src/programs/mdrun/tests
-#    add_subdirectory(tests)
+if(BUILD_TESTING)
+    # TODO import this from src/programs/mdrun/tests
+    #    add_subdirectory(tests)
 endif()

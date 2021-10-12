@@ -33,7 +33,7 @@
 # the research papers on the package. Check out http://www.gromacs.org.
 
 set(TESTUTILS_DIR ${PROJECT_SOURCE_DIR}/src/testutils)
-if (BUILD_TESTING)
+if(BUILD_TESTING)
     if(NOT GMX_DEVELOPER_BUILD)
         set(UNITTEST_TARGET_OPTIONS EXCLUDE_FROM_ALL)
     endif()
@@ -53,13 +53,16 @@ else()
     set(_GMXAPI_DEFAULT ${BUILD_SHARED_LIBS})
 endif()
 option(GMXAPI "Install GROMACS API." ${_GMXAPI_DEFAULT})
-if (GMXAPI)
+if(GMXAPI)
     if(NOT ${BUILD_SHARED_LIBS})
         # Note: this conditional should check for the existence of a libgromacs target supporting PIC
         # using the POSITION_INDEPENDENT_CODE property, but for now the only facility we have is the global
         # variable, BUILD_SHARED_LIBS.
         # TODO: gmxapi should gracefully build for dynamic linking or static linking for PIC or without.
-        message(FATAL_ERROR "GMXAPI requires position-independent code. Set -DGMXAPI=OFF or -DBUILD_SHARED_LIBS=ON.")
+        message(
+            FATAL_ERROR
+                "GMXAPI requires position-independent code. Set -DGMXAPI=OFF or -DBUILD_SHARED_LIBS=ON."
+        )
     endif()
     add_subdirectory(gmxapi)
 endif()
@@ -73,9 +76,12 @@ else()
     set(_NBLIB_DEFAULT ${BUILD_SHARED_LIBS})
 endif()
 option(GMX_INSTALL_NBLIB_API "Install nblib headers" ${_NBLIB_DEFAULT})
-if (GMX_INSTALL_NBLIB_API)
+if(GMX_INSTALL_NBLIB_API)
     if(NOT ${BUILD_SHARED_LIBS})
-        message(FATAL_ERROR "NBLIB requires position-independent code. Set -DGMX_INSTALL_NBLIB_API=OFF or -DBUILD_SHARED_LIBS=ON.")
+        message(
+            FATAL_ERROR
+                "NBLIB requires position-independent code. Set -DGMX_INSTALL_NBLIB_API=OFF or -DBUILD_SHARED_LIBS=ON."
+        )
     else()
         add_subdirectory(nblib)
     endif()

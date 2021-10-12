@@ -15,20 +15,19 @@ set_target_properties(gmxapi_extension PROPERTIES DEBUG_POSTFIX "")
 
 # We expect to be building against an installed GROMACS that we will continue to dynamically link against at runtime.
 set_target_properties(gmxapi_extension PROPERTIES BUILD_WITH_INSTALL_RPATH TRUE)
-set_target_properties(gmxapi_extension PROPERTIES INSTALL_RPATH_USE_LINK_PATH TRUE)
+set_target_properties(gmxapi_extension PROPERTIES INSTALL_RPATH_USE_LINK_PATH
+                                                  TRUE)
 
 # The Python module requires the new library we wrote as well as the gmxapi that we found in the top-level
 # CMakeLists.txt
-target_link_libraries(gmxapi_extension PRIVATE
-                      Gromacs::gmxapi
-                      gmxapi_extension_ensemblepotential
-                      gmxapi_extension_test
-                      )
+target_link_libraries(
+    gmxapi_extension PRIVATE Gromacs::gmxapi gmxapi_extension_ensemblepotential
+                             gmxapi_extension_test)
 
-if (GMXAPI_EXTENSION_MASTER_PROJECT)
-    install(TARGETS gmxapi_extension
-            LIBRARY DESTINATION ${GMXPLUGIN_INSTALL_PATH}
-            ARCHIVE DESTINATION ${GMXPLUGIN_INSTALL_PATH}
-            RUNTIME DESTINATION ${GMXPLUGIN_INSTALL_PATH}
-            )
-endif ()
+if(GMXAPI_EXTENSION_MASTER_PROJECT)
+    install(
+        TARGETS gmxapi_extension
+        LIBRARY DESTINATION ${GMXPLUGIN_INSTALL_PATH}
+        ARCHIVE DESTINATION ${GMXPLUGIN_INSTALL_PATH}
+        RUNTIME DESTINATION ${GMXPLUGIN_INSTALL_PATH})
+endif()

@@ -33,31 +33,25 @@
 # the research papers on the package. Check out http://www.gromacs.org.
 
 add_library(mdrunutility INTERFACE)
-gmx_add_libgromacs_sources(
-    freeenergy.cpp
-    handlerestart.cpp
-    logging.cpp
-    multisim.cpp
-    printtime.cpp
-    threadaffinity.cpp
-    )
+gmx_add_libgromacs_sources(freeenergy.cpp handlerestart.cpp logging.cpp
+                           multisim.cpp printtime.cpp threadaffinity.cpp)
 
 # Source files have the following private module dependencies.
-target_link_libraries(mdrunutility PRIVATE
-#                      gmxlib
-#                      math
-#                      mdtypes
-#                      tng_io
-                      )
+target_link_libraries(
+    mdrunutility
+    PRIVATE #                      gmxlib
+            #                      math
+            #                      mdtypes
+            #                      tng_io
+)
 
 # Public interface for modules, including dependencies and interfaces
 #target_include_directories(mdrunutility PUBLIC
-target_include_directories(mdrunutility INTERFACE
-                           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_include_directories(
+    mdrunutility
+    INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 #target_link_libraries(mdrunutility PUBLIC
-target_link_libraries(mdrunutility INTERFACE
-                      legacy_api
-                      )
+target_link_libraries(mdrunutility INTERFACE legacy_api)
 
 # TODO: when mdrunutility is an OBJECT target
 #target_link_libraries(mdrunutility PUBLIC legacy_api)
@@ -66,14 +60,12 @@ target_link_libraries(mdrunutility INTERFACE
 # Module dependencies
 # mdrunutility interfaces convey transitive dependence on these modules.
 #target_link_libraries(mdrunutility PUBLIC
-target_link_libraries(mdrunutility INTERFACE
-                      utility
-                      )
+target_link_libraries(mdrunutility INTERFACE utility)
 # Source files have the following private module dependencies.
 #target_link_libraries(mdrunutility PRIVATE tng_io)
 # TODO: Explicitly link specific modules.
 #target_link_libraries(mdrunutility PRIVATE legacy_modules)
 
-if (BUILD_TESTING)
+if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()

@@ -32,18 +32,21 @@
 # To help us fund GROMACS development, we humbly ask that you cite
 # the research papers on the package. Check out http://www.gromacs.org.
 
-gmx_add_unit_test(QMMMAppliedForcesUnitTest qmmm_applied_forces-test
+gmx_add_unit_test(
+    QMMMAppliedForcesUnitTest
+    qmmm_applied_forces-test
     CPP_SOURCE_FILES
-        qmmminputgenerator.cpp
-        qmmmtopologypreprocessor.cpp
-        qmmmoptions.cpp
-        qmmmforceprovider.cpp
-        qmmm.cpp
-        )
+    qmmminputgenerator.cpp
+    qmmmtopologypreprocessor.cpp
+    qmmmoptions.cpp
+    qmmmforceprovider.cpp
+    qmmm.cpp)
 
 # For QMMMForceProvider test we need to define wether libcp2k linked
-if (GMX_CP2K)
-    set_source_files_properties(qmmmforceprovider.cpp PROPERTIES COMPILE_DEFINITIONS GMX_CP2K=1)
+if(GMX_CP2K)
+    set_source_files_properties(qmmmforceprovider.cpp
+                                PROPERTIES COMPILE_DEFINITIONS GMX_CP2K=1)
 else()
-    set_source_files_properties(qmmmforceprovider.cpp PROPERTIES COMPILE_DEFINITIONS GMX_CP2K=0)
+    set_source_files_properties(qmmmforceprovider.cpp
+                                PROPERTIES COMPILE_DEFINITIONS GMX_CP2K=0)
 endif()

@@ -35,7 +35,9 @@
 # Set up the module library
 add_library(mdtypes INTERFACE)
 
-file(GLOB MDTYPES_SOURCES
+file(
+    GLOB
+    MDTYPES_SOURCES
     awh_history.cpp
     checkpointdata.cpp
     df_history.cpp
@@ -53,41 +55,34 @@ file(GLOB MDTYPES_SOURCES
     threaded_force_buffer.cpp)
 
 if(GMX_GPU)
-    gmx_add_libgromacs_sources(
-       state_propagator_data_gpu_impl_gpu.cpp
-       )
-   if(GMX_GPU_CUDA)
-       _gmx_add_files_to_property(CUDA_SOURCES
-           state_propagator_data_gpu_impl_gpu.cpp
-           )
-   endif()
-   if(GMX_GPU_SYCL)
-       _gmx_add_files_to_property(SYCL_SOURCES
-           state_propagator_data_gpu_impl_gpu.cpp
-           )
-   endif()
+    gmx_add_libgromacs_sources(state_propagator_data_gpu_impl_gpu.cpp)
+    if(GMX_GPU_CUDA)
+        _gmx_add_files_to_property(CUDA_SOURCES
+                                   state_propagator_data_gpu_impl_gpu.cpp)
+    endif()
+    if(GMX_GPU_SYCL)
+        _gmx_add_files_to_property(SYCL_SOURCES
+                                   state_propagator_data_gpu_impl_gpu.cpp)
+    endif()
 else()
-    gmx_add_libgromacs_sources(
-      state_propagator_data_gpu_impl.cpp
-      )
+    gmx_add_libgromacs_sources(state_propagator_data_gpu_impl.cpp)
 endif()
 
 # Source files have the following private module dependencies.
-target_link_libraries(mdtypes PRIVATE
-                      #                      gmxlib
-                      #                      math
-                      #                      mdtypes
-                      #                      tng_io
-                      )
+target_link_libraries(
+    mdtypes
+    PRIVATE #                      gmxlib
+            #                      math
+            #                      mdtypes
+            #                      tng_io
+)
 
 # Public interface for modules, including dependencies and interfaces
 #target_include_directories(mdtypes PUBLIC
-target_include_directories(mdtypes INTERFACE
-                           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_include_directories(
+    mdtypes INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 #target_link_libraries(mdtypes PUBLIC
-target_link_libraries(mdtypes INTERFACE
-                      legacy_api
-                      )
+target_link_libraries(mdtypes INTERFACE legacy_api)
 
 # TODO: when fileio is an OBJECT target
 #target_link_libraries(mdtypes PUBLIC legacy_api)
@@ -96,23 +91,20 @@ target_link_libraries(mdtypes INTERFACE
 # Module dependencies
 # fileio interfaces convey transitive dependence on these modules.
 #target_link_libraries(mdtypes PUBLIC
-target_link_libraries(mdtypes INTERFACE
-                      utility
-                      )
+target_link_libraries(mdtypes INTERFACE utility)
 # Source files have the following private module dependencies.
 #target_link_libraries(mdtypes PRIVATE tng_io)
 # TODO: Explicitly link specific modules.
 #target_link_libraries(mdtypes PRIVATE legacy_modules)
 
-if (BUILD_TESTING)
+if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
 
-set(LIBGROMACS_SOURCES ${LIBGROMACS_SOURCES} ${MDTYPES_SOURCES} PARENT_SCOPE)
+set(LIBGROMACS_SOURCES
+    ${LIBGROMACS_SOURCES} ${MDTYPES_SOURCES}
+    PARENT_SCOPE)
 
 if(GMX_INSTALL_LEGACY_API)
-  install(FILES
-          inputrec.h
-          md_enums.h
-          DESTINATION include/gromacs/mdtypes)
+    install(FILES inputrec.h md_enums.h DESTINATION include/gromacs/mdtypes)
 endif()

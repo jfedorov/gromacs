@@ -40,11 +40,11 @@
 
 # Make a static library for test infrastructure code that we re-use
 # in multiple test executables across the repository.
-gmx_add_unit_test_library(nblib_test_infrastructure
-        testsystems.cpp
-    )
-target_include_directories(nblib_test_infrastructure PRIVATE ${PROJECT_SOURCE_DIR}/api)
-target_include_directories(nblib_test_infrastructure SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/src/external)
+gmx_add_unit_test_library(nblib_test_infrastructure testsystems.cpp)
+target_include_directories(nblib_test_infrastructure
+                           PRIVATE ${PROJECT_SOURCE_DIR}/api)
+target_include_directories(nblib_test_infrastructure SYSTEM
+                           PRIVATE ${PROJECT_SOURCE_DIR}/src/external)
 target_link_libraries(nblib_test_infrastructure PUBLIC legacy_api)
 
 set(testname "NbLibSetupTests")
@@ -54,16 +54,15 @@ gmx_add_gtest_executable(
     ${exename}
     CPP_SOURCE_FILES
     # files with code for tests
-        box.cpp
-        interactions.cpp
-        particletype.cpp
-        pbcholder.cpp
-        molecules.cpp
-        nbnxmsetup.cpp
-        topology.cpp
-        tpr.cpp
-        virials.cpp
-    )
+    box.cpp
+    interactions.cpp
+    particletype.cpp
+    pbcholder.cpp
+    molecules.cpp
+    nbnxmsetup.cpp
+    topology.cpp
+    tpr.cpp
+    virials.cpp)
 target_link_libraries(${exename} PRIVATE mdrun_test_infrastructure)
 target_link_libraries(${exename} PRIVATE nblib_test_infrastructure nblib)
 target_include_directories(${exename} PRIVATE ${PROJECT_SOURCE_DIR}/api)
@@ -74,13 +73,9 @@ set(testname "NbLibIntegrationTests")
 set(exename "nblib-integration-test")
 
 gmx_add_gtest_executable(
-    ${exename}
-    CPP_SOURCE_FILES
+    ${exename} CPP_SOURCE_FILES
     # files with code for tests
-        gmxcalculator.cpp
-        nbkernelsystem.cpp
-        simstate.cpp
-    )
+    gmxcalculator.cpp nbkernelsystem.cpp simstate.cpp)
 target_link_libraries(${exename} PRIVATE nblib_test_infrastructure nblib)
 target_include_directories(${exename} PRIVATE ${PROJECT_SOURCE_DIR}/api)
 gmx_register_gtest_test(${testname} ${exename} INTEGRATION_TEST)
@@ -90,13 +85,8 @@ add_dependencies(nblib-tests ${exename})
 set(testname "NbLibIntegratorTests")
 set(exename "nblib-integrator-test")
 
-gmx_add_gtest_executable(
-        ${exename}
-        CPP_SOURCE_FILES
-        integrator.cpp
-)
+gmx_add_gtest_executable(${exename} CPP_SOURCE_FILES integrator.cpp)
 target_link_libraries(${exename} PRIVATE nblib_test_infrastructure nblib)
 target_include_directories(${exename} PRIVATE ${PROJECT_SOURCE_DIR}/api)
 gmx_register_gtest_test(${testname} ${exename} INTEGRATION_TEST)
 add_dependencies(nblib-tests ${exename})
-

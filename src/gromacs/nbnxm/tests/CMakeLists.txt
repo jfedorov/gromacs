@@ -32,7 +32,4 @@
 # To help us fund GROMACS development, we humbly ask that you cite
 # the research papers on the package. Check out http://www.gromacs.org.
 
-gmx_add_unit_test(NbnxmTests nbnxm-test
-    CPP_SOURCE_FILES
-        kernelsetup.cpp
-        )
+gmx_add_unit_test(NbnxmTests nbnxm-test CPP_SOURCE_FILES kernelsetup.cpp)

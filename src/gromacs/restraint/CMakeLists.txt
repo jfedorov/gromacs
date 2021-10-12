@@ -1,7 +1,7 @@
 #
 # This file is part of the GROMACS molecular simulation package.
 #
-# Copyright (c) 2017,2018,2019,2020, by the GROMACS development team, led by
+# Copyright (c) 2017,2018,2019,2020,2021, by the GROMACS development team, led by
 # Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
 # and including many others, as listed in the AUTHORS file in the
 # top-level source directory and at http://www.gromacs.org.
@@ -35,7 +35,9 @@
 # Set up the module library
 add_library(restraint INTERFACE)
 file(GLOB RESTRAINT_SOURCES *.cpp)
-set(LIBGROMACS_SOURCES ${LIBGROMACS_SOURCES} ${RESTRAINT_SOURCES} PARENT_SCOPE)
+set(LIBGROMACS_SOURCES
+    ${LIBGROMACS_SOURCES} ${RESTRAINT_SOURCES}
+    PARENT_SCOPE)
 
 # Source files have the following dependencies on library infrastructure.
 #target_link_libraries(restraint PRIVATE
@@ -45,12 +47,10 @@ set(LIBGROMACS_SOURCES ${LIBGROMACS_SOURCES} ${RESTRAINT_SOURCES} PARENT_SCOPE)
 
 # Public interface for modules, including dependencies and interfaces
 #target_include_directories(restraint PUBLIC
-target_include_directories(restraint INTERFACE
-                           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_include_directories(
+    restraint INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 #target_link_libraries(restraint PUBLIC
-target_link_libraries(restraint INTERFACE
-                      legacy_api
-                      )
+target_link_libraries(restraint INTERFACE legacy_api)
 
 # TODO: when restraint is an OBJECT target
 #target_link_libraries(restraint PUBLIC legacy_api)
@@ -59,14 +59,12 @@ target_link_libraries(restraint INTERFACE
 # Module dependencies
 # restraint interfaces convey transitive dependence on these modules.
 #target_link_libraries(restraint PUBLIC
-target_link_libraries(restraint INTERFACE
-                      utility
-                      )
+target_link_libraries(restraint INTERFACE utility)
 # Source files have the following private module dependencies.
 #target_link_libraries(restraint PRIVATE NOTHING)
 # TODO: Explicitly link specific modules.
 #target_link_libraries(restraint PRIVATE legacy_modules)
 
-if (BUILD_TESTING)
+if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()

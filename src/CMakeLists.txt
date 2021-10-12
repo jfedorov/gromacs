@@ -42,43 +42,56 @@ get_compiler_info(C BUILD_C_COMPILER)
 get_compiler_info(CXX BUILD_CXX_COMPILER)
 if(GMX_GPU_CUDA)
     if(NOT GMX_CLANG_CUDA)
-        GMX_SET_CUDA_NVCC_FLAGS()
+        gmx_set_cuda_nvcc_flags()
     endif()
 
-    get_cuda_compiler_info(CUDA_COMPILER_INFO CUDA_DEVICE_COMPILER_FLAGS CUDA_HOST_COMPILER_FLAGS)
+    get_cuda_compiler_info(CUDA_COMPILER_INFO CUDA_DEVICE_COMPILER_FLAGS
+                           CUDA_HOST_COMPILER_FLAGS)
 endif()
 
 # Make a file with compiler flags used for libgromacs for each
 # langauge and build configuration.  The one that corresponds to
 # CMAKE_BUILD_TYPE is #included into buildinfo.h and populates the
 # fields e.g. printed to the log file.
-file(GENERATE
-    OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/include/compilerflaginfo-$<CONFIG>-$<COMPILE_LANGUAGE>.h
+file(
+    GENERATE
+    OUTPUT
+        ${CMAKE_CURRENT_BINARY_DIR}/include/compilerflaginfo-$<CONFIG>-$<COMPILE_LANGUAGE>.h
     INPUT ${CMAKE_CURRENT_SOURCE_DIR}/compilerflaginfo.h.cmakein
-    CONDITION $<CONFIG:${CMAKE_BUILD_TYPE}>
-    )
+    CONDITION $<CONFIG:${CMAKE_BUILD_TYPE}>)
 
 ####
 
 option(GMX_CLANG_TIDY "Use clang-tidy" OFF)
-if (GMX_CLANG_TIDY)
-   if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
-   elseif("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithAssert")
-   elseif("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
-   elseif("${CMAKE_BUILD_TYPE}" STREQUAL "ASAN")
-   else()
-       message(FATAL_ERROR "Can only use clang-tidy with build type containing asserts: Debug, RelWithAssert, RelWithDebInfo, ASAN.")
-   endif()
-   set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-   mark_as_advanced(CMAKE_EXPORT_COMPILE_COMMANDS)
-   set(CLANG_TIDY "clang-tidy" CACHE STRING "Name of clang-tidy executable")
-   find_program(CLANG_TIDY_EXE NAMES "${CLANG_TIDY}"
-       DOC "Path to clang-tidy executable")
-   if(NOT CLANG_TIDY_EXE)
-       message(FATAL_ERROR "clang-tidy not found.")
-   endif()
-   mark_as_advanced(CLANG_TIDY)
-   mark_as_advanced(CLANG_TIDY_EXE)
+if(GMX_CLANG_TIDY)
+    if("${CMAKE_BUILD_TYPE}" STREQUAL "Debug")
+
+    elseif("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithAssert")
+
+    elseif("${CMAKE_BUILD_TYPE}" STREQUAL "RelWithDebInfo")
+
+    elseif("${CMAKE_BUILD_TYPE}" STREQUAL "ASAN")
+
+    else()
+        message(
+            FATAL_ERROR
+                "Can only use clang-tidy with build type containing asserts: Debug, RelWithAssert, RelWithDebInfo, ASAN."
+        )
+    endif()
+    set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+    mark_as_advanced(CMAKE_EXPORT_COMPILE_COMMANDS)
+    set(CLANG_TIDY
+        "clang-tidy"
+        CACHE STRING "Name of clang-tidy executable")
+    find_program(
+        CLANG_TIDY_EXE
+        NAMES "${CLANG_TIDY}"
+        DOC "Path to clang-tidy executable")
+    if(NOT CLANG_TIDY_EXE)
+        message(FATAL_ERROR "clang-tidy not found.")
+    endif()
+    mark_as_advanced(CLANG_TIDY)
+    mark_as_advanced(CLANG_TIDY_EXE)
 endif()
 
 # Create a basic target for the `src` section of the build tree to capture
@@ -90,13 +103,12 @@ endif()
 # provided as transitive usage requirements.
 # It could expand to aggregate the module targets in the future.
 add_library(common INTERFACE)
-target_include_directories(common INTERFACE
-                           ${CMAKE_CURRENT_SOURCE_DIR}/include
-                           ${CMAKE_CURRENT_BINARY_DIR}/include)
+target_include_directories(common INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include
+                                            ${CMAKE_CURRENT_BINARY_DIR}/include)
 
 add_subdirectory(external)
 
-if (BUILD_TESTING)
+if(BUILD_TESTING)
     if(NOT GMX_DEVELOPER_BUILD)
         set(UNITTEST_TARGET_OPTIONS EXCLUDE_FROM_ALL)
     endif()
@@ -121,6 +133,8 @@ string(TOUPPER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_UPPER)
 configure_file(config.h.cmakein include/config.h)
 configure_file(gmxpre-config.h.cmakein include/gmxpre-config.h)
 
-set(CMAKE_BUILD_CONFIGURATION_C_FLAGS   ${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UPPER}})
-set(CMAKE_BUILD_CONFIGURATION_CXX_FLAGS ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UPPER}})
+set(CMAKE_BUILD_CONFIGURATION_C_FLAGS
+    ${CMAKE_C_FLAGS_${CMAKE_BUILD_TYPE_UPPER}})
+set(CMAKE_BUILD_CONFIGURATION_CXX_FLAGS
+    ${CMAKE_CXX_FLAGS_${CMAKE_BUILD_TYPE_UPPER}})
 configure_file(buildinfo.h.cmakein include/buildinfo.h ESCAPE_QUOTES)

@@ -2,7 +2,7 @@
 # This file is part of the GROMACS molecular simulation package.
 #
 # Copyright (c) 2010,2012,2013,2014,2015 by the GROMACS development team.
-# Copyright (c) 2018,2019,2020, by the GROMACS development team, led by
+# Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
 # Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
 # and including many others, as listed in the AUTHORS file in the
 # top-level source directory and at http://www.gromacs.org.
@@ -49,22 +49,28 @@ target_compile_definitions(scanner PRIVATE HAVE_CONFIG_H)
 # are awkward to suppress inline, so we do it in the compilation
 # command (after testing that the compiler supports the
 # suppressions).
-if (WIN32)
+if(WIN32)
     gmx_target_warning_suppression(scanner /wd4101 HAS_NO_MSVC_UNUSED)
     gmx_target_warning_suppression(scanner /wd4244 HAS_NO_MSVC_LOSSY_CONVERSION)
-    gmx_target_warning_suppression(scanner /wd4267 HAS_NO_MSVC_LOSSY_CONVERSION_SIZE_T_TO_INT)
+    gmx_target_warning_suppression(scanner /wd4267
+                                   HAS_NO_MSVC_LOSSY_CONVERSION_SIZE_T_TO_INT)
 else()
     gmx_target_warning_suppression(scanner -Wno-unused HAS_NO_UNUSED)
-    gmx_target_warning_suppression(scanner -Wno-unused-parameter HAS_NO_UNUSED_PARAMETER)
-    gmx_target_warning_suppression(scanner -Wno-missing-declarations HAS_NO_MISSING_DECLARATIONS)
-    gmx_target_warning_suppression(scanner -Wno-null-conversion HAS_NO_NULL_CONVERSIONS)
+    gmx_target_warning_suppression(scanner -Wno-unused-parameter
+                                   HAS_NO_UNUSED_PARAMETER)
+    gmx_target_warning_suppression(scanner -Wno-missing-declarations
+                                   HAS_NO_MISSING_DECLARATIONS)
+    gmx_target_warning_suppression(scanner -Wno-null-conversion
+                                   HAS_NO_NULL_CONVERSIONS)
 endif()
 target_link_libraries(scanner PRIVATE legacy_api)
 # TODO: Use explicit module dependencies.
 target_link_libraries(scanner PRIVATE legacy_modules)
 
 list(APPEND libgromacs_object_library_dependencies scanner)
-set(libgromacs_object_library_dependencies ${libgromacs_object_library_dependencies} PARENT_SCOPE)
+set(libgromacs_object_library_dependencies
+    ${libgromacs_object_library_dependencies}
+    PARENT_SCOPE)
 
 # Source files have the following dependencies on library infrastructure.
 #target_link_libraries(selection PRIVATE
@@ -74,12 +80,10 @@ set(libgromacs_object_library_dependencies ${libgromacs_object_library_dependenc
 
 # Public interface for modules, including dependencies and interfaces
 #target_include_directories(selection PUBLIC
-target_include_directories(selection INTERFACE
-                           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_include_directories(
+    selection INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 #target_link_libraries(selection PUBLIC
-target_link_libraries(selection INTERFACE
-                      legacy_api
-                      )
+target_link_libraries(selection INTERFACE legacy_api)
 
 # TODO: when selection is an OBJECT target
 #target_link_libraries(selection PUBLIC legacy_api)
@@ -88,28 +92,26 @@ target_link_libraries(selection INTERFACE
 # Module dependencies
 # selection interfaces convey transitive dependence on these modules.
 #target_link_libraries(selection PUBLIC
-target_link_libraries(selection INTERFACE
-                      utility
-                      )
+target_link_libraries(selection INTERFACE utility)
 # Source files have the following private module dependencies.
 #target_link_libraries(selection PRIVATE NOTHING)
 # TODO: Explicitly link specific modules.
 #target_link_libraries(selection PRIVATE legacy_modules)
 
 if(GMX_INSTALL_LEGACY_API)
-    install(FILES
-	    indexutil.h
-	    nbsearch.h
-	    position.h
-	    selectioncollection.h
-	    selectionenums.h
-	    selection.h
-	    selectionoptionbehavior.h
-	    selectionoption.h
-	    selectionoptionmanager.h
-            DESTINATION include/gromacs/selection)
+    install(
+        FILES indexutil.h
+              nbsearch.h
+              position.h
+              selectioncollection.h
+              selectionenums.h
+              selection.h
+              selectionoptionbehavior.h
+              selectionoption.h
+              selectionoptionmanager.h
+        DESTINATION include/gromacs/selection)
 endif()
 
-if (BUILD_TESTING)
+if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()

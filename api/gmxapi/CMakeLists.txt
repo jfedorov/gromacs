@@ -55,14 +55,14 @@ set(GMXAPI_PATCH 0)
 set(GMXAPI_RELEASE ${GMXAPI_MAJOR}.${GMXAPI_MINOR}.${GMXAPI_PATCH})
 
 add_library(gmxapi)
-set_target_properties(gmxapi PROPERTIES
-                      VERSION_MAJOR ${GMXAPI_MAJOR}
-                      VERSION_MINOR ${GMXAPI_MINOR}
-                      VERSION_PATCH ${GMXAPI_PATCH}
-                      RELEASE ${GMXAPI_RELEASE})
+set_target_properties(
+    gmxapi
+    PROPERTIES VERSION_MAJOR ${GMXAPI_MAJOR}
+               VERSION_MINOR ${GMXAPI_MINOR}
+               VERSION_PATCH ${GMXAPI_PATCH}
+               RELEASE ${GMXAPI_RELEASE})
 
-
-if (GMX_LIB_MPI)
+if(GMX_LIB_MPI)
     # GROMACS is built against an MPI library.
     set(_gmx_mpi_type "library")
     target_link_libraries(gmxapi PRIVATE MPI::MPI_CXX)
@@ -72,13 +72,15 @@ elseif(GMX_THREAD_MPI)
 else()
     # GROMACS is built without MPI or thread-MPI.
     set(_gmx_mpi_type "none")
-endif ()
-define_property(TARGET PROPERTY MPI
-                BRIEF_DOCS "MPI capability of the GROMACS library."
-                FULL_DOCS "Values of 'library', 'tmpi', or 'none' indicate the configure-time options of the GROMACS
+endif()
+define_property(
+    TARGET
+    PROPERTY MPI
+    BRIEF_DOCS "MPI capability of the GROMACS library."
+    FULL_DOCS
+        "Values of 'library', 'tmpi', or 'none' indicate the configure-time options of the GROMACS
                  library build.")
-set_target_properties(gmxapi PROPERTIES
-                      MPI ${_gmx_mpi_type})
+set_target_properties(gmxapi PROPERTIES MPI ${_gmx_mpi_type})
 unset(_gmx_mpi_type)
 
 ##########################
@@ -87,12 +89,13 @@ unset(_gmx_mpi_type)
 # The include directory should be mostly empty so that we can use it internally as
 # the public interface include directory during build and testing.
 configure_file(include/gmxapiversion.h.in include/gmxapi/version.h)
-configure_file(include/resourceassignment.cmakein.h include/gmxapi/mpi/resourceassignment.h)
-target_include_directories(gmxapi PUBLIC
-                           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-                           $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
-                           $<INSTALL_INTERFACE:include>
-                           )
+configure_file(include/resourceassignment.cmakein.h
+               include/gmxapi/mpi/resourceassignment.h)
+target_include_directories(
+    gmxapi
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+           $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
+           $<INSTALL_INTERFACE:include>)
 
 add_subdirectory(cpp)
 
@@ -104,12 +107,11 @@ add_subdirectory(cpp)
 # Instead, we use a canonical list defined in the parent scope.
 
 # Install public header directories.
-install(DIRECTORY include/gmxapi
-        DESTINATION include)
+install(DIRECTORY include/gmxapi DESTINATION include)
 
 # Install "configured" files from the build tree.
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/include/gmxapi/version.h
         DESTINATION include/gmxapi)
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/include/gmxapi/mpi/resourceassignment.h
-        DESTINATION include/gmxapi/mpi)
-
+install(
+    FILES ${CMAKE_CURRENT_BINARY_DIR}/include/gmxapi/mpi/resourceassignment.h
+    DESTINATION include/gmxapi/mpi)

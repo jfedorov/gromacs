@@ -38,30 +38,27 @@
 # different files and strategies for the different GPU implementation
 # flavours.
 
-gmx_add_unit_test(GpuUtilsUnitTests gpu_utils-test HARDWARE_DETECTION
+gmx_add_unit_test(
+    GpuUtilsUnitTests
+    gpu_utils-test
+    HARDWARE_DETECTION
     CPP_SOURCE_FILES
-        # Tests of code
-        clfftinitializer.cpp
-        device_availability.cpp
-        device_stream_manager.cpp
-        hostallocator.cpp
-        pinnedmemorychecker.cpp
-        
+    # Tests of code
+    clfftinitializer.cpp
+    device_availability.cpp
+    device_stream_manager.cpp
+    hostallocator.cpp
+    pinnedmemorychecker.cpp
     GPU_CPP_SOURCE_FILES
-        device_buffer.cpp
-        gpueventsynchronizer.cpp
-        typecasts.cpp
-
+    device_buffer.cpp
+    gpueventsynchronizer.cpp
+    typecasts.cpp
     CUDA_CU_SOURCE_FILES
-        devicetransfers.cu
-        typecasts_runner.cu
-
+    devicetransfers.cu
+    typecasts_runner.cu
     OPENCL_CPP_SOURCE_FILES
-        devicetransfers_ocl.cpp
-
+    devicetransfers_ocl.cpp
     SYCL_CPP_SOURCE_FILES
-        devicetransfers_sycl.cpp
-
+    devicetransfers_sycl.cpp
     NON_GPU_CPP_SOURCE_FILES
-        devicetransfers.cpp
-    )
+    devicetransfers.cpp)

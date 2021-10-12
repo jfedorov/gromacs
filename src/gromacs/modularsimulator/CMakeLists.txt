@@ -1,7 +1,7 @@
 #
 # This file is part of the GROMACS molecular simulation package.
 #
-# Copyright (c) 2019,2020, by the GROMACS development team, led by
+# Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
 # Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
 # and including many others, as listed in the AUTHORS file in the
 # top-level source directory and at http://www.gromacs.org.
@@ -36,27 +36,37 @@ file(GLOB MODULARSIMULATOR_SOURCES *.cpp)
 
 add_library(modularsimulator OBJECT ${MODULARSIMULATOR_SOURCES})
 
-if (GMX_OPENMP)
+if(GMX_OPENMP)
     # Explicitly set properties for modular simulator module to compile with openmp
-    set_target_properties(modularsimulator PROPERTIES COMPILE_OPTIONS $<TARGET_PROPERTY:OpenMP::OpenMP_CXX,INTERFACE_COMPILE_OPTIONS>)
-endif ()
+    set_target_properties(
+        modularsimulator
+        PROPERTIES
+            COMPILE_OPTIONS
+            $<TARGET_PROPERTY:OpenMP::OpenMP_CXX,INTERFACE_COMPILE_OPTIONS>)
+endif()
 
-if (WIN32)
-    gmx_target_warning_suppression(modularsimulator /wd4244 HAS_NO_MSVC_LOSSY_CONVERSION)
-    gmx_target_warning_suppression(modularsimulator /wd4996 HAS_NO_MSVC_UNSAFE_FUNCTION)
-else ()
+if(WIN32)
+    gmx_target_warning_suppression(modularsimulator /wd4244
+                                   HAS_NO_MSVC_LOSSY_CONVERSION)
+    gmx_target_warning_suppression(modularsimulator /wd4996
+                                   HAS_NO_MSVC_UNSAFE_FUNCTION)
+else()
     # Several std::move uses are redundant in C++14, but clang before
     # 3.9 had a bug that needed them. gcc 9 can warn about their use,
     # which we need to supress. This suppression should be removed
     # when GROMACS requires clang 3.9 or higher.
-    gmx_target_warning_suppression(modularsimulator "-Wno-redundant-move" HAS_NO_REDUNDANT_MOVE)
-endif ()
+    gmx_target_warning_suppression(modularsimulator "-Wno-redundant-move"
+                                   HAS_NO_REDUNDANT_MOVE)
+endif()
 
-target_include_directories(modularsimulator SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/src/external)
+target_include_directories(modularsimulator SYSTEM
+                           PRIVATE ${PROJECT_SOURCE_DIR}/src/external)
 gmx_target_compile_options(modularsimulator)
 target_compile_definitions(modularsimulator PRIVATE HAVE_CONFIG_H)
 # Should be possible to remove this when resolving #3290
-target_include_directories(modularsimulator SYSTEM BEFORE PRIVATE ${PROJECT_SOURCE_DIR}/src/external/thread_mpi/include)
+target_include_directories(
+    modularsimulator SYSTEM BEFORE
+    PRIVATE ${PROJECT_SOURCE_DIR}/src/external/thread_mpi/include)
 
 # Source files have the following private external dependencies.
 target_link_libraries(modularsimulator PRIVATE tng_io)
@@ -67,25 +77,19 @@ target_link_libraries(modularsimulator PRIVATE common)
 # Source files have the following private module dependencies.
 # TODO: Explicitly link specific modules.
 target_link_libraries(modularsimulator PRIVATE legacy_modules)
-target_link_libraries(modularsimulator PRIVATE
-                      gmxlib
-                      math
-                      mdtypes
-                      tng_io
-                      )
+target_link_libraries(modularsimulator PRIVATE gmxlib math mdtypes tng_io)
 
 # Public interface for modules, including dependencies and interfaces
-target_include_directories(modularsimulator PUBLIC
-                           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
-target_link_libraries(modularsimulator PUBLIC
-                      legacy_api
-                      )
+target_include_directories(
+    modularsimulator
+    PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_link_libraries(modularsimulator PUBLIC legacy_api)
 
 # Module dependencies
 # This module convey transitive dependence on these modules.
-target_link_libraries(modularsimulator PUBLIC
-                      utility
-                      )
+target_link_libraries(modularsimulator PUBLIC utility)
 
 list(APPEND libgromacs_object_library_dependencies modularsimulator)
-set(libgromacs_object_library_dependencies ${libgromacs_object_library_dependencies} PARENT_SCOPE)
+set(libgromacs_object_library_dependencies
+    ${libgromacs_object_library_dependencies}
+    PARENT_SCOPE)

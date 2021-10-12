@@ -33,37 +33,38 @@
 # To help us fund GROMACS development, we humbly ask that you cite
 # the research papers on the package. Check out http://www.gromacs.org.
 
-gmx_add_unit_test(UtilityUnitTests utility-test
+gmx_add_unit_test(
+    UtilityUnitTests
+    utility-test
     CPP_SOURCE_FILES
-        alignedallocator.cpp
-        arrayref.cpp
-        bitmask32.cpp bitmask64.cpp bitmask128.cpp
-        cstringutil.cpp
-        defaultinitializationallocator.cpp
-        enumerationhelpers.cpp
-        fixedcapacityvector.cpp
-        inmemoryserializer.cpp
-        keyvaluetreeserializer.cpp
-        keyvaluetreetransform.cpp
-        listoflists.cpp
-        logger.cpp
-        mdmodulesnotifier.cpp
-        message_string_collector.cpp
-        path.cpp
-        physicalnodecommunicator.cpp
-        range.cpp
-        strconvert.cpp
-        stringtoenumvalueconverter.cpp
-        stringutil.cpp
-        template_mp.cpp
-        textreader.cpp
-        textwriter.cpp
-        typetraits.cpp
-        )
+    alignedallocator.cpp
+    arrayref.cpp
+    bitmask32.cpp
+    bitmask64.cpp
+    bitmask128.cpp
+    cstringutil.cpp
+    defaultinitializationallocator.cpp
+    enumerationhelpers.cpp
+    fixedcapacityvector.cpp
+    inmemoryserializer.cpp
+    keyvaluetreeserializer.cpp
+    keyvaluetreetransform.cpp
+    listoflists.cpp
+    logger.cpp
+    mdmodulesnotifier.cpp
+    message_string_collector.cpp
+    path.cpp
+    physicalnodecommunicator.cpp
+    range.cpp
+    strconvert.cpp
+    stringtoenumvalueconverter.cpp
+    stringutil.cpp
+    template_mp.cpp
+    textreader.cpp
+    textwriter.cpp
+    typetraits.cpp)
 # TODO: Explicitly link specific modules.
 target_link_libraries(utility-test PRIVATE legacy_modules)
 
-gmx_add_mpi_unit_test(UtilityMpiUnitTests utility-mpi-test 4
-    CPP_SOURCE_FILES
-        physicalnodecommunicator_mpi.cpp
-        )
+gmx_add_mpi_unit_test(UtilityMpiUnitTests utility-mpi-test 4 CPP_SOURCE_FILES
+                      physicalnodecommunicator_mpi.cpp)

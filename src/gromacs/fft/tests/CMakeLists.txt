@@ -32,14 +32,10 @@
 # To help us fund GROMACS development, we humbly ask that you cite
 # the research papers on the package. Check out http://www.gromacs.org.
 
-gmx_add_unit_test(FFTUnitTests fft-test HARDWARE_DETECTION
-    GPU_CPP_SOURCE_FILES
-        fft.cpp
-    )
+gmx_add_unit_test(FFTUnitTests fft-test HARDWARE_DETECTION GPU_CPP_SOURCE_FILES
+                  fft.cpp)
 
 if(Heffte_FOUND)
-gmx_add_mpi_unit_test(FFTMpiUnitTests fft-mpi-test 4 HARDWARE_DETECTION
-    GPU_CPP_SOURCE_FILES
-        fft_mpi.cpp
-        )
+    gmx_add_mpi_unit_test(FFTMpiUnitTests fft-mpi-test 4 HARDWARE_DETECTION
+                          GPU_CPP_SOURCE_FILES fft_mpi.cpp)
 endif()

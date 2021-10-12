@@ -32,8 +32,10 @@
 # To help us fund GROMACS development, we humbly ask that you cite
 # the research papers on the package. Check out http://www.gromacs.org.
 
-if (GMX_GPU_SYCL)
+if(GMX_GPU_SYCL)
     file(GLOB NBNXM_SYCL_SOURCES *.cpp)
-    set(NBNXM_SOURCES ${NBNXM_SOURCES} ${NBNXM_SYCL_SOURCES} PARENT_SCOPE)
+    set(NBNXM_SOURCES
+        ${NBNXM_SOURCES} ${NBNXM_SYCL_SOURCES}
+        PARENT_SCOPE)
     _gmx_add_files_to_property(SYCL_SOURCES ${NBNXM_SYCL_SOURCES})
 endif()

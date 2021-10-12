@@ -36,18 +36,20 @@
 if(GMX_GPU_CUDA)
     if(NOT GMX_CUDA_NB_SINGLE_COMPILATION_UNIT)
         set(NBNXM_CUDA_KERNEL_SOURCES
-                nbnxm_cuda_kernel_F_noprune.cu
-                nbnxm_cuda_kernel_F_prune.cu
-                nbnxm_cuda_kernel_VF_noprune.cu
-                nbnxm_cuda_kernel_VF_prune.cu
-                nbnxm_cuda_kernel_pruneonly.cu)
+            nbnxm_cuda_kernel_F_noprune.cu nbnxm_cuda_kernel_F_prune.cu
+            nbnxm_cuda_kernel_VF_noprune.cu nbnxm_cuda_kernel_VF_prune.cu
+            nbnxm_cuda_kernel_pruneonly.cu)
     endif()
 
-    file(GLOB NBNXM_CUDA_SOURCES
-         nbnxm_cuda.cu
-         nbnxm_cuda_data_mgmt.cu
-         nbnxm_cuda_jit_support.cu
-         nbnxm_gpu_buffer_ops_internal.cu
-         ${NBNXM_CUDA_KERNEL_SOURCES})
-    set(NBNXM_SOURCES ${NBNXM_SOURCES} ${NBNXM_CUDA_SOURCES} PARENT_SCOPE)
+    file(
+        GLOB
+        NBNXM_CUDA_SOURCES
+        nbnxm_cuda.cu
+        nbnxm_cuda_data_mgmt.cu
+        nbnxm_cuda_jit_support.cu
+        nbnxm_gpu_buffer_ops_internal.cu
+        ${NBNXM_CUDA_KERNEL_SOURCES})
+    set(NBNXM_SOURCES
+        ${NBNXM_SOURCES} ${NBNXM_CUDA_SOURCES}
+        PARENT_SCOPE)
 endif()

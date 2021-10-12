@@ -34,32 +34,33 @@
 
 # This list file provides the Gromacs::gmxapi cmake target.
 
-target_sources(gmxapi PRIVATE
-               resourceassignment.cpp
-               context.cpp
-               exceptions.cpp
-               gmxapi.cpp
-               md.cpp
-               mdmodule.cpp
-               mdsignals.cpp
-               session.cpp
-               status.cpp
-               system.cpp
-               version.cpp
-               workflow.cpp
-               tpr.cpp
-               )
+target_sources(
+    gmxapi
+    PRIVATE resourceassignment.cpp
+            context.cpp
+            exceptions.cpp
+            gmxapi.cpp
+            md.cpp
+            mdmodule.cpp
+            mdsignals.cpp
+            session.cpp
+            status.cpp
+            system.cpp
+            version.cpp
+            workflow.cpp
+            tpr.cpp)
 set_target_properties(gmxapi PROPERTIES POSITION_INDEPENDENT_CODE ON)
 gmx_target_compile_options(gmxapi)
 target_compile_definitions(gmxapi PRIVATE HAVE_CONFIG_H)
-target_include_directories(gmxapi SYSTEM BEFORE PRIVATE ${PROJECT_SOURCE_DIR}/src/external/thread_mpi/include)
+target_include_directories(
+    gmxapi SYSTEM BEFORE
+    PRIVATE ${PROJECT_SOURCE_DIR}/src/external/thread_mpi/include)
 # Should be possible to change this when resolving #3290
-target_include_directories(gmxapi SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/src/external)
+target_include_directories(gmxapi SYSTEM
+                           PRIVATE ${PROJECT_SOURCE_DIR}/src/external)
 
 # Define implementation interface
-target_include_directories(gmxapi PRIVATE
-                           ${CMAKE_CURRENT_SOURCE_DIR}
-                           )
+target_include_directories(gmxapi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 ###############################
 # Install the public interface.
@@ -77,17 +78,16 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set_target_properties(gmxapi PROPERTIES INSTALL_NAME_DIR "@rpath")
 endif()
 
-set_target_properties(gmxapi PROPERTIES
-                      OUTPUT_NAME "gmxapi${GMX_LIBS_SUFFIX}"
-                      SOVERSION ${GMXAPI_MAJOR}
-                      VERSION ${GMXAPI_RELEASE}
-                      )
+set_target_properties(
+    gmxapi
+    PROPERTIES OUTPUT_NAME "gmxapi${GMX_LIBS_SUFFIX}"
+               SOVERSION ${GMXAPI_MAJOR}
+               VERSION ${GMXAPI_RELEASE})
 
 target_link_libraries(gmxapi PRIVATE libgromacs)
 target_link_libraries(gmxapi PRIVATE common)
 # TODO: Explicitly link specific modules: mdlib, mdtypes, utility, commandline
 target_link_libraries(gmxapi PRIVATE legacy_modules)
-
 
 ################################################
 # Install and export gmxapi and Gromacs::gmxapi.
@@ -95,21 +95,22 @@ target_link_libraries(gmxapi PRIVATE legacy_modules)
 # Install the gmxapi target and simultaneously define the export target for
 # which CMake will create a helper file. Specify the directory for clients to
 # add to their include path to be able to `#include "gmxapi/some_header.h"`
-install(TARGETS gmxapi
-        EXPORT gmxapi
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        INCLUDES DESTINATION include
-        )
+install(
+    TARGETS gmxapi
+    EXPORT gmxapi
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    INCLUDES
+    DESTINATION include)
 
 # Create the CMake exports file to help other projects build against libgmxapi
 # as a CMake import target Gromacs::gmxapi.
-install(EXPORT gmxapi
-        NAMESPACE Gromacs::
-        DESTINATION share/cmake/gmxapi/
-        )
-add_library(Gromacs::gmxapi ALIAS gmxapi )
+install(
+    EXPORT gmxapi
+    NAMESPACE Gromacs::
+    DESTINATION share/cmake/gmxapi/)
+add_library(Gromacs::gmxapi ALIAS gmxapi)
 
 include(CMakePackageConfigHelpers)
 
@@ -117,30 +118,24 @@ get_target_property(_mpi Gromacs::gmxapi MPI)
 configure_package_config_file(
     cmake/gmxapi-config.cmake.in
     "${CMAKE_CURRENT_BINARY_DIR}/cmake/gmxapi-config.cmake"
-    INSTALL_DESTINATION share/cmake/gmxapi/
-)
+    INSTALL_DESTINATION share/cmake/gmxapi/)
 unset(_mpi)
 get_target_property(GMXAPI_RELEASE gmxapi RELEASE)
 write_basic_package_version_file(
     ${CMAKE_CURRENT_BINARY_DIR}/cmake/gmxapi-config-version.cmake
     VERSION ${GMXAPI_RELEASE}
-    COMPATIBILITY SameMajorVersion
-)
+    COMPATIBILITY SameMajorVersion)
 
-install(
-    FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/cmake/gmxapi-config-version.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/cmake/gmxapi-config.cmake
-    DESTINATION share/cmake/gmxapi/
-)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/cmake/gmxapi-config-version.cmake
+              ${CMAKE_CURRENT_BINARY_DIR}/cmake/gmxapi-config.cmake
+        DESTINATION share/cmake/gmxapi/)
 
 # We need a CMake target to provide the internal interface(s) of the gmxapi
 # library implementation.
 add_library(gmxapi-detail INTERFACE)
-target_include_directories(gmxapi-detail
-                           INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(gmxapi-detail INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
-if (BUILD_TESTING AND GMX_BUILD_UNITTESTS)
+if(BUILD_TESTING AND GMX_BUILD_UNITTESTS)
     add_subdirectory(tests)
     add_subdirectory(workflow/tests)
 endif()

@@ -33,21 +33,22 @@
 # To help us fund GROMACS development, we humbly ask that you cite
 # the research papers on the package. Check out http://www.gromacs.org.
 
-gmx_add_unit_test(MathUnitTests math-test
+gmx_add_unit_test(
+    MathUnitTests
+    math-test
     CPP_SOURCE_FILES
-        arrayrefwithpadding.cpp
-        coordinatetransformation.cpp
-        densityfit.cpp
-        dofit.cpp
-        exponentialmovingaverage.cpp
-        functions.cpp
-        gausstransform.cpp
-        densityfittingforce.cpp
-        invertmatrix.cpp
-        matrix.cpp
-        multidimarray.cpp
-        neldermead.cpp
-        optimization.cpp
-        paddedvector.cpp
-        vectypes.cpp
-        )
+    arrayrefwithpadding.cpp
+    coordinatetransformation.cpp
+    densityfit.cpp
+    dofit.cpp
+    exponentialmovingaverage.cpp
+    functions.cpp
+    gausstransform.cpp
+    densityfittingforce.cpp
+    invertmatrix.cpp
+    matrix.cpp
+    multidimarray.cpp
+    neldermead.cpp
+    optimization.cpp
+    paddedvector.cpp
+    vectypes.cpp)

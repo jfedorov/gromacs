@@ -51,8 +51,12 @@
 # All of the generated values get put into conf.py (generated from
 # conf.cmakein.py).
 
-set(SOURCE_MD5SUM "unknown" CACHE STRING
-    "MD5 sum of the source tarball, normally used only for the pre-release webpage build")
+set(SOURCE_MD5SUM
+    "unknown"
+    CACHE
+        STRING
+        "MD5 sum of the source tarball, normally used only for the pre-release webpage build"
+)
 # REGRESSIONTEST_MD5SUM is set in cmake/gmxVersionInfo.cmake because it is used also in tests/CMakeLists.txt
 mark_as_advanced(SOURCE_MD5SUM)
 
@@ -65,7 +69,9 @@ if(SPHINX_ALREADY_SEARCHED)
     set(Sphinx_FIND_QUIETLY ON)
 endif()
 find_package(Sphinx ${EXPECTED_SPHINX_VERSION} COMPONENTS pygments)
-set(SPHINX_ALREADY_SEARCHED TRUE CACHE BOOL "True if a search for Sphinx has already been done")
+set(SPHINX_ALREADY_SEARCHED
+    TRUE
+    CACHE BOOL "True if a search for Sphinx has already been done")
 mark_as_advanced(SPHINX_ALREADY_SEARCHED)
 
 # Even if we aren't going to make the full webpage, set up to put all
@@ -81,7 +87,7 @@ file(MAKE_DIRECTORY ${TEX_OUTPUT_DIR})
 # The directory from which man pages will be installed; if it remains
 # empty, they will be silently skipped.
 set(MAN_PAGE_DIR)
-if (SOURCE_IS_SOURCE_DISTRIBUTION)
+if(SOURCE_IS_SOURCE_DISTRIBUTION)
     # When building from the tarball, install the bundled man pages
     # (unless overridden).
     set(MAN_PAGE_DIR ${CMAKE_CURRENT_SOURCE_DIR})
@@ -91,18 +97,19 @@ add_subdirectory(doxygen)
 
 # TODO: Consider whether this could just be replaced by using
 # GMX_DEVELOPER_BUILD to control this as well.
-option(GMX_BUILD_MANUAL "Whether to try to configure to build the PDF manual" OFF)
+option(GMX_BUILD_MANUAL "Whether to try to configure to build the PDF manual"
+       OFF)
 mark_as_advanced(GMX_BUILD_MANUAL)
 
 set(MANUAL_BUILD_IS_POSSIBLE ON)
 set(MANUAL_BUILD_NOT_POSSIBLE_REASON)
 set(NO_IMAGE_CONVERT_REASON)
-if (NOT GMX_BUILD_MANUAL)
+if(NOT GMX_BUILD_MANUAL)
     # Make sure we only do detection of manual-building dependencies
     # when the user opted in for that.
     set(MANUAL_BUILD_IS_POSSIBLE OFF)
     set(MANUAL_BUILD_NOT_POSSIBLE_REASON "GMX_BUILD_MANUAL is not ON")
-elseif (BUILD_IS_INSOURCE)
+elseif(BUILD_IS_INSOURCE)
     # UseLATEX.cmake does not work with an in-source build
     set(MANUAL_BUILD_IS_POSSIBLE OFF)
     set(MANUAL_BUILD_NOT_POSSIBLE_REASON "the build is in-source")
@@ -110,14 +117,18 @@ else()
     include(manual/UseLATEX.cmake)
     if(NOT SPHINX_FOUND)
         set(MANUAL_BUILD_IS_POSSIBLE OFF)
-        set(MANUAL_BUILD_NOT_POSSIBLE_REASON "Sphinx has not been found and is needed to create the LaTex input files")
+        set(MANUAL_BUILD_NOT_POSSIBLE_REASON
+            "Sphinx has not been found and is needed to create the LaTex input files"
+        )
     elseif(NOT PDFLATEX_COMPILER)
         set(MANUAL_BUILD_IS_POSSIBLE OFF)
         set(MANUAL_BUILD_NOT_POSSIBLE_REASON "pdflatex is not available")
     elseif(NOT IMAGE_CONVERT_POSSIBLE)
         set(MANUAL_BUILD_IS_POSSIBLE OFF)
-        set(MANUAL_BUILD_NOT_POSSIBLE_REASON "a working form of ImageMagick convert is not available")
-        set(NO_IMAGE_CONVERT_REASON "Can not convert files for online or pdf manual")
+        set(MANUAL_BUILD_NOT_POSSIBLE_REASON
+            "a working form of ImageMagick convert is not available")
+        set(NO_IMAGE_CONVERT_REASON
+            "Can not convert files for online or pdf manual")
         # TODO Later, identify other dependencies like bibtex,
         # make_index, date, some graphics conversion program,
         # etc. Perhaps patch UseLATEX.cmake and contribute upstream.
@@ -125,7 +136,7 @@ else()
 
 endif()
 
-if (SPHINX_FOUND)
+if(SPHINX_FOUND)
     # We need to have all the Sphinx input files in a single directory, and
     # since some of them are generated, we copy everything into the build tree,
     # to this directory.
@@ -134,7 +145,7 @@ if (SPHINX_FOUND)
     # As the manual build now depends also on Sphinx, the inclusion path needs
     # to be set after we know the basic information for Sphinx.
     add_subdirectory(manual)
-    if (SOURCE_MD5SUM STREQUAL "unknown")
+    if(SOURCE_MD5SUM STREQUAL "unknown")
         # But for testing the webpage build (e.g. from the repo) we
         # need a default value.
         set(REGRESSIONTEST_MD5SUM_STRING "unknown")
@@ -173,11 +184,10 @@ if (SPHINX_FOUND)
         reference-manual/references.rst
         # PNG formated plot files that don't need to be converted into PNG
         # for the web page.
-	reference-manual/plots/GMX_logos/gmx_falcon_blue.png
+        reference-manual/plots/GMX_logos/gmx_falcon_blue.png
         reference-manual/plots/adress.png
         reference-manual/plots/plotje.png
-        reference-manual/plots/xvgr.png
-        )
+        reference-manual/plots/xvgr.png)
     set(REFERENCEMANUAL_SPHINX_FILES_WITH_IMAGES
         # Algorithms chapter
         reference-manual/algorithms.rst
@@ -324,8 +334,7 @@ if (SPHINX_FOUND)
         reference-manual/analysis/plots/rama.pdf
         reference-manual/analysis/plots/rdfO-O.pdf
         reference-manual/analysis/plots/rdf.pdf
-        reference-manual/analysis/plots/sgangle.pdf 
-        )
+        reference-manual/analysis/plots/sgangle.pdf)
     set(SPHINX_SOURCE_FILES
         index.rst
         download.rst
@@ -467,8 +476,7 @@ if (SPHINX_FOUND)
         user-guide/run-time-errors.rst
         user-guide/security.rst
         user-guide/system-preparation.rst
-        user-guide/terminology.rst
-        )
+        user-guide/terminology.rst)
 
     include(SphinxMacros.cmake)
     gmx_init_sphinx_setup(${SPHINX_INPUT_DIR})
@@ -478,24 +486,37 @@ if (SPHINX_FOUND)
     # for release builds, and dummy string for non-release
     # builds
     if("${GMX_MANUAL_DOI}" STREQUAL "")
-      # empty string means no doi, set dummy text
-      set(GMX_MANUAL_DOI_STRING "This is not a release build of GROMACS, so please reference")
-      set(GMX_MANUAL_DOI_STRING "${GMX_MANUAL_DOI_STRING} one of the GROMACS papers and the base release of the manual.")
+        # empty string means no doi, set dummy text
+        set(GMX_MANUAL_DOI_STRING
+            "This is not a release build of GROMACS, so please reference")
+        set(GMX_MANUAL_DOI_STRING
+            "${GMX_MANUAL_DOI_STRING} one of the GROMACS papers and the base release of the manual."
+        )
     else()
-      # release version, set plain old boring string
-      set(GMX_MANUAL_DOI_STRING "Please reference this documentation as https://doi.org/${GMX_MANUAL_DOI}.")
+        # release version, set plain old boring string
+        set(GMX_MANUAL_DOI_STRING
+            "Please reference this documentation as https://doi.org/${GMX_MANUAL_DOI}."
+        )
     endif()
     # same for source doi, but modify the text
     if("${GMX_SOURCE_DOI}" STREQUAL "")
-      # empty string means no release build
-      set(GMX_SOURCE_DOI_STRING "This is not a release build of GROMACS. Please reference one of the")
-      set(GMX_SOURCE_DOI_STRING "${GMX_SOURCE_DOI_STRING} GROMACS papers, as well as the base release that this version is built from.")
-      set(GMX_SOURCE_DOI_STRING "${GMX_SOURCE_DOI_STRING} Also, please state what modifcations have been performed or where the version")
-      set(GMX_SOURCE_DOI_STRING "${GMX_SOURCE_DOI_STRING} was sourced from.")
+        # empty string means no release build
+        set(GMX_SOURCE_DOI_STRING
+            "This is not a release build of GROMACS. Please reference one of the"
+        )
+        set(GMX_SOURCE_DOI_STRING
+            "${GMX_SOURCE_DOI_STRING} GROMACS papers, as well as the base release that this version is built from."
+        )
+        set(GMX_SOURCE_DOI_STRING
+            "${GMX_SOURCE_DOI_STRING} Also, please state what modifcations have been performed or where the version"
+        )
+        set(GMX_SOURCE_DOI_STRING "${GMX_SOURCE_DOI_STRING} was sourced from.")
     else()
-      # release version, give them a doi url string
-      set(GMX_SOURCE_DOI_STRING "To cite the source code for this release, please cite")
-      set(GMX_SOURCE_DOI_STRING "${GMX_SOURCE_DOI_STRING} https://doi.org/${GMX_SOURCE_DOI}.")
+        # release version, give them a doi url string
+        set(GMX_SOURCE_DOI_STRING
+            "To cite the source code for this release, please cite")
+        set(GMX_SOURCE_DOI_STRING
+            "${GMX_SOURCE_DOI_STRING} https://doi.org/${GMX_SOURCE_DOI}.")
     endif()
 
     if(IMAGE_CONVERT_POSSIBLE)
@@ -505,94 +526,85 @@ if (SPHINX_FOUND)
     endif()
 
     set(SPHINX_CONFIG_FILE ${SPHINX_INPUT_DIR}/conf.py)
-    if (GMX_PYTHON_PACKAGE)
-        set(GMXAPI_PYTHON_STAGING_DIR ${CMAKE_BINARY_DIR}/python_packaging/src/gmxapi_staging)
+    if(GMX_PYTHON_PACKAGE)
+        set(GMXAPI_PYTHON_STAGING_DIR
+            ${CMAKE_BINARY_DIR}/python_packaging/src/gmxapi_staging)
         # TODO: Resolve circular reference. We would like to get the CMake build-time directory for
         # the gmxapi Python package from the _gmxapi target, as we do when building sample_restraint.
         # Instead of the above hard-coded path, how can we do
         # get_target_property(GMXAPI_PYTHON_STAGING_DIR _gmxapi staging_dir)
         # in this context?
-    endif ()
+    endif()
 
     gmx_configure_version_file(
-        conf.cmakein.py ${SPHINX_CONFIG_FILE}
+        conf.cmakein.py
+        ${SPHINX_CONFIG_FILE}
         EXTRA_VARS
-            CMAKE_MINIMUM_REQUIRED_VERSION
-            EXPECTED_DOXYGEN_VERSION
-            EXPECTED_SPHINX_VERSION
-            GMX_ADMIN_DIR
-            GMX_LMFIT_REQUIRED_VERSION
-            GMX_MANUAL_DOI_STRING
-            GMX_TNG_MINIMUM_REQUIRED_VERSION
-            GMX_SOURCE_DOI_STRING
-            GMXAPI_PYTHON_STAGING_DIR
-            IMAGE_CONVERT_STRING
-            REGRESSIONTEST_VERSION
-            REQUIRED_CUDA_COMPUTE_CAPABILITY
-            REQUIRED_CUDA_VERSION
-            REQUIRED_OPENCL_MIN_VERSION
-            REGRESSIONTEST_MD5SUM_STRING
-            RELENG_PATH
-            SOURCE_MD5SUM
-            SPHINX_EXTENSION_PATH
-        COMMENT "Configuring Sphinx configuration file")
+        CMAKE_MINIMUM_REQUIRED_VERSION
+        EXPECTED_DOXYGEN_VERSION
+        EXPECTED_SPHINX_VERSION
+        GMX_ADMIN_DIR
+        GMX_LMFIT_REQUIRED_VERSION
+        GMX_MANUAL_DOI_STRING
+        GMX_TNG_MINIMUM_REQUIRED_VERSION
+        GMX_SOURCE_DOI_STRING
+        GMXAPI_PYTHON_STAGING_DIR
+        IMAGE_CONVERT_STRING
+        REGRESSIONTEST_VERSION
+        REQUIRED_CUDA_COMPUTE_CAPABILITY
+        REQUIRED_CUDA_VERSION
+        REQUIRED_OPENCL_MIN_VERSION
+        REGRESSIONTEST_MD5SUM_STRING
+        RELENG_PATH
+        SOURCE_MD5SUM
+        SPHINX_EXTENSION_PATH
+        COMMENT
+        "Configuring Sphinx configuration file")
     gmx_add_sphinx_input_file(${SPHINX_CONFIG_FILE})
     gmx_add_sphinx_source_files(FILES ${SPHINX_SOURCE_FILES})
-    if (EXISTS ${RELENG_PATH}/docs/FileList.cmake)
+    if(EXISTS ${RELENG_PATH}/docs/FileList.cmake)
         include(${RELENG_PATH}/docs/FileList.cmake)
         gmx_add_sphinx_source_files(
-            FROM ${RELENG_PATH}/docs TO dev-manual/releng PREFIX releng/docs/
-            FILES ${RELENG_SPHINX_FILES})
+            FROM
+            ${RELENG_PATH}/docs
+            TO
+            dev-manual/releng
+            PREFIX
+            releng/docs/
+            FILES
+            ${RELENG_SPHINX_FILES})
     else()
-        gmx_add_sphinx_source_files(FILES
-            dev-manual/releng/index.rst
-            )
+        gmx_add_sphinx_source_files(FILES dev-manual/releng/index.rst)
     endif()
 
     gmx_add_sphinx_source_files(
-            FILES
-            gmxapi/index.rst
-            gmxapi/userguide/install.rst
-            gmxapi/userguide/usage.rst
-            gmxapi/userguide/userguide.rst
-    )
+        FILES gmxapi/index.rst gmxapi/userguide/install.rst
+        gmxapi/userguide/usage.rst gmxapi/userguide/userguide.rst)
 
-    if (GMX_PYTHON_PACKAGE)
-        gmx_add_sphinx_source_files(
-            FILES
-            gmxapi/userguide/pythonreference.rst
-            )
+    if(GMX_PYTHON_PACKAGE)
+        gmx_add_sphinx_source_files(FILES gmxapi/userguide/pythonreference.rst)
     else()
         gmx_add_sphinx_source_files(
-            FROM ${CMAKE_CURRENT_SOURCE_DIR}/gmxapi/userguide-stub
-            TO gmxapi/userguide/ 
-            FILES pythonreference.rst 
-            )
-    endif ()
+            FROM ${CMAKE_CURRENT_SOURCE_DIR}/gmxapi/userguide-stub TO
+            gmxapi/userguide/ FILES pythonreference.rst)
+    endif()
 
-    gmx_add_sphinx_source_files(
-            FILES
-            nblib/index.rst
-            nblib/guide-to-writing-MD-programs.rst
-    )
+    gmx_add_sphinx_source_files(FILES nblib/index.rst
+                                nblib/guide-to-writing-MD-programs.rst)
 
-    gmx_add_sphinx_source_files(
-        FILES
-        ${REFERENCEMANUAL_SPHINX_FILES_GENERAL})
-    if (IMAGE_CONVERT_POSSIBLE)
+    gmx_add_sphinx_source_files(FILES ${REFERENCEMANUAL_SPHINX_FILES_GENERAL})
+    if(IMAGE_CONVERT_POSSIBLE)
         gmx_add_sphinx_source_files(
-            FILES
-            ${REFERENCEMANUAL_SPHINX_FILES_WITH_IMAGES}
+            FILES ${REFERENCEMANUAL_SPHINX_FILES_WITH_IMAGES}
             ${REFERENCEMANUAL_IMAGE_FILES})
-        gmx_add_sphinx_image_conversion_files(
-            FILES
-            ${REFERENCEMANUAL_IMAGE_FILES})
+        gmx_add_sphinx_image_conversion_files(FILES
+                                              ${REFERENCEMANUAL_IMAGE_FILES})
     endif()
     gmx_add_sphinx_input_target(sphinx-input-rst)
     gmx_add_sphinx_image_conversion_target(sphinx-image-conversion)
     add_custom_target(sphinx-input)
     add_dependencies(sphinx-input sphinx-input-rst sphinx-image-conversion)
-    if (GMX_PYTHON_PACKAGE)
+    if(GMX_PYTHON_PACKAGE)
         add_dependencies(sphinx-input _gmxapi)
     endif()
     # Remove other rst files from the build tree, since they confuse Sphinx.
@@ -600,17 +612,33 @@ if (SPHINX_FOUND)
     # The latter do not cause issues with obsolete files, as they
     # are not considered as Sphinx input files, but will only be
     # included using an explicit .. include::.
-    gmx_remove_obsolete_sphinx_input_files("^(onlinehelp|fragments)/.*\\\\.rst$")
+    gmx_remove_obsolete_sphinx_input_files(
+        "^(onlinehelp|fragments)/.*\\\\.rst$")
 
     # TODO: Make this remove obsolete .rst files.
     # TODO: This does not work in cross-compilation scenarios; disable up to
     # the necessary level.
-    gmx_add_custom_output_target(sphinx-programs OUTPUT STAMP
-        COMMAND ${CMAKE_COMMAND} -E make_directory onlinehelp
-        COMMAND gmx -quiet help -export rst
-        DEPENDS gmx
-        WORKING_DIRECTORY ${SPHINX_INPUT_DIR}
-        COMMENT "Generating reStructuredText help")
+    gmx_add_custom_output_target(
+        sphinx-programs
+        OUTPUT
+        STAMP
+        COMMAND
+        ${CMAKE_COMMAND}
+        -E
+        make_directory
+        onlinehelp
+        COMMAND
+        gmx
+        -quiet
+        help
+        -export
+        rst
+        DEPENDS
+        gmx
+        WORKING_DIRECTORY
+        ${SPHINX_INPUT_DIR}
+        COMMENT
+        "Generating reStructuredText help")
     # This dependency ensures that the directories exist before the
     # executable tries to write things there.
     add_dependencies(sphinx-programs sphinx-input)
@@ -619,67 +647,54 @@ if (SPHINX_FOUND)
     # into the tarball via the CPack rules below, which requires that
     # the INSTALL file is in a separate directory by itself.
     set(TEXT_INSTALL_GUIDE_OUTPUT_DIR "install-guide/text")
-    add_custom_target(install-guide
+    add_custom_target(
+        install-guide
         COMMAND
-            ${SPHINX_EXECUTABLE}
-            -q -b text
-            -w sphinx-install.log
-            -d ${CMAKE_CURRENT_BINARY_DIR}/install-guide/_doctrees
-            -c ${SPHINX_INPUT_DIR}
-            "${SPHINX_INPUT_DIR}/install-guide"
+            ${SPHINX_EXECUTABLE} -q -b text -w sphinx-install.log -d
+            ${CMAKE_CURRENT_BINARY_DIR}/install-guide/_doctrees -c
+            ${SPHINX_INPUT_DIR} "${SPHINX_INPUT_DIR}/install-guide"
             "${TEXT_INSTALL_GUIDE_OUTPUT_DIR}"
         COMMAND
             ${CMAKE_COMMAND} -E rename
             ${TEXT_INSTALL_GUIDE_OUTPUT_DIR}/index.txt
             ${TEXT_INSTALL_GUIDE_OUTPUT_DIR}/INSTALL
-        WORKING_DIRECTORY
-            ${CMAKE_CURRENT_BINARY_DIR}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         COMMENT "Building INSTALL with Sphinx"
-        VERBATIM
-        )
+        VERBATIM)
     add_dependencies(install-guide sphinx-input)
     gmx_cpack_add_generated_source_directory(install-guide/text DESTINATION /)
 
     # Sphinx cache with pickled ReST documents
     set(SPHINX_CACHE_DIR "${CMAKE_CURRENT_BINARY_DIR}/_doctrees")
     set(SPHINX_CONFIG_OVERRIDES "")
-    if (GMX_DEVELOPER_BUILD)
+    if(GMX_DEVELOPER_BUILD)
         set(SPHINX_CONFIG_OVERRIDES "-Dtodo_include_todos=1")
     endif()
-    add_custom_target(webpage-sphinx
+    add_custom_target(
+        webpage-sphinx
         DEPENDS sphinx-programs
         DEPENDS sphinx-input
         DEPENDS sphinx-image-conversion
         DEPENDS manual
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${SPHINX_INPUT_DIR}/_static
         COMMAND
-            ${CMAKE_COMMAND} -E make_directory ${SPHINX_INPUT_DIR}/_static
-        COMMAND
-            ${SPHINX_EXECUTABLE}
-            -q -b html
-            -w sphinx-html.log
-            -d "${SPHINX_CACHE_DIR}"
-            ${SPHINX_CONFIG_OVERRIDES}
-            "${SPHINX_INPUT_DIR}"
-            "${HTML_OUTPUT_DIR}"
-        WORKING_DIRECTORY
-            ${CMAKE_CURRENT_BINARY_DIR}
+            ${SPHINX_EXECUTABLE} -q -b html -w sphinx-html.log -d
+            "${SPHINX_CACHE_DIR}" ${SPHINX_CONFIG_OVERRIDES}
+            "${SPHINX_INPUT_DIR}" "${HTML_OUTPUT_DIR}"
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         COMMENT "Building HTML documentation with Sphinx"
-        VERBATIM
-        )
+        VERBATIM)
 
-    add_custom_target(man
+    add_custom_target(
+        man
         COMMAND
-            ${SPHINX_EXECUTABLE}
-            -q -b man
-            -w sphinx-man.log
-            -d ${SPHINX_CACHE_DIR}
-            -t do_man
-            ${SPHINX_INPUT_DIR}
+            ${SPHINX_EXECUTABLE} -q -b man -w sphinx-man.log -d
+            ${SPHINX_CACHE_DIR} -t do_man ${SPHINX_INPUT_DIR}
             ${CMAKE_CURRENT_BINARY_DIR}/man
         COMMENT "Building man pages with Sphinx"
         VERBATIM)
     add_dependencies(man sphinx-input sphinx-programs)
-    if (GMX_BUILD_HELP)
+    if(GMX_BUILD_HELP)
         # If requested, install the man pages built by the 'man' target
         # created above.  Nothing will be installed if the user did not
         # manually build the target.
@@ -688,37 +703,52 @@ if (SPHINX_FOUND)
 
 else()
     set(MANUAL_BUILD_IS_POSSIBLE OFF)
-    set(MANUAL_BUILD_NOT_POSSIBLE_REASON "Sphinx expected minimum version ${EXPECTED_SPHINX_VERSION} is not available")
+    set(MANUAL_BUILD_NOT_POSSIBLE_REASON
+        "Sphinx expected minimum version ${EXPECTED_SPHINX_VERSION} is not available"
+    )
 
-    add_custom_target(webpage-sphinx
-        COMMAND ${CMAKE_COMMAND} -E echo
+    add_custom_target(
+        webpage-sphinx
+        COMMAND
+            ${CMAKE_COMMAND} -E echo
             "HTML pages cannot be built because Sphinx expected minimum version ${EXPECTED_SPHINX_VERSION} is not available"
         VERBATIM)
-    add_custom_target(install-guide
-        COMMAND ${CMAKE_COMMAND} -E echo
+    add_custom_target(
+        install-guide
+        COMMAND
+            ${CMAKE_COMMAND} -E echo
             "INSTALL cannot be built because Sphinx expected minimum version ${EXPECTED_SPHINX_VERSION} is not available"
         VERBATIM)
-    add_custom_target(man
-        COMMAND ${CMAKE_COMMAND} -E echo
+    add_custom_target(
+        man
+        COMMAND
+            ${CMAKE_COMMAND} -E echo
             "man pages cannot be built because Sphinx expected minimum version ${EXPECTED_SPHINX_VERSION} is not available"
         VERBATIM)
-    add_custom_target(sphinx-create-texman
-        COMMAND ${CMAKE_COMMAND} -E echo
+    add_custom_target(
+        sphinx-create-texman
+        COMMAND
+            ${CMAKE_COMMAND} -E echo
             "Cannot prepare LaTeX input files because Sphinx expected minimum version ${EXPECTED_SPHINX_VERSION} is not available"
         VERBATIM)
-    add_custom_target(manual
-        COMMAND ${CMAKE_COMMAND} -E echo
-            "manual cannot be built because Sphinx expected minimum version ${EXPECTED_SPHINX_VERSION} is not available")
+    add_custom_target(
+        manual
+        COMMAND
+            ${CMAKE_COMMAND} -E echo
+            "manual cannot be built because Sphinx expected minimum version ${EXPECTED_SPHINX_VERSION} is not available"
+    )
 endif()
 
-if (MAN_PAGE_DIR)
+if(MAN_PAGE_DIR)
     set(MAN_PAGE_DIR ${MAN_PAGE_DIR}/man)
     # Trailing slash on directory is significant for
     # install(DIRECTORY). See CMake docs.
-    install(DIRECTORY ${MAN_PAGE_DIR}/
+    install(
+        DIRECTORY ${MAN_PAGE_DIR}/
         DESTINATION ${CMAKE_INSTALL_MANDIR}/man1
-        COMPONENT man OPTIONAL
-        FILES_MATCHING PATTERN "*.1")
+        COMPONENT man
+        OPTIONAL FILES_MATCHING
+        PATTERN "*.1")
 endif()
 gmx_cpack_add_generated_source_directory(man)
 
@@ -731,55 +761,70 @@ set(HTML_BUILD_NOT_POSSIBLE_REASON)
 set(HTML_BUILD_WARNINGS)
 
 # Next, turn it off if any of the preconditions are unsatisified
-if (NOT Python3_Interpreter_FOUND)
+if(NOT Python3_Interpreter_FOUND)
     set(HTML_BUILD_IS_POSSIBLE OFF)
     set(HTML_BUILD_NOT_POSSIBLE_REASON "Python is required")
-elseif (NOT SPHINX_FOUND)
+elseif(NOT SPHINX_FOUND)
     # Hardly anything gets built if Sphinx is not available, so don't bother.
     set(HTML_BUILD_IS_POSSIBLE OFF)
-    set(HTML_BUILD_NOT_POSSIBLE_REASON "Sphinx expected minimum version ${EXPECTED_SPHINX_VERSION} is required")
+    set(HTML_BUILD_NOT_POSSIBLE_REASON
+        "Sphinx expected minimum version ${EXPECTED_SPHINX_VERSION} is required"
+    )
 endif()
-if (NOT MANUAL_BUILD_IS_POSSIBLE)
+if(NOT MANUAL_BUILD_IS_POSSIBLE)
     list(APPEND HTML_BUILD_WARNINGS
          "Reference PDF manual was not built, so links to it do not work")
 endif()
-if (NOT DOXYGEN_EXECUTABLE)
+if(NOT DOXYGEN_EXECUTABLE)
     list(APPEND HTML_BUILD_WARNINGS
-        "Doxygen was not available, so links to Doxygen do not work")
+         "Doxygen was not available, so links to Doxygen do not work")
 endif()
-if (NOT DOXYGEN_DOT_EXECUTABLE)
+if(NOT DOXYGEN_DOT_EXECUTABLE)
     list(APPEND HTML_BUILD_WARNINGS
-        "dot/graphviz was not found, so some graphs are missing")
+         "dot/graphviz was not found, so some graphs are missing")
 endif()
 
-if (HTML_BUILD_IS_POSSIBLE)
+if(HTML_BUILD_IS_POSSIBLE)
     set(_webpage_target_properties)
-    if (HTML_BUILD_WARNINGS)
-        list(APPEND _webpage_target_properties
-             COMMAND ${CMAKE_COMMAND} -E echo
-                 "webpage was built, but with the following limitations:")
+    if(HTML_BUILD_WARNINGS)
+        list(
+            APPEND
+            _webpage_target_properties
+            COMMAND
+            ${CMAKE_COMMAND}
+            -E
+            echo
+            "webpage was built, but with the following limitations:")
         foreach(_warning ${HTML_BUILD_WARNINGS})
-        list(APPEND _webpage_target_properties
-             COMMAND ${CMAKE_COMMAND} -E echo " - ${_warning}")
+            list(
+                APPEND
+                _webpage_target_properties
+                COMMAND
+                ${CMAKE_COMMAND}
+                -E
+                echo
+                " - ${_warning}")
         endforeach()
     endif()
 
-    if (MANUAL_BUILD_IS_POSSIBLE)
+    if(MANUAL_BUILD_IS_POSSIBLE)
         # Make the PDF reference guide
         # TODO Try to make the PDF arrive directly in ${HTML_OUTPUT_DIR}
         # TODO Make this depend on the output of the manual build, so that the
         # file actually gets copied multiple times.
-        set(_manual_target_location ${HTML_OUTPUT_DIR}/manual-${GMX_VERSION_STRING}.pdf)
+        set(_manual_target_location
+            ${HTML_OUTPUT_DIR}/manual-${GMX_VERSION_STRING}.pdf)
         add_custom_command(
             OUTPUT ${_manual_target_location}
-            COMMAND ${CMAKE_COMMAND}
-                -E remove -f ${_manual_target_location}
-            COMMAND ${CMAKE_COMMAND}
-                -E copy ${CMAKE_CURRENT_BINARY_DIR}/manual/gromacs.pdf ${_manual_target_location}
+            COMMAND ${CMAKE_COMMAND} -E remove -f ${_manual_target_location}
+            COMMAND
+                ${CMAKE_COMMAND} -E copy
+                ${CMAKE_CURRENT_BINARY_DIR}/manual/gromacs.pdf
+                ${_manual_target_location}
             DEPENDS manual
             VERBATIM)
-        list(APPEND _webpage_target_properties
-             DEPENDS ${_manual_target_location})
+        list(APPEND _webpage_target_properties DEPENDS
+             ${_manual_target_location})
     endif()
 
     # The Doxygen configuration in doxygen/Doxyfile-common.cmakein
@@ -789,14 +834,17 @@ if (HTML_BUILD_IS_POSSIBLE)
 
     # Add a top-level target that builds everything related to the webpage,
     # for CI (and possibly others) to use
-    add_custom_target(webpage ${_webpage_target_properties}
+    add_custom_target(
+        webpage
+        ${_webpage_target_properties}
         COMMENT "Building webpage"
         VERBATIM)
     add_dependencies(webpage webpage-sphinx doxygen-all)
 else()
-    add_custom_target(webpage
+    add_custom_target(
+        webpage
         COMMAND ${CMAKE_COMMAND} -E echo
-            "Cannot build webpage because ${HTML_BUILD_NOT_POSSIBLE_REASON}"
+                "Cannot build webpage because ${HTML_BUILD_NOT_POSSIBLE_REASON}"
         COMMENT "Webpage build not possible"
         VERBATIM)
 endif()

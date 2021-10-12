@@ -35,24 +35,20 @@
 # Test private interface.
 #
 
-gmx_add_gtest_executable(workflow-details-test
-    CPP_SOURCE_FILES
-        workflow.cpp
-        # pseudo-library for code for mdrun
-        $<TARGET_OBJECTS:mdrun_objlib>
-)
+gmx_add_gtest_executable(
+    workflow-details-test CPP_SOURCE_FILES workflow.cpp
+    # pseudo-library for code for mdrun
+    $<TARGET_OBJECTS:mdrun_objlib>)
 
-target_link_libraries(workflow-details-test
-                      PRIVATE
-                        Gromacs::gmxapi
-                        gmxapi-detail
-                        gmxapi-testsupport
-                        mdrun_test_infrastructure)
+target_link_libraries(
+    workflow-details-test PRIVATE Gromacs::gmxapi gmxapi-detail
+                                  gmxapi-testsupport mdrun_test_infrastructure)
 
-gmx_register_gtest_test(GmxapiInternalInterfaceTests workflow-details-test OPENMP_THREADS 2 INTEGRATION_TEST IGNORE_LEAKS)
+gmx_register_gtest_test(GmxapiInternalInterfaceTests workflow-details-test
+                        OPENMP_THREADS 2 INTEGRATION_TEST IGNORE_LEAKS)
 
-set_tests_properties(GmxapiInternalInterfaceTests PROPERTIES
-                     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(GmxapiInternalInterfaceTests
+                     PROPERTIES WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 
 #
 # Test with MPI.
@@ -64,23 +60,28 @@ set_tests_properties(GmxapiInternalInterfaceTests PROPERTIES
 # For MPI-enabled testing of gmxapi clients using non-MPI-enabled GROMACS, we
 # defer testing to the Python gmxapi client package tests.
 #
-if (GMX_MPI)
-    gmx_add_gtest_executable(workflow-details-mpi-test MPI
-                             CPP_SOURCE_FILES
-                             workflow.cpp
-                             # pseudo-library for code for mdrun
-                             $<TARGET_OBJECTS:mdrun_objlib>
-                             )
+if(GMX_MPI)
+    gmx_add_gtest_executable(
+        workflow-details-mpi-test MPI CPP_SOURCE_FILES workflow.cpp
+        # pseudo-library for code for mdrun
+        $<TARGET_OBJECTS:mdrun_objlib>)
 
-    target_link_libraries(workflow-details-mpi-test
-                          PRIVATE
-                          Gromacs::gmxapi
-                          gmxapi-detail
-                          gmxapi-testsupport
-                          mdrun_test_infrastructure)
+    target_link_libraries(
+        workflow-details-mpi-test
+        PRIVATE Gromacs::gmxapi gmxapi-detail gmxapi-testsupport
+                mdrun_test_infrastructure)
 
-    gmx_register_gtest_test(GmxapiInternalsMpiTests workflow-details-mpi-test MPI_RANKS 2 OPENMP_THREADS 2 INTEGRATION_TEST IGNORE_LEAKS)
+    gmx_register_gtest_test(
+        GmxapiInternalsMpiTests
+        workflow-details-mpi-test
+        MPI_RANKS
+        2
+        OPENMP_THREADS
+        2
+        INTEGRATION_TEST
+        IGNORE_LEAKS)
 
-    set_tests_properties(GmxapiInternalsMpiTests PROPERTIES
-                         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-endif ()
+    set_tests_properties(
+        GmxapiInternalsMpiTests PROPERTIES WORKING_DIRECTORY
+                                           ${CMAKE_CURRENT_BINARY_DIR})
+endif()

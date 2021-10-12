@@ -38,18 +38,10 @@
 # \author Sebastian Keller <keller@cscs.ch>
 #
 
-
-target_sources(nblib
-        PRIVATE
-        setup.cpp
-        )
+target_sources(nblib PRIVATE setup.cpp)
 
 if(GMX_INSTALL_NBLIB_API)
-    install(FILES
-            setup.h
-            traits.hpp
-            util.hpp
-            DESTINATION include/nblib/util)
+    install(FILES setup.h traits.hpp util.hpp DESTINATION include/nblib/util)
 endif()
 
 if(BUILD_TESTING)

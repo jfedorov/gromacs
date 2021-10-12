@@ -43,31 +43,28 @@ gmx_add_libgromacs_sources(
     orires.cpp
     pairs.cpp
     position_restraints.cpp
-    restcbt.cpp
-    )
+    restcbt.cpp)
 
 if(GMX_GPU_CUDA)
-    gmx_add_libgromacs_sources(
-       listed_forces_gpu_impl.cu
-       listed_forces_gpu_internal.cu
-       )
+    gmx_add_libgromacs_sources(listed_forces_gpu_impl.cu
+                               listed_forces_gpu_internal.cu)
 endif()
 
 # Source files have the following private module dependencies.
-target_link_libraries(listed_forces PRIVATE
-#                      gmxlib
-#                      math
-#                      mdtypes
-                      )
+target_link_libraries(
+    listed_forces
+    PRIVATE #                      gmxlib
+            #                      math
+            #                      mdtypes
+)
 
 # Public interface for modules, including dependencies and interfaces
 #target_include_directories(listed_forces PUBLIC
-target_include_directories(listed_forces INTERFACE
-                           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_include_directories(
+    listed_forces
+    INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 #target_link_libraries(listed_forces PUBLIC
-target_link_libraries(listed_forces INTERFACE
-                      legacy_api
-                      )
+target_link_libraries(listed_forces INTERFACE legacy_api)
 
 # TODO: when listed_forces is an OBJECT target
 #target_link_libraries(listed_forces PUBLIC legacy_api)
@@ -76,14 +73,12 @@ target_link_libraries(listed_forces INTERFACE
 # Module dependencies
 # listed_forces interfaces convey transitive dependence on these modules.
 #target_link_libraries(listed_forces PUBLIC
-target_link_libraries(listed_forces INTERFACE
-                      utility
-                      )
+target_link_libraries(listed_forces INTERFACE utility)
 # Source files have the following private module dependencies.
 #target_link_libraries(listed_forces PRIVATE tng_io)
 # TODO: Explicitly link specific modules.
 #target_link_libraries(listed_forces PRIVATE legacy_modules)
 
-if (BUILD_TESTING)
-     add_subdirectory(tests)
+if(BUILD_TESTING)
+    add_subdirectory(tests)
 endif()

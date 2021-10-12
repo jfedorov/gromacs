@@ -35,91 +35,63 @@
 # Set up the module library
 add_library(fft INTERFACE)
 
-gmx_add_libgromacs_sources(
-     calcgrid.cpp
-     fft.cpp
-     fft5d.cpp
-     parallel_3dfft.cpp
-     gpu_3dfft.cpp
-     )
+gmx_add_libgromacs_sources(calcgrid.cpp fft.cpp fft5d.cpp parallel_3dfft.cpp
+                           gpu_3dfft.cpp)
 
-if (GMX_FFT_FFTPACK)
+if(GMX_FFT_FFTPACK)
     gmx_add_libgromacs_sources(
-        fft_fftpack.cpp
-        ${CMAKE_SOURCE_DIR}/src/external/fftpack/fftpack.cpp)
+        fft_fftpack.cpp ${CMAKE_SOURCE_DIR}/src/external/fftpack/fftpack.cpp)
 endif()
-if (GMX_FFT_FFTW3 OR GMX_FFT_ARMPL_FFTW3)
+if(GMX_FFT_FFTW3 OR GMX_FFT_ARMPL_FFTW3)
     gmx_add_libgromacs_sources(fft_fftw3.cpp)
 endif()
-if (GMX_FFT_MKL)
+if(GMX_FFT_MKL)
     gmx_add_libgromacs_sources(fft_mkl.cpp)
 endif()
 if(Heffte_FOUND)
-    gmx_add_libgromacs_sources(
-        gpu_3dfft_heffte.cpp
-        )
+    gmx_add_libgromacs_sources(gpu_3dfft_heffte.cpp)
 endif()
-if (GMX_GPU_CUDA)
-    gmx_add_libgromacs_sources(
-        # CUDA-specific sources
-        gpu_3dfft_cufft.cu
-        )
-    _gmx_add_files_to_property(CUDA_SOURCES
+if(GMX_GPU_CUDA)
+    gmx_add_libgromacs_sources(# CUDA-specific sources
+                               gpu_3dfft_cufft.cu)
+    _gmx_add_files_to_property(
+        CUDA_SOURCES
         # Must add these files so they can include cuda_runtime.h
-        gpu_3dfft.cpp
-        )
-elseif (GMX_GPU_OPENCL)
-    gmx_add_libgromacs_sources(
-        # OpenCL-specific sources
-        gpu_3dfft_ocl.cpp
-        )
-elseif (GMX_GPU_SYCL)
-    if (NOT GMX_GPU_HIPSYCL AND GMX_FFT_MKL)
-            gmx_add_libgromacs_sources(
-            gpu_3dfft_sycl_mkl.cpp
-            )
-        _gmx_add_files_to_property(SYCL_SOURCES
-            gpu_3dfft_sycl_mkl.cpp
-            )
+        gpu_3dfft.cpp)
+elseif(GMX_GPU_OPENCL)
+    gmx_add_libgromacs_sources(# OpenCL-specific sources
+                               gpu_3dfft_ocl.cpp)
+elseif(GMX_GPU_SYCL)
+    if(NOT GMX_GPU_HIPSYCL AND GMX_FFT_MKL)
+        gmx_add_libgromacs_sources(gpu_3dfft_sycl_mkl.cpp)
+        _gmx_add_files_to_property(SYCL_SOURCES gpu_3dfft_sycl_mkl.cpp)
     endif()
-    if (GMX_GPU_HIPSYCL)
-            gmx_add_libgromacs_sources(
-            gpu_3dfft_sycl_rocfft.cpp
-            )
-        _gmx_add_files_to_property(SYCL_SOURCES
-            gpu_3dfft_sycl_rocfft.cpp
-            )
+    if(GMX_GPU_HIPSYCL)
+        gmx_add_libgromacs_sources(gpu_3dfft_sycl_rocfft.cpp)
+        _gmx_add_files_to_property(SYCL_SOURCES gpu_3dfft_sycl_rocfft.cpp)
     endif()
-    gmx_add_libgromacs_sources(
-        gpu_3dfft_sycl.cpp
-        )
-    _gmx_add_files_to_property(SYCL_SOURCES
-        gpu_3dfft_sycl.cpp
-        gpu_3dfft.cpp
-        )
+    gmx_add_libgromacs_sources(gpu_3dfft_sycl.cpp)
+    _gmx_add_files_to_property(SYCL_SOURCES gpu_3dfft_sycl.cpp gpu_3dfft.cpp)
 else()
-    gmx_add_libgromacs_sources(
-        # Stub sources for CPU-only build
-        gpu_3dfft.cpp
-        )
+    gmx_add_libgromacs_sources(# Stub sources for CPU-only build
+                               gpu_3dfft.cpp)
 endif()
 
 # Source files have the following private module dependencies.
-target_link_libraries(fft PRIVATE
-                      #                      gmxlib
-                      #                      math
-                      #                      mdtypes
-                      #                      tng_io
-                      )
+target_link_libraries(
+    fft
+    PRIVATE #                      gmxlib
+            #                      math
+            #                      mdtypes
+            #                      tng_io
+)
 
 # Public interface for modules, including dependencies and interfaces
 #target_include_directories(fft PUBLIC
-target_include_directories(fft INTERFACE
-                           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_include_directories(
+    fft INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 #target_link_libraries(fft PUBLIC
-target_link_libraries(fft INTERFACE
-                      legacy_api
-                      )
+target_link_libraries(fft INTERFACE legacy_api)
 
 # TODO: when fft is an OBJECT target
 #target_link_libraries(fft PUBLIC legacy_api)
@@ -128,14 +100,13 @@ target_link_libraries(fft INTERFACE
 # Module dependencies
 # This module convey transitive dependence on these modules.
 #target_link_libraries(fft PUBLIC
-target_link_libraries(fft INTERFACE
-                      #                      utility
-                      )
+target_link_libraries(fft INTERFACE #                      utility
+)
 # Source files have the following private module dependencies.
 #target_link_libraries(fft PRIVATE tng_io)
 # TODO: Explicitly link specific modules.
 #target_link_libraries(fft PRIVATE legacy_modules)
 
-if (BUILD_TESTING)
+if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()

@@ -34,18 +34,14 @@
 
 # Set up the module library
 add_library(mimic INTERFACE)
-if (GMX_MIMIC)
-    file(GLOB MIMIC_SOURCES
-        communicator.cpp
-        utilities.cpp
-        )
+if(GMX_MIMIC)
+    file(GLOB MIMIC_SOURCES communicator.cpp utilities.cpp)
 else()
-    file(GLOB MIMIC_SOURCES
-        communicator_stub.cpp
-        utilities.cpp
-        )
+    file(GLOB MIMIC_SOURCES communicator_stub.cpp utilities.cpp)
 endif()
-set(LIBGROMACS_SOURCES ${LIBGROMACS_SOURCES} ${MIMIC_SOURCES} PARENT_SCOPE)
+set(LIBGROMACS_SOURCES
+    ${LIBGROMACS_SOURCES} ${MIMIC_SOURCES}
+    PARENT_SCOPE)
 
 # Source files have the following dependencies on library infrastructure.
 #target_link_libraries(mimic PRIVATE
@@ -55,12 +51,10 @@ set(LIBGROMACS_SOURCES ${LIBGROMACS_SOURCES} ${MIMIC_SOURCES} PARENT_SCOPE)
 
 # Public interface for modules, including dependencies and interfaces
 #target_include_directories(mimic PUBLIC
-target_include_directories(mimic INTERFACE
-                           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_include_directories(
+    mimic INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 #target_link_libraries(mimic PUBLIC
-target_link_libraries(mimic INTERFACE
-                      legacy_api
-)
+target_link_libraries(mimic INTERFACE legacy_api)
 
 # TODO: when mimic is an OBJECT target
 #target_link_libraries(mimic PUBLIC legacy_api)
@@ -69,11 +63,8 @@ target_link_libraries(mimic INTERFACE
 # Module dependencies
 # mimic interfaces convey transitive dependence on these modules.
 #target_link_libraries(mimic PUBLIC
-target_link_libraries(mimic INTERFACE
-                      utility
-                      )
+target_link_libraries(mimic INTERFACE utility)
 # Source files have the following private module dependencies.
 #target_link_libraries(mimic PRIVATE NOTHING)
 # TODO: Explicitly link specific modules.
 #target_link_libraries(mimic PRIVATE legacy_modules)
-

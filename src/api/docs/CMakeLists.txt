@@ -1,7 +1,7 @@
 #
 # This file is part of the GROMACS molecular simulation package.
 #
-# Copyright (c) 2017,2018, by the GROMACS development team, led by
+# Copyright (c) 2017,2018,2021, by the GROMACS development team, led by
 # Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
 # and including many others, as listed in the AUTHORS file in the
 # top-level source directory and at http://www.gromacs.org.
@@ -38,8 +38,10 @@
 # gmxapi-cppdocs-dev produces more complete documentation in docs/api-dev
 # with internal interfaces and implementation details.
 
-file(TO_NATIVE_PATH "${CMAKE_CURRENT_BINARY_DIR}/../../../docs/api-user" GMXAPI_USERDOC_OUTPUT)
-file(TO_NATIVE_PATH "${CMAKE_CURRENT_BINARY_DIR}/../../../docs/api-dev" GMXAPI_DEVDOC_OUTPUT)
+file(TO_NATIVE_PATH "${CMAKE_CURRENT_BINARY_DIR}/../../../docs/api-user"
+     GMXAPI_USERDOC_OUTPUT)
+file(TO_NATIVE_PATH "${CMAKE_CURRENT_BINARY_DIR}/../../../docs/api-dev"
+     GMXAPI_DEVDOC_OUTPUT)
 
 file(MAKE_DIRECTORY ${GMXAPI_USERDOC_OUTPUT})
 file(MAKE_DIRECTORY ${GMXAPI_DEVDOC_OUTPUT})
@@ -59,17 +61,22 @@ configure_file(Doxyfile-dev.in Doxyfile-dev @ONLY)
 # C++ external API documentation
 ################################
 find_package(Doxygen)
-if (DOXYGEN_FOUND)
-    add_custom_target( gmxapi-cppdocs
+if(DOXYGEN_FOUND)
+    add_custom_target(
+        gmxapi-cppdocs
         COMMAND ${DOXYGEN_EXECUTABLE} Doxyfile
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         COMMENT "Generating API user documentation for ${GMXAPI_USERDOC_OUTPUT}"
-        VERBATIM )
-    add_custom_target( gmxapi-cppdocs-dev
+        VERBATIM)
+    add_custom_target(
+        gmxapi-cppdocs-dev
         COMMAND ${DOXYGEN_EXECUTABLE} Doxyfile-dev
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-        COMMENT "Generating API developer documentation for ${GMXAPI_DEVDOC_OUTPUT}"
-        VERBATIM )
-else ()
-    message(STATUS "Doxygen not found. Documentation targets will not be generated.")
-endif ()
+        COMMENT
+            "Generating API developer documentation for ${GMXAPI_DEVDOC_OUTPUT}"
+        VERBATIM)
+else()
+    message(
+        STATUS "Doxygen not found. Documentation targets will not be generated."
+    )
+endif()

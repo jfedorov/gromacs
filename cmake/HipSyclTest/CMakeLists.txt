@@ -39,13 +39,13 @@ find_package(hipsycl REQUIRED)
 # By default, this project will fail compilation if it can't use hipSYCL compiler.
 # By defining CHECK_x_TARGET we can also make it fail if the specified backend is not among the compilation targets.
 
-if (CHECK_CUDA_TARGET)
+if(CHECK_CUDA_TARGET)
     add_compile_definitions(CHECK_CUDA_TARGET)
 endif()
-if (CHECK_HIP_TARGET)
+if(CHECK_HIP_TARGET)
     add_compile_definitions(CHECK_HIP_TARGET)
 endif()
-if (CHECK_LEVELZERO_TARGET)
+if(CHECK_LEVELZERO_TARGET)
     add_compile_definitions(CHECK_LEVELZERO_TARGET)
 endif()
 add_executable(HipSyclTest main.cpp)

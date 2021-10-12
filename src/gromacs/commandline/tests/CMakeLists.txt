@@ -2,7 +2,7 @@
 # This file is part of the GROMACS molecular simulation package.
 #
 # Copyright (c) 2012,2013,2014,2015,2016 by the GROMACS development team.
-# Copyright (c) 2019,2020, by the GROMACS development team, led by
+# Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
 # Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
 # and including many others, as listed in the AUTHORS file in the
 # top-level source directory and at http://www.gromacs.org.
@@ -34,33 +34,33 @@
 # the research papers on the package. Check out http://www.gromacs.org.
 
 set(EXECUTABLE_EXTENSION "")
-if (GMX_NATIVE_WINDOWS OR GMX_CYGWIN)
+if(GMX_NATIVE_WINDOWS OR GMX_CYGWIN)
     set(EXECUTABLE_EXTENSION ".exe")
 endif()
 set(PATH_SEARCH_TEST_DIR ${CMAKE_CURRENT_BINARY_DIR}/test-bin)
 file(MAKE_DIRECTORY ${PATH_SEARCH_TEST_DIR}/bin)
 file(WRITE ${PATH_SEARCH_TEST_DIR}/bin/test-exe${EXECUTABLE_EXTENSION}
      "Test executable for path searching")
-if (UNIX)
+if(UNIX)
+    execute_process(COMMAND ${CMAKE_COMMAND} -E create_symlink test-exe
+                            ${PATH_SEARCH_TEST_DIR}/bin/test-rel-link)
     execute_process(
-        COMMAND ${CMAKE_COMMAND} -E create_symlink
-            test-exe
-            ${PATH_SEARCH_TEST_DIR}/bin/test-rel-link)
-    execute_process(
-        COMMAND ${CMAKE_COMMAND} -E create_symlink
+        COMMAND
+            ${CMAKE_COMMAND} -E create_symlink
             ${PATH_SEARCH_TEST_DIR}/bin/test-exe
             ${PATH_SEARCH_TEST_DIR}/bin/test-abs-link)
 endif()
 
-gmx_add_unit_test(CommandLineUnitTests commandline-test
+gmx_add_unit_test(
+    CommandLineUnitTests
+    commandline-test
     CPP_SOURCE_FILES
-        cmdlinehelpmodule.cpp
-        cmdlinehelpwriter.cpp
-        cmdlinemodulemanager.cpp
-        cmdlinemodulemanagertest.cpp
-        cmdlineparser.cpp
-        cmdlineprogramcontext.cpp
-        filenm.cpp
-        pargs.cpp
-        )
+    cmdlinehelpmodule.cpp
+    cmdlinehelpwriter.cpp
+    cmdlinemodulemanager.cpp
+    cmdlinemodulemanagertest.cpp
+    cmdlineparser.cpp
+    cmdlineprogramcontext.cpp
+    filenm.cpp
+    pargs.cpp)
 target_link_libraries(commandline-test PRIVATE onlinehelp-test-shared)

@@ -2,7 +2,7 @@
 # This file is part of the GROMACS molecular simulation package.
 #
 # Copyright (c) 2013,2014,2015,2016,2018 by the GROMACS development team.
-# Copyright (c) 2019,2020, by the GROMACS development team, led by
+# Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
 # Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
 # and including many others, as listed in the AUTHORS file in the
 # top-level source directory and at http://www.gromacs.org.
@@ -33,20 +33,21 @@
 # To help us fund GROMACS development, we humbly ask that you cite
 # the research papers on the package. Check out http://www.gromacs.org.
 
-if (GMX_USE_TNG)
+if(GMX_USE_TNG)
     set(tng_sources tngio.cpp)
 endif()
-gmx_add_unit_test(FileIOTests fileio-test
+gmx_add_unit_test(
+    FileIOTests
+    fileio-test
     CPP_SOURCE_FILES
-        checkpoint.cpp
-        confio.cpp
-        filemd5.cpp
-        mrcserializer.cpp
-        mrcdensitymap.cpp
-        mrcdensitymapheader.cpp
-        readinp.cpp
-        fileioxdrserializer.cpp
-        ${tng_sources}
-        xvgio.cpp
-    )
+    checkpoint.cpp
+    confio.cpp
+    filemd5.cpp
+    mrcserializer.cpp
+    mrcdensitymap.cpp
+    mrcdensitymapheader.cpp
+    readinp.cpp
+    fileioxdrserializer.cpp
+    ${tng_sources}
+    xvgio.cpp)
 target_link_libraries(fileio-test PRIVATE legacy_api)

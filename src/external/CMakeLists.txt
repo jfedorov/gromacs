@@ -38,7 +38,7 @@ if(BUILD_TESTING AND GMX_BUILD_UNITTESTS)
     set(CMAKE_THREAD_PREFER_PTHREAD 1)
     find_package(Threads)
     set(PTHREADS_LIBRARIES)
-    if (CMAKE_USE_PTHREADS_INIT)
+    if(CMAKE_USE_PTHREADS_INIT)
         set(PTHREADS_LIBRARIES ${CMAKE_THREAD_LIBS_INIT})
         # Input to googletest CMake scripts
         set(GTEST_HAS_PTHREAD 1)
@@ -52,21 +52,21 @@ if(BUILD_TESTING AND GMX_BUILD_UNITTESTS)
     endif()
 
     add_subdirectory(googletest EXCLUDE_FROM_ALL)
-    target_compile_definitions(gmock
-        PRIVATE
-            _GNU_SOURCE=1
-            GTEST_CAN_STREAM_RESULTS=0
-        PUBLIC
-            GTEST_LANG_CXX11
-            )
+    target_compile_definitions(
+        gmock
+        PRIVATE _GNU_SOURCE=1 GTEST_CAN_STREAM_RESULTS=0
+        PUBLIC GTEST_LANG_CXX11)
     target_compile_definitions(gtest PUBLIC GTEST_LANG_CXX11)
-    if (CYGWIN)
+    if(CYGWIN)
         # Ensure GoogleTest and things that use it can find
         # POSIX things needed by GoogleTest
         target_compile_definitions(gtest PUBLIC _POSIX_C_SOURCE=200809L)
     endif()
-    gmx_target_warning_suppression(gmock -Wno-deprecated-copy HAVE_NO_DEPRECATED_COPY)
+    gmx_target_warning_suppression(gmock -Wno-deprecated-copy
+                                   HAVE_NO_DEPRECATED_COPY)
 
-    set(GTEST_IS_THREADSAFE "${GTEST_IS_THREADSAFE}" PARENT_SCOPE)
+    set(GTEST_IS_THREADSAFE
+        "${GTEST_IS_THREADSAFE}"
+        PARENT_SCOPE)
 endif()
 add_subdirectory(boost)

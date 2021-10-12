@@ -2,7 +2,7 @@
 # This file is part of the GROMACS molecular simulation package.
 #
 # Copyright (c) 2012,2013,2014,2015,2018 by the GROMACS development team.
-# Copyright (c) 2019,2020, by the GROMACS development team, led by
+# Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
 # Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
 # and including many others, as listed in the AUTHORS file in the
 # top-level source directory and at http://www.gromacs.org.
@@ -35,21 +35,22 @@
 
 file(GLOB LINEARALGEBRA_SOURCES *.cpp)
 
-if (NOT GMX_EXTERNAL_BLAS)
+if(NOT GMX_EXTERNAL_BLAS)
     file(GLOB BLAS_SOURCES gmx_blas/*.cpp)
 endif()
 
-if (NOT GMX_EXTERNAL_LAPACK)
+if(NOT GMX_EXTERNAL_LAPACK)
     file(GLOB LAPACK_SOURCES gmx_lapack/*.cpp)
 endif()
 
-set(LINEARALGEBRA_SOURCES
-    ${LINEARALGEBRA_SOURCES} ${BLAS_SOURCES} ${LAPACK_SOURCES})
+set(LINEARALGEBRA_SOURCES ${LINEARALGEBRA_SOURCES} ${BLAS_SOURCES}
+                          ${LAPACK_SOURCES})
 
 add_library(linearalgebra OBJECT ${LINEARALGEBRA_SOURCES})
 # TODO: Only expose the module's public headers.
-target_include_directories(linearalgebra INTERFACE
-                           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+target_include_directories(
+    linearalgebra
+    INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
 target_include_directories(linearalgebra PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
 gmx_target_compile_options(linearalgebra)
@@ -57,19 +58,25 @@ target_compile_definitions(linearalgebra PRIVATE HAVE_CONFIG_H)
 # The linearalgebra code is all considered external, and we will
 # not keep it free of warnings. Any compiler suppressions required
 # should be added here.
-if (WIN32)
-    gmx_target_warning_suppression(linearalgebra /wd4305 HAS_NO_MSVC_INITIALIZING_FLOAT_FROM_DOUBLE)
-    gmx_target_warning_suppression(linearalgebra /wd4244 HAS_NO_MSVC_LOSSY_CONVERSION_DOUBLE_TO_REAL)
-    gmx_target_warning_suppression(linearalgebra /wd4996 HAS_NO_MSVC_UNSAFE_FUNCTION)
+if(WIN32)
+    gmx_target_warning_suppression(linearalgebra /wd4305
+                                   HAS_NO_MSVC_INITIALIZING_FLOAT_FROM_DOUBLE)
+    gmx_target_warning_suppression(linearalgebra /wd4244
+                                   HAS_NO_MSVC_LOSSY_CONVERSION_DOUBLE_TO_REAL)
+    gmx_target_warning_suppression(linearalgebra /wd4996
+                                   HAS_NO_MSVC_UNSAFE_FUNCTION)
 else()
     # We usually enable this warning, but here it is being used
     # correctly to construct strings for use with an API that does
     # not expect null termination of C strings.
-    gmx_target_warning_suppression(linearalgebra -Wno-stringop-truncation HAS_NO_STRINGOP_TRUNCATION)
+    gmx_target_warning_suppression(linearalgebra -Wno-stringop-truncation
+                                   HAS_NO_STRINGOP_TRUNCATION)
 endif()
 target_link_libraries(linearalgebra PRIVATE legacy_api)
 target_link_libraries(linearalgebra PRIVATE common)
 # TODO: Link specific modules.
 target_link_libraries(linearalgebra PRIVATE legacy_modules)
 list(APPEND libgromacs_object_library_dependencies linearalgebra)
-set(libgromacs_object_library_dependencies ${libgromacs_object_library_dependencies} PARENT_SCOPE)
+set(libgromacs_object_library_dependencies
+    ${libgromacs_object_library_dependencies}
+    PARENT_SCOPE)

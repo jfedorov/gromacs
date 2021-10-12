@@ -35,7 +35,9 @@
 
 if(GMX_GPU_OPENCL)
     file(GLOB OPENCL_NB_SOURCES *.cpp)
-    set(NBNXM_SOURCES ${NBNXM_SOURCES} ${OPENCL_NB_SOURCES} PARENT_SCOPE)
+    set(NBNXM_SOURCES
+        ${NBNXM_SOURCES} ${OPENCL_NB_SOURCES}
+        PARENT_SCOPE)
 endif()
 
 set(ELEC_DEFS
@@ -54,19 +56,21 @@ set(VDW_DEFS
     "-DLJ_EWALD_COMB_GEOM\;-DVDWNAME=_VdwLJEwCombGeom"
     "-DLJ_EWALD_COMB_LB\;-DVDWNAME=_VdwLJEwCombLB")
 if(CLANG_TIDY_EXE)
-   set(OCL_COMPILER "${CLANG_TIDY_EXE}")
-   # TODO: remove readability-isolate-declaration when the nbnxm OpenCL kernels get modernized
-   set(CLANG_TIDY_ARGS "-quiet;-checks=*,-readability-isolate-declaration,-readability-implicit-bool-conversion,-llvm-header-guard,-hicpp-signed-bitwise,-clang-analyzer-deadcode.DeadStores,-google-readability-todo;--;${CMAKE_C_COMPILER}")
+    set(OCL_COMPILER "${CLANG_TIDY_EXE}")
+    # TODO: remove readability-isolate-declaration when the nbnxm OpenCL kernels get modernized
+    set(CLANG_TIDY_ARGS
+        "-quiet;-checks=*,-readability-isolate-declaration,-readability-implicit-bool-conversion,-llvm-header-guard,-hicpp-signed-bitwise,-clang-analyzer-deadcode.DeadStores,-google-readability-todo;--;${CMAKE_C_COMPILER}"
+    )
 else()
-   set(OCL_COMPILER "${CMAKE_C_COMPILER}")
+    set(OCL_COMPILER "${CMAKE_C_COMPILER}")
 endif()
 foreach(ELEC_DEF IN LISTS ELEC_DEFS)
     foreach(VDW_DEF IN LISTS VDW_DEFS)
         foreach(VENDOR AMD NVIDIA INTEL)
             if(VENDOR STREQUAL INTEL)
-               set(CLUSTER_SIZE 4)
+                set(CLUSTER_SIZE 4)
             else()
-               set(CLUSTER_SIZE 8)
+                set(CLUSTER_SIZE 8)
             endif()
             string(REGEX REPLACE ".*=" "" ELEC_NAME "${ELEC_DEF}")
             string(REGEX REPLACE ".*=" "" VDW_NAME "${VDW_DEF}")
@@ -74,21 +78,22 @@ foreach(ELEC_DEF IN LISTS ELEC_DEFS)
             # The constants below duplicate various others (e.g. from pairlist.h)
             # but as the kernels compiled here are not used for production,
             # it will be OK if the values would fall out of sync.
-            add_custom_command(OUTPUT ${OBJ_FILE} COMMAND ${OCL_COMPILER}
-                ${CMAKE_CURRENT_SOURCE_DIR}/nbnxm_ocl_kernels.cl ${CLANG_TIDY_ARGS}
-                -Xclang -finclude-default-header  -D_${VENDOR}_SOURCE_
-                -DGMX_OCL_FASTGEN ${ELEC_DEF} ${VDW_DEF}
-                -Dc_nbnxnGpuClusterSize=${CLUSTER_SIZE}
-                -DNBNXM_MIN_DISTANCE_SQUARED_VALUE_FLOAT=3.82e-07
-                -Dc_nbnxnGpuNumClusterPerSupercluster=8
-                -Dc_nbnxnGpuJgroupSize=4
-                -Dc_centralShiftIndex=22
-                -DIATYPE_SHMEM
-                -c -I ${CMAKE_SOURCE_DIR}/src -std=cl1.2
-                -Weverything  -Wno-conversion -Wno-missing-variable-declarations -Wno-used-but-marked-unused
-                -Wno-cast-align -Wno-incompatible-pointer-types
-                -o${OBJ_FILE}
-                )
+            add_custom_command(
+                OUTPUT ${OBJ_FILE}
+                COMMAND
+                    ${OCL_COMPILER}
+                    ${CMAKE_CURRENT_SOURCE_DIR}/nbnxm_ocl_kernels.cl
+                    ${CLANG_TIDY_ARGS} -Xclang -finclude-default-header
+                    -D_${VENDOR}_SOURCE_ -DGMX_OCL_FASTGEN ${ELEC_DEF}
+                    ${VDW_DEF} -Dc_nbnxnGpuClusterSize=${CLUSTER_SIZE}
+                    -DNBNXM_MIN_DISTANCE_SQUARED_VALUE_FLOAT=3.82e-07
+                    -Dc_nbnxnGpuNumClusterPerSupercluster=8
+                    -Dc_nbnxnGpuJgroupSize=4 -Dc_centralShiftIndex=22
+                    -DIATYPE_SHMEM -c -I ${CMAKE_SOURCE_DIR}/src -std=cl1.2
+                    -Weverything -Wno-conversion
+                    -Wno-missing-variable-declarations
+                    -Wno-used-but-marked-unused -Wno-cast-align
+                    -Wno-incompatible-pointer-types -o${OBJ_FILE})
             list(APPEND NBNXM_OCL_KERNELS ${OBJ_FILE})
         endforeach()
     endforeach()

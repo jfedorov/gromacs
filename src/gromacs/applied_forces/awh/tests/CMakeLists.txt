@@ -32,12 +32,13 @@
 # To help us fund GROMACS development, we humbly ask that you cite
 # the research papers on the package. Check out http://www.gromacs.org.
 
-gmx_add_unit_test(AwhTest awh-test
+gmx_add_unit_test(
+    AwhTest
+    awh-test
     CPP_SOURCE_FILES
-        awh_setup.cpp
-        bias.cpp
-	biasgrid.cpp
-        biassharing.cpp
-        biasstate.cpp
-        bias_fep_lambda_state.cpp
-        )
+    awh_setup.cpp
+    bias.cpp
+    biasgrid.cpp
+    biassharing.cpp
+    biasstate.cpp
+    bias_fep_lambda_state.cpp)
