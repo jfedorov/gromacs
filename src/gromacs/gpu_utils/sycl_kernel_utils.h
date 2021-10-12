@@ -190,11 +190,10 @@ static inline bool isfinite(Real value)
  * https://github.com/illuhad/hipSYCL/issues/647 is resolved. */
 template<cl::sycl::access::address_space AddressSpace,
          typename T,
-         int NumElements,
-         class VectorStorage = cl::sycl::detail::vec_storage<T, NumElements>>
-__device__ __host__ static inline void loadToVec(size_t                                     offset,
+         int NumElements>
+static inline void loadToVec(size_t                                     offset,
                                                  cl::sycl::multi_ptr<const T, AddressSpace> ptr,
-                                                 cl::sycl::vec<T, NumElements, VectorStorage>* v)
+                                                 cl::sycl::vec<T, NumElements>* v)
 {
     for (int i = 0; i < NumElements; ++i)
     {
@@ -211,9 +210,8 @@ __device__ __host__ static inline void loadToVec(size_t                         
  * https://github.com/illuhad/hipSYCL/issues/647 is resolved. */
 template<cl::sycl::access::address_space AddressSpace,
          typename T,
-         int NumElements,
-         class VectorStorage = cl::sycl::detail::vec_storage<T, NumElements>>
-__device__ __host__ static inline void storeFromVec(const cl::sycl::vec<T, NumElements, VectorStorage>& v,
+         int NumElements>
+static inline void storeFromVec(const cl::sycl::vec<T, NumElements>& v,
                                                     size_t                               offset,
                                                     cl::sycl::multi_ptr<T, AddressSpace> ptr)
 {
@@ -234,11 +232,10 @@ __device__ __host__ static inline void storeFromVec(const cl::sycl::vec<T, NumEl
  * https://github.com/illuhad/hipSYCL/issues/647 is resolved. */
 template<cl::sycl::access::address_space AddressSpace,
          typename T,
-         int NumElements,
-         class VectorStorage = cl::sycl::detail::vec_storage<T, NumElements>>
-__device__ __host__ static inline void loadToVec(size_t offset,
+         int NumElements>
+static inline void loadToVec(size_t offset,
                                                  cl::sycl::multi_ptr<const T, AddressSpace> ptr,
-                                                 cl::sycl::vec<T, NumElements, VectorStorage>* v)
+                                                 cl::sycl::vec<T, NumElements>* v)
 {
     v->load(offset, ptr);
 }
@@ -252,9 +249,8 @@ __device__ __host__ static inline void loadToVec(size_t offset,
  * https://github.com/illuhad/hipSYCL/issues/647 is resolved. */
 template<cl::sycl::access::address_space AddressSpace,
          typename T,
-         int NumElements,
-         class VectorStorage = cl::sycl::detail::vec_storage<T, NumElements>>
-__device__ __host__ static inline void storeFromVec(const cl::sycl::vec<T, NumElements, VectorStorage>& v,
+         int NumElements>
+static inline void storeFromVec(const cl::sycl::vec<T, NumElements>& v,
                                                     size_t offset,
                                                     cl::sycl::multi_ptr<T, AddressSpace> ptr)
 {
