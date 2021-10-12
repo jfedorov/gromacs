@@ -38,14 +38,6 @@
 # \author Sebastian Keller <keller@cscs.ch>
 #
 
-set(TESTUTILS_DIR ${PROJECT_SOURCE_DIR}/src/testutils)
-if (BUILD_TESTING)
-    if(NOT GMX_DEVELOPER_BUILD)
-        set(UNITTEST_TARGET_OPTIONS EXCLUDE_FROM_ALL)
-    endif()
-    include(${TESTUTILS_DIR}/TestMacros.cmake)
-endif()
-
 add_custom_target(nblib-tests
         COMMENT "Target to build all nblib tests including samples"
         )
@@ -99,17 +91,27 @@ target_sources(nblib
         simulationstate.cpp
         topologyhelpers.cpp
         topology.cpp
+        tpr.cpp
         virials.cpp
         )
 
 gmx_target_compile_options(nblib)
 
 target_link_libraries(nblib PRIVATE libgromacs)
-target_include_directories(nblib SYSTEM BEFORE PRIVATE ${PROJECT_SOURCE_DIR}/src/external/thread_mpi/include)
 target_include_directories(nblib PRIVATE ${PROJECT_SOURCE_DIR}/api)
 include_directories(BEFORE ${CMAKE_SOURCE_DIR}/api)
 target_link_libraries(nblib PRIVATE common)
-# There are transitive dependencies on the legacy GROMACS headers.
+target_link_libraries(nblib PRIVATE
+                      fileio
+                      gmxlib
+                      listed_forces
+                      mdtypes
+                      mdlib
+                      topology
+                      utility)
+
+# There are transitive interface dependencies on the legacy GROMACS headers.
+# TODO(#3288): Explicitly link specific modules for public API dependencies as legacy_api is removed.
 target_link_libraries(nblib PUBLIC legacy_api)
 # TODO: Explicitly link specific modules.
 target_link_libraries(nblib PRIVATE legacy_modules)
@@ -141,6 +143,7 @@ if(GMX_INSTALL_NBLIB_API)
             particletype.h
             simulationstate.h
             topology.h
+            tpr.h
             vector.h
             DESTINATION include/nblib)
 endif()

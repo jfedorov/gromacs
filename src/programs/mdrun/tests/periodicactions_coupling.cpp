@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2018,2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -33,53 +33,40 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 
-#include <memory>
+/*! \internal \file
+ * \brief Tests to verify that a simulator that only does some actions
+ * periodically with propagators with coupling produces the expected results.
+ *
+ * \author Mark Abraham <mark.j.abraham@gmail.com>
+ * \ingroup module_mdrun_integration_tests
+ */
+#include "gmxpre.h"
 
-#include "workflow.h"
-#include "workflow_impl.h"
-#include "testingconfiguration.h"
+#include "config.h"
 
-namespace gmxapi
+#include "periodicactions.h"
+
+namespace gmx
+{
+namespace test
 {
 
-namespace testing
-{
+using ::testing::Combine;
+using ::testing::Values;
+using ::testing::ValuesIn;
 
-namespace
-{
+// TODO The time for OpenCL kernel compilation means these tests time
+// out. Once that compilation is cached for the whole process, these
+// tests can run in such configurations.
+#if !GMX_GPU_OPENCL
+INSTANTIATE_TEST_SUITE_P(PropagatorsWithCoupling,
+                         PeriodicActionsTest,
+                         Combine(ValuesIn(propagationParametersWithCoupling()), Values(outputParameters)));
+#else
+INSTANTIATE_TEST_SUITE_P(DISABLED_PropagatorsWithCoupling,
+                         PeriodicActionsTest,
+                         Combine(ValuesIn(propagationParametersWithCoupling()), Values(outputParameters)));
+#endif
 
-//! Create a work spec, then the implementation graph, then the container
-TEST_F(GmxApiTest, BuildApiWorkflowImpl)
-{
-    makeTprFile(100);
-    // Create work spec
-    auto node = std::make_unique<gmxapi::MDNodeSpecification>(runner_.tprFileName_);
-    EXPECT_NE(node, nullptr);
-
-    // Create key
-    std::string key{ "MD" };
-    key.append(runner_.tprFileName_);
-
-    // Create graph (workflow implementation object)
-    gmxapi::Workflow::Impl impl;
-    impl[key] = std::move(node);
-    EXPECT_EQ(impl.count(key), 1);
-    EXPECT_EQ(impl.size(), 1);
-
-    // Create workflow container
-    gmxapi::Workflow work{ std::move(impl) };
-}
-
-//! Create from create() method(s)
-TEST_F(GmxApiTest, CreateApiWorkflow)
-{
-    makeTprFile(100);
-    auto work = gmxapi::Workflow::create(runner_.tprFileName_);
-    EXPECT_NE(work, nullptr);
-}
-
-} // end anonymous namespace
-
-} // end namespace testing
-
-} // end namespace gmxapi
+} // namespace test
+} // namespace gmx

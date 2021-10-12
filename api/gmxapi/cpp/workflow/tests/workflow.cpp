@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2018, by the GROMACS development team, led by
+ * Copyright (c) 2018,2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -33,9 +33,11 @@
  * the research papers on the package. Check out http://www.gromacs.org.
  */
 
-#include "gmxapi/status.h"
+#include <memory>
 
-#include <gtest/gtest.h>
+#include "workflow.h"
+#include "workflow_impl.h"
+#include "testingconfiguration.h"
 
 namespace gmxapi
 {
@@ -45,32 +47,39 @@ namespace testing
 
 namespace
 {
-/*!
- * \brief Test construction and conversion of boolean success status.
- */
-TEST(GmxApiBasicTest, Status)
+
+//! Create a work spec, then the implementation graph, then the container
+TEST_F(GmxApiTest, BuildApiWorkflowImpl)
 {
-    {
-        auto status = gmxapi::Status();
-        EXPECT_FALSE(status.success());
-        status = true;
-        EXPECT_TRUE(status.success());
-    }
-    {
-        auto status = gmxapi::Status(true);
-        EXPECT_TRUE(status.success());
-        status = false;
-        EXPECT_FALSE(status.success());
-    }
-    {
-        auto status = gmxapi::Status(false);
-        EXPECT_FALSE(status.success());
-        EXPECT_TRUE(gmxapi::Status(gmxapi::Status(true)).success());
-    }
+    makeTprFile(100);
+    // Create work spec
+    auto node = std::make_unique<gmxapi::MDNodeSpecification>(runner_.tprFileName_);
+    EXPECT_NE(node, nullptr);
+
+    // Create key
+    std::string key{ "MD" };
+    key.append(runner_.tprFileName_);
+
+    // Create graph (workflow implementation object)
+    gmxapi::Workflow::Impl impl;
+    impl[key] = std::move(node);
+    EXPECT_EQ(impl.count(key), 1);
+    EXPECT_EQ(impl.size(), 1);
+
+    // Create workflow container
+    EXPECT_NO_THROW(gmxapi::Workflow work{ std::move(impl) });
+}
+
+//! Create from create() method(s)
+TEST_F(GmxApiTest, CreateApiWorkflow)
+{
+    makeTprFile(100);
+    auto work = gmxapi::Workflow::create(runner_.tprFileName_);
+    EXPECT_NE(work, nullptr);
 }
 
 } // end anonymous namespace
 
-} // namespace testing
+} // end namespace testing
 
-} // namespace gmxapi
+} // end namespace gmxapi

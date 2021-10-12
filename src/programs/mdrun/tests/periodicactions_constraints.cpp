@@ -1,7 +1,7 @@
 /*
  * This file is part of the GROMACS molecular simulation package.
  *
- * Copyright (c) 2018, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -32,31 +32,43 @@
  * To help us fund GROMACS development, we humbly ask that you cite
  * the research papers on the package. Check out http://www.gromacs.org.
  */
-#include "testingconfiguration.h"
-#include "gmxapi/system.h"
 
-namespace gmxapi
-{
-
-namespace testing
-{
-
-namespace
-{
-
-/*!
- * \brief Check gmxapi::System construction.
+/*! \internal \file
+ * \brief Tests to verify that a simulator that only does some actions
+ * periodically with propagators with constraints produces the expected results.
+ *
+ * \author Mark Abraham <mark.j.abraham@gmail.com>
+ * \ingroup module_mdrun_integration_tests
  */
-TEST_F(GmxApiTest, SystemConstruction)
+#include "gmxpre.h"
+
+#include "config.h"
+
+#include "periodicactions.h"
+
+namespace gmx
 {
-    makeTprFile(1);
-    EXPECT_NO_THROW(gmxapi::fromTprFile(runner_.tprFileName_));
-    // We have nothing to check at this point other than compilation and
-    // error-free execution.
-}
+namespace test
+{
 
-} // end anonymous namespace
+using ::testing::Combine;
+using ::testing::Values;
+using ::testing::ValuesIn;
 
-} // end namespace testing
+// TODO The time for OpenCL kernel compilation means these tests time
+// out. Once that compilation is cached for the whole process, these
+// tests can run in such configurations.
+#if !GMX_GPU_OPENCL
+INSTANTIATE_TEST_SUITE_P(PropagatorsWithConstraints,
+                         PeriodicActionsTest,
+                         Combine(ValuesIn(propagationParametersWithConstraints()),
+                                 Values(outputParameters)));
+#else
+INSTANTIATE_TEST_SUITE_P(DISABLED_PropagatorsWithConstraints,
+                         PeriodicActionsTest,
+                         Combine(ValuesIn(propagationParametersWithConstraints()),
+                                 Values(outputParameters)));
+#endif
 
-} // end namespace gmxapi
+} // namespace test
+} // namespace gmx
