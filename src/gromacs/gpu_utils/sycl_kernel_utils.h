@@ -179,6 +179,90 @@ static inline bool isfinite(Real value)
 
 #endif
 
+#if GMX_SYCL_HIPSYCL
+
+/*! \brief Polyfill for sycl::vec::load buggy in hipSYCL
+ *
+ * Loads from the address \c ptr offset in elements of type T by
+ * NumElements * offset, into the components of \c v.
+ *
+ * Can probably be removed when
+ * https://github.com/illuhad/hipSYCL/issues/647 is resolved. */
+template<cl::sycl::access::address_space AddressSpace,
+         typename T,
+         int NumElements,
+         class VectorStorage = cl::sycl::detail::vec_storage<T, NumElements>>
+__device__ __host__ static inline void loadToVec(size_t                                     offset,
+                                                 cl::sycl::multi_ptr<const T, AddressSpace> ptr,
+                                                 cl::sycl::vec<T, NumElements, VectorStorage>* v)
+{
+    for (int i = 0; i < NumElements; ++i)
+    {
+        (*v)[i] = ptr.get()[offset * NumElements + i];
+    }
+}
+
+/*! \brief Polyfill for sycl::vec::store buggy in hipSYCL
+ *
+ * Loads from the address \c ptr offset in elements of type T by
+ * NumElements * offset, into the components of \c v.
+ *
+ * Can probably be removed when
+ * https://github.com/illuhad/hipSYCL/issues/647 is resolved. */
+template<cl::sycl::access::address_space AddressSpace,
+         typename T,
+         int NumElements,
+         class VectorStorage = cl::sycl::detail::vec_storage<T, NumElements>>
+__device__ __host__ static inline void storeFromVec(const cl::sycl::vec<T, NumElements, VectorStorage>& v,
+                                                    size_t                               offset,
+                                                    cl::sycl::multi_ptr<T, AddressSpace> ptr)
+{
+    for (int i = 0; i < NumElements; ++i)
+    {
+        ptr.get()[offset * NumElements + i] = v[i];
+    }
+}
+
+#elif GMX_SYCL_DPCPP
+
+/*! \brief Polyfill for sycl::vec::load buggy in hipSYCL
+ *
+ * Loads from the address \c ptr offset in elements of type T by
+ * NumElements * offset, into the components of \c v.
+ *
+ * Can probably be removed when
+ * https://github.com/illuhad/hipSYCL/issues/647 is resolved. */
+template<cl::sycl::access::address_space AddressSpace,
+         typename T,
+         int NumElements,
+         class VectorStorage = cl::sycl::detail::vec_storage<T, NumElements>>
+__device__ __host__ static inline void loadToVec(size_t offset,
+                                                 cl::sycl::multi_ptr<const T, AddressSpace> ptr,
+                                                 cl::sycl::vec<T, NumElements, VectorStorage>* v)
+{
+    v->load(offset, ptr);
+}
+
+/*! \brief Polyfill for sycl::vec::store buggy in hipSYCL
+ *
+ * Loads from the address \c ptr offset in elements of type T by
+ * NumElements * offset, into the components of \c v.
+ *
+ * Can probably be removed when
+ * https://github.com/illuhad/hipSYCL/issues/647 is resolved. */
+template<cl::sycl::access::address_space AddressSpace,
+         typename T,
+         int NumElements,
+         class VectorStorage = cl::sycl::detail::vec_storage<T, NumElements>>
+__device__ __host__ static inline void storeFromVec(const cl::sycl::vec<T, NumElements, VectorStorage>& v,
+                                                    size_t offset,
+                                                    cl::sycl::multi_ptr<T, AddressSpace> ptr)
+{
+    v.store(offset, ptr);
+}
+
+#endif
+
 } // namespace sycl_2020
 
 #endif /* GMX_GPU_UTILS_SYCL_KERNEL_UTILS_H */

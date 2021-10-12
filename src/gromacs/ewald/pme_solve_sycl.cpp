@@ -62,11 +62,11 @@ using cl::sycl::access::mode;
  * \tparam     subGroupSize             Describes the width of a SYCL subgroup
  */
 template<GridOrdering gridOrdering, bool computeEnergyAndVirial, int subGroupSize>
-auto makeSolveKernel(cl::sycl::handler&                                 cgh,
-                     DeviceAccessor<float, mode::read>                  a_splineModuli,
-                     DeviceAccessor<SolveKernelParams, mode::read>      a_solveKernelParams,
-                     DeviceAccessor<float, mode::read_write>            a_virialAndEnergy,
-                     DeviceAccessor<cl::sycl::float2, mode::read_write> a_fourierGrid)
+auto makeSolveKernel(cl::sycl::handler&                            cgh,
+                     DeviceAccessor<float, mode::read>             a_splineModuli,
+                     DeviceAccessor<SolveKernelParams, mode::read> a_solveKernelParams,
+                     DeviceAccessor<float, mode::read_write>       a_virialAndEnergy,
+                     DeviceAccessor<float, mode::read_write>       a_fourierGrid)
 {
     cgh.require(a_splineModuli);
     cgh.require(a_solveKernelParams);
@@ -114,6 +114,20 @@ auto makeSolveKernel(cl::sycl::handler&                                 cgh,
                 a_splineModuli.get_pointer() + a_solveKernelParams[0].splineValuesOffset[middleDim];
         const float* __restrict__ gm_splineValueMinor =
                 a_splineModuli.get_pointer() + a_solveKernelParams[0].splineValuesOffset[minorDim];
+        // The Fourier grid is allocated as float values, even though
+        // it logically contains complex values. (It also can be
+        // the same memory as the real grid for in-place transforms.)
+        // The buffer underlying the accessor may have a size that is
+        // larger than the active grid, because it is allocated with
+        // reallocateDeviceBuffer. The size of that larger-than-needed
+        // grid can be an odd number of floats, even though actual
+        // grid code only accesses up to an even number of floats. If
+        // we would use the reinterpet method of the accessor to
+        // convert from float to float2, runtime boundary checks can
+        // fail because of this mismatch. So, we extract the
+        // underlying global_ptr and use that to construct
+        // cl::sycl::float2 values when needed.
+        cl::sycl::global_ptr<float> gm_fourierGrid = a_fourierGrid.get_pointer();
 
         /* Various grid sizes and indices */
         const int localOffsetMinor = 0, localOffsetMajor = 0, localOffsetMiddle = 0;
@@ -236,10 +250,15 @@ auto makeSolveKernel(cl::sycl::handler&                                 cgh,
                 const float tmp1   = cl::sycl::exp(-a_solveKernelParams[0].ewaldFactor * m2k);
                 const float etermk = a_solveKernelParams[0].elFactor * tmp1 / denom;
 
-                cl::sycl::float2       gridValue    = a_fourierGrid[gridThreadIndex];
+                // sycl::float2::load and store are buggy in hipSYCL,
+                // but can probably be used after resolution of
+                // https://github.com/illuhad/hipSYCL/issues/647
+                cl::sycl::float2 gridValue;
+                sycl_2020::loadToVec(
+                        gridThreadIndex, cl::sycl::global_ptr<const float>(gm_fourierGrid), &gridValue);
                 const cl::sycl::float2 oldGridValue = gridValue;
                 gridValue *= etermk;
-                a_fourierGrid[gridThreadIndex] = gridValue;
+                sycl_2020::storeFromVec(gridValue, gridThreadIndex, gm_fourierGrid);
 
                 if (computeEnergyAndVirial)
                 {
@@ -417,23 +436,13 @@ cl::sycl::event PmeSolveKernel<gridOrdering, computeEnergyAndVirial, gridIndex, 
     cl::sycl::queue q = deviceStream.stream();
 
     cl::sycl::buffer<SolveKernelParams, 1> d_solveKernelParams(&solveKernelParams_, 1);
-    // The Fourier grid contains complex values but is allocated as
-    // twice as many floats. Its capacity can be larger than the size,
-    // so we need to recompute the size of the Fourier grid in complex
-    // so we can reinterpret as float2.
-    cl::sycl::buffer<float, 1>& d_fourierGridAsFloat = *gridParams_->d_fourierGrid[gridIndex].buffer_;
-    const int                   fourierGridAsFloat2Size = gridParams_->complexGridSizePadded[XX]
-                                        * gridParams_->complexGridSizePadded[YY]
-                                        * gridParams_->complexGridSizePadded[ZZ];
-    auto d_fourierGridAsFloat2 = d_fourierGridAsFloat.reinterpret<cl::sycl::float2>(
-            cl::sycl::range<1>(fourierGridAsFloat2Size));
-    cl::sycl::event e = q.submit([&](cl::sycl::handler& cgh) {
+    cl::sycl::event                        e = q.submit([&](cl::sycl::handler& cgh) {
         auto kernel = makeSolveKernel<gridOrdering, computeEnergyAndVirial, subGroupSize>(
                 cgh,
                 gridParams_->d_splineModuli[gridIndex],
                 d_solveKernelParams,
                 constParams_->d_virialAndEnergy[gridIndex],
-                d_fourierGridAsFloat2);
+                gridParams_->d_fourierGrid[gridIndex]);
         cgh.parallel_for<KernelNameType>(range, kernel);
     });
 
