@@ -99,13 +99,13 @@ public:
     void compute(gmx::ArrayRef<const Vec3> coordinates,
                  gmx::ArrayRef<Vec3>       forces,
                  gmx::ArrayRef<Vec3>       shiftForces,
-                 EnergyType&               energies,
+                 gmx::ArrayRef<real>       energies,
                  bool                      usePbc = false);
 
     //! \brief Alternative overload without shift forces
     void compute(gmx::ArrayRef<const Vec3> coordinates,
                  gmx::ArrayRef<Vec3>       forces,
-                 EnergyType&               energies,
+                 gmx::ArrayRef<real>       energies,
                  bool                      usePbc = false);
 
     //! \brief Alternative overload without the energies
@@ -116,9 +116,6 @@ public:
 
 private:
     int numThreads;
-
-    //! holds the array of energies computed
-    EnergyType energyBuffer_;
 
     //! holds the listed interactions split into groups for multithreading
     std::vector<ListedInteractionData> threadedInteractions_;
@@ -133,10 +130,11 @@ private:
     std::unique_ptr<PbcHolder> pbcHolder_;
 
     //! compute listed forces and energies, overwrites the internal buffers
-    template<class ShiftForce>
+    template<class ShiftForce, class EnergyType>
     void computeForcesAndEnergies(gmx::ArrayRef<const Vec3>                  x,
                                   gmx::ArrayRef<Vec3>                        forces,
                                   [[maybe_unused]] gmx::ArrayRef<ShiftForce> shiftForces,
+                                  [[maybe_unused]] gmx::ArrayRef<EnergyType> energies,
                                   bool                                       usePbc = false);
 };
 

@@ -69,7 +69,7 @@ ListedForceCalculator::ListedForceCalculator(const ListedInteractionData& intera
     threadedInteractions_ = splitListedWork(interactions, bufferSize, numThreads);
 
     // set up the reduction buffers
-    int threadRange = bufferSize / numThreads;
+    int threadRange = (bufferSize + numThreads - 1) / numThreads;
 #pragma omp parallel for num_threads(numThreads) schedule(static)
     for (int i = 0; i < numThreads; ++i)
     {
@@ -86,10 +86,11 @@ ListedForceCalculator::ListedForceCalculator(const ListedInteractionData& intera
     }
 }
 
-template<class ShiftForce>
+template<class ShiftForce, class EnergyType>
 void ListedForceCalculator::computeForcesAndEnergies(gmx::ArrayRef<const Vec3> x,
                                                      gmx::ArrayRef<Vec3>       forces,
                                                      [[maybe_unused]] gmx::ArrayRef<ShiftForce> shiftForces,
+                                                     [[maybe_unused]] gmx::ArrayRef<EnergyType> energies,
                                                      bool usePbc)
 {
     if (x.size() != forces.size())
@@ -97,10 +98,25 @@ void ListedForceCalculator::computeForcesAndEnergies(gmx::ArrayRef<const Vec3> x
         throw InputException("Coordinates array and force buffer size mismatch");
     }
 
-    energyBuffer_.fill(0);
+    constexpr bool haveEnergies = !std::is_same_v<EnergyType, std::nullptr_t>;
+    if constexpr (haveEnergies)
+    {
+        if (energies.size() != std::tuple_size<ListedInteractionData>::value)
+        {
+            throw InputException("Energies array size mismatch");
+        }
+        std::fill(energies.begin(), energies.end(), 0);
+    }
     std::vector<std::array<real, std::tuple_size<ListedInteractionData>::value>> energiesPerThread(numThreads);
 
     constexpr bool haveShiftForces = !std::is_same_v<ShiftForce, std::nullptr_t>;
+    if constexpr (haveShiftForces)
+    {
+        if (shiftForces.size() != gmx::c_numShiftVectors)
+        {
+            throw InputException("Shift vectors array size mismatch");
+        }
+    }
 
 #pragma omp parallel for num_threads(numThreads) schedule(static)
     for (int thread = 0; thread < numThreads; ++thread)
@@ -147,14 +163,16 @@ void ListedForceCalculator::computeForcesAndEnergies(gmx::ArrayRef<const Vec3> x
     }
 
     // reduce energies
-    for (int thread = 0; thread < numThreads; ++thread)
+    if constexpr (haveEnergies)
     {
-        for (int type = 0; type < int(energyBuffer_.size()); ++type)
+        for (int thread = 0; thread < numThreads; ++thread)
         {
-            energyBuffer_[type] += energiesPerThread[thread][type];
+            for (int type = 0; type < int(energies.size()); ++type)
+            {
+                energies[type] += energiesPerThread[thread][type];
+            }
         }
     }
-
     // reduce forces
 #pragma omp parallel for num_threads(numThreads) schedule(static)
     for (int thread = 0; thread < numThreads; ++thread)
@@ -181,25 +199,24 @@ void ListedForceCalculator::computeForcesAndEnergies(gmx::ArrayRef<const Vec3> x
 void ListedForceCalculator::compute(gmx::ArrayRef<const Vec3> coordinates,
                                     gmx::ArrayRef<Vec3>       forces,
                                     gmx::ArrayRef<Vec3>       shiftForces,
-                                    EnergyType&               energies,
+                                    gmx::ArrayRef<real>       energies,
                                     bool                      usePbc)
 {
-    computeForcesAndEnergies(coordinates, forces, shiftForces, usePbc);
-    energies = energyBuffer_;
+    computeForcesAndEnergies(coordinates, forces, shiftForces, energies, usePbc);
 }
 
 void ListedForceCalculator::compute(gmx::ArrayRef<const Vec3> coordinates,
                                     gmx::ArrayRef<Vec3>       forces,
-                                    EnergyType&               energies,
+                                    gmx::ArrayRef<real>       energies,
                                     bool                      usePbc)
 {
-    computeForcesAndEnergies(coordinates, forces, gmx::ArrayRef<std::nullptr_t>{}, usePbc);
-    energies = energyBuffer_;
+    computeForcesAndEnergies(coordinates, forces, gmx::ArrayRef<std::nullptr_t>{}, energies, usePbc);
 }
 
 void ListedForceCalculator::compute(gmx::ArrayRef<const Vec3> coordinates, gmx::ArrayRef<Vec3> forces, bool usePbc)
 {
-    computeForcesAndEnergies(coordinates, forces, gmx::ArrayRef<std::nullptr_t>{}, usePbc);
+    computeForcesAndEnergies(
+            coordinates, forces, gmx::ArrayRef<std::nullptr_t>{}, gmx::ArrayRef<std::nullptr_t>{}, usePbc);
 }
 
 } // namespace nblib
