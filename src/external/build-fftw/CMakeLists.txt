@@ -44,14 +44,9 @@
 string(TOUPPER "${FFTW}" UPPERFFTW)
 string(TOLOWER "${FFTW}" LOWERFFTW)
 
-set(GMX_BUILD_OWN_FFTW_OPTIMIZATION_CONFIGURATION
-    ""
-    CACHE INTERNAL "Optimization flags for FFTW compilation")
+set(GMX_BUILD_OWN_FFTW_OPTIMIZATION_CONFIGURATION "" CACHE INTERNAL "Optimization flags for FFTW compilation")
 if(${CMAKE_CURRENT_BINARY_DIR} MATCHES ".*[[:space:]].*")
-    message(
-        FATAL_ERROR
-            "An internal limitation of FFTW means GROMACS cannot build FFTW in a directory with whitespace in its name. Either use a system FFTW, build it yourself, or build GROMACS in a different location."
-    )
+    message(FATAL_ERROR "An internal limitation of FFTW means GROMACS cannot build FFTW in a directory with whitespace in its name. Either use a system FFTW, build it yourself, or build GROMACS in a different location.")
 endif()
 
 if(NOT GMX_DOUBLE)
@@ -60,10 +55,8 @@ endif()
 
 # Always build a static lib, so it gets added to libmd and doesn't need to be installed
 set(GMX_BUILD_OWN_FFTW_SHARED_FLAG --disable-shared --enable-static)
-if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" AND BUILD_SHARED_LIBS
-)# FFTW doesn't use -DPIC by default
-    set(GMX_BUILD_OWN_FFTW_SHARED_FLAG ${GMX_BUILD_OWN_FFTW_SHARED_FLAG}
-                                       --with-pic)
+if (CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" AND BUILD_SHARED_LIBS) # FFTW doesn't use -DPIC by default
+    set(GMX_BUILD_OWN_FFTW_SHARED_FLAG ${GMX_BUILD_OWN_FFTW_SHARED_FLAG} --with-pic)
 endif()
 
 # Set library optimizations
@@ -75,8 +68,7 @@ if(${GMX_SIMD_ACTIVE} MATCHES "^(SSE|AVX)" AND APPLE)
     set(_fftw_simd_support_level "--enable-sse2")
 elseif(${GMX_SIMD_ACTIVE} MATCHES "^(SSE)")
     set(_fftw_simd_support_level "--enable-sse2")
-elseif(${GMX_SIMD_ACTIVE} MATCHES "^(AVX)" AND NOT ${GMX_SIMD_ACTIVE} MATCHES
-                                               "^(AVX_512)")
+elseif(${GMX_SIMD_ACTIVE} MATCHES "^(AVX)" AND NOT ${GMX_SIMD_ACTIVE} MATCHES "^(AVX_512)")
     # Testing shows FFTW configured with --enable-sse2 --enable-avx is
     # slightly faster on most architectures than --enable-sse2 alone.
     # Support for --enable-avx2 was only added in 3.3.5, but
@@ -91,74 +83,51 @@ elseif(${GMX_SIMD_ACTIVE} MATCHES "^(AVX_512)")
     # MSVC, GCC < 4.9, Clang < 3.9 do not support AVX-512, so
     # we should not enable it there. FFTW does not support clang with
     # AVX-512, so we should not enable that either.
-    if(MSVC
-       OR (CMAKE_COMPILER_IS_GNUCC AND CMAKE_C_COMPILER_VERSION VERSION_LESS
-                                       4.9.0)
-       OR (CMAKE_C_COMPILER_ID MATCHES "Clang" AND CMAKE_C_COMPILER_VERSION
-                                                   VERSION_LESS 3.9.0)
-       OR (CMAKE_C_COMPILER_ID MATCHES "Clang" AND ${GMX_SIMD_ACTIVE} MATCHES
-                                                   "^(AVX_512)"))
+    if(MSVC OR (CMAKE_COMPILER_IS_GNUCC AND CMAKE_C_COMPILER_VERSION VERSION_LESS 4.9.0) OR
+        (CMAKE_C_COMPILER_ID MATCHES "Clang" AND CMAKE_C_COMPILER_VERSION VERSION_LESS 3.9.0) OR
+        (CMAKE_C_COMPILER_ID MATCHES "Clang" AND ${GMX_SIMD_ACTIVE} MATCHES "^(AVX_512)"))
         set(_fftw_simd_support_level --enable-sse2;--enable-avx;--enable-avx2)
     else()
-        set(_fftw_simd_support_level
-            --enable-sse2;--enable-avx;--enable-avx2;--enable-avx512)
+        set(_fftw_simd_support_level --enable-sse2;--enable-avx;--enable-avx2;--enable-avx512)
     endif()
 elseif(${GMX_SIMD_ACTIVE} MATCHES "^(VSX)")
     set(_fftw_simd_support_level --enable-vsx)
 endif()
-set(GMX_BUILD_OWN_FFTW_OPTIMIZATION_CONFIGURATION
-    ${_fftw_simd_support_level}
-    CACHE INTERNAL "Optimization flags for FFTW compilation")
+set(GMX_BUILD_OWN_FFTW_OPTIMIZATION_CONFIGURATION ${_fftw_simd_support_level} CACHE INTERNAL "Optimization flags for FFTW compilation")
 
 # Allow cross-compiles
-if(TARGET_HOST)
+if (TARGET_HOST)
     set(GMX_BUILD_OWN_FFTW_TARGET_HOST --host=${TARGET_HOST})
 endif()
 
 # Machinery for running the external project
 set(EXTERNAL_FFTW_VERSION 3.3.8)
 set(GMX_BUILD_OWN_FFTW_URL
-    "http://www.fftw.org/fftw-${EXTERNAL_FFTW_VERSION}.tar.gz"
-    CACHE
-        STRING
-        "URL from where to download fftw (use an absolute path when offline, adjust GMX_BUILD_OWN_FFTW_MD5 if downloading other version than ${EXTERNAL_FFTW_VERSION})"
-)
-set(GMX_BUILD_OWN_FFTW_MD5
-    8aac833c943d8e90d51b697b27d4384d
-    CACHE STRING "Expected MD5 hash for the file at GMX_BUILD_OWN_FFTW_URL")
+    "http://www.fftw.org/fftw-${EXTERNAL_FFTW_VERSION}.tar.gz" CACHE STRING
+    "URL from where to download fftw (use an absolute path when offline, adjust GMX_BUILD_OWN_FFTW_MD5 if downloading other version than ${EXTERNAL_FFTW_VERSION})")
+set(GMX_BUILD_OWN_FFTW_MD5 8aac833c943d8e90d51b697b27d4384d CACHE STRING
+    "Expected MD5 hash for the file at GMX_BUILD_OWN_FFTW_URL")
 mark_as_advanced(GMX_BUILD_OWN_FFTW_URL GMX_BUILD_OWN_FFTW_MD5)
 
 # The actual build target.
 set(EXTERNAL_FFTW_BUILD_TARGET fftwBuild)
 include(ExternalProject)
-ExternalProject_Add(
-    ${EXTERNAL_FFTW_BUILD_TARGET}
-    URL "${GMX_BUILD_OWN_FFTW_URL}"
-    URL_MD5 ${GMX_BUILD_OWN_FFTW_MD5}
-    CONFIGURE_COMMAND
-        <SOURCE_DIR>/configure --prefix=<INSTALL_DIR>
-        --libdir=<INSTALL_DIR>/lib --disable-fortran
-        ${GMX_BUILD_OWN_FFTW_SHARED_FLAG}
-        ${GMX_BUILD_OWN_FFTW_OPTIMIZATION_CONFIGURATION}
-        ${GMX_BUILD_OWN_FFTW_PREC} ${GMX_BUILD_OWN_FFTW_TARGET_HOST})
-ExternalProject_Get_Property(${EXTERNAL_FFTW_BUILD_TARGET} INSTALL_DIR)
+ExternalProject_add(${EXTERNAL_FFTW_BUILD_TARGET}
+        URL "${GMX_BUILD_OWN_FFTW_URL}"
+        URL_MD5 ${GMX_BUILD_OWN_FFTW_MD5}
+        CONFIGURE_COMMAND <SOURCE_DIR>/configure --prefix=<INSTALL_DIR> --libdir=<INSTALL_DIR>/lib --disable-fortran
+        ${GMX_BUILD_OWN_FFTW_SHARED_FLAG} ${GMX_BUILD_OWN_FFTW_OPTIMIZATION_CONFIGURATION}
+        ${GMX_BUILD_OWN_FFTW_PREC}
+        ${GMX_BUILD_OWN_FFTW_TARGET_HOST})
+ExternalProject_get_property(${EXTERNAL_FFTW_BUILD_TARGET} INSTALL_DIR)
 
 string(REGEX REPLACE "fftw" "fftw3" FFTW_LIBNAME ${LOWERFFTW})
-set(${UPPERFFTW}_LIBRARIES
-    ${INSTALL_DIR}/lib/lib${FFTW_LIBNAME}${CMAKE_STATIC_LIBRARY_SUFFIX})
-set(${UPPERFFTW}_INCLUDE_DIRS
-    ${INSTALL_DIR}/include
-    PARENT_SCOPE)
+set(${UPPERFFTW}_LIBRARIES ${INSTALL_DIR}/lib/lib${FFTW_LIBNAME}${CMAKE_STATIC_LIBRARY_SUFFIX})
+set(${UPPERFFTW}_INCLUDE_DIRS ${INSTALL_DIR}/include PARENT_SCOPE)
 
 add_library(gmxfftw STATIC IMPORTED GLOBAL)
-set_target_properties(gmxfftw PROPERTIES IMPORTED_LOCATION
-                                         ${${UPPERFFTW}_LIBRARIES})
-set(${UPPERFFTW}_LIBRARIES
-    gmxfftw
-    PARENT_SCOPE)
+set_target_properties(gmxfftw PROPERTIES IMPORTED_LOCATION ${${UPPERFFTW}_LIBRARIES})
+set(${UPPERFFTW}_LIBRARIES gmxfftw PARENT_SCOPE)
 add_dependencies(gmxfftw ${EXTERNAL_FFTW_BUILD_TARGET})
 
-message(
-    STATUS
-        "The GROMACS-managed build of FFTW 3 will configure with the following optimizations: ${GMX_BUILD_OWN_FFTW_OPTIMIZATION_CONFIGURATION}"
-)
+message(STATUS "The GROMACS-managed build of FFTW 3 will configure with the following optimizations: ${GMX_BUILD_OWN_FFTW_OPTIMIZATION_CONFIGURATION}")

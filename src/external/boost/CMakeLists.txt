@@ -33,6 +33,7 @@
 # the research papers on the package. Check out http://www.gromacs.org.
 
 if(GMX_INSTALL_LEGACY_API)
-    install(FILES stl_interfaces/fwd.hpp stl_interfaces/iterator_interface.hpp
-            DESTINATION include/gromacs/external/boost/stl_interfaces)
+  install(FILES
+          stl_interfaces/fwd.hpp  stl_interfaces/iterator_interface.hpp
+          DESTINATION include/gromacs/external/boost/stl_interfaces)
 endif()
