@@ -235,6 +235,7 @@ void gmx_barrier(MPI_Comm gmx_unused communicator)
 
 void gmx_bcast(int gmx_unused nbytes, void gmx_unused* b, MPI_Comm gmx_unused communicator)
 {
+    // Without MPI we have a single rank, so bcast is a no-op
 #if GMX_MPI
     MPI_Bcast(b, nbytes, MPI_BYTE, 0, communicator);
 #endif
@@ -242,6 +243,7 @@ void gmx_bcast(int gmx_unused nbytes, void gmx_unused* b, MPI_Comm gmx_unused co
 
 void gmx_sumd(int gmx_unused nr, double gmx_unused r[], const t_commrec gmx_unused* cr)
 {
+    // Without MPI we have a single rank, so sum is a no-op
 #if GMX_MPI
     if (cr->sizeOfMyGroupCommunicator == 1)
     {
@@ -274,6 +276,7 @@ void gmx_sumd(int gmx_unused nr, double gmx_unused r[], const t_commrec gmx_unus
 
 void gmx_sumf(int gmx_unused nr, float gmx_unused r[], const t_commrec gmx_unused* cr)
 {
+    // Without MPI we have a single rank, so sum is a no-op
 #if GMX_MPI
     if (cr->sizeOfMyGroupCommunicator == 1)
     {
@@ -306,6 +309,7 @@ void gmx_sumf(int gmx_unused nr, float gmx_unused r[], const t_commrec gmx_unuse
 
 void gmx_sumi(int gmx_unused nr, int gmx_unused r[], const t_commrec gmx_unused* cr)
 {
+    // Without MPI we have a single rank, so sum is a no-op
 #if GMX_MPI
     if (cr->sizeOfMyGroupCommunicator == 1)
     {
