@@ -108,7 +108,7 @@ public:
                  gmx::ArrayRef<real>       energies,
                  bool                      usePbc = false);
 
-    //! \brief Alternative overload without the energies
+    //! \brief Alternative overload without the energies or shift forces
     void compute(gmx::ArrayRef<const Vec3> coordinates, gmx::ArrayRef<Vec3> forces, bool usePbc = false);
 
     //! \brief default, but moved to separate compilation unit
@@ -124,7 +124,7 @@ private:
     std::vector<std::unique_ptr<ForceBufferProxy<Vec3>>> threadedForceBuffers_;
 
     //! reduction shift force buffers
-    std::vector<std::unique_ptr<std::vector<Vec3>>> threadedShiftForceBuffers_;
+    std::vector<std::vector<Vec3>> threadedShiftForceBuffers_;
 
     //! PBC objects
     std::unique_ptr<PbcHolder> pbcHolder_;

@@ -82,7 +82,7 @@ ListedForceCalculator::ListedForceCalculator(const ListedInteractionData& intera
         }
 
         threadedForceBuffers_[i] = std::make_unique<ForceBufferProxy<Vec3>>(rangeStart, rangeEnd);
-        threadedShiftForceBuffers_[i] = std::make_unique<std::vector<Vec3>>(gmx::c_numShiftVectors);
+        threadedShiftForceBuffers_[i] = std::vector<Vec3>(gmx::c_numShiftVectors);
     }
 }
 
@@ -124,7 +124,7 @@ void ListedForceCalculator::computeForcesAndEnergies(gmx::ArrayRef<const Vec3> x
         std::conditional_t<haveShiftForces, gmx::ArrayRef<Vec3>, gmx::ArrayRef<std::nullptr_t>> shiftForceBuffer;
         if constexpr (haveShiftForces)
         {
-            shiftForceBuffer = gmx::ArrayRef<Vec3>(*threadedShiftForceBuffers_[thread]);
+            shiftForceBuffer = gmx::ArrayRef<Vec3>(threadedShiftForceBuffers_[thread]);
             std::fill(shiftForceBuffer.begin(), shiftForceBuffer.end(), Vec3{ 0, 0, 0 });
         }
 
@@ -156,7 +156,7 @@ void ListedForceCalculator::computeForcesAndEnergies(gmx::ArrayRef<const Vec3> x
             Vec3 threadSum{ 0, 0, 0 };
             for (int thread = 0; thread < numThreads; ++thread)
             {
-                threadSum += (*threadedShiftForceBuffers_[thread])[i];
+                threadSum += (threadedShiftForceBuffers_[thread])[i];
             }
             shiftForces[i] += threadSum;
         }
