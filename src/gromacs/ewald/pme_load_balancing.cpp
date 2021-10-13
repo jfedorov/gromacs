@@ -428,8 +428,9 @@ static gmx_bool pme_loadbal_increase_cutoff(pme_load_balancing_t* pme_lb,
 
     set.spacing = sp;
 
-    // check if PME selected rlist and spacing meets the expected criteria
-    const int halo = pme_lb->setup[0].pmedata->pmeGpuGridHalo;
+    // check if PME selected spacing meets the expected criteria
+    const int halo = getExtendedHaloRegion(
+            pme_order, pme_lb->setup[0].pmedata->haloExtentForAtomDisplacement, set.spacing);
     if (!gmx_pme_check_restrictions(
                 pme_order, set.grid[XX], set.grid[YY], set.grid[ZZ], numPmeDomains.x, numPmeDomains.y, halo, useGpuPme, true, false))
     {

@@ -967,7 +967,6 @@ static void pme_gpu_copy_common_data_from(const gmx_pme_t* pme)
     pmeGpu->common->s2g0y         = pme->overlap[1].s2g0;
     pmeGpu->common->s2g1y         = pme->overlap[1].s2g1;
     pmeGpu->common->gridHalo      = pme->pmeGpuGridHalo;
-    // pmeGpu->common->spacing       = pme->spacing;
 
     if (pmeGpu->common->pme_order != c_pmeGpuOrder)
     {

@@ -141,6 +141,18 @@ enum class PmeRunMode
 /*! \brief Return the smallest allowed PME grid size for \p pmeOrder */
 int minimalPmeGridSize(int pmeOrder);
 
+/*! \brief Calculates the number of grid lines used as halo region for PME decomposition.
+ *
+ * This function is only used for PME GPU decomposition case
+ *
+ * \param[in]     pmeOrder                          PME interpolation order
+ * \param[in]     haloExtentForAtomDisplacement     extent of halo region in nm to account for atom
+ * displacement \param[in]     gridSpacing                       spacing between grid lines
+ *
+ * \returns  extended halo region used in GPU PME decomposition
+ */
+int getExtendedHaloRegion(int pmeOrder, real haloExtentForAtomDisplacement, real gridSpacing);
+
 /*! \brief
  * Gets grid spacing from simulation box and grid dimension
  *
