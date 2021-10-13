@@ -81,7 +81,7 @@ ListedForceCalculator::ListedForceCalculator(const ListedInteractionData& intera
             rangeEnd = bufferSize;
         }
 
-        threadedForceBuffers_[i] = std::make_unique<ForceBufferProxy<Vec3>>(rangeStart, rangeEnd);
+        threadedForceBuffers_[i]      = ForceBufferProxy<Vec3>(rangeStart, rangeEnd);
         threadedShiftForceBuffers_[i] = std::vector<Vec3>(gmx::c_numShiftVectors);
     }
 }
@@ -128,7 +128,7 @@ void ListedForceCalculator::computeForcesAndEnergies(gmx::ArrayRef<const Vec3> x
             std::fill(shiftForceBuffer.begin(), shiftForceBuffer.end(), Vec3{ 0, 0, 0 });
         }
 
-        ForceBufferProxy<Vec3>* threadBuffer = threadedForceBuffers_[thread].get();
+        ForceBufferProxy<Vec3>* threadBuffer = &threadedForceBuffers_[thread];
 
         // forces in range of this thread are directly written into the output buffer
         threadBuffer->setMasterBuffer(forces);
@@ -177,11 +177,11 @@ void ListedForceCalculator::computeForcesAndEnergies(gmx::ArrayRef<const Vec3> x
 #pragma omp parallel for num_threads(numThreads) schedule(static)
     for (int thread = 0; thread < numThreads; ++thread)
     {
-        auto& thisBuffer = *threadedForceBuffers_[thread];
+        auto& thisBuffer = threadedForceBuffers_[thread];
         // access outliers from other threads
         for (int otherThread = 0; otherThread < numThreads; ++otherThread)
         {
-            auto& otherBuffer = *threadedForceBuffers_[otherThread];
+            auto& otherBuffer = threadedForceBuffers_[otherThread];
             for (const auto& outlier : otherBuffer)
             {
                 int index = outlier.first;

@@ -121,7 +121,7 @@ private:
     std::vector<ListedInteractionData> threadedInteractions_;
 
     //! reduction force buffers
-    std::vector<std::unique_ptr<ForceBufferProxy<Vec3>>> threadedForceBuffers_;
+    std::vector<ForceBufferProxy<Vec3>> threadedForceBuffers_;
 
     //! reduction shift force buffers
     std::vector<std::vector<Vec3>> threadedShiftForceBuffers_;
