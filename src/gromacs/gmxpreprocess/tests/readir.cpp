@@ -305,7 +305,7 @@ TEST_F(GetIrTest, InvalidTransformationCoordWithConstraint)
         "pull = yes",
         "pull-ncoords = 1",
         "pull-coord1-geometry = transformation",
-        "pull-coord1-type = constraint", //INVALID
+        "pull-coord1-type = constraint", // INVALID
         "pull-coord1-expression = 10",
     };
     runTest(joinStrings(inputMdpFile, "\n"), TestBehavior::ErrorAndDoNotCompareOutput);
@@ -318,7 +318,7 @@ TEST_F(GetIrTest, InvalidPullCoordWithConstraintInTransformationExpression)
         "pull-ngroups = 2",
         "pull-ncoords = 2",
         "pull-coord1-geometry = distance",
-        "pull-coord1-type = constraint", //INVALID
+        "pull-coord1-type = constraint", // INVALID
         "pull-coord1-groups = 1 2",
         "pull-coord2-geometry = transformation",
         "pull-coord2-expression = x1",
@@ -333,7 +333,7 @@ TEST_F(GetIrTest, InvalidTransformationCoordDxValue)
         "pull-ncoords = 1",
         "pull-coord1-geometry = transformation",
         "pull-coord1-expression = 10",
-        "pull-coord1-dx = 0", //INVALID
+        "pull-coord1-dx = 0", // INVALID
     };
     runTest(joinStrings(inputMdpFile, "\n"), TestBehavior::ErrorAndDoNotCompareOutput);
 }
