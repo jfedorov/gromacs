@@ -61,6 +61,17 @@ project(gmxapi)
 set(GMXAPI_MASTER_PROJECT OFF)
 if (CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
     set(GMXAPI_MASTER_PROJECT ON)
+    if (NOT Python3_FIND_STRATEGY)
+        # If the user provides a hint for the Python installation with Python3_ROOT_DIR,
+        # prevent FindPython3 from overriding the choice with a newer Python version
+        # when CMP0094 is set to OLD.
+        set(Python3_FIND_STRATEGY LOCATION)
+    endif ()
+    if(NOT Python3_FIND_VIRTUALENV)
+        # We advocate using Python venvs to manage package availability, so by default
+        # we want to preferentially discover user-space software.
+        set(Python3_FIND_VIRTUALENV FIRST)
+    endif()
 endif()
 
 set(CMAKE_CXX_STANDARD 17)
