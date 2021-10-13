@@ -75,12 +75,23 @@ if(POLICY CMP0074) #3.12
     cmake_policy(SET CMP0074 NEW)
 endif()
 
-find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter Development)
+# Warning: as of scikit-build 0.12, skbuild does not seem to play well with modern FindPython3.cmake.
+if (NOT PYTHON_EXECUTABLE)
+    if (SKBUILD)
+        # When invoked through setup.py, skbuild sets PYTHON_EXECUTABLE for cmake.
+        message(FATAL_ERROR "Unknown problem with the environment prepared by scikit-build.")
+    else()
+        # When not using Python front-end, we can try to guess.
+        if (Python3_EXECUTABLE)
+            set(PYTHON_EXECUTABLE "${Python3_EXECUTABLE}")
+        endif ()
+    endif ()
+endif ()
 # Scikit-Build does not add your site-packages to the search path automatically,
 # so we need to add it _or_ the pybind11 specific directory here.
 execute_process(
     COMMAND
-    "${Python3_EXECUTABLE}" -c
+    "${PYTHON_EXECUTABLE}" -c
     "import pybind11; print(pybind11.get_cmake_dir())"
     RESULT_VARIABLE _exit_code
     OUTPUT_VARIABLE _tmp_dir
