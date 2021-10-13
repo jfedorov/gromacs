@@ -86,7 +86,7 @@ if(POLICY CMP0074) #3.12
     cmake_policy(SET CMP0074 NEW)
 endif()
 
-find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter Development)
+find_package(Python3 3.7 COMPONENTS Interpreter Development)
 # Scikit-Build does not add your site-packages to the search path automatically,
 # so we need to add it _or_ the pybind11 specific directory here.
 execute_process(
@@ -97,7 +97,7 @@ execute_process(
     OUTPUT_VARIABLE _tmp_dir
     OUTPUT_STRIP_TRAILING_WHITESPACE COMMAND_ECHO STDOUT)
 if (_exit_code OR NOT _tmp_dir)
-    message(FATAL_ERROR "pybind11 package not found for interpreter $Python3_EXECUTABLE}.")
+    message(FATAL_ERROR "pybind11 package not found for interpreter ${Python3_EXECUTABLE}.")
 endif ()
 list(APPEND CMAKE_PREFIX_PATH "${_tmp_dir}")
 
