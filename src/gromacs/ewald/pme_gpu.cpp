@@ -215,7 +215,7 @@ void pme_gpu_launch_spread(gmx_pme_t*            pme,
     const bool spreadCharges  = true;
     wallcycle_start_nocount(wcycle, WallCycleCounter::LaunchGpu);
     wallcycle_sub_start_nocount(wcycle, WallCycleSubCounter::LaunchGpuPme);
-    pme_gpu_spread(pmeGpu, xReadyOnDevice, fftgrids, computeSplines, spreadCharges, lambdaQ);
+    pme_gpu_spread(pmeGpu, xReadyOnDevice, fftgrids, pme->pfft_setup, computeSplines, spreadCharges, lambdaQ);
     wallcycle_sub_stop(wcycle, WallCycleSubCounter::LaunchGpuPme);
     wallcycle_stop(wcycle, WallCycleCounter::LaunchGpu);
 }
@@ -284,7 +284,7 @@ void pme_gpu_launch_gather(const gmx_pme_t* pme, gmx_wallcycle gmx_unused* wcycl
     wallcycle_sub_start_nocount(wcycle, WallCycleSubCounter::LaunchGpuPme);
 
     float** fftgrids = pme->fftgrid;
-    pme_gpu_gather(pme->gpu, fftgrids, lambdaQ);
+    pme_gpu_gather(pme->gpu, fftgrids, pme->pfft_setup, lambdaQ);
     wallcycle_sub_stop(wcycle, WallCycleSubCounter::LaunchGpuPme);
     wallcycle_stop(wcycle, WallCycleCounter::LaunchGpu);
 }

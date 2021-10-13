@@ -189,6 +189,7 @@ static gmx_pme_t* gmx_pmeonly_switch(std::vector<gmx_pme_t*>* pmedata,
                                      const ivec               grid_size,
                                      real                     ewaldcoeff_q,
                                      real                     ewaldcoeff_lj,
+                                     real                     spacing,
                                      const t_commrec*         cr,
                                      const t_inputrec*        ir)
 {
@@ -204,7 +205,7 @@ static gmx_pme_t* gmx_pmeonly_switch(std::vector<gmx_pme_t*>* pmedata,
              * So, just some grid size updates in the GPU kernel parameters.
              * TODO: this should be something like gmx_pme_update_split_params()
              */
-            gmx_pme_reinit(&pme, cr, pme, ir, grid_size, ewaldcoeff_q, ewaldcoeff_lj);
+            gmx_pme_reinit(&pme, cr, pme, ir, grid_size, ewaldcoeff_q, ewaldcoeff_lj, spacing);
             return pme;
         }
     }
@@ -212,7 +213,7 @@ static gmx_pme_t* gmx_pmeonly_switch(std::vector<gmx_pme_t*>* pmedata,
     const auto& pme          = pmedata->back();
     gmx_pme_t*  newStructure = nullptr;
     // Copy last structure with new grid params
-    gmx_pme_reinit(&newStructure, cr, pme, ir, grid_size, ewaldcoeff_q, ewaldcoeff_lj);
+    gmx_pme_reinit(&newStructure, cr, pme, ir, grid_size, ewaldcoeff_q, ewaldcoeff_lj, spacing);
     pmedata->push_back(newStructure);
     return newStructure;
 }
@@ -233,6 +234,7 @@ static gmx_pme_t* gmx_pmeonly_switch(std::vector<gmx_pme_t*>* pmedata,
  * \param[out] grid_size              PME grid size, if received.
  * \param[out] ewaldcoeff_q           Ewald cut-off parameter for electrostatics, if received.
  * \param[out] ewaldcoeff_lj          Ewald cut-off parameter for Lennard-Jones, if received.
+ * \param[out] spacing                updated fourier grid spacing, if received.
  * \param[in]  useGpuForPme           Flag on whether PME is on GPU.
  * \param[in]  stateGpu               GPU state propagator object.
  * \param[in]  runMode                PME run mode.
@@ -255,6 +257,7 @@ static int gmx_pme_recv_coeffs_coords(struct gmx_pme_t*            pme,
                                       ivec*                        grid_size,
                                       real*                        ewaldcoeff_q,
                                       real*                        ewaldcoeff_lj,
+                                      real*                        spacing,
                                       bool                         useGpuForPme,
                                       gmx::StatePropagatorDataGpu* stateGpu,
                                       PmeRunMode gmx_unused        runMode)
@@ -304,6 +307,7 @@ static int gmx_pme_recv_coeffs_coords(struct gmx_pme_t*            pme,
             copy_ivec(cnb.grid_size, *grid_size);
             *ewaldcoeff_q  = cnb.ewaldcoeff_q;
             *ewaldcoeff_lj = cnb.ewaldcoeff_lj;
+            *spacing       = cnb.spacing;
 
             status = pmerecvqxSWITCHGRID;
         }
@@ -434,7 +438,7 @@ static int gmx_pme_recv_coeffs_coords(struct gmx_pme_t*            pme,
                 }
                 if (pme_pp->useGpuDirectComm)
                 {
-                    GMX_ASSERT(runMode == PmeRunMode::GPU,
+                    GMX_ASSERT((runMode == PmeRunMode::GPU || runMode == PmeRunMode::Mixed),
                                "GPU Direct PME-PP communication has been enabled, "
                                "but PME run mode is not PmeRunMode::GPU\n");
 
@@ -702,7 +706,7 @@ int gmx_pmeonly(struct gmx_pme_t*               pme,
         {
             /* Domain decomposition */
             ivec newGridSize;
-            real ewaldcoeff_q = 0, ewaldcoeff_lj = 0;
+            real ewaldcoeff_q = 0, ewaldcoeff_lj = 0, spacing = 0;
             ret = gmx_pme_recv_coeffs_coords(pme,
                                              pme_pp.get(),
                                              &natoms,
@@ -716,6 +720,7 @@ int gmx_pmeonly(struct gmx_pme_t*               pme,
                                              &newGridSize,
                                              &ewaldcoeff_q,
                                              &ewaldcoeff_lj,
+                                             &spacing,
                                              useGpuForPme,
                                              stateGpu.get(),
                                              runMode);
@@ -723,7 +728,8 @@ int gmx_pmeonly(struct gmx_pme_t*               pme,
             if (ret == pmerecvqxSWITCHGRID)
             {
                 /* Switch the PME grid to newGridSize */
-                pme = gmx_pmeonly_switch(&pmedata, newGridSize, ewaldcoeff_q, ewaldcoeff_lj, cr, ir);
+                pme = gmx_pmeonly_switch(
+                        &pmedata, newGridSize, ewaldcoeff_q, ewaldcoeff_lj, spacing, cr, ir);
             }
 
             if (ret == pmerecvqxRESETCOUNTERS)

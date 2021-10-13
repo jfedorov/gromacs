@@ -108,7 +108,8 @@ void pme_loadbal_do(pme_load_balancing_t*          pme_lb,
                     int64_t                        step,
                     int64_t                        step_rel,
                     gmx_bool*                      bPrinting,
-                    bool                           useGpuPmePpCommunication);
+                    bool                           useGpuPmePpCommunication,
+                    bool                           useGpuPme);
 
 /*! \brief Finish the PME load balancing and print the settings when fplog!=NULL */
 void pme_loadbal_done(pme_load_balancing_t* pme_lb, FILE* fplog, const gmx::MDLogger& mdlog, gmx_bool bNonBondedOnGPU);

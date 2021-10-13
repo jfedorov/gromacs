@@ -220,8 +220,6 @@ void pme_loadbal_init(pme_load_balancing_t**     pme_lb_p,
 {
 
     pme_load_balancing_t* pme_lb;
-    real                  spm, sp;
-    int                   d;
 
     // Note that we don't (yet) support PME load balancing with LJ-PME only.
     GMX_RELEASE_ASSERT(EEL_PME(ir.coulombtype),
@@ -275,16 +273,7 @@ void pme_loadbal_init(pme_load_balancing_t**     pme_lb_p,
         pme_lb->setup[0].pmedata = pmedata;
     }
 
-    spm = 0;
-    for (d = 0; d < DIM; d++)
-    {
-        sp = norm(pme_lb->box_start[d]) / pme_lb->setup[0].grid[d];
-        if (sp > spm)
-        {
-            spm = sp;
-        }
-    }
-    pme_lb->setup[0].spacing = spm;
+    pme_lb->setup[0].spacing = getGridSpacingFromBox(pme_lb->box_start, pme_lb->setup[0].grid);
 
     if (ir.fourier_spacing > 0)
     {
@@ -356,7 +345,10 @@ void pme_loadbal_init(pme_load_balancing_t**     pme_lb_p,
 }
 
 /*! \brief Try to increase the cutoff during load balancing */
-static gmx_bool pme_loadbal_increase_cutoff(pme_load_balancing_t* pme_lb, int pme_order, const gmx_domdec_t* dd)
+static gmx_bool pme_loadbal_increase_cutoff(pme_load_balancing_t* pme_lb,
+                                            int                   pme_order,
+                                            const gmx_domdec_t*   dd,
+                                            bool                  useGpuPme)
 {
     real fac, sp;
     real tmpr_coulomb, tmpr_vdw;
@@ -399,7 +391,7 @@ static gmx_bool pme_loadbal_increase_cutoff(pme_load_balancing_t* pme_lb, int pm
          * per PME rank along x, which is not a strong restriction.
          */
         grid_ok = gmx_pme_check_restrictions(
-                pme_order, set.grid[XX], set.grid[YY], set.grid[ZZ], numPmeDomains.x, true, false);
+                pme_order, set.grid[XX], set.grid[YY], set.grid[ZZ], numPmeDomains.x, numPmeDomains.y, 0, false, true, false);
     } while (sp <= 1.001 * pme_lb->setup[pme_lb->cur].spacing || !grid_ok);
 
     set.rcut_coulomb = pme_lb->cut_spacing * sp;
@@ -435,6 +427,15 @@ static gmx_bool pme_loadbal_increase_cutoff(pme_load_balancing_t* pme_lb, int pm
     }
 
     set.spacing = sp;
+
+    // check if PME selected rlist and spacing meets the expected criteria
+    const int halo = pme_lb->setup[0].pmedata->pmeGpuGridHalo;
+    if (!gmx_pme_check_restrictions(
+                pme_order, set.grid[XX], set.grid[YY], set.grid[ZZ], numPmeDomains.x, numPmeDomains.y, halo, useGpuPme, true, false))
+    {
+        return FALSE;
+    }
+
     /* The grid efficiency is the size wrt a grid with uniform x/y/z spacing */
     set.grid_efficiency = 1;
     for (d = 0; d < DIM; d++)
@@ -587,7 +588,8 @@ static void pme_load_balance(pme_load_balancing_t*          pme_lb,
                              interaction_const_t*           ic,
                              struct nonbonded_verlet_t*     nbv,
                              struct gmx_pme_t**             pmedata,
-                             int64_t                        step)
+                             int64_t                        step,
+                             bool                           useGpuPme)
 {
     gmx_bool     OK;
     pme_setup_t* set;
@@ -697,7 +699,7 @@ static void pme_load_balance(pme_load_balancing_t*          pme_lb,
             else
             {
                 /* Find the next setup */
-                OK = pme_loadbal_increase_cutoff(pme_lb, ir.pme_order, cr->dd);
+                OK = pme_loadbal_increase_cutoff(pme_lb, ir.pme_order, cr->dd, useGpuPme);
 
                 if (!OK)
                 {
@@ -880,15 +882,21 @@ static void pme_load_balance(pme_load_balancing_t*          pme_lb,
             /* Generate a new PME data structure,
              * copying part of the old pointers.
              */
-            gmx_pme_reinit(
-                    &set->pmedata, cr, pme_lb->setup[0].pmedata, &ir, set->grid, set->ewaldcoeff_q, set->ewaldcoeff_lj);
+            gmx_pme_reinit(&set->pmedata,
+                           cr,
+                           pme_lb->setup[0].pmedata,
+                           &ir,
+                           set->grid,
+                           set->ewaldcoeff_q,
+                           set->ewaldcoeff_lj,
+                           set->spacing);
         }
         *pmedata = set->pmedata;
     }
     else
     {
         /* Tell our PME-only rank to switch grid */
-        gmx_pme_send_switchgrid(cr, set->grid, set->ewaldcoeff_q, set->ewaldcoeff_lj);
+        gmx_pme_send_switchgrid(cr, set->grid, set->ewaldcoeff_q, set->ewaldcoeff_lj, set->spacing);
     }
 
     if (debug)
@@ -939,7 +947,8 @@ void pme_loadbal_do(pme_load_balancing_t*          pme_lb,
                     int64_t                        step,
                     int64_t                        step_rel,
                     gmx_bool*                      bPrinting,
-                    bool                           useGpuPmePpCommunication)
+                    bool                           useGpuPmePpCommunication,
+                    bool                           useGpuPme)
 {
     int    n_prev;
     double cycles_prev;
@@ -1077,7 +1086,8 @@ void pme_loadbal_do(pme_load_balancing_t*          pme_lb,
                          fr->ic.get(),
                          fr->nbv.get(),
                          &fr->pmedata,
-                         step);
+                         step,
+                         useGpuPme);
 
         /* Update deprecated rlist in forcerec to stay in sync with fr->nbv */
         fr->rlist = fr->nbv->pairlistOuterRadius();

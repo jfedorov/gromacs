@@ -119,6 +119,7 @@ struct gmx_pme_comm_n_box_t
     ivec grid_size;
     real ewaldcoeff_q;
     real ewaldcoeff_lj;
+    real spacing;
     //@}
 };
 

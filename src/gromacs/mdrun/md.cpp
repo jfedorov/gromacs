@@ -869,7 +869,8 @@ void gmx::LegacySimulator::do_md()
                            step,
                            step_rel,
                            &bPMETunePrinting,
-                           simulationWork.useGpuPmePpCommunication);
+                           simulationWork.useGpuPmePpCommunication,
+                           simulationWork.useGpuPme);
         }
 
         wallcycle_start(wcycle, WallCycleCounter::Step);

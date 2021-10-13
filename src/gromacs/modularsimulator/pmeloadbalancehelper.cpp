@@ -88,7 +88,7 @@ PmeLoadBalanceHelper::PmeLoadBalanceHelper(bool                 isVerbose,
 
 void PmeLoadBalanceHelper::setup()
 {
-    auto box = statePropagatorData_->constBox();
+    const auto* box = statePropagatorData_->constBox();
     GMX_RELEASE_ASSERT(box[0][0] != 0 && box[1][1] != 0 && box[2][2] != 0,
                        "PmeLoadBalanceHelper cannot be initialized with zero box.");
     pme_loadbal_init(
@@ -103,8 +103,8 @@ void PmeLoadBalanceHelper::run(gmx::Step step, gmx::Time gmx_unused time)
     }
 
     // PME grid + cut-off optimization with GPUs or PME nodes
-    // TODO pass SimulationWork object into this function, such that last argument can be set as
-    // simulationWork.useGpuPmePpCommunication as is done in main MD loop.
+    // TODO pass SimulationWork object into this function, such that last two arguments can be set as
+    // simulationWork.useGpuPmePpCommunication, simulationWork.useGpuPme as is done in main MD loop.
     pme_loadbal_do(pme_loadbal_,
                    cr_,
                    (isVerbose_ && MASTER(cr_)) ? stderr : nullptr,
@@ -118,6 +118,7 @@ void PmeLoadBalanceHelper::run(gmx::Step step, gmx::Time gmx_unused time)
                    step,
                    step - inputrec_->init_step,
                    &bPMETunePrinting_,
+                   false,
                    false);
 }
 
@@ -126,7 +127,7 @@ void PmeLoadBalanceHelper::teardown()
     pme_loadbal_done(pme_loadbal_, fplog_, mdlog_, fr_->nbv->useGpu());
 }
 
-bool PmeLoadBalanceHelper::pmePrinting()
+bool PmeLoadBalanceHelper::pmePrinting() const
 {
     return bPMETunePrinting_;
 }
