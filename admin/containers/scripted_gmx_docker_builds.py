@@ -517,12 +517,14 @@ def prepare_venv(version: StrictVersion) -> typing.Sequence[str]:
             'networkx>=2.0' \
             'numpy>=1' \
             'pip>=10.1' \
+            'pybind11>2.6' \
             'Pygments>=2.2.0' \
             'pytest>=3.9' \
             'setuptools>=42' \
             'scikit-build>=0.10' \
             'Sphinx>=1.6.3' \
-            'sphinxcontrib-plantuml>=0.14'""")
+            'sphinxcontrib-plantuml>=0.14' \
+            'wheel'""")
 
     # TODO: Remove 'importlib_resources' dependency when Python >=3.7 is required.
     if minor == 6:

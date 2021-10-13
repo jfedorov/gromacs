@@ -64,8 +64,9 @@ ADD --chown=testing:testing src/gmxapi /home/testing/gmxapi/src/gmxapi
 
 RUN . $VENV/bin/activate && \
     (cd $HOME/gmxapi/src && \
+     rm -rf _skbuild dist && \
      GMXTOOLCHAINDIR=/usr/local/gromacs/share/cmake/gromacs \
-      pip install --no-cache-dir --use-feature=in-tree-build . \
+      pip install --no-cache-dir . \
     )
 
 ADD --chown=testing:testing src/test /home/testing/gmxapi/test

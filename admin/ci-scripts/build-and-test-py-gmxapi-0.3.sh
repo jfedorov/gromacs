@@ -22,8 +22,6 @@ pushd python_packaging/src
   GMXTOOLCHAINDIR=$INSTALL_DIR/share/cmake/gromacs \
       python -m pip install \
           --no-cache-dir \
-          --no-deps \
-          --no-index \
           --no-build-isolation \
           .
 popd
