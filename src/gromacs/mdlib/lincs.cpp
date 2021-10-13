@@ -1720,23 +1720,30 @@ static void assign_constraint(Lincs*                  li,
     li->nc++;
 }
 
-/*! \brief Check if constraint with topology index constraint_index is connected
- * to other constraints, and if so add those connected constraints to our task. */
+/*! \brief Assign constraints connected to a constraint
+ *
+ * \param[in,out] li  The LINCS data structure
+ * \param[in] iatom   The list of constraints to assign
+ * \param[in] idef    Interaction parameters, only used for checking for flexible constraints
+ * \param[in] bDynamics  Whether we have an "integrator" with dynamics (for flexible constraint
+ * handling) \param[in] a1      The first atom in the constraint to check connected constraints for
+ * \param[in] a2      The second atom in the constraint to check connected constraints for
+ * \param[in] at2con  The atom to constraint mapping
+ * \param[in] maxNumConstraintsToAssign  The limit for the total number of assigned constraints
+ * \param[in] recursionDepth  Check at most this number of sequential constraints
+ */
 static void check_assign_connected(Lincs*                        li,
                                    gmx::ArrayRef<const int>      iatom,
                                    const InteractionDefinitions& idef,
-                                   bool                          bDynamics,
-                                   int                           a1,
-                                   int                           a2,
-                                   const ListOfLists<int>&       at2con)
+                                   const bool                    bDynamics,
+                                   const int                     a1,
+                                   const int                     a2,
+                                   const ListOfLists<int>&       at2con,
+                                   const int                     maxNumConstraintsToAssign,
+                                   const int                     recursionDepth)
 {
-    /* Currently this function only supports constraint groups
-     * in which all constraints share at least one atom
-     * (e.g. H-bond constraints).
-     * Check both ends of the current constraint for
-     * connected constraints. We need to assign those
-     * to the same task.
-     */
+    GMX_ASSERT(recursionDepth >= 1, "The number of constraints to recurse over should be >= 1");
+
     for (int end = 0; end < 2; end++)
     {
         const int a = (end == 0 ? a1 : a2);
@@ -1752,7 +1759,22 @@ static void check_assign_connected(Lincs*                        li,
 
                 if (bDynamics || lenA != 0 || lenB != 0)
                 {
-                    assign_constraint(li, cc, iatom[3 * cc + 1], iatom[3 * cc + 2], lenA, lenB, at2con);
+                    const int a1Connected = iatom[3 * cc + 1];
+                    const int a2Connected = iatom[3 * cc + 2];
+                    assign_constraint(li, cc, a1Connected, a2Connected, lenA, lenB, at2con);
+
+                    if (recursionDepth > 1 && li->nc < maxNumConstraintsToAssign)
+                    {
+                        check_assign_connected(li,
+                                               iatom,
+                                               idef,
+                                               bDynamics,
+                                               a1Connected,
+                                               a2Connected,
+                                               at2con,
+                                               maxNumConstraintsToAssign,
+                                               recursionDepth - 1);
+                    }
                 }
             }
         }
@@ -1899,6 +1921,16 @@ void set_lincs(const InteractionDefinitions& idef,
                const t_commrec*              cr,
                Lincs*                        li)
 {
+    // The maximum Number of connected constraints to attempt to assign to
+    // a thread task. This should be high to minimize the connections between
+    // constraints in different tasks. This number is not relevant with H-bond
+    // constraints only.
+    // A depth of 100 seems to give optimal performance for 32 and 64 threads.
+    constexpr int c_connectedConstraintRecursionDepth = 100;
+
+    static_assert(c_connectedConstraintRecursionDepth >= 1,
+                  "We need this number to be at least 1 for the case of update groups");
+
     li->nc_real = 0;
     li->nc      = 0;
     li->ncc     = 0;
@@ -2057,12 +2089,16 @@ void set_lincs(const InteractionDefinitions& idef,
                 {
                     assign_constraint(li, con, a1, a2, lenA, lenB, at2con);
 
-                    if (li->ntask > 1 && !li->bTaskDep)
+                    if (li->ntask > 1)
                     {
-                        /* We can generate independent tasks. Check if we
-                         * need to assign connected constraints to our task.
-                         */
-                        check_assign_connected(li, iatom, idef, bDynamics, a1, a2, at2con);
+                        // We have more than one task.
+                        // With update groups we need to assign all connected constraints (note
+                        // that a recursion depth of 1 would suffice in this case)
+                        // Without updated groups we want to minimize the connections between
+                        // the different tasks, so we should, as much as possible, assign connected
+                        // constraints to the same task.
+                        check_assign_connected(
+                                li, iatom, idef, bDynamics, a1, a2, at2con, li_task->b0 + ncon_target, c_connectedConstraintRecursionDepth);
                     }
                     if (li->ntask > 1 && li->ncg_triangle > 0)
                     {
