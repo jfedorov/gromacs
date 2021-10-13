@@ -214,6 +214,10 @@ static DevelopmentFeatureFlags manageDevelopmentFeatures(const gmx::MDLogger& md
 
     devFlags.usingCudaAwareMpi = (haveDetectedCudaAwareMpi || forceCudaAwareMpi);
 
+    devFlags.enablePmeDecompositionWithPpPmeOnSameRank =
+            devFlags.usingCudaAwareMpi
+            && getenv("GMX_GPU_PME_DECOMPOSITION_WITH_PP_PME_ON_SAME_RANK") != nullptr;
+
     // Direct GPU comm path is being used with CUDA_AWARE_MPI
     // make sure underlying MPI implementation is CUDA-aware
     if (!GMX_THREAD_MPI && (devFlags.enableGpuPmePPComm || devFlags.enableGpuHaloExchange))
@@ -1024,7 +1028,7 @@ int Mdrunner::mdrunner()
     const bool pmeDecompositionSupported =
             !useGpuForPme
             || decideWhetherToUseGpuPmeDecomposition(
-                    devFlags, pmeRunMode, cr->sizeOfDefaultCommunicator, domdecOptions.numPmeRanks);
+                    devFlags, pmeRunMode, cr->sizeOfDefaultCommunicator, domdecOptions.numPmeRanks, mdlog);
 
     const bool useModularSimulator = checkUseModularSimulator(false,
                                                               inputrec.get(),

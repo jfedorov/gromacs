@@ -191,7 +191,7 @@ bool decideWhetherToUseGpusForPmeWithThreadMpi(const bool              useGpuFor
         // PME on GPUs is only supported in a single case
         if (pmeTarget == TaskTarget::Gpu)
         {
-            if (((numRanksPerSimulation > 1) && (numPmeRanksPerSimulation == 0))
+            if (((numRanksPerSimulation > 1) && (numPmeRanksPerSimulation <= 0))
                 || (numPmeRanksPerSimulation > 1))
             {
                 GMX_THROW(InconsistentInputError(
@@ -211,7 +211,7 @@ bool decideWhetherToUseGpusForPmeWithThreadMpi(const bool              useGpuFor
 
     if (pmeTarget == TaskTarget::Gpu)
     {
-        if (((numRanksPerSimulation > 1) && (numPmeRanksPerSimulation == 0))
+        if (((numRanksPerSimulation > 1) && (numPmeRanksPerSimulation <= 0))
             || (numPmeRanksPerSimulation > 1))
         {
             GMX_THROW(NotImplementedError(
@@ -721,14 +721,43 @@ bool decideWhetherToUseGpuForHalo(const DevelopmentFeatureFlags& devFlags,
 bool decideWhetherToUseGpuPmeDecomposition(const DevelopmentFeatureFlags& devFlags,
                                            const PmeRunMode               pmeRunMode,
                                            const int                      numRanksPerSimulation,
-                                           const int                      numPmeRanksPerSimulation)
+                                           const int                      numPmeRanksPerSimulation,
+                                           const gmx::MDLogger&           mdlog)
 {
     // PME decomposition is supported only with CUDA-backend in mixed mode
     // CUDA-backend also needs CUDA-aware MPI support for Mixed-mode decomposition to work
+    // PME decomposition with PP-PME on same rank is supported only when it is forced using GMX_GPU_PME_DECOMPOSITION_WITH_PP_PME_ON_SAME_RANK
+    const bool pmeDecompositionRequestedWithPpPmeOnSameRank =
+            (numRanksPerSimulation > 1 && numPmeRanksPerSimulation <= 0);
     const bool pmeDecompositionSupported = (devFlags.usingCudaAwareMpi && pmeRunMode == PmeRunMode::Mixed);
 
+    if (pmeDecompositionSupported && pmeDecompositionRequestedWithPpPmeOnSameRank)
+    {
+        if (devFlags.enablePmeDecompositionWithPpPmeOnSameRank)
+        {
+            GMX_LOG(mdlog.warning)
+                    .asParagraph()
+                    .appendTextFormatted(
+                            "This run has requested the 'GPU PME decomposition' feature, enabled "
+                            "by "
+                            "the "
+                            "GMX_GPU_PME_DECOMPOSITION_WITH_PP_PME_ON_SAME_RANK environment "
+                            "variable. "
+                            "PME decomposition with PP-PME on same rank lacks substatial testing "
+                            "and should be used with caution.");
+        }
+        else
+        {
+            gmx_fatal(FARGS,
+                      "Multiple PME tasks were required to run on GPUs with PP-PME on same rank, "
+                      "but that is not supported. "
+                      "Use GMX_GPU_PME_DECOMPOSITION_WITH_PP_PME_ON_SAME_RANK environment variable "
+                      "to enable it.");
+        }
+    }
+
     if (!pmeDecompositionSupported
-        && ((numRanksPerSimulation > 1 && numPmeRanksPerSimulation == 0) || numPmeRanksPerSimulation > 1))
+        && (pmeDecompositionRequestedWithPpPmeOnSameRank || numPmeRanksPerSimulation > 1))
     {
         gmx_fatal(FARGS,
                   "PME tasks were required to run on GPUs, but that is not implemented with "

@@ -89,6 +89,8 @@ struct DevelopmentFeatureFlags
     bool enableGpuHaloExchange = false;
     //! True if the PME PP direct communication GPU development feature is enabled
     bool enableGpuPmePPComm = false;
+    //! True if PME-decomposition is enabled with PP-PME on same rank
+    bool enablePmeDecompositionWithPpPmeOnSameRank = false;
     //! True if the CUDA-aware MPI is being used for GPU direct communication feature
     bool usingCudaAwareMpi = false;
 };
@@ -327,13 +329,15 @@ bool decideWhetherToUseGpuForHalo(const DevelopmentFeatureFlags& devFlags,
  * \param[in]  pmeRunMode                   Run mode indicating what resource is PME execured on.
  * \param[in]  numRanksPerSimulation        The number of ranks in each simulation.
  * \param[in]  numPmeRanksPerSimulation     The number of PME ranks in each simulation, can be -1 for auto.
+ * \param[in]  mdlog                        MD logger.
  *
  * \returns    Whether Direct PME-PP communication should be enabled.
  */
 bool decideWhetherToUseGpuPmeDecomposition(const DevelopmentFeatureFlags& devFlags,
                                            PmeRunMode                     pmeRunMode,
                                            int                            numRanksPerSimulation,
-                                           int                            numPmeRanksPerSimulation);
+                                           int                            numPmeRanksPerSimulation,
+                                           const gmx::MDLogger&           mdlog);
 
 } // namespace gmx
 
