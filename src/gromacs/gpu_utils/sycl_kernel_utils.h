@@ -188,12 +188,10 @@ static inline bool isfinite(Real value)
  *
  * Can probably be removed when
  * https://github.com/illuhad/hipSYCL/issues/647 is resolved. */
-template<cl::sycl::access::address_space AddressSpace,
-         typename T,
-         int NumElements>
+template<cl::sycl::access::address_space AddressSpace, typename T, int NumElements>
 static inline void loadToVec(size_t                                     offset,
-                                                 cl::sycl::multi_ptr<const T, AddressSpace> ptr,
-                                                 cl::sycl::vec<T, NumElements>* v)
+                             cl::sycl::multi_ptr<const T, AddressSpace> ptr,
+                             cl::sycl::vec<T, NumElements>*             v)
 {
     for (int i = 0; i < NumElements; ++i)
     {
@@ -208,12 +206,10 @@ static inline void loadToVec(size_t                                     offset,
  *
  * Can probably be removed when
  * https://github.com/illuhad/hipSYCL/issues/647 is resolved. */
-template<cl::sycl::access::address_space AddressSpace,
-         typename T,
-         int NumElements>
+template<cl::sycl::access::address_space AddressSpace, typename T, int NumElements>
 static inline void storeFromVec(const cl::sycl::vec<T, NumElements>& v,
-                                                    size_t                               offset,
-                                                    cl::sycl::multi_ptr<T, AddressSpace> ptr)
+                                size_t                               offset,
+                                cl::sycl::multi_ptr<T, AddressSpace> ptr)
 {
     for (int i = 0; i < NumElements; ++i)
     {
@@ -230,12 +226,10 @@ static inline void storeFromVec(const cl::sycl::vec<T, NumElements>& v,
  *
  * Can probably be removed when
  * https://github.com/illuhad/hipSYCL/issues/647 is resolved. */
-template<cl::sycl::access::address_space AddressSpace,
-         typename T,
-         int NumElements>
+template<cl::sycl::access::address_space AddressSpace, typename T, int NumElements>
 static inline void loadToVec(size_t offset,
-                                                 cl::sycl::multi_ptr<const T, AddressSpace> ptr,
-                                                 cl::sycl::vec<T, NumElements>* v)
+                             cl::sycl::multi_ptr<const T, AddressSpace> ptr,
+                             cl::sycl::vec<T, NumElements>* v)
 {
     v->load(offset, ptr);
 }
@@ -247,12 +241,10 @@ static inline void loadToVec(size_t offset,
  *
  * Can probably be removed when
  * https://github.com/illuhad/hipSYCL/issues/647 is resolved. */
-template<cl::sycl::access::address_space AddressSpace,
-         typename T,
-         int NumElements>
+template<cl::sycl::access::address_space AddressSpace, typename T, int NumElements>
 static inline void storeFromVec(const cl::sycl::vec<T, NumElements>& v,
-                                                    size_t offset,
-                                                    cl::sycl::multi_ptr<T, AddressSpace> ptr)
+                                size_t offset,
+                                cl::sycl::multi_ptr<T, AddressSpace> ptr)
 {
     v.store(offset, ptr);
 }
