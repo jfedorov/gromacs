@@ -667,12 +667,8 @@ void pmeGpuGridHaloExchangeReverse(const PmeGpu* pmeGpu)
         }
     }
 
-    // Wait for c2r tranform to finish before reverse halo exchange
-    // In hybrid mode, this event is never marked
-    if (pmeGpu->settings.performGPUFFT)
-    {
-        pmeGpu->archSpecific->c2rFftCompleted.waitForEvent();
-    }
+    // Wait for conversion from FFT to Pme grid to finish before reverse halo exchange
+    pmeGpu->archSpecific->syncFftToPmeGrid.waitForEvent();
 
     // major dimension
     if (pmeGpu->common->nnodesMajor > 1)
@@ -832,6 +828,10 @@ void convertPmeGridToFftGrid(const PmeGpu* pmeGpu, float* h_grid, gmx_parallel_3
     if (forward)
     {
         pmeGpu->archSpecific->syncSpreadGridD2H.markEvent(pmeGpu->archSpecific->pmeStream_);
+    }
+    else
+    {
+        pmeGpu->archSpecific->syncFftToPmeGrid.markEvent(pmeGpu->archSpecific->pmeStream_);
     }
 }
 

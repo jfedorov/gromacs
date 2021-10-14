@@ -105,10 +105,10 @@ struct PmeGpuSpecific
     GpuEventSynchronizer pmeForcesReady;
     /*! \brief Triggered after the grid has been copied to the host (after the spreading stage). */
     GpuEventSynchronizer syncSpreadGridD2H;
+    /*! \brief Triggered after the grid has been converted from FFT grid to PME grid (before the gather stage). */
+    GpuEventSynchronizer syncFftToPmeGrid;
     /*! \brief Triggered after spline/spread computations have been completed. */
     GpuEventSynchronizer spreadCompleted;
-    /*! \brief Triggered after C2R FFT transformations have been completed */
-    GpuEventSynchronizer c2rFftCompleted;
 
     /* Settings which are set at the start of the run */
     /*! \brief A boolean which tells whether the complex and real grids for cu/clFFT are different or same. Currenty true. */
