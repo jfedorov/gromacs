@@ -1535,9 +1535,6 @@ void pme_gpu_spread(const PmeGpu*         pmeGpu,
     launchGpuKernel(
             kernelPtr, config, pmeGpu->archSpecific->pmeStream_, timingEvent, "PME spline/spread", kernelArgs);
 
-    // mark event once spread has been launched
-    pmeGpu->archSpecific->spreadCompleted.markEvent(pmeGpu->archSpecific->pmeStream_);
-
     pme_gpu_stop_timing(pmeGpu, timingId);
 
     const auto& settings = pmeGpu->settings;
@@ -1545,6 +1542,8 @@ void pme_gpu_spread(const PmeGpu*         pmeGpu,
     // halo exchange
     if (settings.useDecomposition)
     {
+        // mark event once spread has been launched, this event is consumed in pmeGpuGridHaloExchange
+        pmeGpu->archSpecific->spreadCompleted.markEvent(pmeGpu->archSpecific->pmeStream_);
         pmeGpuGridHaloExchange(pmeGpu);
     }
 

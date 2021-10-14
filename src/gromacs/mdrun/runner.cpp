@@ -1881,15 +1881,14 @@ int Mdrunner::mdrunner()
                     GMX_THROW(gmx::NotImplementedError("PME GPU decomposition is not supported"));
                 }
 
-                pmedata = gmx_pme_init(
+                const t_inputrec* ir = inputrec.get();
+                pmedata              = gmx_pme_init(
                         cr,
                         getNumPmeDomains(cr->dd),
-                        inputrec.get(),
+                        ir,
                         box,
-                        minCellSizeForAtomDisplacement(mtop,
-                                                       *inputrec.get(),
-                                                       updateGroups.updateGroupingPerMoleculeType(),
-                                                       inputrec.get()->ewald_rtol),
+                        minCellSizeForAtomDisplacement(
+                                mtop, *ir, updateGroups.updateGroupingPerMoleculeType(), ir->ewald_rtol),
                         nChargePerturbed != 0,
                         nTypePerturbed != 0,
                         mdrunOptions.reproducible,

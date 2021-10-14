@@ -451,6 +451,9 @@ void pmeGpuGridHaloExchange(const PmeGpu* pmeGpu)
         }
     }
 
+    // wait for spread to finish before starting halo exchange
+    pmeGpu->archSpecific->spreadCompleted.waitForEvent();
+
     // major dimension
     if (pmeGpu->common->nnodesMajor > 1)
     {
@@ -490,9 +493,6 @@ void pmeGpuGridHaloExchange(const PmeGpu* pmeGpu)
         int transferSizeSendRight = overlapRight * localPmeSize[YY] * localPmeSize[ZZ];
         int transferSizeSendLeft  = overlapLeft * localPmeSize[YY] * localPmeSize[ZZ];
         int transferSizeRecv      = overlapRecv * localPmeSize[YY] * localPmeSize[ZZ];
-
-        // wait for spread to finish before starting halo exchange
-        pmeGpu->archSpecific->spreadCompleted.waitForEvent();
 
         for (int gridIndex = 0; gridIndex < pmeGpu->common->ngrids; gridIndex++)
         {
