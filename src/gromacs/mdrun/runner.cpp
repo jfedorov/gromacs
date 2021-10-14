@@ -1028,7 +1028,7 @@ int Mdrunner::mdrunner()
     const bool pmeDecompositionSupported =
             !useGpuForPme
             || decideWhetherToUseGpuPmeDecomposition(
-                    devFlags, pmeRunMode, cr->sizeOfDefaultCommunicator, domdecOptions.numPmeRanks, mdlog);
+                    devFlags, cr->sizeOfDefaultCommunicator, domdecOptions.numPmeRanks, mdlog);
 
     const bool useModularSimulator = checkUseModularSimulator(false,
                                                               inputrec.get(),

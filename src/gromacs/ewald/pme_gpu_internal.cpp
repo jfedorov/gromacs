@@ -379,16 +379,13 @@ void pme_gpu_realloc_grids(PmeGpu* pmeGpu)
         if (pmeGpu->archSpecific->performOutOfPlaceFFT)
         {
             /* 2 separate grids */
-            reallocateDeviceBuffer(&kernelParamsPtr->grid.d_fourierGrid[gridIndex],
-                                   newComplexGridSize,
-                                   &pmeGpu->archSpecific->complexGridSize[gridIndex],
-                                   &pmeGpu->archSpecific->complexGridCapacity[gridIndex],
-                                   pmeGpu->archSpecific->deviceContext_);
             reallocateDeviceBuffer(&kernelParamsPtr->grid.d_realGrid[gridIndex],
                                    newRealGridSize,
                                    &pmeGpu->archSpecific->realGridSize[gridIndex],
                                    &pmeGpu->archSpecific->realGridCapacity[gridIndex],
                                    pmeGpu->archSpecific->deviceContext_);
+
+            pmeGpu->archSpecific->complexGridSize[gridIndex] = newComplexGridSize;
         }
         else
         {
@@ -399,7 +396,7 @@ void pme_gpu_realloc_grids(PmeGpu* pmeGpu)
                                    &pmeGpu->archSpecific->realGridSize[gridIndex],
                                    &pmeGpu->archSpecific->realGridCapacity[gridIndex],
                                    pmeGpu->archSpecific->deviceContext_);
-            kernelParamsPtr->grid.d_fourierGrid[gridIndex] = kernelParamsPtr->grid.d_realGrid[gridIndex];
+            kernelParamsPtr->grid.d_fftComplexGrid[gridIndex] = kernelParamsPtr->grid.d_realGrid[gridIndex];
             pmeGpu->archSpecific->complexGridSize[gridIndex] =
                     pmeGpu->archSpecific->realGridSize[gridIndex];
             // the size might get used later for copying the grid
@@ -498,10 +495,6 @@ void pme_gpu_free_grids(const PmeGpu* pmeGpu)
 {
     for (int gridIndex = 0; gridIndex < pmeGpu->common->ngrids; gridIndex++)
     {
-        if (pmeGpu->archSpecific->performOutOfPlaceFFT)
-        {
-            freeDeviceBuffer(&pmeGpu->kernelParams->grid.d_fourierGrid[gridIndex]);
-        }
         freeDeviceBuffer(&pmeGpu->kernelParams->grid.d_realGrid[gridIndex]);
     }
 
@@ -711,13 +704,28 @@ void pme_gpu_reinit_3dfft(const PmeGpu* pmeGpu)
     if (pme_gpu_settings(pmeGpu).performGPUFFT)
     {
         pmeGpu->archSpecific->fftSetup.resize(0);
-        const bool         performOutOfPlaceFFT      = pmeGpu->archSpecific->performOutOfPlaceFFT;
-        const bool         allocateGrid              = false;
-        MPI_Comm           comm                      = MPI_COMM_NULL;
-        std::array<int, 1> gridOffsetsInXForEachRank = { 0 };
-        std::array<int, 1> gridOffsetsInYForEachRank = { 0 };
+        const bool performOutOfPlaceFFT      = pmeGpu->archSpecific->performOutOfPlaceFFT;
+        bool allocateGrid                    = false;
+        MPI_Comm   comm                      = pmeGpu->common->mpiComm;
+        std::vector<int> gridSizesInXForEachRank(pmeGpu->common->nnodesMajor);
+        std::vector<int> gridSizesInYForEachRank(pmeGpu->common->nnodesMinor);
+
+        for(int i = 0; i < pmeGpu->common->nnodesMajor; ++i)
+        {
+            gridSizesInXForEachRank[i] = pmeGpu->common->s2g0x[i+1] - pmeGpu->common->s2g0x[i];
+        }
+        for(int i = 0; i < pmeGpu->common->nnodesMinor; ++i)
+        {
+            gridSizesInYForEachRank[i] = pmeGpu->common->s2g0y[i+1] - pmeGpu->common->s2g0y[i];
+        }
+
 #if GMX_GPU_CUDA
-        const gmx::FftBackend backend = gmx::FftBackend::Cufft;
+        gmx::FftBackend backend = gmx::FftBackend::Cufft;
+        if(pmeGpu->settings.useDecomposition)
+        {
+            backend = gmx::FftBackend::HeFFTe_CUDA;
+            allocateGrid = true;
+        }
 #elif GMX_GPU_OPENCL
         const gmx::FftBackend backend = gmx::FftBackend::Ocl;
 #elif GMX_GPU_SYCL
@@ -736,21 +744,25 @@ void pme_gpu_reinit_3dfft(const PmeGpu* pmeGpu)
         PmeGpuGridParams& grid = pme_gpu_get_kernel_params_base_ptr(pmeGpu)->grid;
         for (int gridIndex = 0; gridIndex < pmeGpu->common->ngrids; gridIndex++)
         {
+            const bool useDecomposition = pmeGpu->settings.useDecomposition;
+            DeviceBuffer<float> fftGrid = useDecomposition ? 
+                                grid.d_fftRealGrid[gridIndex] : grid.d_realGrid[gridIndex];
+
             pmeGpu->archSpecific->fftSetup.push_back(
                     std::make_unique<gmx::Gpu3dFft>(backend,
                                                     allocateGrid,
                                                     comm,
-                                                    gridOffsetsInXForEachRank,
-                                                    gridOffsetsInYForEachRank,
+                                                    gridSizesInXForEachRank,
+                                                    gridSizesInYForEachRank,
                                                     grid.realGridSize[ZZ],
                                                     performOutOfPlaceFFT,
                                                     pmeGpu->archSpecific->deviceContext_,
                                                     pmeGpu->archSpecific->pmeStream_,
-                                                    grid.realGridSize,
-                                                    grid.realGridSizePadded,
-                                                    grid.complexGridSizePadded,
-                                                    &(grid.d_realGrid[gridIndex]),
-                                                    &(grid.d_fourierGrid[gridIndex])));
+                                                    useDecomposition ? grid.localRealGridSize : grid.realGridSize,
+                                                    useDecomposition ? grid.localRealGridSizePadded : grid.realGridSizePadded,
+                                                    useDecomposition ? grid.localComplexGridSizePadded : grid.complexGridSizePadded,
+                                                    &(fftGrid),
+                                                    &(grid.d_fftComplexGrid[gridIndex])));
         }
     }
 }
@@ -988,6 +1000,7 @@ static void pme_gpu_copy_common_data_from(const gmx_pme_t* pme)
     pmeGpu->common->runMode       = pme->runMode;
     pmeGpu->common->isRankPmeOnly = !pme->bPPnode;
     pmeGpu->common->boxScaler     = pme->boxScaler.get();
+    pmeGpu->common->mpiComm      = pme->mpi_comm;
     pmeGpu->common->mpiCommx      = pme->mpi_comm_d[0];
     pmeGpu->common->mpiCommy      = pme->mpi_comm_d[1];
 }
@@ -1091,9 +1104,8 @@ void pme_gpu_reinit(gmx_pme_t*           pme,
         /* After this call nothing in the GPU code should refer to the gmx_pme_t *pme itself - until the next pme_gpu_reinit */
         pme_gpu_copy_common_data_from(pme);
     }
-    /* GPU FFT will only get used for a single rank.*/
-    pme->gpu->settings.performGPUFFT =
-            (pme->gpu->common->runMode == PmeRunMode::GPU) && !pme->gpu->settings.useDecomposition;
+
+    pme->gpu->settings.performGPUFFT = (pme->gpu->common->runMode == PmeRunMode::GPU);
     pme->gpu->settings.performGPUSolve = (pme->gpu->common->runMode == PmeRunMode::GPU);
 
     /* Reinit active timers */
@@ -1573,7 +1585,9 @@ void pme_gpu_solve(const PmeGpu* pmeGpu,
                    const int     gridIndex,
                    t_complex*    h_grid,
                    GridOrdering  gridOrdering,
-                   bool          computeEnergyAndVirial)
+                   bool          computeEnergyAndVirial,
+                   int           nodeId,
+                   int           nNodes)
 {
     GMX_ASSERT(
             pmeGpu->common->ngrids == 1 || pmeGpu->common->ngrids == 2,
@@ -1589,7 +1603,7 @@ void pme_gpu_solve(const PmeGpu* pmeGpu,
     float* h_gridFloat = reinterpret_cast<float*>(h_grid);
     if (copyInputAndOutputGrid)
     {
-        copyToDeviceBuffer(&kernelParamsPtr->grid.d_fourierGrid[gridIndex],
+        copyToDeviceBuffer(&kernelParamsPtr->grid.d_fftComplexGrid[gridIndex],
                            h_gridFloat,
                            0,
                            pmeGpu->archSpecific->complexGridSize[gridIndex],
@@ -1622,6 +1636,12 @@ void pme_gpu_solve(const PmeGpu* pmeGpu,
     const int gridLinesPerBlock = std::max(maxBlockSize / gridLineSize, 1);
     const int blocksPerGridLine = (gridLineSize + maxBlockSize - 1) / maxBlockSize;
     int       cellsPerBlock;
+
+    pmeGpu->kernelParams->grid.kOffsets[minorDim]  = 0;
+    pmeGpu->kernelParams->grid.kOffsets[middleDim] = 0;
+    pmeGpu->kernelParams->grid.kOffsets[majorDim] =
+            nodeId * pmeGpu->kernelParams->grid.complexGridSize[majorDim] / nNodes;
+
     if (blocksPerGridLine == 1)
     {
         cellsPerBlock = gridLineSize * gridLinesPerBlock;
@@ -1643,7 +1663,17 @@ void pme_gpu_solve(const PmeGpu* pmeGpu,
     // rounding up to full warps so that shuffle operations produce defined results
     config.gridSize[1] = (pmeGpu->kernelParams->grid.complexGridSize[middleDim] + gridLinesPerBlock - 1)
                          / gridLinesPerBlock;
-    config.gridSize[2] = pmeGpu->kernelParams->grid.complexGridSize[majorDim];
+
+    if (pmeGpu->settings.useDecomposition)
+    {
+        config.gridSize[2] =
+                ((nodeId + 1) * pmeGpu->kernelParams->grid.complexGridSize[majorDim] / nNodes)
+                - ((nodeId)*pmeGpu->kernelParams->grid.complexGridSize[majorDim] / nNodes);
+    }
+    else
+    {
+        config.gridSize[2] = pmeGpu->kernelParams->grid.complexGridSize[majorDim];
+    }
 
     PmeStage                           timingId  = PmeStage::Solve;
     PmeGpuProgramImpl::PmeKernelHandle kernelPtr = nullptr;
@@ -1685,7 +1715,7 @@ void pme_gpu_solve(const PmeGpu* pmeGpu,
                                       kernelParamsPtr,
                                       &kernelParamsPtr->grid.d_splineModuli[gridIndex],
                                       &kernelParamsPtr->constants.d_virialAndEnergy[gridIndex],
-                                      &kernelParamsPtr->grid.d_fourierGrid[gridIndex]);
+                                      &kernelParamsPtr->grid.d_fftComplexGrid[gridIndex]);
 #endif
     launchGpuKernel(kernelPtr, config, pmeGpu->archSpecific->pmeStream_, timingEvent, "PME solve", kernelArgs);
     pme_gpu_stop_timing(pmeGpu, timingId);
@@ -1704,7 +1734,7 @@ void pme_gpu_solve(const PmeGpu* pmeGpu,
     if (copyInputAndOutputGrid)
     {
         copyFromDeviceBuffer(h_gridFloat,
-                             &kernelParamsPtr->grid.d_fourierGrid[gridIndex],
+                             &kernelParamsPtr->grid.d_fftComplexGrid[gridIndex],
                              0,
                              pmeGpu->archSpecific->complexGridSize[gridIndex],
                              pmeGpu->archSpecific->pmeStream_,

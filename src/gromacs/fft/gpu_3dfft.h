@@ -98,7 +98,7 @@ public:
      * \param[in,out]  realGridSizePadded       Dimensions of the local real grid with padding, out if allocateGrids=true
      * \param[in,out]  complexGridSizePadded    Dimensions of the local complex grid with padding, out if allocateGrids=true
      * \param[in,out]  realGrid                 Device buffer of floats for the local real grid, out if allocateGrids=true
-     * \param[in,out]  complexGrid              Device buffer of complex floats for the local complex grid, out if allocateGrids=true
+     * \param[out]  complexGrid                 Device buffer of complex floats for the local complex grid
      */
     Gpu3dFft(FftBackend           backend,
              bool                 allocateGrids,

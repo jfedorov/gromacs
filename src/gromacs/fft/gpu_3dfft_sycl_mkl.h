@@ -94,9 +94,15 @@ private:
             oneapi::mkl::dft::descriptor<oneapi::mkl::dft::precision::SINGLE, oneapi::mkl::dft::domain::REAL>;
 
     cl::sycl::buffer<float, 1> realGrid_;
-    cl::sycl::buffer<float, 1> complexGrid_;
     cl::sycl::queue            queue_;
     Descriptor                 r2cDescriptor_, c2rDescriptor_;
+    DeviceBuffer<float>           complexGrid_;
+    /*! \brief A boolean which tells whether the complex and real grids are different or same. Currenty true. */
+    bool performOutOfPlaceFFT_ = false;
+    /*! \brief complexGrid float (not float2!) element count (actual) */
+    int complexGridSize_ = 0;
+    /*! \brief complexGrid float (not float2!) element count (reserved) */
+    int complexGridCapacity_ = 0;
 
     static Descriptor initDescriptor(const ivec realGridSize);
 };

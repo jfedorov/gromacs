@@ -326,15 +326,13 @@ bool decideWhetherToUseGpuForHalo(const DevelopmentFeatureFlags& devFlags,
 /*! \brief Decide whether to support GPU PME decomposition.
  *
  * \param[in]  devFlags                     GPU development / experimental feature flags.
- * \param[in]  pmeRunMode                   Run mode indicating what resource is PME execured on.
  * \param[in]  numRanksPerSimulation        The number of ranks in each simulation.
- * \param[in]  numPmeRanksPerSimulation     The number of PME ranks in each simulation, can be -1
- * for auto. \param[in]  mdlog                        MD logger.
+ * \param[in]  numPmeRanksPerSimulation     The number of PME ranks in each simulation, can be -1 for auto.
+ * \param[in]  mdlog                        MD logger.
  *
  * \returns    Whether Direct PME-PP communication should be enabled.
  */
 bool decideWhetherToUseGpuPmeDecomposition(const DevelopmentFeatureFlags& devFlags,
-                                           PmeRunMode                     pmeRunMode,
                                            int                            numRanksPerSimulation,
                                            int                            numPmeRanksPerSimulation,
                                            const gmx::MDLogger&           mdlog);

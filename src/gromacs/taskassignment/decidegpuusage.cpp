@@ -719,7 +719,6 @@ bool decideWhetherToUseGpuForHalo(const DevelopmentFeatureFlags& devFlags,
 }
 
 bool decideWhetherToUseGpuPmeDecomposition(const DevelopmentFeatureFlags& devFlags,
-                                           const PmeRunMode               pmeRunMode,
                                            const int                      numRanksPerSimulation,
                                            const int                      numPmeRanksPerSimulation,
                                            const gmx::MDLogger&           mdlog)
@@ -729,7 +728,7 @@ bool decideWhetherToUseGpuPmeDecomposition(const DevelopmentFeatureFlags& devFla
     // PME decomposition with PP-PME on same rank is supported only when it is forced using GMX_GPU_PME_DECOMPOSITION_WITH_PP_PME_ON_SAME_RANK
     const bool pmeDecompositionRequestedWithPpPmeOnSameRank =
             (numRanksPerSimulation > 1 && numPmeRanksPerSimulation <= 0);
-    const bool pmeDecompositionSupported = (devFlags.usingCudaAwareMpi && pmeRunMode == PmeRunMode::Mixed);
+    const bool pmeDecompositionSupported = devFlags.usingCudaAwareMpi;
 
     if (pmeDecompositionSupported && pmeDecompositionRequestedWithPpPmeOnSameRank)
     {
