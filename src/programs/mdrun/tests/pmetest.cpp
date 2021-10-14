@@ -134,14 +134,6 @@ void PmeTest::runTest(const RunModesList& runModes)
             continue;
         }
 
-        auto modeTargetsFftOnGpus = (mode.first.find("FftOnGpu") != std::string::npos);
-        if (modeTargetsFftOnGpus && GMX_GPU_SYCL)
-        {
-            // Currently, we only support Pme Mixed mode with SYCL, because neither Solve kernel,
-            // nor FFT are ported yet.
-            continue;
-        }
-
         runner_.edrFileName_ =
                 fileManager_.getTemporaryFilePath(inputFile + "_" + mode.first + ".edr");
 

@@ -76,17 +76,7 @@ public:
     PmeSolveTest() = default;
 
     //! Sets the programs once
-    static void SetUpTestSuite()
-    {
-        s_pmeTestHardwareContexts    = createPmeTestHardwareContextList();
-        g_allowPmeWithSyclForTesting = true; // We support PmeSolve with SYCL
-    }
-
-    static void TearDownTestSuite()
-    {
-        // Revert the value back.
-        g_allowPmeWithSyclForTesting = false;
-    }
+    static void SetUpTestSuite() { s_pmeTestHardwareContexts = createPmeTestHardwareContextList(); }
 
     //! The test
     static void runTest()
@@ -123,12 +113,7 @@ public:
         for (const auto& pmeTestHardwareContext : s_pmeTestHardwareContexts)
         {
             pmeTestHardwareContext->activate();
-            CodePath codePath = pmeTestHardwareContext->codePath();
-            // We do not support PME Solve with SYCL yet.
-            if (GMX_GPU_SYCL && codePath == CodePath::GPU)
-            {
-                continue;
-            }
+            CodePath   codePath       = pmeTestHardwareContext->codePath();
             const bool supportedInput = pmeSupportsInputForMode(
                     *getTestHardwareEnvironment()->hwinfo(), &inputRec, codePath);
             if (!supportedInput)

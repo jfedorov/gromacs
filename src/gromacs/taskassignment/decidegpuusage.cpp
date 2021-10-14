@@ -436,7 +436,6 @@ bool decideWhetherToUseGpusForPme(const bool              useGpuForNonbonded,
 
 PmeRunMode determinePmeRunMode(const bool useGpuForPme, const TaskTarget& pmeFftTarget, const t_inputrec& inputrec)
 {
-    static constexpr bool sc_gpuBuildOnlySupportsMixedMode = GMX_GPU_SYCL;
     if (!EEL_PME(inputrec.coulombtype))
     {
         return PmeRunMode::None;
@@ -444,13 +443,7 @@ PmeRunMode determinePmeRunMode(const bool useGpuForPme, const TaskTarget& pmeFft
 
     if (useGpuForPme)
     {
-        if (sc_gpuBuildOnlySupportsMixedMode && pmeFftTarget == TaskTarget::Gpu)
-        {
-            gmx_fatal(FARGS,
-                      "SYCL build does not support fully offloading PME to GPUs. Please use "
-                      "-pmefft cpu.");
-        }
-        if (sc_gpuBuildOnlySupportsMixedMode || pmeFftTarget == TaskTarget::Cpu)
+        if (pmeFftTarget == TaskTarget::Cpu)
         {
             return PmeRunMode::Mixed;
         }
