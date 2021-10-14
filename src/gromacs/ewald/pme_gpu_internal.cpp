@@ -586,7 +586,8 @@ static void pme_gpu_init_internal(PmeGpu* pmeGpu, const DeviceContext& deviceCon
     pmeGpu->archSpecific.reset(new PmeGpuSpecific(deviceContext, deviceStream));
     pmeGpu->kernelParams.reset(new PmeGpuKernelParams());
 
-    pmeGpu->archSpecific->performOutOfPlaceFFT = true;
+    // We prefer to use out-of-place FFT, unless we use Intel DPC++ with MKL, where it is broken.
+    pmeGpu->archSpecific->performOutOfPlaceFFT = !GMX_SYCL_DPCPP;
     /* This should give better performance, according to the cuFFT documentation.
      * The performance seems to be the same though.
      * TODO: PME could also try to pick up nice grid sizes (with factors of 2, 3, 5, 7).
