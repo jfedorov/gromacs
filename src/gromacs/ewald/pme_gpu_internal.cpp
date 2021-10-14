@@ -1197,9 +1197,10 @@ void pme_gpu_3dfft(const PmeGpu* pmeGpu, gmx_fft_direction dir, const int grid_i
             dir, pme_gpu_fetch_timing_event(pmeGpu, timerId));
     pme_gpu_stop_timing(pmeGpu, timerId);
 
-    if (dir == GMX_FFT_COMPLEX_TO_REAL)
+    if (dir == GMX_FFT_COMPLEX_TO_REAL && pmeGpu->settings.useDecomposition)
     {
-        // mark event once C2R FFT has been launched
+        // mark event once C2R FFT has been launched,
+        // this is consumed during reverse PME halo exchange in pme decomposition code path
         pmeGpu->archSpecific->c2rFftCompleted.markEvent(pmeGpu->archSpecific->pmeStream_);
     }
 }

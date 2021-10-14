@@ -667,6 +667,13 @@ void pmeGpuGridHaloExchangeReverse(const PmeGpu* pmeGpu)
         }
     }
 
+    // Wait for c2r tranform to finish before reverse halo exchange
+    // In hybrid mode, this event is never marked
+    if (pmeGpu->settings.performGPUFFT)
+    {
+        pmeGpu->archSpecific->c2rFftCompleted.waitForEvent();
+    }
+
     // major dimension
     if (pmeGpu->common->nnodesMajor > 1)
     {
@@ -704,10 +711,6 @@ void pmeGpuGridHaloExchangeReverse(const PmeGpu* pmeGpu)
         int transferSizeSend      = overlapSend * localPmeSize[YY] * localPmeSize[ZZ];
         int transferSizeRecvRight = overlapRight * localPmeSize[YY] * localPmeSize[ZZ];
         int transferSizeRecvLeft  = overlapLeft * localPmeSize[YY] * localPmeSize[ZZ];
-
-        // Wait for c2r tranform to finish before reverse halo exchange
-        // In hybrid mode, this event is never marked, so has no effect
-        pmeGpu->archSpecific->c2rFftCompleted.waitForEvent();
 
         for (int gridIndex = 0; gridIndex < pmeGpu->common->ngrids; gridIndex++)
         {

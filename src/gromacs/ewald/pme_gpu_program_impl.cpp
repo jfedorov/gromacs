@@ -45,13 +45,6 @@
 
 #include "pme_gpu_program_impl.h"
 
-#include "pme.cuh"
-#include "pme_gpu_types_host.h"
-#include "pme_gpu_types.h"
-#include "pme_gpu_types_host_impl.h"
-#include "gromacs/fft/parallel_3dfft.h"
-#include "pme_gpu_grid.h"
-
 PmeGpuProgramImpl::PmeGpuProgramImpl(const DeviceContext& deviceContext) :
     deviceContext_(deviceContext),
     warpSize_(0),
@@ -62,38 +55,3 @@ PmeGpuProgramImpl::PmeGpuProgramImpl(const DeviceContext& deviceContext) :
 }
 
 PmeGpuProgramImpl::~PmeGpuProgramImpl() = default;
-
-// [[noreturn]] attributes must be added in the common headers, so it's easier to silence the warning here
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wmissing-noreturn"
-
-void pmeGpuGridHaloExchange(const PmeGpu* /*pmeGpu*/)
-{
-    GMX_THROW(gmx::NotImplementedError("PME decomposition is not implemented in SYCL"));
-}
-
-void pmeGpuGridHaloExchangeReverse(const PmeGpu* /*pmeGpu*/)
-{
-    GMX_THROW(gmx::NotImplementedError("PME decomposition is not implemented in SYCL"));
-}
-
-template<bool forward>
-void convertPmeGridToFftGrid(const PmeGpu* /*pmeGpu*/,
-                             float* /*h_grid*/,
-                             gmx_parallel_3dfft_t* /*fftSetup*/,
-                             const int /*gridIndex*/)
-{
-    GMX_THROW(gmx::NotImplementedError("PME decomposition is not implemented in SYCL"));
-}
-
-template void convertPmeGridToFftGrid<true>(const PmeGpu* /*pmeGpu*/,
-                                            float* /*h_grid*/,
-                                            gmx_parallel_3dfft_t* /*fftSetup*/,
-                                            const int /*gridIndex*/);
-
-template void convertPmeGridToFftGrid<false>(const PmeGpu* /*pmeGpu*/,
-                                             float* /*h_grid*/,
-                                             gmx_parallel_3dfft_t* /*fftSetup*/,
-                                             const int /*gridIndex*/);
-
-#pragma clang diagnostic pop

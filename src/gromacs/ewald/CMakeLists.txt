@@ -94,6 +94,7 @@ elseif (GMX_GPU_SYCL)
         pme_gpu.cpp
         pme_gpu_internal.cpp
         pme_gpu_program_impl_sycl.cpp
+        pme_gpu_sycl_stubs.cpp
         pme_gpu_timings.cpp
         pme_solve_sycl.cpp
         pme_spread_sycl.cpp

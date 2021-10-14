@@ -34,7 +34,7 @@
  */
 
 /*! \internal \file
- * \brief Implements stubs of high-level PME GPU functions for OpenCL.
+ * \brief Implements stubs of high-level PME GPU functions for Sycl.
  *
  * \author Gaurav Garg <gaugarg@nvidia.com>
  *
@@ -56,12 +56,12 @@
 
 void pmeGpuGridHaloExchange(const PmeGpu* /*pmeGpu*/)
 {
-    GMX_THROW(gmx::NotImplementedError("PME decomposition is not implemented in OpenCL"));
+    GMX_THROW(gmx::NotImplementedError("PME decomposition is not implemented in Sycl"));
 }
 
 void pmeGpuGridHaloExchangeReverse(const PmeGpu* /*pmeGpu*/)
 {
-    GMX_THROW(gmx::NotImplementedError("PME decomposition is not implemented in OpenCL"));
+    GMX_THROW(gmx::NotImplementedError("PME decomposition is not implemented in Sycl"));
 }
 
 template<bool forward>
@@ -70,7 +70,7 @@ void convertPmeGridToFftGrid(const PmeGpu* /*pmeGpu*/,
                              gmx_parallel_3dfft_t* /*fftSetup*/,
                              const int /*gridIndex*/)
 {
-    GMX_THROW(gmx::NotImplementedError("PME decomposition is not implemented in OpenCL"));
+    GMX_THROW(gmx::NotImplementedError("PME decomposition is not implemented in Sycl"));
 }
 
 template void convertPmeGridToFftGrid<true>(const PmeGpu* /*pmeGpu*/,
