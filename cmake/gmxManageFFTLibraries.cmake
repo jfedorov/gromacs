@@ -191,6 +191,10 @@ if (FFT_CHANGED)
         message(WARNING "${FFT_WARNING_MESSAGE}")
     endif()
     message(STATUS "${FFT_STATUS_MESSAGE}")
+
+    if(GMX_GPU_SYCL AND NOT GMX_FFT_MKL)
+        message(WARNING "Building SYCL version with ${GMX_FFT_LIBRARY} instead of MKL. GPU FFT is disabled!")
+    endif()
 endif()
 
 # enable threaded fftw3 if we've found it
