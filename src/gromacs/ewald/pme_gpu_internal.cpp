@@ -1446,12 +1446,12 @@ void pme_gpu_spread(const PmeGpu*                  pmeGpu,
 #endif
 
         launchGpuKernel(kernelPtr, config, *launchStream, timingEvent, "PME spline/spread", kernelArgs);
+    }
 
-        if (kernelParamsPtr->usePipeline)
-        {
-            // Set dependencies for PME stream on all pipeline streams
-            pmeCoordinateReceiverGpu->addPipelineDependencies(pmeGpu->archSpecific->pmeStream_);
-        }
+    if (kernelParamsPtr->usePipeline)
+    {
+        // Set dependencies for PME stream on all pipeline streams
+        pmeCoordinateReceiverGpu->addPipelineDependencies(pmeGpu->archSpecific->pmeStream_);
     }
 
     pme_gpu_stop_timing(pmeGpu, timingId);
