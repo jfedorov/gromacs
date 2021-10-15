@@ -1482,6 +1482,10 @@ Lincs* init_lincs(FILE*                            fplog,
         }
     }
 
+    // Count constraint triangles and detect whether we have more than two
+    // sequentially connected constraints. If the latter is not the case,
+    // we can easily generate independent thread task. This case is optimized
+    // as it is the case with H-bond only constraints, which is rather common.
     li->ncg_triangle = 0;
     bMoreThanTwoSeq  = FALSE;
     for (const gmx_molblock_t& molb : mtop.molblock)
@@ -1763,7 +1767,9 @@ static void check_assign_connected(Lincs*                        li,
                     const int a2Connected = iatom[3 * cc + 2];
                     assign_constraint(li, cc, a1Connected, a2Connected, lenA, lenB, at2con);
 
-                    if (recursionDepth > 1 && li->nc < maxNumConstraintsToAssign)
+                    // With independent tasks we should assign all connected constraints
+                    // to the same task. With dependent tasks we assign as many as asked.
+                    if (recursionDepth > 1 && (!li->bTaskDep && li->nc < maxNumConstraintsToAssign))
                     {
                         check_assign_connected(li,
                                                iatom,
@@ -1929,7 +1935,8 @@ void set_lincs(const InteractionDefinitions& idef,
     constexpr int c_connectedConstraintRecursionDepth = 100;
 
     static_assert(c_connectedConstraintRecursionDepth >= 1,
-                  "We need this number to be at least 1 for the case of update groups");
+                  "We need this number to be at least 1 as we guarantee independent tasks when we "
+                  "have at most two sequentially connected constraints");
 
     li->nc_real = 0;
     li->nc      = 0;
@@ -2091,12 +2098,10 @@ void set_lincs(const InteractionDefinitions& idef,
 
                     if (li->ntask > 1)
                     {
-                        // We have more than one task.
-                        // With update groups we need to assign all connected constraints (note
-                        // that a recursion depth of 1 would suffice in this case)
-                        // Without updated groups we want to minimize the connections between
-                        // the different tasks, so we should, as much as possible, assign connected
-                        // constraints to the same task.
+                        // We have more than one task: assigned connected constraints
+                        // to the same task. When !li->bTaskDep we will assign all
+                        // connected constraints (max 1), otherwise we assign up to
+                        // li_task->b0 + ncon_target total constraints.
                         check_assign_connected(
                                 li, iatom, idef, bDynamics, a1, a2, at2con, li_task->b0 + ncon_target, c_connectedConstraintRecursionDepth);
                     }
