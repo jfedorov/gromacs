@@ -1403,16 +1403,15 @@ void pme_gpu_spread(const PmeGpu*                  pmeGpu,
             // to those, and return the result in usePipeline, along
             // with other matching parameters.
             const bool canPipelineReceives = computeSplines && spreadCharges && !writeGlobalOrSaveSplines;
-            std::tie(kernelParamsPtr->usePipeline,
-                     kernelParamsPtr->pipelineAtomStart,
-                     kernelParamsPtr->pipelineAtomEnd,
-                     launchStream,
-                     spreadIsComplete) =
+            int        pipelineAtomStart, pipelineAtomEnd;
+            std::tie(kernelParamsPtr->usePipeline, pipelineAtomStart, pipelineAtomEnd, launchStream, spreadIsComplete) =
                     pmeCoordinateReceiverGpu->synchronizeOnCoordinatesFromPpRank(
                             canPipelineReceives, &pmeGpu->archSpecific->pmeStream_);
             if (kernelParamsPtr->usePipeline)
             {
                 // set kernel configuration options specific to this stage of the pipeline
+                kernelParamsPtr->pipelineAtomStart = pipelineAtomStart;
+                kernelParamsPtr->pipelineAtomEnd   = pipelineAtomEnd;
                 const int blockCount =
                         int(std::ceil((kernelParamsPtr->pipelineAtomEnd - kernelParamsPtr->pipelineAtomStart)
                                       / float(atomsPerBlock)));
