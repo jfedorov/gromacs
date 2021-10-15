@@ -155,6 +155,53 @@ bool decideWhetherToUseGpusForNonbondedWithThreadMpi(const TaskTarget        non
     return haveAvailableDevices;
 }
 
+static bool canUseGpusForPme(const bool           useGpuForNonbonded,
+                             const TaskTarget     pmeTarget,
+                             const gmx_hw_info_t& hardwareInfo,
+                             const t_inputrec&    inputrec,
+                             std::string*         errorMessage)
+{
+    if (pmeTarget == TaskTarget::Cpu)
+    {
+        return false;
+    }
+    if (!useGpuForNonbonded)
+    {
+        if (pmeTarget == TaskTarget::Gpu && errorMessage)
+        {
+            *errorMessage =
+                    "PME on GPUs is only supported when nonbonded interactions run on GPUs also.";
+        }
+        return false;
+    }
+
+    if (!pme_gpu_supports_build(errorMessage))
+    {
+        if (pmeTarget == TaskTarget::Gpu && errorMessage)
+        {
+            *errorMessage = "Cannot compute PME interactions on a GPU, because " + *errorMessage;
+        }
+        return false;
+    }
+    if (!pme_gpu_supports_hardware(hardwareInfo, errorMessage))
+    {
+        if (pmeTarget == TaskTarget::Gpu && errorMessage)
+        {
+            *errorMessage = "Cannot compute PME interactions on a GPU, because " + *errorMessage;
+        }
+        return false;
+    }
+    if (!pme_gpu_supports_input(inputrec, errorMessage))
+    {
+        if (pmeTarget == TaskTarget::Gpu && errorMessage)
+        {
+            *errorMessage = "Cannot compute PME interactions on a GPU, because " + *errorMessage;
+        }
+        return false;
+    }
+    return true;
+}
+
 bool decideWhetherToUseGpusForPmeWithThreadMpi(const bool              useGpuForNonbonded,
                                                const TaskTarget        pmeTarget,
                                                const int               numDevicesToUse,
@@ -165,8 +212,7 @@ bool decideWhetherToUseGpusForPmeWithThreadMpi(const bool              useGpuFor
                                                const int               numPmeRanksPerSimulation)
 {
     // First, exclude all cases where we can't run PME on GPUs.
-    if ((pmeTarget == TaskTarget::Cpu) || !useGpuForNonbonded || !pme_gpu_supports_build(nullptr)
-        || !pme_gpu_supports_hardware(hardwareInfo, nullptr) || !pme_gpu_supports_input(inputrec, nullptr))
+    if (!canUseGpusForPme(useGpuForNonbonded, pmeTarget, hardwareInfo, inputrec, nullptr))
     {
         // PME can't run on a GPU. If the user required that, we issue
         // an error later.
@@ -337,43 +383,12 @@ bool decideWhetherToUseGpusForPme(const bool              useGpuForNonbonded,
                                   const int               numPmeRanksPerSimulation,
                                   const bool              gpusWereDetected)
 {
-    if (pmeTarget == TaskTarget::Cpu)
-    {
-        return false;
-    }
-
-    if (!useGpuForNonbonded)
-    {
-        if (pmeTarget == TaskTarget::Gpu)
-        {
-            GMX_THROW(NotImplementedError(
-                    "PME on GPUs is only supported when nonbonded interactions run on GPUs also."));
-        }
-        return false;
-    }
-
     std::string message;
-    if (!pme_gpu_supports_build(&message))
+    if (!canUseGpusForPme(useGpuForNonbonded, pmeTarget, hardwareInfo, inputrec, &message))
     {
-        if (pmeTarget == TaskTarget::Gpu)
+        if (!message.empty())
         {
-            GMX_THROW(NotImplementedError("Cannot compute PME interactions on a GPU, because " + message));
-        }
-        return false;
-    }
-    if (!pme_gpu_supports_hardware(hardwareInfo, &message))
-    {
-        if (pmeTarget == TaskTarget::Gpu)
-        {
-            GMX_THROW(NotImplementedError("Cannot compute PME interactions on a GPU, because " + message));
-        }
-        return false;
-    }
-    if (!pme_gpu_supports_input(inputrec, &message))
-    {
-        if (pmeTarget == TaskTarget::Gpu)
-        {
-            GMX_THROW(NotImplementedError("Cannot compute PME interactions on a GPU, because " + message));
+            GMX_THROW(InconsistentInputError(message));
         }
         return false;
     }
