@@ -157,6 +157,7 @@ bool decideWhetherToUseGpusForNonbondedWithThreadMpi(const TaskTarget        non
 
 static bool canUseGpusForPme(const bool           useGpuForNonbonded,
                              const TaskTarget     pmeTarget,
+                             const TaskTarget     pmeFftTarget,
                              const gmx_hw_info_t& hardwareInfo,
                              const t_inputrec&    inputrec,
                              std::string*         errorMessage)
@@ -199,11 +200,24 @@ static bool canUseGpusForPme(const bool           useGpuForNonbonded,
         }
         return false;
     }
+    if (!pme_gpu_supports_input_in_mixed_mode(inputrec, errorMessage))
+    {
+        if (pmeFftTarget == TaskTarget::Cpu)
+        {
+            if (pmeTarget == TaskTarget::Gpu && errorMessage)
+            {
+                *errorMessage = "Can not run PME in mixed mode (-pme gpu -pmefft cpu), because "
+                                + *errorMessage;
+            }
+            return false;
+        }
+    }
     return true;
 }
 
 bool decideWhetherToUseGpusForPmeWithThreadMpi(const bool              useGpuForNonbonded,
                                                const TaskTarget        pmeTarget,
+                                               const TaskTarget        pmeFftTarget,
                                                const int               numDevicesToUse,
                                                const std::vector<int>& userGpuTaskAssignment,
                                                const gmx_hw_info_t&    hardwareInfo,
@@ -212,7 +226,7 @@ bool decideWhetherToUseGpusForPmeWithThreadMpi(const bool              useGpuFor
                                                const int               numPmeRanksPerSimulation)
 {
     // First, exclude all cases where we can't run PME on GPUs.
-    if (!canUseGpusForPme(useGpuForNonbonded, pmeTarget, hardwareInfo, inputrec, nullptr))
+    if (!canUseGpusForPme(useGpuForNonbonded, pmeTarget, pmeFftTarget, hardwareInfo, inputrec, nullptr))
     {
         // PME can't run on a GPU. If the user required that, we issue
         // an error later.
@@ -376,6 +390,7 @@ bool decideWhetherToUseGpusForNonbonded(const TaskTarget          nonbondedTarge
 
 bool decideWhetherToUseGpusForPme(const bool              useGpuForNonbonded,
                                   const TaskTarget        pmeTarget,
+                                  const TaskTarget        pmeFftTarget,
                                   const std::vector<int>& userGpuTaskAssignment,
                                   const gmx_hw_info_t&    hardwareInfo,
                                   const t_inputrec&       inputrec,
@@ -384,7 +399,7 @@ bool decideWhetherToUseGpusForPme(const bool              useGpuForNonbonded,
                                   const bool              gpusWereDetected)
 {
     std::string message;
-    if (!canUseGpusForPme(useGpuForNonbonded, pmeTarget, hardwareInfo, inputrec, &message))
+    if (!canUseGpusForPme(useGpuForNonbonded, pmeTarget, pmeFftTarget, hardwareInfo, inputrec, &message))
     {
         if (!message.empty())
         {

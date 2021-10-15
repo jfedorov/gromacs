@@ -300,6 +300,17 @@ bool pme_gpu_supports_hardware(const gmx_hw_info_t& hwinfo, std::string* error);
  */
 bool pme_gpu_supports_input(const t_inputrec& ir, std::string* error);
 
+/*! \brief Checks whether the input system allows to run PME on GPU in Mixed mode specifically.
+ * Assumes that PME on GPU is supported otherwise, i.e., that \ref pme_gpu_supports_input
+ * returns \c true.
+ *
+ * \param[in]  ir     Input system.
+ * \param[out] error  If non-null, the error message if the input is not supported on GPU.
+ *
+ * \returns true if PME can run on GPU in Mixed mode with this input, false otherwise.
+ */
+bool pme_gpu_supports_input_in_mixed_mode(const t_inputrec& ir, std::string* error);
+
 /*! \brief
  * Returns the active PME codepath (CPU, GPU, mixed).
  * \todo This is a rather static data that should be managed by the higher level task scheduler.
