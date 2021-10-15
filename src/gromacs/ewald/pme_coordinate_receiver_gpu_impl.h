@@ -103,38 +103,12 @@ public:
      */
     void launchReceiveCoordinatesFromPpCudaMpi(DeviceBuffer<RVec> recvbuf, int numAtoms, int numBytes, int ppRank);
 
-    /*! \brief
-     * For lib MPI, wait for coordinates from any PP rank
-     * For thread MPI, enqueue PP co-ordinate transfer event received from PP
-     * rank determined from pipeline stage into given stream
-     * \param[in] pipelineStage  stage of pipeline corresponding to this transfer
-     * \param[in] deviceStream   stream in which to enqueue the wait event.
-     * \returns                  rank of sending PP task
-     */
-    int synchronizeOnCoordinatesFromPpRank(int pipelineStage, const DeviceStream& deviceStream);
+    //! \copydoc PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromPpRank
+    std::tuple<bool, int, int, const DeviceStream*, bool>
+    synchronizeOnCoordinatesFromPpRank(bool canPipelineReceives, const DeviceStream* pmeStream);
 
-    /*! \brief Perform above synchronizeOnCoordinatesFromPpRanks for all PP ranks,
-     * enqueueing all events to a single stream
-     * \param[in] deviceStream   stream in which to enqueue the wait events.
-     */
-    void synchronizeOnCoordinatesFromAllPpRanks(const DeviceStream& deviceStream);
-
-    /*! \brief
-     * Return pointer to stream associated with specific PP rank sender index
-     * \param[in] senderIndex    Index of sender PP rank.
-     */
-    DeviceStream* ppCommStream(int senderIndex);
-
-    /*! \brief
-     * Returns range of atoms involved in communication associated with specific PP rank sender
-     * index \param[in] senderIndex    Index of sender PP rank.
-     */
-    std::tuple<int, int> ppCommAtomRange(int senderIndex);
-
-    /*! \brief
-     * Return number of PP ranks involved in PME-PP communication
-     */
-    int ppCommNumSenderRanks();
+    //! \copydoc PmeCoordinateReceiverGpu::addPipelineDependencies
+    void addPipelineDependencies(const DeviceStream& pmeStream);
 
 private:
     //! communicator for simulation

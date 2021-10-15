@@ -67,9 +67,9 @@ PmeCoordinateReceiverGpu::PmeCoordinateReceiverGpu(MPI_Comm /* comm */,
                                                    gmx::ArrayRef<PpRanks> /* ppRanks */) :
     impl_(nullptr)
 {
-    GMX_ASSERT(!impl_,
-               "A CPU stub for PME-PP GPU communication was called instead of the correct "
-               "implementation.");
+    GMX_RELEASE_ASSERT(!impl_,
+                       "A CPU stub for PME-PP GPU communication was called instead of the correct "
+                       "implementation.");
 }
 
 PmeCoordinateReceiverGpu::~PmeCoordinateReceiverGpu() = default;
@@ -77,16 +77,17 @@ PmeCoordinateReceiverGpu::~PmeCoordinateReceiverGpu() = default;
 /*!\brief init PME-PP GPU communication stub */
 void PmeCoordinateReceiverGpu::reinitCoordinateReceiver(DeviceBuffer<RVec> /* d_x */)
 {
-    GMX_ASSERT(!impl_,
-               "A CPU stub for PME-PP GPU communication initialization was called instead of the "
-               "correct implementation.");
+    GMX_RELEASE_ASSERT(
+            !impl_,
+            "A CPU stub for PME-PP GPU communication initialization was called instead of the "
+            "correct implementation.");
 }
 
 void PmeCoordinateReceiverGpu::receiveCoordinatesSynchronizerFromPpCudaDirect(int /* ppRank */)
 {
-    GMX_ASSERT(!impl_,
-               "A CPU stub for PME-PP GPU communication was called instead of the correct "
-               "implementation.");
+    GMX_RELEASE_ASSERT(!impl_,
+                       "A CPU stub for PME-PP GPU communication was called instead of the correct "
+                       "implementation.");
 }
 
 void PmeCoordinateReceiverGpu::launchReceiveCoordinatesFromPpCudaMpi(DeviceBuffer<RVec> /* recvbuf */,
@@ -94,51 +95,27 @@ void PmeCoordinateReceiverGpu::launchReceiveCoordinatesFromPpCudaMpi(DeviceBuffe
                                                                      int /* numBytes */,
                                                                      int /* ppRank */)
 {
-    GMX_ASSERT(!impl_,
-               "A CPU stub for PME-PP GPU communication was called instead of the correct "
-               "implementation.");
+    GMX_RELEASE_ASSERT(!impl_,
+                       "A CPU stub for PME-PP GPU communication was called instead of the correct "
+                       "implementation.");
 }
 
-int PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromPpRank(int /* pipelineStage */,
-                                                                 const DeviceStream& /* deviceStream */)
+std::tuple<bool, int, int, const DeviceStream*, bool>
+PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromPpRank(const bool /* canPipelineReceives */,
+                                                             const DeviceStream* /* pmeStream */)
 {
-    GMX_ASSERT(!impl_,
-               "A CPU stub for PME-PP GPU communication was called instead of the correct "
-               "implementation.");
-    return 0;
+    GMX_RELEASE_ASSERT(!impl_,
+                       "A CPU stub for PME-PP GPU communication was called instead of the correct "
+                       "implementation.");
+    return std::make_tuple(false, -1, -1, nullptr, false);
 }
 
-void PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromAllPpRanks(const DeviceStream& /* deviceStream */)
+void PmeCoordinateReceiverGpu::addPipelineDependencies(const DeviceStream& /* pmeStream */)
 {
-    GMX_ASSERT(!impl_,
-               "A CPU stub for PME-PP GPU communication was called instead of the correct "
-               "implementation.");
+    GMX_RELEASE_ASSERT(!impl_,
+                       "A CPU stub for PME-PP GPU communication was called instead of the correct "
+                       "implementation.");
 }
-
-DeviceStream* PmeCoordinateReceiverGpu::ppCommStream(int /* senderIndex */)
-{
-    GMX_ASSERT(!impl_,
-               "A CPU stub for PME-PP GPU communication was called instead of the correct "
-               "implementation.");
-    return nullptr;
-}
-
-std::tuple<int, int> PmeCoordinateReceiverGpu::ppCommAtomRange(int /* senderIndex */)
-{
-    GMX_ASSERT(!impl_,
-               "A CPU stub for PME-PP GPU communication was called instead of the correct "
-               "implementation.");
-    return std::make_tuple(0, 0);
-}
-
-int PmeCoordinateReceiverGpu::ppCommNumSenderRanks()
-{
-    GMX_ASSERT(!impl_,
-               "A CPU stub for PME-PP GPU communication was called instead of the correct "
-               "implementation.");
-    return 0;
-}
-
 
 } // namespace gmx
 

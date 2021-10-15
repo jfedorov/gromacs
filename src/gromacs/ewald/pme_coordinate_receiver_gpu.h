@@ -43,6 +43,7 @@
 #define GMX_PMECOORDINATERECEIVERGPU_H
 
 #include <memory>
+#include <tuple>
 
 #include "gromacs/gpu_utils/devicebuffer_datatype.h"
 #include "gromacs/math/vectypes.h"
@@ -106,37 +107,43 @@ public:
     void launchReceiveCoordinatesFromPpCudaMpi(DeviceBuffer<RVec> recvbuf, int numAtoms, int numBytes, int ppRank);
 
     /*! \brief
-     * For lib MPI, wait for coordinates from any PP rank
-     * For thread MPI, enqueue PP co-ordinate transfer event received from PP
-     * rank determined from pipeline stage into given stream
-     * \param[in] pipelineStage  stage of pipeline corresponding to this transfer
-     * \param[in] deviceStream   stream in which to enqueue the wait event.
-     * \returns                  rank of sending PP task
-     */
-    int synchronizeOnCoordinatesFromPpRank(int pipelineStage, const DeviceStream& deviceStream);
+     * Synchronize on coordinates received from the PP ranks before spreading
+     *
+     * If \c canPipelineReceives and multiple PP ranks will send coordinates,
+     * pipelining will be used.
 
-    /*! \brief Perform above synchronizeOnCoordinatesFromPpRanks for all PP ranks,
-     * enqueueing all events to a single stream
-     * \param[in] deviceStream   stream in which to enqueue the wait events.
+     * If so, wait for coordinates from any PP rank and prepare to
+     * launch a spread kernel in the pipeline stream corresponding to
+     * that rank. Otherwise, prepare to launch a spread kernel in the
+     * \c pmeStream.
+     *
+     * Only for thread MPI, enqueue the PP co-ordinate transfer event
+     * received from the PP rank (or ranks, when not pipelining) into
+     * the launch stream.
+     *
+     * \param[in] canPipelineReceives  Whether the spread invocation is consistent with pipelining
+     * \param[in] pmeStream            The stream in which PME operates
+     *
+     * \return    A tuple of values:
+     *            * whether pipeline is in use
+     *            * the start of the atom range in this
+     *              pipeline chunk (or -1 if not in use)
+     *            * the end of the atom range in this
+     *              pipeline chunk (or -1 if not in use)
+     *            * the stream for this pipeline chunk
+     *              (or \c pmeStream when not in use)
+     *            * whether no further pipeline chunks
+     *              remain to be handled
      */
-    void synchronizeOnCoordinatesFromAllPpRanks(const DeviceStream& deviceStream);
+    std::tuple<bool, int, int, const DeviceStream*, bool>
+    synchronizeOnCoordinatesFromPpRank(bool canPipelineReceives, const DeviceStream* pmeStream);
 
-    /*! \brief
-     * Return pointer to stream associated with specific PP rank sender index
-     * \param[in] senderIndex    Index of sender PP rank.
+    /*! \brief Synchronize the PME stream with the streams used for
+     * pipelined spread-kernel chunks.
+     *
+     * \param[in] pmeStream  The stream in which PME operates
      */
-    DeviceStream* ppCommStream(int senderIndex);
-
-    /*! \brief
-     * Returns range of atoms involved in communication associated with specific PP rank sender
-     * index \param[in] senderIndex    Index of sender PP rank.
-     */
-    std::tuple<int, int> ppCommAtomRange(int senderIndex);
-
-    /*! \brief
-     * Return number of PP ranks involved in PME-PP communication
-     */
-    int ppCommNumSenderRanks();
+    void addPipelineDependencies(const DeviceStream& pmeStream);
 
 private:
     class Impl;

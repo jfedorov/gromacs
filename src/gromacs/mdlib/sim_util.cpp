@@ -54,7 +54,6 @@
 #include "gromacs/domdec/partition.h"
 #include "gromacs/essentialdynamics/edsam.h"
 #include "gromacs/ewald/pme.h"
-#include "gromacs/ewald/pme_coordinate_receiver_gpu.h"
 #include "gromacs/ewald/pme_pp.h"
 #include "gromacs/ewald/pme_pp_comm_gpu.h"
 #include "gromacs/gmxlib/network.h"
@@ -135,6 +134,11 @@ using gmx::InteractionLocality;
 using gmx::RVec;
 using gmx::SimulationWorkload;
 using gmx::StepWorkload;
+
+namespace gmx
+{
+class PmeCoordinateReceiverGpu;
+} // namespace gmx
 
 // TODO: this environment variable allows us to verify before release
 // that on less common architectures the total cost of polling is not larger than

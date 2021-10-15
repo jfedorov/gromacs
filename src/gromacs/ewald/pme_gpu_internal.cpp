@@ -1387,72 +1387,43 @@ void pme_gpu_spread(const PmeGpu*                  pmeGpu,
     pme_gpu_start_timing(pmeGpu, timingId);
     auto* timingEvent = pme_gpu_fetch_timing_event(pmeGpu, timingId);
 
-    kernelParamsPtr->usePipeline = computeSplines && spreadCharges && useGpuDirectComm
-                                   && (pmeCoordinateReceiverGpu->ppCommNumSenderRanks() > 1)
-                                   && !writeGlobalOrSaveSplines;
-    if (kernelParamsPtr->usePipeline)
+    // When multiple separate PP ranks are doing direct PP-PME
+    // communication, multiple spread kernels are launched in a
+    // pipelined fashion as coordinates arrive on the PME
+    // rank. Otherwise, a single spread kernel handles the whole
+    // coordinate range.
+    bool spreadIsComplete = false;
+    while (!spreadIsComplete)
     {
-        int numStagesInPipeline = pmeCoordinateReceiverGpu->ppCommNumSenderRanks();
-
-        for (int i = 0; i < numStagesInPipeline; i++)
+        const DeviceStream* launchStream;
+        if (useGpuDirectComm)
         {
-            int senderRank;
-            if (useGpuDirectComm)
+            // Let the pmeCoordinateReceiver know whether this spread
+            // stage can be pipelined. It will add its own conditions
+            // to those, and return the result in usePipeline, along
+            // with other matching parameters.
+            const bool canPipelineReceives = computeSplines && spreadCharges && !writeGlobalOrSaveSplines;
+            std::tie(kernelParamsPtr->usePipeline,
+                     kernelParamsPtr->pipelineAtomEnd,
+                     kernelParamsPtr->pipelineAtomStart,
+                     launchStream,
+                     spreadIsComplete) =
+                    pmeCoordinateReceiverGpu->synchronizeOnCoordinatesFromPpRank(
+                            canPipelineReceives, &pmeGpu->archSpecific->pmeStream_);
+            if (kernelParamsPtr->usePipeline)
             {
-                senderRank = pmeCoordinateReceiverGpu->synchronizeOnCoordinatesFromPpRank(
-                        i, *(pmeCoordinateReceiverGpu->ppCommStream(i)));
+                // set kernel configuration options specific to this stage of the pipeline
+                const int blockCount =
+                        int(std::ceil((kernelParamsPtr->pipelineAtomEnd - kernelParamsPtr->pipelineAtomStart)
+                                      / float(atomsPerBlock)));
+                std::tie(config.gridSize[0], config.gridSize[1]) = pmeGpuCreateGrid(pmeGpu, blockCount);
             }
-            else
-            {
-                senderRank = i;
-            }
-
-            // set kernel configuration options specific to this stage of the pipeline
-            std::tie(kernelParamsPtr->pipelineAtomStart, kernelParamsPtr->pipelineAtomEnd) =
-                    pmeCoordinateReceiverGpu->ppCommAtomRange(senderRank);
-            const int blockCount       = static_cast<int>(std::ceil(
-                    static_cast<float>(kernelParamsPtr->pipelineAtomEnd - kernelParamsPtr->pipelineAtomStart)
-                    / atomsPerBlock));
-            auto      dimGrid          = pmeGpuCreateGrid(pmeGpu, blockCount);
-            config.gridSize[0]         = dimGrid.first;
-            config.gridSize[1]         = dimGrid.second;
-            DeviceStream* launchStream = pmeCoordinateReceiverGpu->ppCommStream(senderRank);
-
-
-#if c_canEmbedBuffers
-            const auto kernelArgs = prepareGpuKernelArguments(kernelPtr, config, kernelParamsPtr);
-#else
-            const auto kernelArgs =
-                    prepareGpuKernelArguments(kernelPtr,
-                                              config,
-                                              kernelParamsPtr,
-                                              &kernelParamsPtr->atoms.d_theta,
-                                              &kernelParamsPtr->atoms.d_dtheta,
-                                              &kernelParamsPtr->atoms.d_gridlineIndices,
-                                              &kernelParamsPtr->grid.d_realGrid[FEP_STATE_A],
-                                              &kernelParamsPtr->grid.d_realGrid[FEP_STATE_B],
-                                              &kernelParamsPtr->grid.d_fractShiftsTable,
-                                              &kernelParamsPtr->grid.d_gridlineIndicesTable,
-                                              &kernelParamsPtr->atoms.d_coefficients[FEP_STATE_A],
-                                              &kernelParamsPtr->atoms.d_coefficients[FEP_STATE_B],
-                                              &kernelParamsPtr->atoms.d_coordinates);
-#endif
-
-            launchGpuKernel(kernelPtr, config, *launchStream, timingEvent, "PME spline/spread", kernelArgs);
         }
-        // Set dependencies for PME stream on all pipeline streams
-        for (int i = 0; i < pmeCoordinateReceiverGpu->ppCommNumSenderRanks(); i++)
+        else
         {
-            GpuEventSynchronizer event;
-            event.markEvent(*(pmeCoordinateReceiverGpu->ppCommStream(i)));
-            event.enqueueWaitEvent(pmeGpu->archSpecific->pmeStream_);
-        }
-    }
-    else // pipelining is not in use
-    {
-        if (useGpuDirectComm) // Sync all PME-PP communications to PME stream
-        {
-            pmeCoordinateReceiverGpu->synchronizeOnCoordinatesFromAllPpRanks(pmeGpu->archSpecific->pmeStream_);
+            kernelParamsPtr->usePipeline = false;
+            launchStream                 = &pmeGpu->archSpecific->pmeStream_;
+            spreadIsComplete             = true;
         }
 
 #if c_canEmbedBuffers
@@ -1474,12 +1445,13 @@ void pme_gpu_spread(const PmeGpu*                  pmeGpu,
                                           &kernelParamsPtr->atoms.d_coordinates);
 #endif
 
-        launchGpuKernel(kernelPtr,
-                        config,
-                        pmeGpu->archSpecific->pmeStream_,
-                        timingEvent,
-                        "PME spline/spread",
-                        kernelArgs);
+        launchGpuKernel(kernelPtr, config, *launchStream, timingEvent, "PME spline/spread", kernelArgs);
+
+        if (kernelParamsPtr->usePipeline)
+        {
+            // Set dependencies for PME stream on all pipeline streams
+            pmeCoordinateReceiverGpu->addPipelineDependencies(pmeGpu->archSpecific->pmeStream_);
+        }
     }
 
     pme_gpu_stop_timing(pmeGpu, timingId);
