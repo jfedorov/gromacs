@@ -207,6 +207,16 @@ bool pme_gpu_supports_input(const t_inputrec& ir, std::string* error)
     return addMessageIfNotSupported(errorReasons, error);
 }
 
+bool pme_gpu_mixed_mode_supports_input(const t_inputrec& ir, std::string* error)
+{
+    std::list<std::string> errorReasons;
+    if (ir.efep != efepNO)
+    {
+        errorReasons.emplace_back("Free Energy Perturbation (in PME GPU mixed mode)");
+    }
+    return addMessageIfNotSupported(errorReasons, error);
+}
+
 /*! \brief \libinternal
  * Finds out if PME with given inputs is possible to run on GPU.
  * This function is an internal final check, validating the whole PME structure on creation,
