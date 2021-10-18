@@ -145,12 +145,6 @@ void PmeCoordinateReceiverGpu::Impl::launchReceiveCoordinatesFromPpCudaMpi(Devic
 #endif
 }
 
-//! Return whether \c r is a non-null MPI request
-static bool isValidRequest(const MPI_Request& r)
-{
-    return r != MPI_REQUEST_NULL;
-}
-
 int PmeCoordinateReceiverGpu::Impl::prepareForSpread(const bool          canPipelineReceives,
                                                      const DeviceStream& pmeStream)
 {
@@ -170,7 +164,7 @@ int PmeCoordinateReceiverGpu::Impl::prepareForSpread(const bool          canPipe
         ppCommManager.sync->enqueueWaitEvent(pmeStream);
     }
 #else
-    GMX_UNUSED_VALUE(pmeStream)
+    GMX_UNUSED_VALUE(pmeStream);
 #endif
     return 1;
 }
@@ -197,7 +191,9 @@ PipelinedSpreadManager PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesF
     // scheduling is less asynchronous (done on a per-step basis), so
     // host-side improvements should be investigated as tracked in
     // issue #4047
-    auto foundRequest = std::find_if(requests_.begin(), requests_.end(), isValidRequest);
+    auto foundRequest = std::find_if(requests_.begin(), requests_.end(), [](const MPI_Request& r) {
+        return r != MPI_REQUEST_NULL;
+    });
     GMX_ASSERT(foundRequest != requests_.end(),
                "Must have an outstanding request for coordinates from a PP rank");
     MPI_Wait(&*foundRequest, MPI_STATUS_IGNORE);
