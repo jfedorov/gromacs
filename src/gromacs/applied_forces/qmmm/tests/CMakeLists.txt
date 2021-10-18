@@ -36,4 +36,14 @@ gmx_add_unit_test(QMMMAppliedForcesUnitTest qmmm_applied_forces-test
     CPP_SOURCE_FILES
         qmmminputgenerator.cpp
         qmmmtopologypreprocessor.cpp
+        qmmmoptions.cpp
+        qmmmforceprovider.cpp
+        qmmm.cpp
         )
+
+# For QMMMForceProvider test we need to define wether libcp2k linked
+if (GMX_CP2K)
+    set_source_files_properties(qmmmforceprovider.cpp PROPERTIES COMPILE_DEFINITIONS GMX_CP2K=1)
+else()
+    set_source_files_properties(qmmmforceprovider.cpp PROPERTIES COMPILE_DEFINITIONS GMX_CP2K=0)
+endif()

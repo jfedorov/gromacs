@@ -101,6 +101,7 @@
 #include "gromacs/utility/smalloc.h"
 
 #include "pme_gpu_internal.h"
+#include "pme_internal.h"
 #include "pme_output.h"
 #include "pme_pp_communication.h"
 
@@ -217,6 +218,9 @@ static gmx_pme_t* gmx_pmeonly_switch(std::vector<gmx_pme_t*>* pmedata,
 }
 
 /*! \brief Called by PME-only ranks to receive coefficients and coordinates
+ *
+ * Note that with GPU direct communication the transfer is only initiated, it is the responsibility
+ * of the caller to synchronize prior to launching spread.
  *
  * \param[in] pme                     PME data structure.
  * \param[in,out] pme_pp              PME-PP communication structure.
@@ -437,9 +441,8 @@ static int gmx_pme_recv_coeffs_coords(struct gmx_pme_t*            pme,
                                "GPU Direct PME-PP communication has been enabled, "
                                "but PME run mode is not PmeRunMode::GPU\n");
 
-                    // This rank will have its data accessed directly by PP rank, so needs to send the remote addresses.
-                    pme_pp->pmeCoordinateReceiverGpu->sendCoordinateBufferAddressToPpRanks(
-                            stateGpu->getCoordinates());
+                    // This rank will have its data accessed directly by PP rank, so needs to send the remote addresses and re-set atom ranges associated with transfers.
+                    pme_pp->pmeCoordinateReceiverGpu->reinitCoordinateReceiver(stateGpu->getCoordinates());
                     pme_pp->pmeForceSenderGpu->setForceSendBuffer(pme_gpu_get_device_f(pme));
                 }
             }
@@ -494,11 +497,6 @@ static int gmx_pme_recv_coeffs_coords(struct gmx_pme_t*            pme,
                 }
             }
 
-            if (pme_pp->useGpuDirectComm)
-            {
-                pme_pp->pmeCoordinateReceiverGpu->synchronizeOnCoordinatesFromPpRanks();
-            }
-
             status = pmerecvqxX;
         }
 
@@ -546,46 +544,54 @@ static void gmx_pme_send_force_vir_ener(const gmx_pme_t& pme,
     int                    messages, ind_start, ind_end;
     cve.cycles = cycles;
 
-    /* Now the evaluated forces have to be transferred to the PP nodes */
+    if (pme_pp->useGpuDirectComm)
+    {
+        GMX_ASSERT((pme_pp->pmeForceSenderGpu != nullptr),
+                   "The use of GPU direct communication for PME-PP is enabled, "
+                   "but the PME GPU force reciever object does not exist");
+    }
+
     messages = 0;
     ind_end  = 0;
-    for (const auto& receiver : pme_pp->ppRanks)
-    {
-        ind_start = ind_end;
-        ind_end   = ind_start + receiver.numAtoms;
-        if (pme_pp->useGpuDirectComm)
-        {
-            GMX_ASSERT((pme_pp->pmeForceSenderGpu != nullptr),
-                       "The use of GPU direct communication for PME-PP is enabled, "
-                       "but the PME GPU force reciever object does not exist");
 
-            if (GMX_THREAD_MPI)
-            {
-                pme_pp->pmeForceSenderGpu->sendFToPpCudaDirect(
-                        receiver.rankId, receiver.numAtoms, pme_pp->sendForcesDirectToPpGpu);
-            }
-            else
+    /* Now the evaluated forces have to be transferred to the PP ranks */
+    if (pme_pp->useGpuDirectComm && GMX_THREAD_MPI)
+    {
+        int numPpRanks = static_cast<int>(pme_pp->ppRanks.size());
+#    pragma omp parallel for num_threads(std::min(numPpRanks, pme.nthread)) schedule(static)
+        for (int i = 0; i < numPpRanks; i++)
+        {
+            auto& receiver = pme_pp->ppRanks[i];
+            pme_pp->pmeForceSenderGpu->sendFToPpCudaDirect(
+                    receiver.rankId, receiver.numAtoms, pme_pp->sendForcesDirectToPpGpu);
+        }
+    }
+    else
+    {
+        for (const auto& receiver : pme_pp->ppRanks)
+        {
+            ind_start = ind_end;
+            ind_end   = ind_start + receiver.numAtoms;
+            if (pme_pp->useGpuDirectComm)
             {
                 pme_pp->pmeForceSenderGpu->sendFToPpCudaMpi(pme_gpu_get_device_f(&pme),
                                                             ind_start,
                                                             receiver.numAtoms * sizeof(rvec),
                                                             receiver.rankId,
                                                             &pme_pp->req[messages]);
-
-                messages++;
             }
-        }
-        else
-        {
-            void* sendbuf = const_cast<void*>(static_cast<const void*>(output.forces_[ind_start]));
-            // Send using MPI
-            MPI_Isend(sendbuf,
-                      receiver.numAtoms * sizeof(rvec),
-                      MPI_BYTE,
-                      receiver.rankId,
-                      0,
-                      pme_pp->mpi_comm_mysim,
-                      &pme_pp->req[messages]);
+            else
+            {
+                void* sendbuf = const_cast<void*>(static_cast<const void*>(output.forces_[ind_start]));
+                // Send using MPI
+                MPI_Isend(sendbuf,
+                          receiver.numAtoms * sizeof(rvec),
+                          MPI_BYTE,
+                          receiver.rankId,
+                          0,
+                          pme_pp->mpi_comm_mysim,
+                          &pme_pp->req[messages]);
+            }
             messages++;
         }
     }
@@ -664,9 +670,7 @@ int gmx_pmeonly(struct gmx_pme_t*               pme,
         if (useGpuPmePpCommunication)
         {
             pme_pp->pmeCoordinateReceiverGpu = std::make_unique<gmx::PmeCoordinateReceiverGpu>(
-                    deviceStreamManager->stream(gmx::DeviceStreamType::Pme),
-                    pme_pp->mpi_comm_mysim,
-                    pme_pp->ppRanks);
+                    pme_pp->mpi_comm_mysim, deviceStreamManager->context(), pme_pp->ppRanks);
             pme_pp->pmeForceSenderGpu =
                     std::make_unique<gmx::PmeForceSenderGpu>(pme_gpu_get_f_ready_synchronizer(pme),
                                                              pme_pp->mpi_comm_mysim,
@@ -766,7 +770,12 @@ int gmx_pmeonly(struct gmx_pme_t*               pme,
             // TODO: with pme on GPU the receive should make a list of synchronizers and pass it here #3157
             auto xReadyOnDevice = nullptr;
 
-            pme_gpu_launch_spread(pme, xReadyOnDevice, wcycle, lambda_q);
+            pme_gpu_launch_spread(pme,
+                                  xReadyOnDevice,
+                                  wcycle,
+                                  lambda_q,
+                                  pme_pp->useGpuDirectComm,
+                                  pme_pp->pmeCoordinateReceiverGpu.get());
             pme_gpu_launch_complex_transforms(pme, wcycle, stepWork);
             pme_gpu_launch_gather(pme, wcycle, lambda_q);
             output = pme_gpu_wait_finish_task(pme, computeEnergyAndVirial, lambda_q, wcycle);

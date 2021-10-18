@@ -605,6 +605,36 @@ enum class DhDlDerivativeCalculation : int
 //! String for DHDL derivatives
 const char* enumValueToString(DhDlDerivativeCalculation enumValue);
 
+/*! \brief soft-core function \
+ *
+ * Distinguishes between soft-core functions in the input.
+ */
+enum class SoftcoreType : int
+{
+    Beutler,
+    Gapsys,
+    Count,
+    Default = Beutler
+};
+//! Strings for softcore function names
+const char* enumValueToString(SoftcoreType enumValue);
+
+/*! \brief soft-core function as parameter to the nb-fep kernel/14-interaction.\
+ *
+ * Distinguishes between soft-core functions internally. This is different
+ * from SoftcoreType in that it offers 'None' which is not exposed to the user.
+ */
+enum class KernelSoftcoreType : int
+{
+    Beutler,
+    Gapsys,
+    None,
+    Count,
+    Default = Beutler
+};
+//! Strings for softcore function names
+const char* enumValueToString(KernelSoftcoreType enumValue);
+
 /*! \brief Solvent model
  *
  * Distinguishes classical water types with 3 or 4 particles
@@ -796,5 +826,30 @@ enum class NbkernelVdwType : int
 };
 //! String corresponding to VdW kernels
 const char* enumValueToString(NbkernelVdwType enumValue);
+
+//! Center of mass motion removal algorithm.
+enum class ComRemovalAlgorithm : int
+{
+    Linear,
+    Angular,
+    No,
+    LinearAccelerationCorrection,
+    Count,
+    Default = Linear
+};
+//! String corresponding to COM removal
+const char* enumValueToString(ComRemovalAlgorithm enumValue);
+
+//! Enumeration that contains all supported periodic boundary setups.
+enum class PbcType : int
+{
+    Xyz     = 0, //!< Periodic boundaries in all dimensions.
+    No      = 1, //!< No periodic boundaries.
+    XY      = 2, //!< Only two dimensions are periodic.
+    Screw   = 3, //!< Screw.
+    Unset   = 4, //!< The type of PBC is not set or invalid.
+    Count   = 5,
+    Default = Xyz
+};
 
 #endif /* GMX_MDTYPES_MD_ENUMS_H */

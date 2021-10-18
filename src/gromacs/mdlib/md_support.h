@@ -60,7 +60,6 @@ namespace gmx
 {
 template<typename T>
 class ArrayRef;
-class Constraints;
 class MDLogger;
 class ObservablesReducer;
 class SimulationSignaller;
@@ -88,10 +87,6 @@ class SimulationSignaller;
 #define CGLO_READEKIN (1u << 10u)
 /* we need to reset the ekin rescaling factor here */
 #define CGLO_SCALEEKIN (1u << 11u)
-/* After a new DD partitioning, we need to set a flag to schedule
- * global reduction of the total number of bonded interactions that
- * will be computed, to check none are missing. */
-#define CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS (1u << 12u)
 
 /*! \brief Return the number of steps that will take place between
  * intra-simulation communications, given the constraints of the
@@ -132,7 +127,6 @@ void compute_globals(gmx_global_stat*               gstat,
                      tensor                         shake_vir,
                      tensor                         total_vir,
                      tensor                         pres,
-                     gmx::ArrayRef<real>            constraintsRmsdData,
                      gmx::SimulationSignaller*      signalCoordinator,
                      const matrix                   lastbox,
                      gmx_bool*                      bSumEkinhOld,

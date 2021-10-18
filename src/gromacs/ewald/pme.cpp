@@ -127,6 +127,7 @@
 #include "pme_spline_work.h"
 #include "pme_spread.h"
 
+//NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 bool g_allowPmeWithSyclForTesting = false;
 
 bool pme_gpu_supports_build(std::string* error)
@@ -1580,7 +1581,7 @@ int gmx_pme_do(struct gmx_pme_t*              pme,
             {
                 forcesRef = pme->atc[d + 1].f;
             }
-            if (DOMAINDECOMP(cr))
+            if (haveDDAtomOrdering(*cr))
             {
                 dd_pmeredist_f(pme, &pme->atc[d], forcesRef, d == pme->ndecompdim - 1 && pme->bPPnode);
             }

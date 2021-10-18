@@ -87,11 +87,12 @@ CommrecHandle init_commrec(MPI_Comm communicator)
 
     // For now, we want things to go horribly wrong if this is used too early...
     // TODO: Remove when communicators are removed from commrec (#2395)
-    cr->nnodes           = -1;
-    cr->nodeid           = -1;
-    cr->sim_nodeid       = -1;
-    cr->mpi_comm_mysim   = MPI_COMM_NULL;
-    cr->mpi_comm_mygroup = MPI_COMM_NULL;
+    cr->nnodes                    = -1;
+    cr->sizeOfMyGroupCommunicator = -1;
+    cr->nodeid                    = -1;
+    cr->sim_nodeid                = -1;
+    cr->mpi_comm_mysim            = MPI_COMM_NULL;
+    cr->mpi_comm_mygroup          = MPI_COMM_NULL;
 
     // TODO cr->duty should not be initialized here
     cr->duty = (DUTY_PP | DUTY_PME);
@@ -221,6 +222,10 @@ void gmx_setup_nodecomm(FILE gmx_unused* fplog, t_commrec* cr)
 
 void gmx_barrier(MPI_Comm gmx_unused communicator)
 {
+    if (communicator == MPI_COMM_NULL)
+    {
+        return;
+    }
 #if !GMX_MPI
     GMX_RELEASE_ASSERT(false, "Invalid call to gmx_barrier");
 #else
@@ -230,18 +235,21 @@ void gmx_barrier(MPI_Comm gmx_unused communicator)
 
 void gmx_bcast(int gmx_unused nbytes, void gmx_unused* b, MPI_Comm gmx_unused communicator)
 {
-#if !GMX_MPI
-    GMX_RELEASE_ASSERT(false, "Invalid call to gmx_bcast");
-#else
+    // Without MPI we have a single rank, so bcast is a no-op
+#if GMX_MPI
     MPI_Bcast(b, nbytes, MPI_BYTE, 0, communicator);
 #endif
 }
 
 void gmx_sumd(int gmx_unused nr, double gmx_unused r[], const t_commrec gmx_unused* cr)
 {
-#if !GMX_MPI
-    GMX_RELEASE_ASSERT(false, "Invalid call to gmx_sumd");
-#else
+    // Without MPI we have a single rank, so sum is a no-op
+#if GMX_MPI
+    if (cr->sizeOfMyGroupCommunicator == 1)
+    {
+        return;
+    }
+
     if (cr->nc.bUse)
     {
         if (cr->nc.rank_intra == 0)
@@ -268,9 +276,13 @@ void gmx_sumd(int gmx_unused nr, double gmx_unused r[], const t_commrec gmx_unus
 
 void gmx_sumf(int gmx_unused nr, float gmx_unused r[], const t_commrec gmx_unused* cr)
 {
-#if !GMX_MPI
-    GMX_RELEASE_ASSERT(false, "Invalid call to gmx_sumf");
-#else
+    // Without MPI we have a single rank, so sum is a no-op
+#if GMX_MPI
+    if (cr->sizeOfMyGroupCommunicator == 1)
+    {
+        return;
+    }
+
     if (cr->nc.bUse)
     {
         /* Use two step summing.  */
@@ -297,9 +309,13 @@ void gmx_sumf(int gmx_unused nr, float gmx_unused r[], const t_commrec gmx_unuse
 
 void gmx_sumi(int gmx_unused nr, int gmx_unused r[], const t_commrec gmx_unused* cr)
 {
-#if !GMX_MPI
-    GMX_RELEASE_ASSERT(false, "Invalid call to gmx_sumi");
-#else
+    // Without MPI we have a single rank, so sum is a no-op
+#if GMX_MPI
+    if (cr->sizeOfMyGroupCommunicator == 1)
+    {
+        return;
+    }
+
     if (cr->nc.bUse)
     {
         /* Use two step summing */
@@ -320,35 +336,6 @@ void gmx_sumi(int gmx_unused nr, int gmx_unused r[], const t_commrec gmx_unused*
     else
     {
         MPI_Allreduce(MPI_IN_PLACE, r, nr, MPI_INT, MPI_SUM, cr->mpi_comm_mygroup);
-    }
-#endif
-}
-
-void gmx_sumli(int gmx_unused nr, int64_t gmx_unused r[], const t_commrec gmx_unused* cr)
-{
-#if !GMX_MPI
-    GMX_RELEASE_ASSERT(false, "Invalid call to gmx_sumli");
-#else
-    if (cr->nc.bUse)
-    {
-        /* Use two step summing */
-        if (cr->nc.rank_intra == 0)
-        {
-            MPI_Reduce(MPI_IN_PLACE, r, nr, MPI_INT64_T, MPI_SUM, 0, cr->nc.comm_intra);
-            /* Sum with the buffers reversed */
-            MPI_Allreduce(MPI_IN_PLACE, r, nr, MPI_INT64_T, MPI_SUM, cr->nc.comm_inter);
-        }
-        else
-        {
-            /* This is here because of the silly MPI specification
-                that MPI_IN_PLACE should be put in sendbuf instead of recvbuf */
-            MPI_Reduce(r, nullptr, nr, MPI_INT64_T, MPI_SUM, 0, cr->nc.comm_intra);
-        }
-        MPI_Bcast(r, nr, MPI_INT64_T, 0, cr->nc.comm_intra);
-    }
-    else
-    {
-        MPI_Allreduce(MPI_IN_PLACE, r, nr, MPI_INT64_T, MPI_SUM, cr->mpi_comm_mygroup);
     }
 #endif
 }

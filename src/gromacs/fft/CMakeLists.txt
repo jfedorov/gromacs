@@ -54,7 +54,11 @@ endif()
 if (GMX_FFT_MKL)
     gmx_add_libgromacs_sources(fft_mkl.cpp)
 endif()
-
+if(Heffte_FOUND)
+    gmx_add_libgromacs_sources(
+        gpu_3dfft_heffte.cpp
+        )
+endif()
 if (GMX_GPU_CUDA)
     gmx_add_libgromacs_sources(
         # CUDA-specific sources
@@ -70,14 +74,33 @@ elseif (GMX_GPU_OPENCL)
         gpu_3dfft_ocl.cpp
         )
 elseif (GMX_GPU_SYCL)
-    # SYCL-TODO: proper implementation
+    if (NOT GMX_SYCL_HIPSYCL AND GMX_FFT_MKL)
+            gmx_add_libgromacs_sources(
+            gpu_3dfft_sycl_mkl.cpp
+            )
+        _gmx_add_files_to_property(SYCL_SOURCES
+            gpu_3dfft_sycl_mkl.cpp
+            )
+    endif()
+    if (GMX_SYCL_HIPSYCL)
+            gmx_add_libgromacs_sources(
+            gpu_3dfft_sycl_rocfft.cpp
+            )
+        _gmx_add_files_to_property(SYCL_SOURCES
+            gpu_3dfft_sycl_rocfft.cpp
+            )
+    endif()
     gmx_add_libgromacs_sources(
-        # SYCL-specific sources
         gpu_3dfft_sycl.cpp
         )
     _gmx_add_files_to_property(SYCL_SOURCES
-        gpu_3dfft.cpp
         gpu_3dfft_sycl.cpp
+        gpu_3dfft.cpp
+        )
+else()
+    gmx_add_libgromacs_sources(
+        # Stub sources for CPU-only build
+        gpu_3dfft.cpp
         )
 endif()
 

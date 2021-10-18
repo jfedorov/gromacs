@@ -2048,7 +2048,7 @@ struct pull_t* init_pull(FILE*                     fplog,
                                  maxNumThreads);
     }
 
-    if (cr != nullptr && DOMAINDECOMP(cr))
+    if (cr != nullptr && haveDDAtomOrdering(*cr))
     {
         /* Set up the global to local atom mapping for PBC atoms */
         for (pull_group_work_t& group : pull->group)
@@ -2398,7 +2398,7 @@ struct pull_t* init_pull(FILE*                     fplog,
      * when we have an external pull potential, since then the external
      * potential provider expects each rank to have the coordinate.
      */
-    comm->bParticipateAll = (cr == nullptr || !DOMAINDECOMP(cr) || cr->dd->nnodes <= 32
+    comm->bParticipateAll = (cr == nullptr || !haveDDAtomOrdering(*cr) || cr->dd->nnodes <= 32
                              || pull->numCoordinatesWithExternalPotential > 0
                              || getenv("GMX_PULL_PARTICIPATE_ALL") != nullptr);
     /* This sub-commicator is not used with comm->bParticipateAll,
@@ -2449,6 +2449,20 @@ static void destroy_pull(struct pull_t* pull)
     delete pull;
 }
 
+void preparePrevStepPullComNewSimulation(const t_commrec*                       cr,
+                                         pull_t*                                pull_work,
+                                         ArrayRef<const real>                   masses,
+                                         ArrayRef<const RVec>                   x,
+                                         const matrix                           box,
+                                         PbcType                                pbcType,
+                                         std::optional<gmx::ArrayRef<double>>&& comPreviousStep)
+{
+    t_pbc pbc;
+    set_pbc(&pbc, pbcType, box);
+    initPullComFromPrevStep(cr, pull_work, masses, pbc, x);
+    updatePrevStepPullCom(pull_work, comPreviousStep);
+}
+
 void preparePrevStepPullCom(const t_inputrec*    ir,
                             pull_t*              pull_work,
                             ArrayRef<const real> masses,
@@ -2479,11 +2493,13 @@ void preparePrevStepPullCom(const t_inputrec*    ir,
     }
     else
     {
-        t_pbc pbc;
-        set_pbc(&pbc, ir->pbcType, state->box);
-        initPullComFromPrevStep(
-                cr, pull_work, masses, pbc, state->x.arrayRefWithPadding().unpaddedArrayRef());
-        updatePrevStepPullCom(pull_work, state);
+        preparePrevStepPullComNewSimulation(cr,
+                                            pull_work,
+                                            masses,
+                                            state->x.arrayRefWithPadding().unpaddedArrayRef(),
+                                            state->box,
+                                            ir->pbcType,
+                                            state->pull_com_prev_step);
     }
 }
 

@@ -249,11 +249,15 @@ temperature-lambdas      =
 calc-lambda-neighbors    = 1
 init-lambda-weights      = 
 dhdl-print-energy        = no
+sc-function              = beutler
 sc-alpha                 = 0
 sc-power                 = 1
 sc-r-power               = 6
 sc-sigma                 = 0.3
 sc-coul                  = no
+sc-gapsys-scale-linpoint-lj = 0.85
+sc-gapsys-scale-linpoint-q = 0.3
+sc-gapsys-sigma-lj       = 0.3
 separate-dhdl-file       = yes
 dhdl-derivatives         = yes
 dh_hist_size             = 0
@@ -298,5 +302,8 @@ electric-field-z         = 3.7 7.5 0 0
 
 ; Density guided simulation
 density-guided-simulation-active = false
+
+; QM/MM with CP2K
+qmmm-cp2k-active         = false
 </String>
 </ReferenceData>

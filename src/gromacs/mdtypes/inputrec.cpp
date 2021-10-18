@@ -87,14 +87,11 @@ const int nstmin_harmonic          = 20;
 constexpr int c_defaultNstTCouple = 10;
 constexpr int c_defaultNstPCouple = 10;
 
-t_inputrec::t_inputrec()
+t_inputrec::t_inputrec() :
+    fepvals(std::make_unique<t_lambda>()),
+    simtempvals(std::make_unique<t_simtemp>()),
+    expandedvals(std::make_unique<t_expanded>())
 {
-    // TODO When this memset is removed, remove the suppression of
-    // gcc -Wno-class-memaccess in a CMakeLists.txt file.
-    std::memset(this, 0, sizeof(*this)); // NOLINT(bugprone-undefined-memory-manipulation)
-    fepvals      = std::make_unique<t_lambda>();
-    expandedvals = std::make_unique<t_expanded>();
-    simtempvals  = std::make_unique<t_simtemp>();
 }
 
 t_inputrec::~t_inputrec()
@@ -603,6 +600,10 @@ static void pr_fepvals(FILE* fp, int indent, const t_lambda* fep, gmx_bool bMDPf
     PD("dh-hist-spacing", fep->dh_hist_spacing);
     PS("separate-dhdl-file", enumValueToString(fep->separate_dhdl_file));
     PS("dhdl-derivatives", enumValueToString(fep->dhdl_derivatives));
+    PS("sc-function", enumValueToString(fep->softcoreFunction));
+    PR("sc-gapsys-scale-linpoint-lj", fep->scGapsysScaleLinpointLJ);
+    PR("sc-gapsys-scale-linpoint-q", fep->scGapsysScaleLinpointQ);
+    PR("sc-gapsys-sigma-lj", fep->scGapsysSigmaLJ);
 };
 
 static void pr_pull(FILE* fp, int indent, const pull_params_t& pull)
@@ -1351,6 +1352,22 @@ static void cmp_fepvals(FILE* fp, const t_lambda* fep1, const t_lambda* fep2, re
     cmpEnum(fp, "inputrec->dhdl_derivatives", fep1->dhdl_derivatives, fep2->dhdl_derivatives);
     cmp_int(fp, "inputrec->dh_hist_size", -1, fep1->dh_hist_size, fep2->dh_hist_size);
     cmp_double(fp, "inputrec->dh_hist_spacing", -1, fep1->dh_hist_spacing, fep2->dh_hist_spacing, ftol, abstol);
+    cmpEnum(fp, "inputrec->fepvals->softcoreFunction", fep1->softcoreFunction, fep2->softcoreFunction);
+    cmp_real(fp,
+             "inputrec->fepvals->scGapsysScaleLinpointLJ",
+             -1,
+             fep1->scGapsysScaleLinpointLJ,
+             fep2->scGapsysScaleLinpointLJ,
+             ftol,
+             abstol);
+    cmp_real(fp,
+             "inputrec->fepvals->scGapsysScaleLinpointQ",
+             -1,
+             fep1->scGapsysScaleLinpointQ,
+             fep2->scGapsysScaleLinpointQ,
+             ftol,
+             abstol);
+    cmp_real(fp, "inputrec->fepvals->scGapsysSigmaLJ", -1, fep1->scGapsysSigmaLJ, fep2->scGapsysSigmaLJ, ftol, abstol);
 }
 
 void cmp_inputrec(FILE* fp, const t_inputrec* ir1, const t_inputrec* ir2, real ftol, real abstol)

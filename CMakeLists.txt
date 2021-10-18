@@ -209,7 +209,13 @@ gmx_option_multichoice(
     "AUTO"
     AUTO None SSE2 SSE4.1 AVX_128_FMA AVX_256 AVX2_256 AVX2_128 AVX_512 AVX_512_KNL ARM_NEON_ASIMD ARM_SVE IBM_VSX Reference)
 
-set(GMX_FFT_LIBRARY_DEFAULT "fftw3")
+include(gmxTestIntelLLVM)
+
+if (GMX_INTEL_LLVM)
+    set(GMX_FFT_LIBRARY_DEFAULT "mkl")
+else()
+    set(GMX_FFT_LIBRARY_DEFAULT "fftw3")
+endif()
 
 gmx_option_multichoice(
     GMX_FFT_LIBRARY
@@ -228,6 +234,12 @@ gmx_dependent_option(
     "GMX_FFT_LIBRARY STREQUAL FFTW3")
 mark_as_advanced(GMX_BUILD_OWN_FFTW)
 mark_as_advanced(GMX_DISABLE_FFTW_MEASURE)
+
+gmx_dependent_option(
+    GMX_USE_HEFFTE
+    "Use HeFFTe for FFT support. Used with CUDA backend"
+    OFF
+    "GMX_GPU STREQUAL CUDA;GMX_MPI")
 
 gmx_dependent_cache_variable(GMX_SIMD_REF_FLOAT_WIDTH  "Reference SIMD single precision width" STRING "4" "GMX_SIMD STREQUAL REFERENCE")
 gmx_dependent_cache_variable(GMX_SIMD_REF_DOUBLE_WIDTH "Reference SIMD double precision width" STRING "2" "GMX_SIMD STREQUAL REFERENCE")
@@ -289,7 +301,6 @@ include(gmxManageOpenMP)
 # These need to be done early (before further tests).
 #####################################################################
 
-include(gmxTestIntelLLVM)
 include(gmxCFlags)
 gmx_c_flags()
 
@@ -555,6 +566,18 @@ include(gmxManageLmfit)
 
 include(gmxManageMuparser)
 
+##################################################
+# Process SIMD instruction settings
+##################################################
+# This checks what flags to add in order to
+# support the SIMD instructions we need, it sets
+# correct defines for the SIMD instructions supported,
+# and adds advanced options to control accuracy
+# for SIMD math operations.
+include(gmxManageSimd)
+gmx_manage_simd()
+
+
 if(GMX_GPU)
 
     string(TOUPPER "${GMX_GPU}" _gmx_gpu_uppercase)
@@ -620,6 +643,16 @@ if(CYGWIN)
     set(GMX_CYGWIN 1)
 endif()
 
+if(GMX_USE_HEFFTE)
+    if(NOT GMX_GPU_CUDA)
+        message(FATAL_ERROR "HeFFTe support requires a CUDA build")
+    endif()
+    if(NOT GMX_LIB_MPI)
+        message(FATAL_ERROR "HeFFTe support requires a library MPI build")
+    endif()
+    find_package(Heffte 2.1.0 REQUIRED CUDA)
+endif()
+
 if(WIN32)
     set(GMX_NATIVE_WINDOWS 1)
     # This makes windows.h not declare min/max as macros that would break
@@ -670,18 +703,6 @@ gmx_test_xdr(GMX_SYSTEM_XDR)
 if(NOT GMX_SYSTEM_XDR OR CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(GMX_INTERNAL_XDR 1)
 endif()
-
-
-##################################################
-# Process SIMD instruction settings
-##################################################
-# This checks what flags to add in order to
-# support the SIMD instructions we need, it sets
-# correct defines for the SIMD instructions supported,
-# and adds advanced options to control accuracy
-# for SIMD math operations.
-include(gmxManageSimd)
-gmx_manage_simd()
 
 ##################################################
 # Process FFT library settings
@@ -807,9 +828,9 @@ if (BUILD_TESTING)
     include(tests/CheckTarget.cmake)
 endif()
 
-# TODO: Determine control flow and defaults for package installation and testing use cases.
-# Ref: https://gitlab.com/gromacs/gromacs/-/issues/2896
-option(GMX_PYTHON_PACKAGE "Configure gmxapi Python package" OFF)
+option(GMX_PYTHON_PACKAGE
+       "Configure gmxapi Python package for use in build tree. Requires pybind11 installed for project Python interpreter."
+       OFF)
 mark_as_advanced(GMX_PYTHON_PACKAGE)
 
 find_package(ImageMagick QUIET COMPONENTS convert)

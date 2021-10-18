@@ -65,7 +65,6 @@
 #include "gromacs/math/vec.h"
 #include "gromacs/mdlib/dispersioncorrection.h"
 #include "gromacs/mdlib/force.h"
-#include "gromacs/mdlib/forcerec_threading.h"
 #include "gromacs/mdlib/gmx_omp_nthreads.h"
 #include "gromacs/mdlib/md_support.h"
 #include "gromacs/mdlib/wall.h"
@@ -740,14 +739,15 @@ void init_forcerec(FILE*                            fplog,
     }
     else
     {
-        forcerec->bMolPBC = (!DOMAINDECOMP(commrec) || dd_bonded_molpbc(*commrec->dd, forcerec->pbcType));
+        forcerec->bMolPBC =
+                (!haveDDAtomOrdering(*commrec) || dd_bonded_molpbc(*commrec->dd, forcerec->pbcType));
 
         // Check and set up PBC for Ewald surface corrections or orientation restraints
         const bool useEwaldSurfaceCorrection =
                 (EEL_PME_EWALD(inputrec.coulombtype) && inputrec.epsilon_surface != 0);
         const bool haveOrientationRestraints = (gmx_mtop_ftype_count(mtop, F_ORIRES) > 0);
         const bool moleculesAreAlwaysWhole =
-                (DOMAINDECOMP(commrec) && dd_moleculesAreAlwaysWhole(*commrec->dd));
+                (haveDDAtomOrdering(*commrec) && dd_moleculesAreAlwaysWhole(*commrec->dd));
         // WholeMoleculeTransform is only supported with a single PP rank
         if (!moleculesAreAlwaysWhole && !havePPDomainDecomposition(commrec)
             && (useEwaldSurfaceCorrection || haveOrientationRestraints))
@@ -762,10 +762,11 @@ void init_forcerec(FILE*                            fplog,
             }
 
             forcerec->wholeMoleculeTransform = std::make_unique<gmx::WholeMoleculeTransform>(
-                    mtop, inputrec.pbcType, DOMAINDECOMP(commrec));
+                    mtop, inputrec.pbcType, haveDDAtomOrdering(*commrec));
         }
 
-        forcerec->bMolPBC = !DOMAINDECOMP(commrec) || dd_bonded_molpbc(*commrec->dd, forcerec->pbcType);
+        forcerec->bMolPBC =
+                !haveDDAtomOrdering(*commrec) || dd_bonded_molpbc(*commrec->dd, forcerec->pbcType);
 
         if (useEwaldSurfaceCorrection)
         {
@@ -789,12 +790,6 @@ void init_forcerec(FILE*                            fplog,
     init_interaction_const_tables(fplog, forcerec->ic.get(), forcerec->rlist, inputrec.tabext);
 
     const interaction_const_t* interactionConst = forcerec->ic.get();
-
-    /* TODO: Replace this Ewald table or move it into interaction_const_t */
-    if (inputrec.coulombtype == CoulombInteractionType::Ewald)
-    {
-        forcerec->ewald_table = std::make_unique<gmx_ewald_tab_t>(inputrec, fplog);
-    }
 
     /* Electrostatics: Translate from interaction-setting-in-mdp-file to kernel interaction format */
     switch (interactionConst->eeltype)
@@ -1058,20 +1053,17 @@ void init_forcerec(FILE*                            fplog,
 
     /* Set all the static charge group info */
     forcerec->atomInfoForEachMoleculeBlock = makeAtomInfoForEachMoleculeBlock(mtop, forcerec);
-    if (!DOMAINDECOMP(commrec))
+    if (!haveDDAtomOrdering(*commrec))
     {
         forcerec->atomInfo = expandAtomInfo(mtop.molblock.size(), forcerec->atomInfoForEachMoleculeBlock);
     }
 
-    if (!DOMAINDECOMP(commrec))
+    if (!haveDDAtomOrdering(*commrec))
     {
         forcerec_set_ranges(forcerec, mtop.natoms, mtop.natoms, mtop.natoms);
     }
 
     forcerec->print_force = print_force;
-
-    forcerec->nthread_ewc = gmx_omp_nthreads_get(ModuleMultiThread::Bonded);
-    forcerec->ewc_t.resize(forcerec->nthread_ewc);
 
     if (inputrec.eDispCorr != DispersionCorrectionType::No)
     {

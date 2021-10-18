@@ -49,6 +49,8 @@
 #include "gromacs/gpu_utils/syclutils.h"
 
 #include "pme_gpu_program_impl.h"
+#include "pme_gather_sycl.h"
+#include "pme_solve_sycl.h"
 #include "pme_spread_sycl.h"
 
 #include "pme_gpu_constants.h"
@@ -61,6 +63,9 @@ constexpr int c_pmeOrder = 4;
 constexpr bool c_wrapX = true;
 constexpr bool c_wrapY = true;
 
+constexpr int c_stateA = 0;
+constexpr int c_stateB = 1;
+
 static int subGroupSizeFromVendor(const DeviceInformation& deviceInfo)
 {
     switch (deviceInfo.deviceVendor)
@@ -72,20 +77,43 @@ static int subGroupSizeFromVendor(const DeviceInformation& deviceInfo)
     }
 }
 
-#define INSTANTIATE_3(order, computeSplines, spreadCharges, numGrids, writeGlobal, threadsPerAtom, subGroupSize) \
+#define INSTANTIATE_SPREAD_2(                                                                      \
+        order, computeSplines, spreadCharges, numGrids, writeGlobal, threadsPerAtom, subGroupSize) \
     extern template class PmeSplineAndSpreadKernel<order, computeSplines, spreadCharges, true, true, numGrids, writeGlobal, threadsPerAtom, subGroupSize>;
 
-#define INSTANTIATE_2(order, numGrids, threadsPerAtom, subGroupSize)                 \
-    INSTANTIATE_3(order, true, true, numGrids, true, threadsPerAtom, subGroupSize);  \
-    INSTANTIATE_3(order, true, false, numGrids, true, threadsPerAtom, subGroupSize); \
-    INSTANTIATE_3(order, false, true, numGrids, true, threadsPerAtom, subGroupSize); \
-    INSTANTIATE_3(order, true, true, numGrids, false, threadsPerAtom, subGroupSize);
+#define INSTANTIATE_SPREAD(order, numGrids, threadsPerAtom, subGroupSize)                   \
+    INSTANTIATE_SPREAD_2(order, true, true, numGrids, true, threadsPerAtom, subGroupSize);  \
+    INSTANTIATE_SPREAD_2(order, true, false, numGrids, true, threadsPerAtom, subGroupSize); \
+    INSTANTIATE_SPREAD_2(order, false, true, numGrids, true, threadsPerAtom, subGroupSize); \
+    INSTANTIATE_SPREAD_2(order, true, true, numGrids, false, threadsPerAtom, subGroupSize);
 
-#define INSTANTIATE(order, subGroupSize)                                 \
-    INSTANTIATE_2(order, 1, ThreadsPerAtom::Order, subGroupSize);        \
-    INSTANTIATE_2(order, 1, ThreadsPerAtom::OrderSquared, subGroupSize); \
-    INSTANTIATE_2(order, 2, ThreadsPerAtom::Order, subGroupSize);        \
-    INSTANTIATE_2(order, 2, ThreadsPerAtom::OrderSquared, subGroupSize);
+#define INSTANTIATE_GATHER_2(order, numGrids, readGlobal, threadsPerAtom, subGroupSize) \
+    extern template class PmeGatherKernel<order, true, true, numGrids, readGlobal, threadsPerAtom, subGroupSize>;
+
+#define INSTANTIATE_GATHER(order, numGrids, threadsPerAtom, subGroupSize)      \
+    INSTANTIATE_GATHER_2(order, numGrids, true, threadsPerAtom, subGroupSize); \
+    INSTANTIATE_GATHER_2(order, numGrids, false, threadsPerAtom, subGroupSize);
+
+#define INSTANTIATE_X(x, order, subGroupSize)                              \
+    INSTANTIATE_##x(order, 1, ThreadsPerAtom::Order, subGroupSize);        \
+    INSTANTIATE_##x(order, 1, ThreadsPerAtom::OrderSquared, subGroupSize); \
+    INSTANTIATE_##x(order, 2, ThreadsPerAtom::Order, subGroupSize);        \
+    INSTANTIATE_##x(order, 2, ThreadsPerAtom::OrderSquared, subGroupSize);
+
+#define INSTANTIATE_SOLVE(subGroupSize)                                                     \
+    extern template class PmeSolveKernel<GridOrdering::XYZ, false, c_stateA, subGroupSize>; \
+    extern template class PmeSolveKernel<GridOrdering::XYZ, true, c_stateA, subGroupSize>;  \
+    extern template class PmeSolveKernel<GridOrdering::YZX, false, c_stateA, subGroupSize>; \
+    extern template class PmeSolveKernel<GridOrdering::YZX, true, c_stateA, subGroupSize>;  \
+    extern template class PmeSolveKernel<GridOrdering::XYZ, false, c_stateB, subGroupSize>; \
+    extern template class PmeSolveKernel<GridOrdering::XYZ, true, c_stateB, subGroupSize>;  \
+    extern template class PmeSolveKernel<GridOrdering::YZX, false, c_stateB, subGroupSize>; \
+    extern template class PmeSolveKernel<GridOrdering::YZX, true, c_stateB, subGroupSize>;
+
+#define INSTANTIATE(order, subGroupSize)        \
+    INSTANTIATE_X(SPREAD, order, subGroupSize); \
+    INSTANTIATE_X(GATHER, order, subGroupSize); \
+    INSTANTIATE_SOLVE(subGroupSize);
 
 #if GMX_SYCL_DPCPP
 INSTANTIATE(4, 16);
@@ -93,7 +121,6 @@ INSTANTIATE(4, 16);
 INSTANTIATE(4, 32);
 INSTANTIATE(4, 64);
 #endif
-
 
 //! Helper function to set proper kernel functor pointers
 template<int subGroupSize>
@@ -135,6 +162,38 @@ static void setKernelPointers(struct PmeGpuProgramImpl* pmeGpuProgram)
             new PmeSplineAndSpreadKernel<c_pmeOrder, false, true, c_wrapX, c_wrapY, 2, true, ThreadsPerAtom::OrderSquared, subGroupSize>();
     pmeGpuProgram->spreadKernelThPerAtom4Dual =
             new PmeSplineAndSpreadKernel<c_pmeOrder, false, true, c_wrapX, c_wrapY, 2, true, ThreadsPerAtom::Order, subGroupSize>();
+    pmeGpuProgram->gatherKernelSingle =
+            new PmeGatherKernel<c_pmeOrder, c_wrapX, c_wrapY, 1, false, ThreadsPerAtom::OrderSquared, subGroupSize>();
+    pmeGpuProgram->gatherKernelThPerAtom4Single =
+            new PmeGatherKernel<c_pmeOrder, c_wrapX, c_wrapY, 1, false, ThreadsPerAtom::Order, subGroupSize>();
+    pmeGpuProgram->gatherKernelReadSplinesSingle =
+            new PmeGatherKernel<c_pmeOrder, c_wrapX, c_wrapY, 1, true, ThreadsPerAtom::OrderSquared, subGroupSize>();
+    pmeGpuProgram->gatherKernelReadSplinesThPerAtom4Single =
+            new PmeGatherKernel<c_pmeOrder, c_wrapX, c_wrapY, 1, true, ThreadsPerAtom::Order, subGroupSize>();
+    pmeGpuProgram->gatherKernelDual =
+            new PmeGatherKernel<c_pmeOrder, c_wrapX, c_wrapY, 2, false, ThreadsPerAtom::OrderSquared, subGroupSize>();
+    pmeGpuProgram->gatherKernelThPerAtom4Dual =
+            new PmeGatherKernel<c_pmeOrder, c_wrapX, c_wrapY, 2, false, ThreadsPerAtom::Order, subGroupSize>();
+    pmeGpuProgram->gatherKernelReadSplinesDual =
+            new PmeGatherKernel<c_pmeOrder, c_wrapX, c_wrapY, 2, true, ThreadsPerAtom::OrderSquared, subGroupSize>();
+    pmeGpuProgram->gatherKernelReadSplinesThPerAtom4Dual =
+            new PmeGatherKernel<c_pmeOrder, c_wrapX, c_wrapY, 2, true, ThreadsPerAtom::Order, subGroupSize>();
+    pmeGpuProgram->solveXYZKernelA =
+            new PmeSolveKernel<GridOrdering::XYZ, false, c_stateA, subGroupSize>();
+    pmeGpuProgram->solveXYZEnergyKernelA =
+            new PmeSolveKernel<GridOrdering::XYZ, true, c_stateA, subGroupSize>();
+    pmeGpuProgram->solveYZXKernelA =
+            new PmeSolveKernel<GridOrdering::YZX, false, c_stateA, subGroupSize>();
+    pmeGpuProgram->solveYZXEnergyKernelA =
+            new PmeSolveKernel<GridOrdering::YZX, true, c_stateA, subGroupSize>();
+    pmeGpuProgram->solveXYZKernelB =
+            new PmeSolveKernel<GridOrdering::XYZ, false, c_stateB, subGroupSize>();
+    pmeGpuProgram->solveXYZEnergyKernelB =
+            new PmeSolveKernel<GridOrdering::XYZ, true, c_stateB, subGroupSize>();
+    pmeGpuProgram->solveYZXKernelB =
+            new PmeSolveKernel<GridOrdering::YZX, false, c_stateB, subGroupSize>();
+    pmeGpuProgram->solveYZXEnergyKernelB =
+            new PmeSolveKernel<GridOrdering::YZX, true, c_stateB, subGroupSize>();
 }
 
 PmeGpuProgramImpl::PmeGpuProgramImpl(const DeviceContext& deviceContext) :
@@ -176,4 +235,20 @@ PmeGpuProgramImpl::~PmeGpuProgramImpl()
     delete splineAndSpreadKernelThPerAtom4Dual;
     delete splineAndSpreadKernelWriteSplinesDual;
     delete splineAndSpreadKernelWriteSplinesThPerAtom4Dual;
+    delete gatherKernelSingle;
+    delete gatherKernelThPerAtom4Single;
+    delete gatherKernelReadSplinesSingle;
+    delete gatherKernelReadSplinesThPerAtom4Single;
+    delete gatherKernelDual;
+    delete gatherKernelThPerAtom4Dual;
+    delete gatherKernelReadSplinesDual;
+    delete gatherKernelReadSplinesThPerAtom4Dual;
+    delete solveYZXKernelA;
+    delete solveXYZKernelA;
+    delete solveYZXEnergyKernelA;
+    delete solveXYZEnergyKernelA;
+    delete solveYZXKernelB;
+    delete solveXYZKernelB;
+    delete solveYZXEnergyKernelB;
+    delete solveXYZEnergyKernelB;
 }

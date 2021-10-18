@@ -1063,7 +1063,7 @@ static void make_load_communicator(gmx_domdec_t* dd, int dim_ind, ivec loc)
 void dd_setup_dlb_resource_sharing(const t_commrec* cr, int gpu_id)
 {
 #if GMX_MPI
-    MPI_Comm mpi_comm_pp_physicalnode = MPI_COMM_NULL;
+    gmx_domdec_t* dd = cr->dd;
 
     if (!thisRankHasDuty(cr, DUTY_PP) || gpu_id < 0)
     {
@@ -1073,9 +1073,14 @@ void dd_setup_dlb_resource_sharing(const t_commrec* cr, int gpu_id)
         return;
     }
 
-    const int physicalnode_id_hash = gmx_physicalnode_id_hash();
+    if (cr->nnodes == 1)
+    {
+        dd->comm->nrank_gpu_shared = 1;
 
-    gmx_domdec_t* dd = cr->dd;
+        return;
+    }
+
+    const int physicalnode_id_hash = gmx_physicalnode_id_hash();
 
     if (debug)
     {
@@ -1088,6 +1093,7 @@ void dd_setup_dlb_resource_sharing(const t_commrec* cr, int gpu_id)
      */
     // TODO PhysicalNodeCommunicator could be extended/used to handle
     // the need for per-node per-group communicators.
+    MPI_Comm mpi_comm_pp_physicalnode;
     MPI_Comm_split(dd->mpi_comm_all, physicalnode_id_hash, dd->rank, &mpi_comm_pp_physicalnode);
     MPI_Comm_split(mpi_comm_pp_physicalnode, gpu_id, dd->rank, &dd->comm->mpi_comm_gpu_shared);
     MPI_Comm_free(&mpi_comm_pp_physicalnode);
@@ -1528,6 +1534,7 @@ static CartesianRankSetup split_communicator(const gmx::MDLogger& mdlog,
                        getThisRankDuties(cr),
                        dd_index(cartSetup.ntot, ddCellIndex),
                        &cr->mpi_comm_mygroup);
+        MPI_Comm_size(cr->mpi_comm_mygroup, &cr->sizeOfMyGroupCommunicator);
 #else
         GMX_UNUSED_VALUE(ddCellIndex);
 #endif
@@ -1559,6 +1566,7 @@ static CartesianRankSetup split_communicator(const gmx::MDLogger& mdlog,
 #if GMX_MPI
         /* Split the sim communicator into PP and PME only nodes */
         MPI_Comm_split(cr->mpi_comm_mysim, getThisRankDuties(cr), cr->nodeid, &cr->mpi_comm_mygroup);
+        MPI_Comm_size(cr->mpi_comm_mygroup, &cr->sizeOfMyGroupCommunicator);
         MPI_Comm_rank(cr->mpi_comm_mygroup, &cr->nodeid);
 #endif
     }
@@ -1628,14 +1636,18 @@ static void setupGroupCommunication(const gmx::MDLogger&     mdlog,
 
     if (thisRankHasDuty(cr, DUTY_PP))
     {
-        /* Copy or make a new PP communicator */
+        if (dd->nnodes > 1)
+        {
+            /* Copy or make a new PP communicator */
 
-        /* We (possibly) reordered the nodes in split_communicator,
-         * so it is no longer required in make_pp_communicator.
-         */
-        const bool useCartesianReorder = (ddSettings.useCartesianReorder && !cartSetup.bCartesianPP_PME);
+            /* We (possibly) reordered the nodes in split_communicator,
+             * so it is no longer required in make_pp_communicator.
+             */
+            const bool useCartesianReorder =
+                    (ddSettings.useCartesianReorder && !cartSetup.bCartesianPP_PME);
 
-        make_pp_communicator(mdlog, dd, cr, useCartesianReorder);
+            make_pp_communicator(mdlog, dd, cr, useCartesianReorder);
+        }
     }
     else
     {
@@ -2860,7 +2872,10 @@ public:
          bool                              directGpuCommUsedWithGpuUpdate);
 
     //! Build the resulting DD manager
-    gmx_domdec_t* build(LocalAtomSetManager* atomSets);
+    gmx_domdec_t* build(LocalAtomSetManager*       atomSets,
+                        const gmx_localtop_t&      localTopology,
+                        const t_state&             localState,
+                        ObservablesReducerBuilder* observablesReducerBuilder);
 
     //! Objects used in constructing and configuring DD
     //! {
@@ -2996,7 +3011,10 @@ DomainDecompositionBuilder::Impl::Impl(const MDLogger&                   mdlog,
             mdlog_, ddSettings_, options_.rankOrder, ddRankSetup_, cr_, ddCellIndex_, &pmeRanks_);
 }
 
-gmx_domdec_t* DomainDecompositionBuilder::Impl::build(LocalAtomSetManager* atomSets)
+gmx_domdec_t* DomainDecompositionBuilder::Impl::build(LocalAtomSetManager*  atomSets,
+                                                      const gmx_localtop_t& localTopology,
+                                                      const t_state&        localState,
+                                                      ObservablesReducerBuilder* observablesReducerBuilder)
 {
     gmx_domdec_t* dd = new gmx_domdec_t(ir_);
 
@@ -3034,7 +3052,7 @@ gmx_domdec_t* DomainDecompositionBuilder::Impl::build(LocalAtomSetManager* atomS
     dd->atomSets = atomSets;
 
     dd->localTopologyChecker = std::make_unique<LocalTopologyChecker>(
-            mdlog_, cr_, mtop_, dd->comm->systemInfo.useUpdateGroups);
+            mdlog_, cr_, mtop_, localTopology, localState, dd->comm->systemInfo.useUpdateGroups, observablesReducerBuilder);
 
     return dd;
 }
@@ -3072,9 +3090,12 @@ DomainDecompositionBuilder::DomainDecompositionBuilder(const MDLogger&          
 {
 }
 
-gmx_domdec_t* DomainDecompositionBuilder::build(LocalAtomSetManager* atomSets)
+gmx_domdec_t* DomainDecompositionBuilder::build(LocalAtomSetManager*       atomSets,
+                                                const gmx_localtop_t&      localTopology,
+                                                const t_state&             localState,
+                                                ObservablesReducerBuilder* observablesReducerBuilder)
 {
-    return impl_->build(atomSets);
+    return impl_->build(atomSets, localTopology, localState, observablesReducerBuilder);
 }
 
 DomainDecompositionBuilder::~DomainDecompositionBuilder() = default;
@@ -3184,14 +3205,7 @@ void constructGpuHaloExchange(const gmx::MDLogger&            mdlog,
         for (int pulse = cr.dd->gpuHaloExchange[d].size(); pulse < cr.dd->comm->cd[d].numPulses(); pulse++)
         {
             cr.dd->gpuHaloExchange[d].push_back(std::make_unique<gmx::GpuHaloExchange>(
-                    cr.dd,
-                    d,
-                    cr.mpi_comm_mygroup,
-                    deviceStreamManager.context(),
-                    deviceStreamManager.stream(gmx::DeviceStreamType::NonBondedLocal),
-                    deviceStreamManager.stream(gmx::DeviceStreamType::NonBondedNonLocal),
-                    pulse,
-                    wcycle));
+                    cr.dd, d, cr.mpi_comm_mygroup, deviceStreamManager.context(), pulse, wcycle));
         }
     }
 }
@@ -3209,38 +3223,33 @@ void reinitGpuHaloExchange(const t_commrec&              cr,
     }
 }
 
-void communicateGpuHaloCoordinates(const t_commrec&      cr,
-                                   const matrix          box,
-                                   GpuEventSynchronizer* coordinatesReadyOnDeviceEvent)
+GpuEventSynchronizer* communicateGpuHaloCoordinates(const t_commrec&      cr,
+                                                    const matrix          box,
+                                                    GpuEventSynchronizer* dependencyEvent)
 {
+    GpuEventSynchronizer* eventPtr = dependencyEvent;
     for (int d = 0; d < cr.dd->ndim; d++)
     {
         for (int pulse = 0; pulse < cr.dd->comm->cd[d].numPulses(); pulse++)
         {
-            cr.dd->gpuHaloExchange[d][pulse]->communicateHaloCoordinates(box, coordinatesReadyOnDeviceEvent);
+            eventPtr = cr.dd->gpuHaloExchange[d][pulse]->communicateHaloCoordinates(box, eventPtr);
         }
     }
+    return eventPtr;
 }
 
-void communicateGpuHaloForces(const t_commrec& cr, bool accumulateForces)
+void communicateGpuHaloForces(const t_commrec&                                    cr,
+                              bool                                                accumulateForces,
+                              gmx::FixedCapacityVector<GpuEventSynchronizer*, 2>* dependencyEvents)
 {
     for (int d = cr.dd->ndim - 1; d >= 0; d--)
     {
         for (int pulse = cr.dd->comm->cd[d].numPulses() - 1; pulse >= 0; pulse--)
         {
-            cr.dd->gpuHaloExchange[d][pulse]->communicateHaloForces(accumulateForces);
+            cr.dd->gpuHaloExchange[d][pulse]->communicateHaloForces(accumulateForces, dependencyEvents);
+            dependencyEvents->push_back(cr.dd->gpuHaloExchange[d][pulse]->getForcesReadyOnDeviceEvent());
         }
     }
-}
-
-const gmx::LocalTopologyChecker& dd_localTopologyChecker(const gmx_domdec_t& dd)
-{
-    return *dd.localTopologyChecker;
-}
-
-gmx::LocalTopologyChecker* dd_localTopologyChecker(gmx_domdec_t* dd)
-{
-    return dd->localTopologyChecker.get();
 }
 
 void dd_init_local_state(const gmx_domdec_t& dd, const t_state* state_global, t_state* state_local)

@@ -98,11 +98,7 @@ typedef std::function<void()> CheckBondedInteractionsCallback;
  * \tparam algorithm  The global reduction scheme
  */
 template<ComputeGlobalsAlgorithm algorithm>
-class ComputeGlobalsElement final :
-    public ISimulatorElement,
-    public IEnergySignallerClient,
-    public ITrajectorySignallerClient,
-    public ITopologyHolderClient
+class ComputeGlobalsElement final : public ISimulatorElement, public IEnergySignallerClient, public ITrajectorySignallerClient
 {
 public:
     //! Constructor
@@ -141,9 +137,6 @@ public:
      */
     void scheduleTask(Step step, Time time, const RegisterRunFunction& registerRunFunction) override;
 
-    //! Get callback to request checking of bonded interactions
-    CheckBondedInteractionsCallback getCheckNumberOfBondedInteractionsCallback();
-
     //! No element teardown needed
     void elementTeardown() override {}
 
@@ -171,8 +164,6 @@ public:
                                                     ObservablesReducer*        observablesReducer);
 
 private:
-    //! ITopologyClient implementation
-    void setTopology(const gmx_localtop_t* top) override;
     //! IEnergySignallerClient implementation
     std::optional<SignallerCallback> registerEnergyCallback(EnergySignallerEvent event) override;
     //! ITrajectorySignallerClient implementation
@@ -236,8 +227,6 @@ private:
     StatePropagatorData* statePropagatorData_;
     //! Pointer to the energy data (needed for the tensors and mu_tot)
     EnergyData* energyData_;
-    //! Pointer to the local topology (only needed for checkNumberOfBondedInteractions)
-    const gmx_localtop_t* localTopology_;
     //! Pointer to the free energy perturbation data
     FreeEnergyPerturbationData* freeEnergyPerturbationData_;
 

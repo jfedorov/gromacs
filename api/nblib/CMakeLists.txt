@@ -38,28 +38,20 @@
 # \author Sebastian Keller <keller@cscs.ch>
 #
 
-set(TESTUTILS_DIR ${PROJECT_SOURCE_DIR}/src/testutils)
-if (BUILD_TESTING)
-    if(NOT GMX_DEVELOPER_BUILD)
-        set(UNITTEST_TARGET_OPTIONS EXCLUDE_FROM_ALL)
-    endif()
-    include(${TESTUTILS_DIR}/TestMacros.cmake)
-endif()
-
 add_custom_target(nblib-tests
         COMMENT "Target to build all nblib tests including samples"
         )
 # Ensure that "make tests" builds all nblib tests so the top-level
 # "make check" will work.
 if (BUILD_TESTING)
-	add_dependencies(tests nblib-tests)
+        add_dependencies(tests nblib-tests)
 
-	# this allows all nblib tests to be run with "make check-nblib"
-	add_custom_target(check-nblib
-		COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -R NbLib
-		COMMENT "Running nblib tests"
-		USES_TERMINAL VERBATIM)
-	add_dependencies(check-nblib nblib-tests)
+        # this allows all nblib tests to be run with "make check-nblib"
+        add_custom_target(check-nblib
+                COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure -R NbLib
+                COMMENT "Running nblib tests"
+                USES_TERMINAL VERBATIM)
+        add_dependencies(check-nblib nblib-tests)
 endif()
 
 set(NBLIB_MAJOR 0)
@@ -89,9 +81,7 @@ endif()
 target_sources(nblib
         PRIVATE
         box.cpp
-        forcecalculator.cpp
-        gmxcalculator.cpp
-        gmxsetup.cpp
+        gmxcalculatorcpu.cpp
         integrator.cpp
         interactions.cpp
         molecules.cpp
@@ -101,17 +91,27 @@ target_sources(nblib
         simulationstate.cpp
         topologyhelpers.cpp
         topology.cpp
+        tpr.cpp
         virials.cpp
         )
 
 gmx_target_compile_options(nblib)
 
 target_link_libraries(nblib PRIVATE libgromacs)
-target_include_directories(nblib SYSTEM BEFORE PRIVATE ${PROJECT_SOURCE_DIR}/src/external/thread_mpi/include)
 target_include_directories(nblib PRIVATE ${PROJECT_SOURCE_DIR}/api)
 include_directories(BEFORE ${CMAKE_SOURCE_DIR}/api)
 target_link_libraries(nblib PRIVATE common)
-# There are transitive dependencies on the legacy GROMACS headers.
+target_link_libraries(nblib PRIVATE
+                      fileio
+                      gmxlib
+                      listed_forces
+                      mdtypes
+                      mdlib
+                      topology
+                      utility)
+
+# There are transitive interface dependencies on the legacy GROMACS headers.
+# TODO(#3288): Explicitly link specific modules for public API dependencies as legacy_api is removed.
 target_link_libraries(nblib PUBLIC legacy_api)
 # TODO: Explicitly link specific modules.
 target_link_libraries(nblib PRIVATE legacy_modules)
@@ -132,7 +132,7 @@ if(GMX_INSTALL_NBLIB_API)
             basicdefinitions.h
             box.h
             exception.h
-            forcecalculator.h
+            gmxcalculatorcpu.h
             integrator.h
             interactions.h
             molecules.h
@@ -143,6 +143,7 @@ if(GMX_INSTALL_NBLIB_API)
             particletype.h
             simulationstate.h
             topology.h
+            tpr.h
             vector.h
             DESTINATION include/nblib)
 endif()

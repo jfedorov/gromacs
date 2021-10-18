@@ -850,6 +850,27 @@ void check_ir(const char*                    mdparin,
                 CHECK((fep->all_lambda[i][j] < 0) || (fep->all_lambda[i][j] > 1));
             }
         }
+
+        if (fep->softcoreFunction == SoftcoreType::Gapsys)
+        {
+            if (fep->scGapsysScaleLinpointQ < 0.0)
+            {
+                sprintf(warn_buf,
+                        "sc_scale_linpoint_Q_gapsys is equal %g but must be >= 0",
+                        fep->scGapsysScaleLinpointQ);
+                warning_note(wi, warn_buf);
+            }
+
+            if ((fep->scGapsysScaleLinpointLJ < 0.0) || (fep->scGapsysScaleLinpointLJ >= 1.0))
+            {
+                sprintf(warn_buf,
+                        "sc_scale_linpoint_LJ_gapsys is equal %g but must be in [0,1) when used "
+                        "with "
+                        "sc_function=gapsys.",
+                        fep->scGapsysScaleLinpointLJ);
+                warning_note(wi, warn_buf);
+            }
+        }
     }
 
     if ((ir->bSimTemp) || (ir->efep == FreeEnergyPerturbationType::Expanded))
@@ -2302,18 +2323,22 @@ void get_ir(const char*     mdparin,
             setStringEntry(&inp, "temperature-lambdas", "");
     fep->lambda_neighbors = get_eint(&inp, "calc-lambda-neighbors", 1, wi);
     setStringEntry(&inp, "init-lambda-weights", inputrecStrings->lambda_weights, nullptr);
-    fep->edHdLPrintEnergy   = getEnum<FreeEnergyPrintEnergy>(&inp, "dhdl-print-energy", wi);
-    fep->sc_alpha           = get_ereal(&inp, "sc-alpha", 0.0, wi);
-    fep->sc_power           = get_eint(&inp, "sc-power", 1, wi);
-    fep->sc_r_power         = get_ereal(&inp, "sc-r-power", 6.0, wi);
-    fep->sc_sigma           = get_ereal(&inp, "sc-sigma", 0.3, wi);
-    fep->bScCoul            = (getEnum<Boolean>(&inp, "sc-coul", wi) != Boolean::No);
-    fep->dh_hist_size       = get_eint(&inp, "dh_hist_size", 0, wi);
-    fep->dh_hist_spacing    = get_ereal(&inp, "dh_hist_spacing", 0.1, wi);
-    fep->separate_dhdl_file = getEnum<SeparateDhdlFile>(&inp, "separate-dhdl-file", wi);
-    fep->dhdl_derivatives   = getEnum<DhDlDerivativeCalculation>(&inp, "dhdl-derivatives", wi);
-    fep->dh_hist_size       = get_eint(&inp, "dh_hist_size", 0, wi);
-    fep->dh_hist_spacing    = get_ereal(&inp, "dh_hist_spacing", 0.1, wi);
+    fep->edHdLPrintEnergy        = getEnum<FreeEnergyPrintEnergy>(&inp, "dhdl-print-energy", wi);
+    fep->softcoreFunction        = getEnum<SoftcoreType>(&inp, "sc-function", wi);
+    fep->sc_alpha                = get_ereal(&inp, "sc-alpha", 0.0, wi);
+    fep->sc_power                = get_eint(&inp, "sc-power", 1, wi);
+    fep->sc_r_power              = get_ereal(&inp, "sc-r-power", 6.0, wi);
+    fep->sc_sigma                = get_ereal(&inp, "sc-sigma", 0.3, wi);
+    fep->bScCoul                 = (getEnum<Boolean>(&inp, "sc-coul", wi) != Boolean::No);
+    fep->scGapsysScaleLinpointLJ = get_ereal(&inp, "sc-gapsys-scale-linpoint-lj", 0.85, wi);
+    fep->scGapsysScaleLinpointQ  = get_ereal(&inp, "sc-gapsys-scale-linpoint-q", 0.3, wi);
+    fep->scGapsysSigmaLJ         = get_ereal(&inp, "sc-gapsys-sigma-lj", 0.3, wi);
+    fep->dh_hist_size            = get_eint(&inp, "dh_hist_size", 0, wi);
+    fep->dh_hist_spacing         = get_ereal(&inp, "dh_hist_spacing", 0.1, wi);
+    fep->separate_dhdl_file      = getEnum<SeparateDhdlFile>(&inp, "separate-dhdl-file", wi);
+    fep->dhdl_derivatives        = getEnum<DhDlDerivativeCalculation>(&inp, "dhdl-derivatives", wi);
+    fep->dh_hist_size            = get_eint(&inp, "dh_hist_size", 0, wi);
+    fep->dh_hist_spacing         = get_ereal(&inp, "dh_hist_spacing", 0.1, wi);
 
     /* Non-equilibrium MD stuff */
     printStringNewline(&inp, "Non-equilibrium MD stuff");

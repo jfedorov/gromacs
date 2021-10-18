@@ -44,7 +44,6 @@
 #include "computeglobalselement.h"
 
 #include "gromacs/domdec/domdec.h"
-#include "gromacs/domdec/localtopologychecker.h"
 #include "gromacs/gmxlib/network.h"
 #include "gromacs/gmxlib/nrnb.h"
 #include "gromacs/math/vec.h"
@@ -94,7 +93,6 @@ ComputeGlobalsElement<algorithm>::ComputeGlobalsElement(StatePropagatorData* sta
     nullSignaller_(std::make_unique<SimulationSignaller>(nullptr, nullptr, nullptr, false, false)),
     statePropagatorData_(statePropagatorData),
     energyData_(energyData),
-    localTopology_(nullptr),
     freeEnergyPerturbationData_(freeEnergyPerturbationData),
     vcm_(global_top.groups, *inputrec),
     signals_(signals),
@@ -123,8 +121,6 @@ ComputeGlobalsElement<algorithm>::~ComputeGlobalsElement()
 template<ComputeGlobalsAlgorithm algorithm>
 void ComputeGlobalsElement<algorithm>::elementSetup()
 {
-    GMX_ASSERT(localTopology_, "Setup called before local topology was set.");
-
     if (doStopCM_ && !inputrec_->bContinuation)
     {
         // To minimize communication, compute_globals computes the COM velocity
@@ -133,6 +129,8 @@ void ComputeGlobalsElement<algorithm>::elementSetup()
         // to call compute_globals twice.
 
         compute(-1, CGLO_GSTAT | CGLO_STOPCM, nullSignaller_.get(), false, true);
+        // Clean up after pre-step use of compute()
+        observablesReducer_->markAsReadyToReduce();
 
         auto v = statePropagatorData_->velocitiesView();
         // At initialization, do not pass x with acceleration-correction mode
@@ -160,6 +158,9 @@ void ComputeGlobalsElement<algorithm>::elementSetup()
     {
         copy_mat(energyData_->ekindata()->tcstat[i].ekinh, energyData_->ekindata()->tcstat[i].ekinh_old);
     }
+
+    // Clean up after pre-step use of compute()
+    observablesReducer_->markAsReadyToReduce();
 }
 
 template<ComputeGlobalsAlgorithm algorithm>
@@ -286,10 +287,6 @@ void ComputeGlobalsElement<algorithm>::compute(gmx::Step            step,
     const auto* lastbox = useLastBox ? statePropagatorData_->constPreviousBox()
                                      : statePropagatorData_->constBox();
 
-    if (DOMAINDECOMP(cr_) && dd_localTopologyChecker(*cr_->dd).shouldCheckNumberOfBondedInteractions())
-    {
-        flags |= CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS;
-    }
     compute_globals(gstat_,
                     cr_,
                     inputrec_,
@@ -307,29 +304,17 @@ void ComputeGlobalsElement<algorithm>::compute(gmx::Step            step,
                     energyData_->constraintVirial(step),
                     energyData_->totalVirial(step),
                     energyData_->pressure(step),
-                    (((flags & CGLO_ENERGY) != 0) && constr_ != nullptr) ? constr_->rmsdData()
-                                                                         : gmx::ArrayRef<real>{},
                     signaller,
                     lastbox,
                     energyData_->needToSumEkinhOld(),
                     flags,
                     step,
                     observablesReducer_);
-    if (DOMAINDECOMP(cr_))
-    {
-        dd_localTopologyChecker(cr_->dd)->checkNumberOfBondedInteractions(localTopology_, x, box);
-    }
     if (flags & CGLO_STOPCM && !isInit)
     {
         process_and_stopcm_grp(fplog_, &vcm_, *mdAtoms_->mdatoms(), x, v);
         inc_nrnb(nrnb_, eNR_STOPCM, mdAtoms_->mdatoms()->homenr);
     }
-}
-
-template<ComputeGlobalsAlgorithm algorithm>
-void ComputeGlobalsElement<algorithm>::setTopology(const gmx_localtop_t* top)
-{
-    localTopology_ = top;
 }
 
 template<ComputeGlobalsAlgorithm algorithm>
@@ -357,6 +342,32 @@ ComputeGlobalsElement<algorithm>::registerTrajectorySignallerCallback(Trajectory
     return std::nullopt;
 }
 
+namespace
+{
+
+/*! \brief Schedule a function for actions that must happen at the end of each step
+ *
+ * After reduction, an ObservablesReducer is marked as unavailable for
+ * further reduction this step. This needs to be reset in order to be
+ * used on the next step.
+ *
+ * \param[in]  observablesReducer The ObservablesReducer to mark as ready for use
+ */
+SchedulingFunction registerPostStepSchedulingFunction(ObservablesReducer* observablesReducer)
+{
+    SchedulingFunction postStepSchedulingFunction =
+            [observablesReducer](
+                    Step /*step*/, Time /*time*/, const RegisterRunFunction& registerRunFunction) {
+                SimulatorRunFunction completeObservablesReducerStep = [&observablesReducer]() {
+                    observablesReducer->markAsReadyToReduce();
+                };
+                registerRunFunction(completeObservablesReducerStep);
+            };
+    return postStepSchedulingFunction;
+}
+
+} // namespace
+
 //! Explicit template instantiation
 //! \{
 template class ComputeGlobalsElement<ComputeGlobalsAlgorithm::LeapFrog>;
@@ -373,7 +384,7 @@ ISimulatorElement* ComputeGlobalsElement<ComputeGlobalsAlgorithm::LeapFrog>::get
         GlobalCommunicationHelper*              globalCommunicationHelper,
         ObservablesReducer*                     observablesReducer)
 {
-    auto* element = builderHelper->storeElement(
+    ComputeGlobalsElement* element = builderHelper->storeElement(
             std::make_unique<ComputeGlobalsElement<ComputeGlobalsAlgorithm::LeapFrog>>(
                     statePropagatorData,
                     energyData,
@@ -391,6 +402,8 @@ ISimulatorElement* ComputeGlobalsElement<ComputeGlobalsAlgorithm::LeapFrog>::get
                     legacySimulatorData->top_global,
                     legacySimulatorData->constr,
                     observablesReducer));
+    builderHelper->registerPostStepScheduling(
+            registerPostStepSchedulingFunction(element->observablesReducer_));
 
     return element;
 }
@@ -413,11 +426,11 @@ ISimulatorElement* ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet
 
     if (cachedValue)
     {
-        return std::any_cast<ISimulatorElement*>(cachedValue.value());
+        return std::any_cast<ComputeGlobalsElement*>(cachedValue.value());
     }
     else
     {
-        ISimulatorElement* vvComputeGlobalsElement = builderHelper->storeElement(
+        ComputeGlobalsElement* vvComputeGlobalsElement = builderHelper->storeElement(
                 std::make_unique<ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet>>(
                         statePropagatorData,
                         energyData,
@@ -436,6 +449,8 @@ ISimulatorElement* ComputeGlobalsElement<ComputeGlobalsAlgorithm::VelocityVerlet
                         simulator->constr,
                         observablesReducer));
         builderHelper->storeBuilderData(key, vvComputeGlobalsElement);
+        builderHelper->registerPostStepScheduling(
+                registerPostStepSchedulingFunction(vvComputeGlobalsElement->observablesReducer_));
         return vvComputeGlobalsElement;
     }
 }

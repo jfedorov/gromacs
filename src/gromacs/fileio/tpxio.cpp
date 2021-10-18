@@ -138,6 +138,7 @@ enum tpxv
     tpxv_MTS,                                     /**< Added multiple time stepping */
     tpxv_RemovedConstantAcceleration, /**< Removed support for constant acceleration NEMD. */
     tpxv_TransformationPullCoord,     /**< Support for transformation pull coordinates */
+    tpxv_SoftcoreGapsys,              /**< Added gapsys softcore function */
     tpxv_Count                        /**< the total number of tpxv versions */
 };
 
@@ -621,6 +622,20 @@ static void do_fepvals(gmx::ISerializer* serializer, t_lambda* fepvals, int file
     else
     {
         fepvals->edHdLPrintEnergy = FreeEnergyPrintEnergy::No;
+    }
+    if (file_version >= tpxv_SoftcoreGapsys)
+    {
+        serializer->doInt(reinterpret_cast<int*>(&fepvals->softcoreFunction));
+        serializer->doReal(&fepvals->scGapsysScaleLinpointLJ);
+        serializer->doReal(&fepvals->scGapsysScaleLinpointQ);
+        serializer->doReal(&fepvals->scGapsysSigmaLJ);
+    }
+    else
+    {
+        fepvals->softcoreFunction        = SoftcoreType::Beutler;
+        fepvals->scGapsysScaleLinpointLJ = 0.85;
+        fepvals->scGapsysScaleLinpointQ  = 0.3;
+        fepvals->scGapsysSigmaLJ         = 0.3;
     }
 
     /* handle lambda_neighbors */

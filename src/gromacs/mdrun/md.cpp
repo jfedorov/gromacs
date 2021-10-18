@@ -346,7 +346,7 @@ void gmx::LegacySimulator::do_md()
                                  top_global,
                                  constr ? constr->numFlexibleConstraints() : 0,
                                  ir->nstcalcenergy,
-                                 DOMAINDECOMP(cr),
+                                 haveDDAtomOrdering(*cr),
                                  useGpuForPme);
 
     {
@@ -357,11 +357,6 @@ void gmx::LegacySimulator::do_md()
         }
     }
 
-    // Local state only becomes valid now.
-    std::unique_ptr<t_state> stateInstance;
-    t_state*                 state;
-
-    gmx_localtop_t     top(top_global.ffparams);
     ObservablesReducer observablesReducer = observablesReducerBuilder->build();
 
     ForceBuffers     f(simulationWork.useMts,
@@ -369,10 +364,9 @@ void gmx::LegacySimulator::do_md()
                                ? PinningPolicy::PinnedIfSupported
                                : PinningPolicy::CannotBePinned);
     const t_mdatoms* md = mdAtoms->mdatoms();
-    if (DOMAINDECOMP(cr))
+    if (haveDDAtomOrdering(*cr))
     {
-        stateInstance = std::make_unique<t_state>();
-        state         = stateInstance.get();
+        // Local state only becomes valid now.
         dd_init_local_state(*cr->dd, state_global, state);
 
         /* Distribute the charge groups over the nodes from the master node */
@@ -390,7 +384,7 @@ void gmx::LegacySimulator::do_md()
                             state,
                             &f,
                             mdAtoms,
-                            &top,
+                            top,
                             fr,
                             vsite,
                             constr,
@@ -402,21 +396,21 @@ void gmx::LegacySimulator::do_md()
                                              : gmx::ArrayRef<const unsigned short>(),
                                  md->cTC ? gmx::arrayRefFromArray(md->cTC, md->nr)
                                          : gmx::ArrayRef<const unsigned short>());
+        fr->longRangeNonbondeds->updateAfterPartition(*md);
     }
     else
     {
         state_change_natoms(state_global, state_global->natoms);
-        /* Copy the pointer to the global state */
-        state = state_global;
 
         /* Generate and initialize new topology */
-        mdAlgorithmsSetupAtomData(cr, *ir, top_global, &top, fr, &f, mdAtoms, constr, vsite, shellfc);
+        mdAlgorithmsSetupAtomData(cr, *ir, top_global, top, fr, &f, mdAtoms, constr, vsite, shellfc);
 
         upd.updateAfterPartition(state->natoms,
                                  md->cFREEZE ? gmx::arrayRefFromArray(md->cFREEZE, md->nr)
                                              : gmx::ArrayRef<const unsigned short>(),
                                  md->cTC ? gmx::arrayRefFromArray(md->cTC, md->nr)
                                          : gmx::ArrayRef<const unsigned short>());
+        fr->longRangeNonbondeds->updateAfterPartition(*md);
     }
 
     std::unique_ptr<UpdateConstrainGpu> integrator;
@@ -426,8 +420,8 @@ void gmx::LegacySimulator::do_md()
     // TODO: the assertions below should be handled by UpdateConstraintsBuilder.
     if (useGpuForUpdate)
     {
-        GMX_RELEASE_ASSERT(!DOMAINDECOMP(cr) || ddUsesUpdateGroups(*cr->dd) || constr == nullptr
-                                   || constr->numConstraintsTotal() == 0,
+        GMX_RELEASE_ASSERT(!haveDDAtomOrdering(*cr) || ddUsesUpdateGroups(*cr->dd)
+                                   || constr == nullptr || constr->numConstraintsTotal() == 0,
                            "Constraints in domain decomposition are only supported with update "
                            "groups if using GPU update.\n");
         GMX_RELEASE_ASSERT(ir->eConstrAlg != ConstraintAlgorithm::Shake || constr == nullptr
@@ -650,11 +644,6 @@ void gmx::LegacySimulator::do_md()
             cglo_flags_iteration |= CGLO_STOPCM;
             cglo_flags_iteration &= ~CGLO_TEMPERATURE;
         }
-        if (DOMAINDECOMP(cr) && dd_localTopologyChecker(*cr->dd).shouldCheckNumberOfBondedInteractions()
-            && cgloIteration == 0)
-        {
-            cglo_flags_iteration |= CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS;
-        }
         compute_globals(gstat,
                         cr,
                         ir,
@@ -672,13 +661,15 @@ void gmx::LegacySimulator::do_md()
                         shake_vir,
                         total_vir,
                         pres,
-                        gmx::ArrayRef<real>{},
                         &nullSignaller,
                         state->box,
                         &bSumEkinhOld,
                         cglo_flags_iteration,
                         step,
                         &observablesReducer);
+        // Clean up after pre-step use of compute_globals()
+        observablesReducer.markAsReadyToReduce();
+
         if (cglo_flags_iteration & CGLO_STOPCM)
         {
             /* At initialization, do not pass x with acceleration-correction mode
@@ -690,11 +681,6 @@ void gmx::LegacySimulator::do_md()
             process_and_stopcm_grp(fplog, &vcm, *md, x, makeArrayRef(state->v));
             inc_nrnb(nrnb, eNR_STOPCM, md->homenr);
         }
-    }
-    if (DOMAINDECOMP(cr))
-    {
-        dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
-                &top, makeConstArrayRef(state->x), state->box);
     }
     if (ir->eI == IntegrationAlgorithm::VVAK)
     {
@@ -721,13 +707,14 @@ void gmx::LegacySimulator::do_md()
                         shake_vir,
                         total_vir,
                         pres,
-                        gmx::ArrayRef<real>{},
                         &nullSignaller,
                         state->box,
                         &bSumEkinhOld,
                         cglo_flags & ~CGLO_PRESSURE,
                         step,
                         &observablesReducer);
+        // Clean up after pre-step use of compute_globals()
+        observablesReducer.markAsReadyToReduce();
     }
 
     /* Calculate the initial half step temperature, and save the ekinh_old */
@@ -935,15 +922,15 @@ void gmx::LegacySimulator::do_md()
         do_verbose = mdrunOptions.verbose
                      && (step % mdrunOptions.verboseStepPrintInterval == 0 || bFirstStep || bLastStep);
 
-        if (useGpuForUpdate && !bFirstStep && bNS)
+        // On search steps, when doing the update on the GPU, copy
+        // the coordinates and velocities to the host unless they are
+        // already there (ie on the first step and after replica
+        // exchange).
+        if (useGpuForUpdate && bNS && !bFirstStep && !bExchanged)
         {
-            // Copy velocities from the GPU on search steps to keep a copy on host (device buffers are reinitialized).
             stateGpu->copyVelocitiesFromGpu(state->v, AtomLocality::Local);
-            stateGpu->waitVelocitiesReadyOnHost(AtomLocality::Local);
-            // Copy coordinate from the GPU when needed at the search step.
-            // NOTE: The cases when coordinates needed on CPU for force evaluation are handled in sim_utils.
-            // NOTE: If the coordinates are to be written into output file they are also copied separately before the output.
             stateGpu->copyCoordinatesFromGpu(state->x, AtomLocality::Local);
+            stateGpu->waitVelocitiesReadyOnHost(AtomLocality::Local);
             stateGpu->waitCoordinatesReadyOnHost(AtomLocality::Local);
         }
 
@@ -975,19 +962,21 @@ void gmx::LegacySimulator::do_md()
                 if (correct_box(fplog, step, state->box))
                 {
                     bMasterState = TRUE;
-                    // If update is offloaded, it should be informed about the box size change
-                    if (useGpuForUpdate)
-                    {
-                        integrator->setPbc(PbcType::Xyz, state->box);
-                    }
                 }
             }
-            if (DOMAINDECOMP(cr) && bMasterState)
+            // If update is offloaded, and the box was changed either
+            // above or in a replica exchange on the previous step,
+            // the GPU Update object should be informed
+            if (useGpuForUpdate && (bMasterState || bExchanged))
+            {
+                integrator->setPbc(PbcType::Xyz, state->box);
+            }
+            if (haveDDAtomOrdering(*cr) && bMasterState)
             {
                 dd_collect_state(cr->dd, state, state_global);
             }
 
-            if (DOMAINDECOMP(cr))
+            if (haveDDAtomOrdering(*cr))
             {
                 /* Repartition the domain decomposition */
                 dd_partition_system(fplog,
@@ -1004,7 +993,7 @@ void gmx::LegacySimulator::do_md()
                                     state,
                                     &f,
                                     mdAtoms,
-                                    &top,
+                                    top,
                                     fr,
                                     vsite,
                                     constr,
@@ -1016,6 +1005,7 @@ void gmx::LegacySimulator::do_md()
                                                      : gmx::ArrayRef<const unsigned short>(),
                                          md->cTC ? gmx::arrayRefFromArray(md->cTC, md->nr)
                                                  : gmx::ArrayRef<const unsigned short>());
+                fr->longRangeNonbondeds->updateAfterPartition(*md);
             }
         }
 
@@ -1045,10 +1035,6 @@ void gmx::LegacySimulator::do_md()
              * the full step kinetic energy and possibly for T-coupling.*/
             /* This may not be quite working correctly yet . . . . */
             int cglo_flags = CGLO_GSTAT | CGLO_TEMPERATURE;
-            if (DOMAINDECOMP(cr) && dd_localTopologyChecker(*cr->dd).shouldCheckNumberOfBondedInteractions())
-            {
-                cglo_flags |= CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS;
-            }
             compute_globals(gstat,
                             cr,
                             ir,
@@ -1066,18 +1052,12 @@ void gmx::LegacySimulator::do_md()
                             nullptr,
                             nullptr,
                             nullptr,
-                            gmx::ArrayRef<real>{},
                             &nullSignaller,
                             state->box,
                             &bSumEkinhOld,
                             cglo_flags,
                             step,
                             &observablesReducer);
-            if (DOMAINDECOMP(cr))
-            {
-                dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
-                        &top, makeConstArrayRef(state->x), state->box);
-            }
         }
         clear_mat(force_vir);
 
@@ -1140,7 +1120,7 @@ void gmx::LegacySimulator::do_md()
                                 pull_work,
                                 bNS,
                                 force_flags,
-                                &top,
+                                top,
                                 constr,
                                 enerd,
                                 state->natoms,
@@ -1152,6 +1132,7 @@ void gmx::LegacySimulator::do_md()
                                 &f.view(),
                                 force_vir,
                                 *md,
+                                fr->longRangeNonbondeds.get(),
                                 nrnb,
                                 wcycle,
                                 shellfc,
@@ -1193,7 +1174,7 @@ void gmx::LegacySimulator::do_md()
                      step,
                      nrnb,
                      wcycle,
-                     &top,
+                     top,
                      state->box,
                      state->x.arrayRefWithPadding(),
                      &state->hist,
@@ -1208,6 +1189,7 @@ void gmx::LegacySimulator::do_md()
                      mu_tot,
                      t,
                      ed ? ed->getLegacyED() : nullptr,
+                     fr->longRangeNonbondeds.get(),
                      (bNS ? GMX_FORCE_NS : 0) | force_flags,
                      ddBalanceRegionHandler);
         }
@@ -1231,7 +1213,6 @@ void gmx::LegacySimulator::do_md()
                                  &fcdata,
                                  &MassQ,
                                  &vcm,
-                                 top,
                                  enerd,
                                  &observablesReducer,
                                  ekind,
@@ -1510,63 +1491,52 @@ void gmx::LegacySimulator::do_md()
         {
             if (useGpuForUpdate)
             {
-                if (bNS && (bFirstStep || DOMAINDECOMP(cr)))
+                // On search steps, update handles to device vectors
+                if (bNS && (bFirstStep || haveDDAtomOrdering(*cr) || bExchanged))
                 {
                     integrator->set(stateGpu->getCoordinates(),
                                     stateGpu->getVelocities(),
                                     stateGpu->getForces(),
-                                    top.idef,
+                                    top->idef,
                                     *md);
 
                     // Copy data to the GPU after buffers might have being reinitialized
                     /* The velocity copy is redundant if we had Center-of-Mass motion removed on
                      * the previous step. We don't check that now. */
                     stateGpu->copyVelocitiesToGpu(state->v, AtomLocality::Local);
-                    if (!runScheduleWork->stepWork.haveGpuPmeOnThisRank
-                        && !runScheduleWork->stepWork.useGpuXBufferOps)
+                    if (bExchanged
+                        || (!runScheduleWork->stepWork.haveGpuPmeOnThisRank
+                            && !runScheduleWork->stepWork.useGpuXBufferOps))
                     {
                         stateGpu->copyCoordinatesToGpu(state->x, AtomLocality::Local);
                     }
                 }
 
-                if (simulationWork.useGpuPme && simulationWork.useCpuPmePpCommunication)
+                if ((simulationWork.useGpuPme && simulationWork.useCpuPmePpCommunication)
+                    || (!runScheduleWork->stepWork.useGpuFBufferOps))
                 {
-                    // The PME forces were recieved to the host, so have to be copied
-                    stateGpu->copyForcesToGpu(f.view().force(), AtomLocality::All);
-                }
-                else if (!runScheduleWork->stepWork.useGpuFBufferOps)
-                {
-                    // The buffer ops were not offloaded this step, so the forces are on the
-                    // host and have to be copied
+                    // The PME forces were recieved to the host, and reduced on the CPU with the
+                    // rest of the forces computed on the GPU, so the final forces have to be copied
+                    // back to the GPU. Or the buffer ops were not offloaded this step, so the
+                    // forces are on the host and have to be copied
                     stateGpu->copyForcesToGpu(f.view().force(), AtomLocality::Local);
                 }
-
                 const bool doTemperatureScaling =
                         (ir->etc != TemperatureCoupling::No
                          && do_per_step(step + ir->nsttcouple - 1, ir->nsttcouple));
 
                 // This applies Leap-Frog, LINCS and SETTLE in succession
-                integrator->integrate(
-                        stateGpu->getForcesReadyOnDeviceEvent(
-                                AtomLocality::Local, runScheduleWork->stepWork.useGpuFBufferOps),
-                        ir->delta_t,
-                        true,
-                        bCalcVir,
-                        shake_vir,
-                        doTemperatureScaling,
-                        ekind->tcstat,
-                        doParrinelloRahman,
-                        ir->nstpcouple * ir->delta_t,
-                        M);
-
-                // Copy velocities D2H after update if:
-                // - Globals are computed this step (includes the energy output steps).
-                // - Temperature is needed for the next step.
-                if (bGStat || needHalfStepKineticEnergy)
-                {
-                    stateGpu->copyVelocitiesFromGpu(state->v, AtomLocality::Local);
-                    stateGpu->waitVelocitiesReadyOnHost(AtomLocality::Local);
-                }
+                integrator->integrate(stateGpu->getLocalForcesReadyOnDeviceEvent(
+                                              runScheduleWork->stepWork, runScheduleWork->simulationWork),
+                                      ir->delta_t,
+                                      true,
+                                      bCalcVir,
+                                      shake_vir,
+                                      doTemperatureScaling,
+                                      ekind->tcstat,
+                                      doParrinelloRahman,
+                                      ir->nstpcouple * ir->delta_t,
+                                      M);
             }
             else
             {
@@ -1649,7 +1619,7 @@ void gmx::LegacySimulator::do_md()
 
             if (ir->bPull && ir->pull->bSetPbcRefToPrevStepCOM)
             {
-                updatePrevStepPullCom(pull_work, state);
+                updatePrevStepPullCom(pull_work, state->pull_com_prev_step);
             }
 
             enerd->term[F_DVDL_CONSTR] += dvdl_constr;
@@ -1665,14 +1635,33 @@ void gmx::LegacySimulator::do_md()
             // and when algorithms require it.
             const bool doInterSimSignal = (simulationsShareState && do_per_step(step, nstSignalComm));
 
-            if (bGStat || needHalfStepKineticEnergy || doInterSimSignal)
+            if (useGpuForUpdate)
             {
-                // Copy coordinates when needed to stop the CM motion.
-                if (useGpuForUpdate && (bDoReplEx || (!EI_VV(ir->eI) && bStopCM)))
+                const bool coordinatesRequiredForStopCM =
+                        bStopCM && (bGStat || needHalfStepKineticEnergy || doInterSimSignal)
+                        && !EI_VV(ir->eI);
+
+                // Copy coordinates when needed to stop the CM motion or for replica exchange
+                if (coordinatesRequiredForStopCM || bDoReplEx)
                 {
                     stateGpu->copyCoordinatesFromGpu(state->x, AtomLocality::Local);
                     stateGpu->waitCoordinatesReadyOnHost(AtomLocality::Local);
                 }
+
+                // Copy velocities back to the host if:
+                // - Globals are computed this step (includes the energy output steps).
+                // - Temperature is needed for the next step.
+                // - This is a replica exchange step (even though we will only need
+                //     the velocities if an exchange succeeds)
+                if (bGStat || needHalfStepKineticEnergy || bDoReplEx)
+                {
+                    stateGpu->copyVelocitiesFromGpu(state->v, AtomLocality::Local);
+                    stateGpu->waitVelocitiesReadyOnHost(AtomLocality::Local);
+                }
+            }
+
+            if (bGStat || needHalfStepKineticEnergy || doInterSimSignal)
+            {
                 // Since we're already communicating at this step, we
                 // can propagate intra-simulation signals. Note that
                 // check_nstglobalcomm has the responsibility for
@@ -1683,43 +1672,32 @@ void gmx::LegacySimulator::do_md()
                 bool                doIntraSimSignal = true;
                 SimulationSignaller signaller(&signals, cr, ms, doInterSimSignal, doIntraSimSignal);
 
-                compute_globals(
-                        gstat,
-                        cr,
-                        ir,
-                        fr,
-                        ekind,
-                        makeConstArrayRef(state->x),
-                        makeConstArrayRef(state->v),
-                        state->box,
-                        md,
-                        nrnb,
-                        &vcm,
-                        wcycle,
-                        enerd,
-                        force_vir,
-                        shake_vir,
-                        total_vir,
-                        pres,
-                        (!EI_VV(ir->eI) && bCalcEner && constr != nullptr) ? constr->rmsdData()
-                                                                           : gmx::ArrayRef<real>{},
-                        &signaller,
-                        lastbox,
-                        &bSumEkinhOld,
-                        (bGStat ? CGLO_GSTAT : 0) | (!EI_VV(ir->eI) && bCalcEner ? CGLO_ENERGY : 0)
-                                | (!EI_VV(ir->eI) && bStopCM ? CGLO_STOPCM : 0)
-                                | (!EI_VV(ir->eI) ? CGLO_TEMPERATURE : 0)
-                                | (!EI_VV(ir->eI) ? CGLO_PRESSURE : 0) | CGLO_CONSTRAINT
-                                | (DOMAINDECOMP(cr) && dd_localTopologyChecker(*cr->dd).shouldCheckNumberOfBondedInteractions()
-                                           ? CGLO_CHECK_NUMBER_OF_BONDED_INTERACTIONS
-                                           : 0),
-                        step,
-                        &observablesReducer);
-                if (DOMAINDECOMP(cr))
-                {
-                    dd_localTopologyChecker(cr->dd)->checkNumberOfBondedInteractions(
-                            &top, makeConstArrayRef(state->x), state->box);
-                }
+                compute_globals(gstat,
+                                cr,
+                                ir,
+                                fr,
+                                ekind,
+                                makeConstArrayRef(state->x),
+                                makeConstArrayRef(state->v),
+                                state->box,
+                                md,
+                                nrnb,
+                                &vcm,
+                                wcycle,
+                                enerd,
+                                force_vir,
+                                shake_vir,
+                                total_vir,
+                                pres,
+                                &signaller,
+                                lastbox,
+                                &bSumEkinhOld,
+                                (bGStat ? CGLO_GSTAT : 0) | (!EI_VV(ir->eI) && bCalcEner ? CGLO_ENERGY : 0)
+                                        | (!EI_VV(ir->eI) && bStopCM ? CGLO_STOPCM : 0)
+                                        | (!EI_VV(ir->eI) ? CGLO_TEMPERATURE : 0)
+                                        | (!EI_VV(ir->eI) ? CGLO_PRESSURE : 0) | CGLO_CONSTRAINT,
+                                step,
+                                &observablesReducer);
                 if (!EI_VV(ir->eI) && bStopCM)
                 {
                     process_and_stopcm_grp(
@@ -1758,6 +1736,7 @@ void gmx::LegacySimulator::do_md()
             accumulateKineticLambdaComponents(enerd, state->lambda, *ir->fepvals);
         }
 
+        bool scaleCoordinates = !useGpuForUpdate || bDoReplEx;
         update_pcouple_after_coordinates(fplog,
                                          step,
                                          ir,
@@ -1771,7 +1750,7 @@ void gmx::LegacySimulator::do_md()
                                          state,
                                          nrnb,
                                          upd.deform(),
-                                         !useGpuForUpdate);
+                                         scaleCoordinates);
 
         const bool doBerendsenPressureCoupling = (inputrec->epc == PressureCoupling::Berendsen
                                                   && do_per_step(step, inputrec->nstpcouple));
@@ -1948,7 +1927,7 @@ void gmx::LegacySimulator::do_md()
                                              MASTER(cr) && mdrunOptions.verbose,
                                              bRerunMD);
 
-            if (bNeedRepartition && DOMAINDECOMP(cr))
+            if (bNeedRepartition && haveDDAtomOrdering(*cr))
             {
                 dd_collect_state(cr->dd, state, state_global);
             }
@@ -1961,7 +1940,7 @@ void gmx::LegacySimulator::do_md()
             bExchanged = replica_exchange(fplog, cr, ms, repl_ex, state_global, enerd, state, step, t);
         }
 
-        if ((bExchanged || bNeedRepartition) && DOMAINDECOMP(cr))
+        if ((bExchanged || bNeedRepartition) && haveDDAtomOrdering(*cr))
         {
             dd_partition_system(fplog,
                                 mdlog,
@@ -1977,7 +1956,7 @@ void gmx::LegacySimulator::do_md()
                                 state,
                                 &f,
                                 mdAtoms,
-                                &top,
+                                top,
                                 fr,
                                 vsite,
                                 constr,
@@ -1989,6 +1968,7 @@ void gmx::LegacySimulator::do_md()
                                                  : gmx::ArrayRef<const unsigned short>(),
                                      md->cTC ? gmx::arrayRefFromArray(md->cTC, md->nr)
                                              : gmx::ArrayRef<const unsigned short>());
+            fr->longRangeNonbondeds->updateAfterPartition(*md);
         }
 
         bFirstStep = FALSE;
@@ -2015,7 +1995,7 @@ void gmx::LegacySimulator::do_md()
         }
 
         cycles = wallcycle_stop(wcycle, WallCycleCounter::Step);
-        if (DOMAINDECOMP(cr) && wcycle)
+        if (haveDDAtomOrdering(*cr) && wcycle)
         {
             dd_cycles_add(cr->dd, cycles, ddCyclStep);
         }
@@ -2023,6 +2003,7 @@ void gmx::LegacySimulator::do_md()
         /* increase the MD step number */
         step++;
         step_rel++;
+        observablesReducer.markAsReadyToReduce();
 
 #if GMX_FAHCORE
         if (MASTER(cr))

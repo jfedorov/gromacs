@@ -62,16 +62,18 @@ double getTransformationPullCoordinateValue(pull_coord_work_t* coord)
     {
         result = coord->expressionParser.evaluate(coord->transformationVariables);
     }
+#if HAVE_MUPARSER
     catch (mu::Parser::exception_type& e)
     {
-        GMX_THROW(InternalError(
+        GMX_THROW(InconsistentInputError(
                 formatString("failed to evaluate expression for transformation pull-coord%d: %s\n",
                              transformationPullCoordinateIndex + 1,
                              e.GetMsg().c_str())));
     }
+#endif
     catch (std::exception& e)
     {
-        GMX_THROW(InternalError(
+        GMX_THROW(InconsistentInputError(
                 formatString("failed to evaluate expression for transformation pull-coord%d.\n"
                              "Last variable pull-coord-index: %d.\n"
                              "Message:  %s\n",
