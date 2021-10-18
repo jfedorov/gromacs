@@ -131,7 +131,7 @@ public:
      * \return The number of spread kernels to launch, where > 1
      * indicates pipelining is active, so the calling code can loop
      * appropriately. */
-    int prepareForSpread(const bool canPipelineReceives, const DeviceStream& pmeStream);
+    int prepareForSpread(bool canPipelineReceives, const DeviceStream& pmeStream);
 
     /*! \brief When using pipelined spread kernel launches, wait for
      * the coordinates from a PP rank and prepare to launch a spread
