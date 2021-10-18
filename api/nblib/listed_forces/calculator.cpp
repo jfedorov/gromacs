@@ -140,6 +140,9 @@ void ListedForceCalculator::computeForcesAndEnergies(gmx::ArrayRef<const Vec3> x
     }
 
     // reduce shift forces
+    // This is a potential candidate for OMP parallelization, but attention should be paid to the
+    // relative costs of thread synchronization overhead vs reduction cost in contexts where the
+    // number of threads could be large vs where number of threads could be small
     if constexpr (haveShiftForces)
     {
         for (int i = 0; i < gmx::c_numShiftVectors; ++i)
