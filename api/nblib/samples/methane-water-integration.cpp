@@ -199,7 +199,8 @@ int main()
 
         forceCalculator.compute(simulationState.coordinates(), simulationState.forces());
 
-        listedForceCalculator.compute(simulationState.coordinates(), simulationState.forces(), gmx::ArrayRef<real>{});
+        listedForceCalculator.compute(
+                simulationState.coordinates(), simulationState.forces(), gmx::ArrayRef<real>{});
 
         // Integrate with a time step of 1 fs, positions, velocities and forces
         integrator.integrate(
