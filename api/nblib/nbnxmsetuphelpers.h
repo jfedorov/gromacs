@@ -107,6 +107,7 @@ gmx::StepWorkload createStepWorkload();
 //! Create a SimulationWorkload object for use with createDeviceStreamManager
 gmx::SimulationWorkload createSimulationWorkloadGpu();
 
+//! Create a DeviceStreamManager; could be shared among multiple force calculators
 std::shared_ptr<gmx::DeviceStreamManager> createDeviceStreamManager(const DeviceInformation& deviceInfo,
                                                                     const gmx::SimulationWorkload& simulationWorkload);
 
