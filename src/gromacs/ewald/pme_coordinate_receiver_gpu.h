@@ -43,7 +43,6 @@
 #define GMX_PMECOORDINATERECEIVERGPU_H
 
 #include <memory>
-#include <tuple>
 
 #include "gromacs/gpu_utils/devicebuffer_datatype.h"
 #include "gromacs/math/vectypes.h"
@@ -59,6 +58,14 @@ namespace gmx
 
 template<typename>
 class ArrayRef;
+
+//! Helper object to coordinate pipelined spread kernel launches
+struct PipelinedSpreadManager
+{
+    int                 atomStart    = -1;
+    int                 atomEnd      = -1;
+    const DeviceStream* launchStream = nullptr;
+};
 
 class PmeCoordinateReceiverGpu
 {
@@ -106,40 +113,40 @@ public:
      */
     void launchReceiveCoordinatesFromPpCudaMpi(DeviceBuffer<RVec> recvbuf, int numAtoms, int numBytes, int ppRank);
 
-    /*! \brief
-     * Synchronize on coordinates received from the PP ranks before spreading
+    /*! \brief Prepare for spreading operations, which may be
+     * pipelined on the arrival of coordinates from multiple PP ranks.
      *
-     * If \c canPipelineReceives and multiple PP ranks will send coordinates,
-     * pipelining will be used.
-
-     * If so, wait for coordinates from any PP rank and prepare to
-     * launch a spread kernel in the pipeline stream corresponding to
-     * that rank. Otherwise, prepare to launch a spread kernel in the
-     * \c pmeStream.
+     * If \c canPipelineReceives and multiple PP ranks will send
+     * coordinates, pipelining will be used.
      *
-     * Only for thread MPI, enqueue the PP co-ordinate transfer event
-     * received from the PP rank (or ranks, when not pipelining) into
-     * the launch stream.
+     * Otherwise, prepare to launch a spread kernel in the \c
+     * pmeStream by waiting on the coordinate transfers. Only with
+     * thread MPI, enqueue the PP co-ordinate transfer event received
+     * from the PP rank or ranks into the launch stream.
      *
-     * \param[in] canPipelineReceives  Whether the spread invocation is consistent with pipelining
+     * \param[in] canPipelineReceives  Whether the spread invocation is
+     *                                 consistent with pipelining
      * \param[in] pmeStream            The stream in which PME operates
      *
-     * \return    A tuple of values:
-     *            * whether pipeline is in use
-     *            * the start of the atom range in this
-     *              pipeline chunk (or -1 if not in use)
-     *            * the end of the atom range in this
-     *              pipeline chunk (or -1 if not in use)
-     *            * the stream for this pipeline chunk
-     *              (or \c pmeStream when not in use)
-     *            * whether no further pipeline chunks
-     *              remain to be handled
-     */
-    std::tuple<bool, int, int, const DeviceStream*, bool>
-    synchronizeOnCoordinatesFromPpRank(bool canPipelineReceives, const DeviceStream* pmeStream);
+     * \return The number of spread kernels to launch, where > 1
+     * indicates pipelining is active, so the calling code can loop
+     * appropriately. */
+    int prepareForSpread(const bool canPipelineReceives, const DeviceStream& pmeStream);
 
-    /*! \brief Synchronize the PME stream with the streams used for
-     * pipelined spread-kernel chunks.
+    /*! \brief When using pipelined spread kernel launches, wait for
+     * the coordinates from a PP rank and prepare to launch a spread
+     * kernel in the stream corresponding to that rank.
+     *
+     * Only with thread MPI, enqueue the PP co-ordinate transfer event
+     * received from the PP rank or ranks into the launch stream.
+     *
+     * \return The atom range and GPU stream for this kernel launch.
+     */
+    PipelinedSpreadManager synchronizeOnCoordinatesFromAPpRank();
+
+    /*! \brief When using pipelined spread kernel launches,
+     * synchronize the PME stream with the streams used for pipelined
+     * spread-kernel chunks.
      *
      * \param[in] pmeStream  The stream in which PME operates
      */

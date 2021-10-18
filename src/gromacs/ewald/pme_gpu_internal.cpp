@@ -1392,37 +1392,32 @@ void pme_gpu_spread(const PmeGpu*                  pmeGpu,
     // pipelined fashion as coordinates arrive on the PME
     // rank. Otherwise, a single spread kernel handles the whole
     // coordinate range.
-    bool spreadIsComplete = false;
-    while (!spreadIsComplete)
+    //
+    // To find out which mode is being used, we let the
+    // pmeCoordinateReceiver know whether this spread stage can be
+    // pipelined. It will add its own conditions to those, and return
+    // the number of spread operations. Pipelining is active when
+    // that is greater than one.
+    const bool canPipelineReceives = computeSplines && spreadCharges && !writeGlobalOrSaveSplines;
+    const int  numSpreadKernels    = useGpuDirectComm ? pmeCoordinateReceiverGpu->prepareForSpread(
+                                         canPipelineReceives, pmeGpu->archSpecific->pmeStream_)
+                                                      : 1;
+    const DeviceStream* launchStream = &pmeGpu->archSpecific->pmeStream_;
+    for (int i = 0; i < numSpreadKernels; ++i)
     {
-        const DeviceStream* launchStream;
-        if (useGpuDirectComm)
+        if (numSpreadKernels > 1)
         {
-            // Let the pmeCoordinateReceiver know whether this spread
-            // stage can be pipelined. It will add its own conditions
-            // to those, and return the result in usePipeline, along
-            // with other matching parameters.
-            const bool canPipelineReceives = computeSplines && spreadCharges && !writeGlobalOrSaveSplines;
-            int        pipelineAtomStart, pipelineAtomEnd;
-            std::tie(kernelParamsPtr->usePipeline, pipelineAtomStart, pipelineAtomEnd, launchStream, spreadIsComplete) =
-                    pmeCoordinateReceiverGpu->synchronizeOnCoordinatesFromPpRank(
-                            canPipelineReceives, &pmeGpu->archSpecific->pmeStream_);
-            if (kernelParamsPtr->usePipeline)
-            {
-                // set kernel configuration options specific to this stage of the pipeline
-                kernelParamsPtr->pipelineAtomStart = pipelineAtomStart;
-                kernelParamsPtr->pipelineAtomEnd   = pipelineAtomEnd;
-                const int blockCount =
-                        int(std::ceil((kernelParamsPtr->pipelineAtomEnd - kernelParamsPtr->pipelineAtomStart)
-                                      / float(atomsPerBlock)));
-                std::tie(config.gridSize[0], config.gridSize[1]) = pmeGpuCreateGrid(pmeGpu, blockCount);
-            }
-        }
-        else
-        {
-            kernelParamsPtr->usePipeline = false;
-            launchStream                 = &pmeGpu->archSpecific->pmeStream_;
-            spreadIsComplete             = true;
+            const gmx::PipelinedSpreadManager manager =
+                    pmeCoordinateReceiverGpu->synchronizeOnCoordinatesFromAPpRank();
+            kernelParamsPtr->usePipeline = true;
+            // set kernel configuration options specific to this stage of the pipeline
+            kernelParamsPtr->pipelineAtomStart = manager.atomStart;
+            kernelParamsPtr->pipelineAtomEnd   = manager.atomEnd;
+            const int blockCount =
+                    int(std::ceil((kernelParamsPtr->pipelineAtomEnd - kernelParamsPtr->pipelineAtomStart)
+                                  / float(atomsPerBlock)));
+            std::tie(config.gridSize[0], config.gridSize[1]) = pmeGpuCreateGrid(pmeGpu, blockCount);
+            launchStream                                     = manager.launchStream;
         }
 
 #if c_canEmbedBuffers
@@ -1447,7 +1442,7 @@ void pme_gpu_spread(const PmeGpu*                  pmeGpu,
         launchGpuKernel(kernelPtr, config, *launchStream, timingEvent, "PME spline/spread", kernelArgs);
     }
 
-    if (kernelParamsPtr->usePipeline)
+    if (numSpreadKernels > 1)
     {
         // Set dependencies for PME stream on all pipeline streams
         pmeCoordinateReceiverGpu->addPipelineDependencies(pmeGpu->archSpecific->pmeStream_);

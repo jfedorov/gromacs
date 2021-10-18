@@ -151,69 +151,69 @@ static bool isValidRequest(const MPI_Request& r)
     return r != MPI_REQUEST_NULL;
 }
 
-std::tuple<bool, int, int, const DeviceStream*, bool>
-PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesFromPpRank(const bool canPipelineReceives,
-                                                                   const DeviceStream* pmeStream)
+int PmeCoordinateReceiverGpu::Impl::prepareForSpread(const bool          canPipelineReceives,
+                                                     const DeviceStream& pmeStream)
 {
-    const bool          usePipeline           = canPipelineReceives && ppCommManagers_.size() > 1;
-    const DeviceStream* launchStream          = pmeStream;
-    bool                noPipelineWorkRemains = true;
-
-#if GMX_MPI
+    const bool usePipeline = canPipelineReceives && ppCommManagers_.size() > 1;
     if (usePipeline)
     {
-        int senderRank = -1; // Rank of PP task that is associated with this invocation.
-#    if (!GMX_THREAD_MPI)
-        // Wait on data from any one of the PP sender GPUs
-        MPI_Waitany(requests_.size(), requests_.data(), &senderRank, MPI_STATUS_IGNORE);
-        GMX_ASSERT(senderRank >= 0, "Rank of sending PP task must be 0 or greater");
-        launchStream = ppCommManagers_[senderRank].stream.get();
-#    else
-        // MPI_Waitany is not available in thread-MPI. However, the
-        // MPI_Wait here is not associated with data but is host-side
-        // scheduling code to receive a CUDA event, and will be executed
-        // in advance of the actual data transfer. Therefore we can
-        // receive in order of pipeline stage, still allowing the
-        // scheduled GPU-direct comms to initiate out-of-order in their
-        // respective streams. For cases with CPU force computations, the
-        // scheduling is less asynchronous (done on a per-step basis), so
-        // host-side improvements should be investigated as tracked in
-        // issue #4047
-        auto foundRequest = std::find_if(requests_.begin(), requests_.end(), isValidRequest);
-        GMX_ASSERT(foundRequest != requests_.end(),
-                   "Must have an outstanding request for coordinates from a PP rank");
-        MPI_Wait(&*foundRequest, MPI_STATUS_IGNORE);
-        // Clear the completed request
-        *foundRequest = MPI_REQUEST_NULL;
-        // Prepare to launch the spread kernel in the stream of the
-        // rank whose coordinates have arrived, and synchronize
-        // appropriately.
-        senderRank   = std::distance(requests_.begin(), foundRequest);
-        launchStream = ppCommManagers_[senderRank].stream.get();
-        ppCommManagers_[senderRank].sync->enqueueWaitEvent(*launchStream);
-#    endif
-        noPipelineWorkRemains =
-                std::find_if(requests_.begin(), requests_.end(), isValidRequest) == requests_.end();
-        return std::make_tuple(usePipeline,
-                               std::get<0>(ppCommManagers_[senderRank].atomRange),
-                               std::get<1>(ppCommManagers_[senderRank].atomRange),
-                               launchStream,
-                               noPipelineWorkRemains);
+        const int numSpreadKernels = ppCommManagers_.size();
+        return numSpreadKernels;
     }
-    else
+    // Either we can't pipeline the receives, or there's only one of them
+#if GMX_MPI
+    MPI_Waitall(requests_.size(), requests_.data(), MPI_STATUSES_IGNORE);
+#endif
+#if GMX_THREAD_MPI
+    for (const auto& ppCommManager : ppCommManagers_)
     {
-        MPI_Waitall(requests_.size(), requests_.data(), MPI_STATUSES_IGNORE);
-#    if GMX_THREAD_MPI
-        for (const auto& ppCommManager : ppCommManagers_)
-        {
-            ppCommManager.sync->enqueueWaitEvent(*pmeStream);
-        }
-#    endif
-        return std::make_tuple(usePipeline, -1, -1, launchStream, noPipelineWorkRemains);
+        ppCommManager.sync->enqueueWaitEvent(pmeStream);
     }
 #else
-    return std::make_tuple(usePipeline, -1, -1, launchStream, noPipelineWorkRemains);
+    GMX_UNUSED_VALUE(pmeStream)
 #endif
+    return 1;
+}
+
+PipelinedSpreadManager PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesFromAPpRank()
+{
+    PipelinedSpreadManager manager;
+
+#if GMX_MPI
+    int senderRank = -1; // Rank of PP task that is associated with this invocation.
+#    if GMX_LIB_MPI
+    // Wait on data from any one of the PP sender GPUs
+    MPI_Waitany(requests_.size(), requests_.data(), &senderRank, MPI_STATUS_IGNORE);
+    GMX_ASSERT(senderRank >= 0, "Rank of sending PP task must be 0 or greater");
+    manager.launchStream = ppCommManagers_[senderRank].stream.get();
+#    else
+    // MPI_Waitany is not available in thread-MPI. However, the
+    // MPI_Wait here is not associated with data but is host-side
+    // scheduling code to receive a CUDA event, and will be executed
+    // in advance of the actual data transfer. Therefore we can
+    // receive in order of pipeline stage, still allowing the
+    // scheduled GPU-direct comms to initiate out-of-order in their
+    // respective streams. For cases with CPU force computations, the
+    // scheduling is less asynchronous (done on a per-step basis), so
+    // host-side improvements should be investigated as tracked in
+    // issue #4047
+    auto foundRequest = std::find_if(requests_.begin(), requests_.end(), isValidRequest);
+    GMX_ASSERT(foundRequest != requests_.end(),
+               "Must have an outstanding request for coordinates from a PP rank");
+    MPI_Wait(&*foundRequest, MPI_STATUS_IGNORE);
+    // Clear the completed request
+    *foundRequest = MPI_REQUEST_NULL;
+    // Prepare to launch the spread kernel in the stream of the
+    // rank whose coordinates have arrived, and synchronize
+    // appropriately.
+    senderRank           = std::distance(requests_.begin(), foundRequest);
+    manager.launchStream = ppCommManagers_[senderRank].stream.get();
+    ppCommManagers_[senderRank].sync->enqueueWaitEvent(*manager.launchStream);
+#    endif
+    manager.atomStart = std::get<0>(ppCommManagers_[senderRank].atomRange);
+    manager.atomEnd   = std::get<1>(ppCommManagers_[senderRank].atomRange);
+#endif
+    return manager;
 }
 
 void PmeCoordinateReceiverGpu::Impl::addPipelineDependencies(const DeviceStream& pmeStream)
@@ -253,11 +253,14 @@ void PmeCoordinateReceiverGpu::launchReceiveCoordinatesFromPpCudaMpi(DeviceBuffe
     impl_->launchReceiveCoordinatesFromPpCudaMpi(recvbuf, numAtoms, numBytes, ppRank);
 }
 
-std::tuple<bool, int, int, const DeviceStream*, bool>
-PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromPpRank(const bool canPipelineReceives,
-                                                             const DeviceStream* pmeStream)
+int PmeCoordinateReceiverGpu::prepareForSpread(const bool canPipelineReceives, const DeviceStream& pmeStream)
 {
-    return impl_->synchronizeOnCoordinatesFromPpRank(canPipelineReceives, pmeStream);
+    return impl_->prepareForSpread(canPipelineReceives, pmeStream);
+}
+
+PipelinedSpreadManager PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromAPpRank()
+{
+    return impl_->synchronizeOnCoordinatesFromAPpRank();
 }
 
 void PmeCoordinateReceiverGpu::addPipelineDependencies(const DeviceStream& pmeStream)
