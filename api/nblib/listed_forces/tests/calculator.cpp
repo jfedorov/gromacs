@@ -206,7 +206,6 @@ protected:
         interactions = data.interactions;
         box          = data.box;
         refForces    = data.forces;
-        // pbc.reset(new PbcHolder(*box));
 
         refEnergies = reduceListedForces(interactions, x, &refForces, NoPbc{});
     }
@@ -224,7 +223,6 @@ protected:
     std::vector<gmx::RVec> x;
     ListedInteractionData  interactions;
     std::shared_ptr<Box>   box;
-    // std::shared_ptr<PbcHolder> pbc;
 
 private:
     std::vector<gmx::RVec>            refForces;
@@ -237,7 +235,8 @@ TEST_F(LinearChainDataFixture, Multithreading)
 
     std::vector<Vec3>                 forces(x.size(), Vec3{ 0, 0, 0 });
     ListedForceCalculator::EnergyType energies;
-    lfCalculator.compute(x, forces, energies);
+    std::vector<real> energies2(energies.size());
+    lfCalculator.compute(x, forces, gmx::arrayRefFromArray(energies.begin(), energies.size()));
 
     testEnergies(energies);
     testForces(forces);

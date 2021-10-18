@@ -187,25 +187,26 @@ void ListedForceCalculator::computeForcesAndEnergies(gmx::ArrayRef<const Vec3> x
 void ListedForceCalculator::compute(gmx::ArrayRef<const Vec3> coordinates,
                                     gmx::ArrayRef<Vec3>       forces,
                                     gmx::ArrayRef<Vec3>       shiftForces,
-                                    EnergyType&               energies,
+                                    gmx::ArrayRef<real>       energies,
                                     bool                      usePbc)
 {
     computeForcesAndEnergies(coordinates, forces, shiftForces, usePbc);
-    energies = energyBuffer_;
+    if (!energies.empty())
+    {
+        std::copy(energyBuffer_.begin(), energyBuffer_.end(), energies.begin());
+    }
 }
 
 void ListedForceCalculator::compute(gmx::ArrayRef<const Vec3> coordinates,
                                     gmx::ArrayRef<Vec3>       forces,
-                                    EnergyType&               energies,
+                                    gmx::ArrayRef<real>       energies,
                                     bool                      usePbc)
 {
     computeForcesAndEnergies(coordinates, forces, gmx::ArrayRef<std::nullptr_t>{}, usePbc);
-    energies = energyBuffer_;
-}
-
-void ListedForceCalculator::compute(gmx::ArrayRef<const Vec3> coordinates, gmx::ArrayRef<Vec3> forces, bool usePbc)
-{
-    computeForcesAndEnergies(coordinates, forces, gmx::ArrayRef<std::nullptr_t>{}, usePbc);
+    if (!energies.empty())
+    {
+        std::copy(energyBuffer_.begin(), energyBuffer_.end(), energies.begin());
+    }
 }
 
 } // namespace nblib

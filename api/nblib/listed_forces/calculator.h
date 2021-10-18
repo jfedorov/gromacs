@@ -99,17 +99,14 @@ public:
     void compute(gmx::ArrayRef<const Vec3> coordinates,
                  gmx::ArrayRef<Vec3>       forces,
                  gmx::ArrayRef<Vec3>       shiftForces,
-                 EnergyType&               energies,
+                 gmx::ArrayRef<real>       energies,
                  bool                      usePbc = false);
 
     //! \brief Alternative overload without shift forces
     void compute(gmx::ArrayRef<const Vec3> coordinates,
                  gmx::ArrayRef<Vec3>       forces,
-                 EnergyType&               energies,
+                 gmx::ArrayRef<real>       energies,
                  bool                      usePbc = false);
-
-    //! \brief Alternative overload without the energies or shift forces
-    void compute(gmx::ArrayRef<const Vec3> coordinates, gmx::ArrayRef<Vec3> forces, bool usePbc = false);
 
     //! \brief default, but moved to separate compilation unit
     ~ListedForceCalculator();
