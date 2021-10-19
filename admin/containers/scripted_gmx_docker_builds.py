@@ -67,7 +67,7 @@ See Also:
 """
 
 import argparse
-import collections
+import collections.abc
 import typing
 from distutils.version import StrictVersion
 
@@ -111,31 +111,31 @@ _opencl_extra_packages = [
 ]
 
 _rocm_extra_packages = [
-        # The following require
-        #             apt_keys=['http://repo.radeon.com/rocm/rocm.gpg.key'],
-        #             apt_repositories=['deb [arch=amd64] http://repo.radeon.com/rocm/apt/4.0.1/ xenial main']
-        'libelf1',
-        'rocm-opencl',
-        'rocm-dev',
-        'clinfo',
-        'rocfft',
-        'hipfft',
+    # The following require
+    #             apt_keys=['http://repo.radeon.com/rocm/rocm.gpg.key'],
+    #             apt_repositories=['deb [arch=amd64] http://repo.radeon.com/rocm/apt/4.0.1/ xenial main']
+    'clinfo',
+    'hipfft',
+    'libelf1',
+    'rocfft',
+    'rocm-opencl',
+    'rocm-dev',
 ]
-                     
 
 # Extra packages needed to build Intel Compute Runtime
-_intel_compute_runtime_extra_packages = ['pkg-config',
-                                         'libxml2',
-                                         'libxml2-dev',
-                                         'libigc',
+_intel_compute_runtime_extra_packages = ['libigc',
                                          'libigc-dev',
                                          'libigdgmm11',
                                          'libigdgmm-dev',
+                                         'libxml2',
+                                         'libxml2-dev',
                                          'libze-loader',
                                          'libze-loader-dev',
                                          'ocl-icd-libopencl1',
                                          'ocl-icd-opencl-dev',
-                                         'opencl-headers']
+                                         'opencl-headers',
+                                         'pkg-config',
+                                         ]
 
 # Extra packages needed to build Python installations from source.
 _python_extra_packages = ['build-essential',
@@ -189,6 +189,7 @@ parser.add_argument('--format', type=str, default='docker',
 
 
 def base_image_tag(args) -> str:
+    """Generate *image* for hpccm.baseimage()."""
     # Check if we use CUDA images or plain linux images
     if args.cuda is not None:
         cuda_version_tag = 'nvidia/cuda:' + args.cuda + '-devel'
@@ -209,20 +210,26 @@ def base_image_tag(args) -> str:
             raise RuntimeError('Logic error: no Linux distribution selected.')
     return base_image_tag
 
-# Convert the linux distribution variables into something that hpccm
-# understands.
+
 def hpccm_distro_name(args) -> str:
+    """Generate *_distro* for hpccm.baseimage().
+
+    Convert the linux distribution variables into something that hpccm
+    understands.
+
+    The same format is used by the lower level hpccm.config.set_linux_distro().
+    """
     if args.centos is not None:
-        name_mapping = { '7': 'centos7',
-                         '8': 'centos8' }
+        name_mapping = {'7': 'centos7',
+                        '8': 'centos8'}
         if args.centos in name_mapping:
             hpccm_name = name_mapping[args.centos]
         else:
             raise RuntimeError('Logic error: unsupported CentOS distribution selected.')
     elif args.ubuntu is not None:
-        name_mapping = { '20.04': 'ubuntu20',
-                         '18.04': 'ubuntu18',
-                         '16.04': 'ubuntu16' }
+        name_mapping = {'20.04': 'ubuntu20',
+                        '18.04': 'ubuntu18',
+                        '16.04': 'ubuntu16'}
         if args.ubuntu in name_mapping:
             hpccm_name = name_mapping[args.ubuntu]
         else:
@@ -230,6 +237,7 @@ def hpccm_distro_name(args) -> str:
     else:
         raise RuntimeError('Logic error: no Linux distribution selected.')
     return hpccm_name
+
 
 def get_llvm_packages(args) -> typing.Iterable[str]:
     # If we use the package version of LLVM, we need to install extra packages for it.
@@ -246,17 +254,20 @@ def get_llvm_packages(args) -> typing.Iterable[str]:
     else:
         return []
 
-def get_opencl_packages(args) -> typing.Iterable[str]:
+
+def get_opencl_packages(args) -> typing.List[str]:
     if (args.doxygen is None) and (args.oneapi is None):
         return _opencl_extra_packages
     else:
         return []
 
-def get_rocm_packages(args) -> typing.Iterable[str]:
+
+def get_rocm_packages(args) -> typing.List[str]:
     if (args.rocm is None):
         return []
     else:
         return _rocm_extra_packages
+
 
 def get_compiler(args, compiler_build_stage: hpccm.Stage = None) -> bb_base:
     # Compiler
@@ -305,16 +316,19 @@ def get_gdrcopy(args, compiler):
     else:
         return None
 
+
 def get_ucx(args, compiler, gdrcopy):
     if args.cuda is not None:
         if hasattr(compiler, 'toolchain'):
             use_gdrcopy = (gdrcopy is not None)
             # Version last updated June 7, 2021
-            return hpccm.building_blocks.ucx(toolchain=compiler.toolchain, gdrcopy=use_gdrcopy, version="1.10.1", cuda=True)
+            return hpccm.building_blocks.ucx(toolchain=compiler.toolchain, gdrcopy=use_gdrcopy, version="1.10.1",
+                                             cuda=True)
         else:
             raise RuntimeError('compiler is not an HPCCM compiler building block!')
     else:
         return None
+
 
 def get_mpi(args, compiler, ucx):
     # If needed, add MPI to the image
@@ -326,7 +340,8 @@ def get_mpi(args, compiler, ucx):
                 use_cuda = (args.cuda is not None)
                 use_ucx = (ucx is not None)
                 # Version last updated June 7, 2021
-                return hpccm.building_blocks.openmpi(toolchain=compiler.toolchain, version="4.1.1", cuda=use_cuda, ucx=use_ucx, infiniband=False)
+                return hpccm.building_blocks.openmpi(toolchain=compiler.toolchain, version="4.1.1", cuda=use_cuda,
+                                                     ucx=use_ucx, infiniband=False)
             else:
                 raise RuntimeError('compiler is not an HPCCM compiler building block!')
 
@@ -352,18 +367,20 @@ def get_clfft(args):
     else:
         return None
 
+
 def get_heffte(args):
     if (args.heffte is not None):
         return hpccm.building_blocks.generic_cmake(
             cmake_opts=['-D CMAKE_BUILD_TYPE=Release',
-                                    '-D CUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda',
-                                    '-D Heffte_ENABLE_CUDA=ON',
-                                    '-D Heffte_ENABLE_FFTW=OFF',
-                                    '-D BUILD_SHARED_LIBS=ON'],
+                        '-D CUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda',
+                        '-D Heffte_ENABLE_CUDA=ON',
+                        '-D Heffte_ENABLE_FFTW=OFF',
+                        '-D BUILD_SHARED_LIBS=ON'],
             repository='https://bitbucket.org/icl/heffte.git',
             prefix='/usr/local', recursive=True, commit=args.heffte, directory='heffte')
     else:
         return None
+
 
 def get_hipsycl(args):
     if args.hipsycl is None:
@@ -382,16 +399,16 @@ def get_hipsycl(args):
                        '-DWITH_CUDA_BACKEND=ON']
 
     postinstall = [
-            # https://github.com/illuhad/hipSYCL/issues/361#issuecomment-718943645
-            'for f in /opt/rocm/amdgcn/bitcode/*.bc; do ln -s "$f" "/opt/rocm/lib/$(basename $f .bc).amdgcn.bc"; done'
-            ]
+        # https://github.com/illuhad/hipSYCL/issues/361#issuecomment-718943645
+        'for f in /opt/rocm/amdgcn/bitcode/*.bc; do ln -s "$f" "/opt/rocm/lib/$(basename $f .bc).amdgcn.bc"; done'
+    ]
     if args.cuda is not None:
         postinstall += [
             # https://github.com/illuhad/hipSYCL/issues/410#issuecomment-743301929
             f'sed s/_OPENMP/__OPENMP_NVPTX__/ -i /usr/lib/llvm-{args.llvm}/lib/clang/*/include/__clang_cuda_complex_builtins.h',
             # Not needed unless we're building with CUDA 11.x, but no harm in doing always
             f'ln -s /usr/local/cuda/compat/* /usr/local/cuda/lib64/'
-            ]
+        ]
 
     return hpccm.building_blocks.generic_cmake(
         repository='https://github.com/illuhad/hipSYCL.git',
@@ -399,6 +416,7 @@ def get_hipsycl(args):
         prefix='/usr/local', recursive=True, commit=args.hipsycl,
         cmake_opts=['-DCMAKE_BUILD_TYPE=Release', *cmake_opts],
         postinstall=postinstall)
+
 
 def get_intel_compute_runtime(args):
     # The only reason we need to build Compute Runtime ourselves is because Intel packages have no DG1 support
@@ -417,6 +435,7 @@ def get_intel_compute_runtime(args):
         prefix='/usr/local', recursive=True, branch=args.intel_compute_runtime,
         cmake_opts=cmake_opts,
         postinstall=['ldconfig'])
+
 
 def add_tsan_compiler_build_stage(input_args, output_stages: typing.Mapping[str, hpccm.Stage]):
     """Isolate the expensive TSAN preparation stage.
@@ -441,15 +460,19 @@ def add_tsan_compiler_build_stage(input_args, output_stages: typing.Mapping[str,
         repository='https://github.com/llvm/llvm-project.git',
         directory='/var/tmp/llvm-project/llvm/',
         prefix='/usr/local', recursive=True, branch=compiler_branch,
-        cmake_opts=['-D CMAKE_BUILD_TYPE=Release', '-D LLVM_ENABLE_PROJECTS="clang;openmp;clang-tools-extra;compiler-rt;lld"',
+        cmake_opts=['-D CMAKE_BUILD_TYPE=Release',
+                    '-D LLVM_ENABLE_PROJECTS="clang;openmp;clang-tools-extra;compiler-rt;lld"',
                     '-D LIBOMP_TSAN_SUPPORT=on'],
         postinstall=['ln -s /usr/local/bin/clang++ /usr/local/bin/clang++-' + str(input_args.llvm),
                      'ln -s /usr/local/bin/clang-format /usr/local/bin/clang-format-' + str(input_args.llvm),
                      'ln -s /usr/local/bin/clang-tidy /usr/local/bin/clang-tidy-' + str(input_args.llvm),
-                     'ln -s /usr/local/share/clang/run-clang-tidy.py /usr/local/bin/run-clang-tidy-' + str(input_args.llvm) + '.py',
-                     'ln -s /usr/local/bin/run-clang-tidy-' + str(input_args.llvm) + '.py /usr/local/bin/run-clang-tidy-' + str(input_args.llvm),
+                     'ln -s /usr/local/share/clang/run-clang-tidy.py /usr/local/bin/run-clang-tidy-' + str(
+                         input_args.llvm) + '.py',
+                     'ln -s /usr/local/bin/run-clang-tidy-' + str(
+                         input_args.llvm) + '.py /usr/local/bin/run-clang-tidy-' + str(input_args.llvm),
                      'ln -s /usr/local/libexec/c++-analyzer /usr/local/bin/c++-analyzer-' + str(input_args.llvm)])
     output_stages['compiler_build'] = tsan_stage
+
 
 def oneapi_runtime(_from='0'):
     oneapi_runtime_stage = hpccm.Stage()
@@ -457,6 +480,7 @@ def oneapi_runtime(_from='0'):
                                                   files={"/opt/intel": "/opt/intel",
                                                          "/etc/bash.bashrc": "/etc/bash.bashrc"})
     return oneapi_runtime_stage
+
 
 def add_oneapi_compiler_build_stage(input_args, output_stages: typing.Mapping[str, hpccm.Stage]):
     """Isolate the oneAPI preparation stage.
@@ -479,19 +503,20 @@ def add_oneapi_compiler_build_stage(input_args, output_stages: typing.Mapping[st
         apt_repositories=['deb https://apt.repos.intel.com/oneapi all main'],
         # Add minimal packages (not the whole HPC toolkit!)
         ospackages=[f'intel-oneapi-dpcpp-cpp-{version}',
-            f'intel-oneapi-openmp-{version}',
-            f'intel-oneapi-mkl-{version}',
-            f'intel-oneapi-mkl-devel-{version}']
+                    f'intel-oneapi-openmp-{version}',
+                    f'intel-oneapi-mkl-{version}',
+                    f'intel-oneapi-mkl-devel-{version}']
     )
     # Ensure that all bash shells on the final container will have access to oneAPI
     oneapi_stage += hpccm.primitives.shell(
-            commands=['echo "source /opt/intel/oneapi/setvars.sh" >> /etc/bash.bashrc',
-                      'unlink /opt/intel/oneapi/compiler/latest',
-                     f'ln -sf /opt/intel/oneapi/compiler/{version} /opt/intel/oneapi/compiler/latest']
-            )
+        commands=['echo "source /opt/intel/oneapi/setvars.sh" >> /etc/bash.bashrc',
+                  'unlink /opt/intel/oneapi/compiler/latest',
+                  f'ln -sf /opt/intel/oneapi/compiler/{version} /opt/intel/oneapi/compiler/latest']
+    )
     setattr(oneapi_stage, 'runtime', oneapi_runtime)
 
     output_stages['compiler_build'] = oneapi_stage
+
 
 def prepare_venv(version: StrictVersion) -> typing.Sequence[str]:
     """Get shell commands to set up the venv for the requested Python version."""
@@ -613,9 +638,11 @@ def add_documentation_dependencies(input_args,
     if input_args.doxygen is None:
         return
     # Always clone the same version of linkchecker (latest release at June 1, 2021)
-    output_stages['main'] += hpccm.building_blocks.pip(pip='pip3', packages=['git+https://github.com/linkchecker/linkchecker.git@v10.0.1'])
+    output_stages['main'] += hpccm.building_blocks.pip(pip='pip3', packages=[
+        'git+https://github.com/linkchecker/linkchecker.git@v10.0.1'])
     output_stages['main'] += hpccm.primitives.shell(
-        commands=['sed -i \'/\"XPS\"/d;/\"PDF\"/d;/\"PS\"/d;/\"EPS\"/d;/disable ghostscript format types/d\' /etc/ImageMagick-6/policy.xml'])
+        commands=[
+            'sed -i \'/\"XPS\"/d;/\"PDF\"/d;/\"PS\"/d;/\"EPS\"/d;/disable ghostscript format types/d\' /etc/ImageMagick-6/policy.xml'])
     if input_args.doxygen == '1.8.5':
         doxygen_commit = 'ed4ed873ab0e7f15116e2052119a6729d4589f7a'
         output_stages['main'] += hpccm.building_blocks.generic_autotools(
@@ -720,7 +747,7 @@ def build_stages(args) -> typing.Iterable[hpccm.Stage]:
         )
         building_blocks['cuda-clang-workaround'] = hpccm.primitives.shell(commands=[
             f'echo "CUDA Version {cuda_version_str}" > /usr/local/cuda/version.txt'
-            ])
+        ])
 
     building_blocks['clfft'] = get_clfft(args)
 
