@@ -316,7 +316,7 @@ std::unique_ptr<nonbonded_verlet_t> createNbnxmGPU(const size_t               nu
                                                    const NBKernelOptions&     options,
                                                    const std::vector<real>&   nonbondedParameters,
                                                    const interaction_const_t& interactionConst,
-                                                   std::shared_ptr<gmx::DeviceStreamManager> deviceStreamManager)
+                                                   const gmx::DeviceStreamManager& deviceStreamManager)
 {
     const auto pinPolicy       = gmx::PinningPolicy::PinnedIfSupported;
     const int  combinationRule = static_cast<int>(options.ljCombinationRule);
@@ -340,7 +340,7 @@ std::unique_ptr<nonbonded_verlet_t> createNbnxmGPU(const size_t               nu
                                                        numThreadsInit);
 
     NbnxmGpu* nbnxmGpu = Nbnxm::gpu_init(
-            *deviceStreamManager, &interactionConst, pairlistParams, atomData.get(), false);
+            deviceStreamManager, &interactionConst, pairlistParams, atomData.get(), false);
 
     // minimum iList count for GPU balancing
     int iListCount = Nbnxm::gpu_min_ci_balanced(nbnxmGpu);

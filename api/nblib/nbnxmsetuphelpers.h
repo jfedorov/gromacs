@@ -128,7 +128,7 @@ std::unique_ptr<nonbonded_verlet_t> createNbnxmGPU(size_t                     nu
                                                    const NBKernelOptions&     options,
                                                    const std::vector<real>&   nonbondedParameters,
                                                    const interaction_const_t& interactionConst,
-                                                   std::shared_ptr<gmx::DeviceStreamManager> deviceStreamManager);
+                                                   const gmx::DeviceStreamManager& deviceStreamManager);
 
 //! Set number of OpenMP threads in the GROMACS backend
 void setGmxNonBondedNThreads(int numThreads);

@@ -229,7 +229,7 @@ TEST(NbnxmSetupTest, CanCreateNbnxmGPU)
         // set DeviceInformation and create the DeviceStreamManager
         auto deviceStreamManager = createDeviceStreamManager(deviceInfo, simulationWork);
         EXPECT_NO_THROW(createNbnxmGPU(
-                numParticles, nbKernelOptions, nonbondedParameters, interactionConst, deviceStreamManager));
+                numParticles, nbKernelOptions, nonbondedParameters, interactionConst, *deviceStreamManager));
     }
 }
 
