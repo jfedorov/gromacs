@@ -79,8 +79,6 @@ variables = [
 
 sys.path.append(gmx_containers_path)
 sys.path.append(gmx_sphinx_extension_path)
-if releng_path and os.path.isdir(releng_path):
-    sys.path.append(releng_path)
 if gmxapi_staging_path and os.path.isdir(gmxapi_staging_path):
     sys.path.append(gmxapi_staging_path)
 
@@ -288,13 +286,13 @@ html_static_path = ['_static']
 #html_additional_pages = {}
 
 # If false, no module index is generated.
-#html_domain_indices = True
+html_domain_indices = True
 
 # If false, no index is generated.
-#html_use_index = True
+html_use_index = True
 
 # If true, the index is split into individual pages for each letter.
-#html_split_index = False
+html_split_index = True
 
 # If true, links to the reST sources are added to the pages.
 #html_show_sourcelink = True
@@ -356,7 +354,7 @@ latex_elements = {
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
   ('index', 'gromacs.tex', u'GROMACS Documentation',
-   u'GROMACS development team', 'manual'),
+   u'GROMACS development team', 'manual', False),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
