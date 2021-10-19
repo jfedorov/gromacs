@@ -447,8 +447,12 @@ def add_tsan_compiler_build_stage(input_args, output_stages: typing.Mapping[str,
     """
     if not isinstance(output_stages, collections.abc.MutableMapping):
         raise RuntimeError('Need output_stages container.')
+    if 'compiler_build' in output_stages:
+        raise RuntimeError('"compiler_build" output stage is already present.')
     tsan_stage = hpccm.Stage()
-    tsan_stage += hpccm.primitives.baseimage(image=base_image_tag(input_args), _as='tsan')
+    tsan_stage += hpccm.primitives.baseimage(image=base_image_tag(input_args),
+                                             _distro=hpccm_distro_name(input_args),
+                                             _as='tsan')
 
     tsan_stage += hpccm.building_blocks.packages(ospackages=['git', 'ca-certificates', 'build-essential', 'cmake'])
     # CMake will get duplicated later, but this is an expensive image, and it isn't worth optimizing
@@ -491,8 +495,12 @@ def add_oneapi_compiler_build_stage(input_args, output_stages: typing.Mapping[st
     """
     if not isinstance(output_stages, collections.abc.MutableMapping):
         raise RuntimeError('Need output_stages container.')
+    if 'compiler_build' in output_stages:
+        raise RuntimeError('"compiler_build" output stage is already present.')
     oneapi_stage = hpccm.Stage()
-    oneapi_stage += hpccm.primitives.baseimage(image=base_image_tag(input_args), _as='oneapi-build')
+    oneapi_stage += hpccm.primitives.baseimage(image=base_image_tag(input_args),
+                                               _distro=hpccm_distro_name(input_args),
+                                               _as='oneapi-build')
 
     version = str(input_args.oneapi)
 
@@ -577,7 +585,9 @@ def add_python_stages(building_blocks: typing.Mapping[str, bb_base],
     # copy is a bit slow and wastes local Docker image space for each filesystem
     # layer.
     pyenv_stage = hpccm.Stage()
-    pyenv_stage += hpccm.primitives.baseimage(image=base_image_tag(input_args), _as='pyenv')
+    pyenv_stage += hpccm.primitives.baseimage(image=base_image_tag(input_args),
+                                              _distro=hpccm_distro_name(input_args),
+                                              _as='pyenv')
     pyenv_stage += building_blocks['compiler']
     if building_blocks['gdrcopy'] is not None:
         pyenv_stage += building_blocks['gdrcopy']
@@ -589,7 +599,9 @@ def add_python_stages(building_blocks: typing.Mapping[str, bb_base],
     for version in [StrictVersion(py_ver) for py_ver in sorted(input_args.venvs)]:
         stage_name = 'py' + str(version)
         stage = hpccm.Stage()
-        stage += hpccm.primitives.baseimage(image=base_image_tag(input_args), _as=stage_name)
+        stage += hpccm.primitives.baseimage(image=base_image_tag(input_args),
+                                            _distro=hpccm_distro_name(input_args),
+                                            _as=stage_name)
         stage += building_blocks['compiler']
         if building_blocks['gdrcopy'] is not None:
             stage += building_blocks['gdrcopy']
@@ -698,11 +710,6 @@ def build_stages(args) -> typing.Iterable[hpccm.Stage]:
     building_blocks = collections.OrderedDict()
     building_blocks['base_packages'] = hpccm.building_blocks.packages(
         ospackages=_common_packages)
-
-    # Normally in hpccm the first call to baseimage sets the context
-    # for other packages, e.g. for which apt respository to
-    # use. We want to set that early on.
-    hpccm.config.set_linux_distro(hpccm_distro_name(args))
 
     # These are the most expensive and most reusable layers, so we put them first.
     building_blocks['compiler'] = get_compiler(args, compiler_build_stage=stages.get('compiler_build'))
