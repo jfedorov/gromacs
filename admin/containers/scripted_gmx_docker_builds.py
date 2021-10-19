@@ -67,6 +67,7 @@ See Also:
 """
 
 import argparse
+import collections
 import collections.abc
 import typing
 from distutils.version import StrictVersion
@@ -391,11 +392,11 @@ def get_hipsycl(args):
     if args.rocm is None:
         raise RuntimeError('hipSYCL requires the rocm packages')
 
-    cmake_opts = [f'-DLLVM_DIR=/opt/rocm/llvm/lib/cmake/llvm',
+    cmake_opts = ['-DLLVM_DIR=/opt/rocm/llvm/lib/cmake/llvm',
                   '-DCMAKE_PREFIX_PATH=/opt/rocm/lib/cmake',
                   '-DWITH_ROCM_BACKEND=ON']
     if args.cuda is not None:
-        cmake_opts += [f'-DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda',
+        cmake_opts += ['-DCUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda',
                        '-DWITH_CUDA_BACKEND=ON']
 
     postinstall = [
@@ -407,7 +408,7 @@ def get_hipsycl(args):
             # https://github.com/illuhad/hipSYCL/issues/410#issuecomment-743301929
             f'sed s/_OPENMP/__OPENMP_NVPTX__/ -i /usr/lib/llvm-{args.llvm}/lib/clang/*/include/__clang_cuda_complex_builtins.h',
             # Not needed unless we're building with CUDA 11.x, but no harm in doing always
-            f'ln -s /usr/local/cuda/compat/* /usr/local/cuda/lib64/'
+            'ln -s /usr/local/cuda/compat/* /usr/local/cuda/lib64/'
         ]
 
     return hpccm.building_blocks.generic_cmake(
@@ -470,10 +471,10 @@ def add_tsan_compiler_build_stage(input_args, output_stages: typing.Mapping[str,
         postinstall=['ln -s /usr/local/bin/clang++ /usr/local/bin/clang++-' + str(input_args.llvm),
                      'ln -s /usr/local/bin/clang-format /usr/local/bin/clang-format-' + str(input_args.llvm),
                      'ln -s /usr/local/bin/clang-tidy /usr/local/bin/clang-tidy-' + str(input_args.llvm),
-                     'ln -s /usr/local/share/clang/run-clang-tidy.py /usr/local/bin/run-clang-tidy-' + str(
-                         input_args.llvm) + '.py',
-                     'ln -s /usr/local/bin/run-clang-tidy-' + str(
-                         input_args.llvm) + '.py /usr/local/bin/run-clang-tidy-' + str(input_args.llvm),
+                     'ln -s /usr/local/share/clang/run-clang-tidy.py /usr/local/bin/run-clang-tidy-'
+                     + str(input_args.llvm) + '.py',
+                     'ln -s /usr/local/bin/run-clang-tidy-'
+                     + str(input_args.llvm) + '.py /usr/local/bin/run-clang-tidy-' + str(input_args.llvm),
                      'ln -s /usr/local/libexec/c++-analyzer /usr/local/bin/c++-analyzer-' + str(input_args.llvm)])
     output_stages['compiler_build'] = tsan_stage
 
