@@ -81,13 +81,13 @@ const char* codePathToString(CodePath codePath);
 //! A safe pointer type for PME.
 typedef gmx::unique_cptr<gmx_pme_t, gmx_pme_destroy> PmeSafePointer;
 //! Charges
-typedef ArrayRef<const real> ChargesVector;
+typedef std::vector<real> ChargesVector;
 //! Coordinates
 typedef std::vector<RVec> CoordinatesVector;
 //! Forces
 typedef ArrayRef<RVec> ForcesVector;
 //! Gridline indices
-typedef ArrayRef<const IVec> GridLineIndicesVector;
+typedef std::vector<IVec> GridLineIndicesVector;
 /*! \brief Spline parameters (theta or dtheta).
  * A reference to a single dimension's spline data; this means (atomCount * pmeOrder) values or derivatives.
  */
@@ -245,6 +245,12 @@ struct PmeTestHardwareContext
 };
 
 std::vector<std::unique_ptr<PmeTestHardwareContext>> createPmeTestHardwareContextList();
+
+//! A couple of valid inputs for boxes.
+extern const std::map<std::string, Matrix3x3> c_inputBoxes;
+
+//! Valid PME orders for testing
+extern std::vector<int> c_inputPmeOrders;
 
 } // namespace test
 } // namespace gmx
