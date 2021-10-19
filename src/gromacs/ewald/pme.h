@@ -300,6 +300,17 @@ bool pme_gpu_supports_hardware(const gmx_hw_info_t& hwinfo, std::string* error);
  */
 bool pme_gpu_supports_input(const t_inputrec& ir, std::string* error);
 
+/*! \brief Checks whether the input system allows to run PME on GPU in Mixed mode.
+ * Assumes that the input system is compatible with GPU PME otherwise, that is,
+ * before calling this function one should check that \ref pme_gpu_supports_input returns \c true.
+ *
+ * \param[in]  ir     Input system.
+ * \param[out] error  If non-null, the error message if the input is not supported.
+ *
+ * \returns true if PME can run on GPU in Mixed mode with this input, false otherwise.
+ */
+bool pme_gpu_mixed_mode_supports_input(const t_inputrec& ir, std::string* error);
+
 /*! \brief
  * Returns the active PME codepath (CPU, GPU, mixed).
  * \todo This is a rather static data that should be managed by the higher level task scheduler.
@@ -390,7 +401,7 @@ GPU_FUNC_QUALIFIER void pme_gpu_launch_spread(
         GpuEventSynchronizer*          GPU_FUNC_ARGUMENT(xReadyOnDevice),
         gmx_wallcycle*                 GPU_FUNC_ARGUMENT(wcycle),
         real                           GPU_FUNC_ARGUMENT(lambdaQ),
-        const bool                     GPU_FUNC_ARGUMENT(useGpuDirectComm),
+        bool                           GPU_FUNC_ARGUMENT(useGpuDirectComm),
         gmx::PmeCoordinateReceiverGpu* GPU_FUNC_ARGUMENT(pmeCoordinateReceiverGpu)) GPU_FUNC_TERM;
 
 /*! \brief
