@@ -126,8 +126,8 @@ parser.add_argument('--hipsycl', type=str, nargs='?', default=None,
 parser.add_argument('--rocm', type=str, nargs='?', const='debian', default=None,
                     help='Select AMD compute engine version.')
 
-parser.add_argument('--intel-compute-runtime', type=str, nargs='?', default=None,
-                    help='Select Intel Compute Runtime version.')
+parser.add_argument('--intel-compute-runtime', type=str, nargs='?', default='latest',
+                    help='Include Intel Compute Runtime.')
 
 parser.add_argument('--clfft', type=str, nargs='?', const='master', default=None,
                     help='Add external clFFT libraries to the build image')
@@ -176,7 +176,7 @@ def image_name(configuration: argparse.Namespace) -> str:
     if configuration.oneapi is not None:
         elements.append('oneapi-' + configuration.oneapi)
     if configuration.intel_compute_runtime is not None:
-        elements.append('intel-' + configuration.intel_compute_runtime)
+        elements.append('intel-compute-runtime')
     if configuration.rocm is not None:
         if (configuration.rocm != 'debian'):
             elements.append('rocm-' + configuration.rocm)
