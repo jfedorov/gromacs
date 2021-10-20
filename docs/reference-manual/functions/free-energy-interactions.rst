@@ -229,7 +229,8 @@ energies and forces involved at :math:`{\lambda}` values between 0 and
 
 In |Gromacs| the soft-core potentials :math:`V_{sc}` are shifted versions
 of the regular potentials, so that the singularity in the potential and
-its derivatives at :math:`r=0` is never reached:
+its derivatives at :math:`r=0` is never reached. This formulation was
+introduced by Beutler *et al.*\ :ref:`100 <refBeutler94>`:
 
 .. math:: \begin{aligned}
           V_{sc}(r) &=& {(1-{\lambda})}V^A(r_A) + {\lambda}V^B(r_B)
@@ -247,7 +248,10 @@ soft-core parameter (set with ``sc_alpha`` in the
 power (set with ``sc_power``), :math:`\sigma` is the radius
 of the interaction, which is :math:`(C_{12}/C_6)^{1/6}` or an input
 parameter (``sc_sigma``) when :math:`C_6` or :math:`C_{12}`
-is zero.
+is zero. Beutler *et al.*\ :ref:`100 <refBeutler94>` probed various
+combinations of the :math:`r` power values for the Lennard-Jones
+and Coulombic interactions. GROMACS uses :math:`r^6` for both,
+van der Waals and electrostatic interactions.
 
 For intermediate :math:`{\lambda}`, :math:`r_A` and :math:`r_B` alter
 the interactions very little for :math:`r > \alpha^{1/6} \sigma` and
