@@ -62,13 +62,25 @@ gmx_add_gtest_executable(
         molecules.cpp
         nbnxmsetup.cpp
         topology.cpp
-        tpr.cpp
         virials.cpp
     )
 target_link_libraries(${exename} PRIVATE mdrun_test_infrastructure)
 target_link_libraries(${exename} PRIVATE nblib_test_infrastructure nblib)
 target_include_directories(${exename} PRIVATE ${PROJECT_SOURCE_DIR}/api)
 gmx_register_gtest_test(${testname} ${exename} INTEGRATION_TEST)
+add_dependencies(nblib-tests ${exename})
+
+set(exename "nblib-tpr-test")
+
+gmx_add_unit_test(
+        NbLibTprTests
+        ${exename}
+        CPP_SOURCE_FILES
+        # files with code for tests
+        tpr.cpp
+)
+target_link_libraries(${exename} PRIVATE mdrun_test_infrastructure)
+target_link_libraries(${exename} PRIVATE nblib_test_infrastructure nblib)
 add_dependencies(nblib-tests ${exename})
 
 set(testname "NbLibIntegrationTests")
