@@ -43,6 +43,7 @@
 #define GMX_PMECOORDINATERECEIVERGPU_H
 
 #include <memory>
+#include <utility>
 
 #include "gromacs/gpu_utils/devicebuffer_datatype.h"
 #include "gromacs/math/vectypes.h"
@@ -131,18 +132,22 @@ public:
      * \return The number of spread kernels to launch, where > 1
      * indicates pipelining is active, so the calling code can loop
      * appropriately. */
-    int prepareForSpread(bool canPipelineReceives, const DeviceStream& pmeStream);
+    std::pair<int, int> prepareForSpread(bool canPipelineReceives, const DeviceStream& pmeStream);
 
     /*! \brief When using pipelined spread kernel launches, wait for
      * the coordinates from a PP rank and prepare to launch a spread
      * kernel in the stream corresponding to that rank.
      *
-     * Only with thread MPI, enqueue the PP co-ordinate transfer event
-     * received from the PP rank or ranks into the launch stream.
+     * With library MPI, ignore the \c senderRank and wait on any
+     * incoming communication.
+     *
+     * With thread MPI, wait on the PP rank described by \c senderRank
+     * and then enqueue the PP co-ordinate transfer event received
+     * from that rank into the launch stream.
      *
      * \return The atom range and GPU stream for this kernel launch.
      */
-    PipelinedSpreadManager synchronizeOnCoordinatesFromAPpRank();
+    PipelinedSpreadManager synchronizeOnCoordinatesFromAPpRank(int senderRank);
 
     /*! \brief When using pipelined spread kernel launches,
      * synchronize the PME stream with the streams used for pipelined

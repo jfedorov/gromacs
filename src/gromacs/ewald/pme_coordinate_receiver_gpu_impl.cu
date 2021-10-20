@@ -47,9 +47,6 @@
 
 #include "config.h"
 
-#include <algorithm>
-#include <iterator>
-
 #include "gromacs/ewald/pme_force_sender_gpu.h"
 #include "gromacs/ewald/pme_pp_communication.h"
 #include "gromacs/gpu_utils/cudautils.cuh"
@@ -145,14 +142,13 @@ void PmeCoordinateReceiverGpu::Impl::launchReceiveCoordinatesFromPpCudaMpi(Devic
 #endif
 }
 
-int PmeCoordinateReceiverGpu::Impl::prepareForSpread(const bool          canPipelineReceives,
-                                                     const DeviceStream& pmeStream)
+std::pair<int,int> PmeCoordinateReceiverGpu::Impl::prepareForSpread(const bool          canPipelineReceives,
+                                                                    const DeviceStream& pmeStream)
 {
     const bool usePipeline = canPipelineReceives && ppCommManagers_.size() > 1;
     if (usePipeline)
     {
-        const int numSpreadKernels = ppCommManagers_.size();
-        return numSpreadKernels;
+        return {0, ppCommManagers_.size()};
     }
     // Either we can't pipeline the receives, or there's only one of them
 #if GMX_MPI
@@ -166,15 +162,17 @@ int PmeCoordinateReceiverGpu::Impl::prepareForSpread(const bool          canPipe
 #else
     GMX_UNUSED_VALUE(pmeStream);
 #endif
-    return 1;
+    return {0, 1};
 }
 
-PipelinedSpreadManager PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesFromAPpRank()
+PipelinedSpreadManager PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesFromAPpRank(int senderRank)
 {
     PipelinedSpreadManager manager;
 
+    GMX_ASSERT(ppCommManagers_.size() > 1, "Multiple PP ranks are required for pipelining");
 #if GMX_MPI
-    int senderRank = -1; // Rank of PP task that is associated with this invocation.
+    // Ignore the rank passed in
+    senderRank = -1; // Rank of PP task that is associated with this invocation.
 #    if GMX_LIB_MPI
     // Wait on data from any one of the PP sender GPUs
     MPI_Waitany(requests_.size(), requests_.data(), &senderRank, MPI_STATUS_IGNORE);
@@ -191,18 +189,10 @@ PipelinedSpreadManager PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesF
     // scheduling is less asynchronous (done on a per-step basis), so
     // host-side improvements should be investigated as tracked in
     // issue #4047
-    auto foundRequest = std::find_if(requests_.begin(), requests_.end(), [](const MPI_Request& r) {
-        return r != MPI_REQUEST_NULL;
-    });
-    GMX_ASSERT(foundRequest != requests_.end(),
-               "Must have an outstanding request for coordinates from a PP rank");
-    MPI_Wait(&*foundRequest, MPI_STATUS_IGNORE);
-    // Clear the completed request
-    *foundRequest = MPI_REQUEST_NULL;
+    MPI_Wait(&requests_[senderRank], MPI_STATUS_IGNORE);
     // Prepare to launch the spread kernel in the stream of the
     // rank whose coordinates have arrived, and synchronize
     // appropriately.
-    senderRank           = std::distance(requests_.begin(), foundRequest);
     manager.launchStream = ppCommManagers_[senderRank].stream.get();
     ppCommManagers_[senderRank].sync->enqueueWaitEvent(*manager.launchStream);
 #    endif
@@ -214,6 +204,7 @@ PipelinedSpreadManager PmeCoordinateReceiverGpu::Impl::synchronizeOnCoordinatesF
 
 void PmeCoordinateReceiverGpu::Impl::addPipelineDependencies(const DeviceStream& pmeStream)
 {
+    GMX_ASSERT(ppCommManagers_.size() > 1, "Multiple PP ranks are required for pipelining");
     for (const auto& ppCommManager : ppCommManagers_)
     {
         GpuEventSynchronizer event;
@@ -249,14 +240,14 @@ void PmeCoordinateReceiverGpu::launchReceiveCoordinatesFromPpCudaMpi(DeviceBuffe
     impl_->launchReceiveCoordinatesFromPpCudaMpi(recvbuf, numAtoms, numBytes, ppRank);
 }
 
-int PmeCoordinateReceiverGpu::prepareForSpread(const bool canPipelineReceives, const DeviceStream& pmeStream)
+std::pair<int,int> PmeCoordinateReceiverGpu::prepareForSpread(const bool canPipelineReceives, const DeviceStream& pmeStream)
 {
     return impl_->prepareForSpread(canPipelineReceives, pmeStream);
 }
 
-PipelinedSpreadManager PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromAPpRank()
+PipelinedSpreadManager PmeCoordinateReceiverGpu::synchronizeOnCoordinatesFromAPpRank(int senderRank)
 {
-    return impl_->synchronizeOnCoordinatesFromAPpRank();
+    return impl_->synchronizeOnCoordinatesFromAPpRank(senderRank);
 }
 
 void PmeCoordinateReceiverGpu::addPipelineDependencies(const DeviceStream& pmeStream)
