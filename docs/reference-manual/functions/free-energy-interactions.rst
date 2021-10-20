@@ -310,24 +310,6 @@ simultaneously, a soft-core potential is used, and a hydrogen is being
 introduced or deleted, the sigma is set to ``sc-sigma-min``,
 which itself defaults to ``sc-sigma-default``.
 
-Recently, a new formulation of the soft-core approach has been derived
-that in most cases gives lower and more even statistical variance than
-the standard soft-core path described above \ :ref:`101 <refPham2011>`,
-:ref:`102 <refPham2012>`. Specifically, we have:
-
-.. math:: \begin{aligned}
-          V_{sc}(r) &=& {(1-{\lambda})}V^A(r_A) + {\lambda}V^B(r_B)
-              \\
-          r_A &=& \left(\alpha \sigma_A^{48} {\lambda}^p + r^{48} \right)^\frac{1}{48}
-              \\
-          r_B &=& \left(\alpha \sigma_B^{48} {(1-{\lambda})}^p + r^{48} \right)^\frac{1}{48}\end{aligned}
-          :label: eqnnewsoftcore
-
-This “1-1-48” path is also implemented in |Gromacs|. Note that for this
-path the soft core :math:`\alpha` should satisfy
-:math:`0.001 < \alpha < 0.003`, rather than :math:`\alpha \approx
-0.5`.
-
 
 Soft-core interactions: Gapsys *et al.*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
