@@ -95,10 +95,10 @@ typedef std::tuple<std::string, IVec, std::string, double, double, double, PmeSo
 
 const char* enumValueToString(PmeSolveAlgorithm enumValue)
 {
-    static constexpr gmx::EnumerationArray<PmeSolveAlgorithm, const char*> pmeSolveAlgorithmNames = {
+    static constexpr gmx::EnumerationArray<PmeSolveAlgorithm, const char*> s_pmeSolveAlgorithmNames = {
         "Coulomb", "LJ"
     };
-    return pmeSolveAlgorithmNames[enumValue];
+    return s_pmeSolveAlgorithmNames[enumValue];
 }
 
 //! Help GoogleTest name our test cases

@@ -71,7 +71,8 @@ enum class SplineAndSpreadOptions
 {
     SplineOnly,
     SpreadOnly,
-    SplineAndSpreadUnified
+    SplineAndSpreadUnified,
+    Count
 };
 
 struct TestSystem
@@ -151,6 +152,16 @@ std::string nameOfTest(const testing::TestParamInfo<SplineAndSpreadInputParamete
     return testName;
 }
 
+const char* enumValueToString(SplineAndSpreadOptions enumValue)
+{
+    static constexpr gmx::EnumerationArray<SplineAndSpreadOptions, const char*> s_splineAndSpreadOptionsNames = {
+        "spline computation",
+        "charge spreading",
+        "spline computation and charge spreading (fused)",
+    };
+    return s_splineAndSpreadOptionsNames[enumValue];
+}
+
 /*! \brief Test fixture for testing both atom spline parameter computation and charge spreading.
  * These 2 stages of PME are tightly coupled in the code.
  */
@@ -194,13 +205,6 @@ public:
         inputRec.coulombtype = CoulombInteractionType::Pme;
         inputRec.epsilon_r   = 1.0;
 
-        const std::map<SplineAndSpreadOptions, std::string> optionsToTest = {
-            { SplineAndSpreadOptions::SplineAndSpreadUnified,
-              "spline computation and charge spreading (fused)" },
-            { SplineAndSpreadOptions::SplineOnly, "spline computation" },
-            { SplineAndSpreadOptions::SpreadOnly, "charge spreading" }
-        };
-
         // There is a subtle problem with multiple comparisons against same reference data:
         // The subsequent (GPU) spreading runs at one point didn't actually copy the output grid
         // into the proper buffer, but the reference data was already marked as checked
@@ -226,14 +230,14 @@ public:
                 continue;
             }
 
-            for (const auto& option : optionsToTest)
+            for (SplineAndSpreadOptions option : EnumerationWrapper<SplineAndSpreadOptions>())
             {
                 /* Describing the test uniquely in case it fails */
 
                 SCOPED_TRACE(
                         formatString("Testing %s on %s for PME grid size %d %d %d"
                                      ", order %d, %zu atoms",
-                                     option.second.c_str(),
+                                     enumValueToString(option),
                                      pmeTestHardwareContext->description().c_str(),
                                      gridSize[XX],
                                      gridSize[YY],
@@ -258,12 +262,10 @@ public:
 
                 pmeInitAtoms(pmeSafe.get(), stateGpu.get(), codePath, coordinates, charges);
 
-                const bool computeSplines =
-                        (option.first == SplineAndSpreadOptions::SplineOnly)
-                        || (option.first == SplineAndSpreadOptions::SplineAndSpreadUnified);
-                const bool spreadCharges =
-                        (option.first == SplineAndSpreadOptions::SpreadOnly)
-                        || (option.first == SplineAndSpreadOptions::SplineAndSpreadUnified);
+                const bool computeSplines = (option == SplineAndSpreadOptions::SplineOnly)
+                                            || (option == SplineAndSpreadOptions::SplineAndSpreadUnified);
+                const bool spreadCharges = (option == SplineAndSpreadOptions::SpreadOnly)
+                                           || (option == SplineAndSpreadOptions::SplineAndSpreadUnified);
 
                 if (!computeSplines)
                 {
