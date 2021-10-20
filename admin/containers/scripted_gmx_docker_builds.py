@@ -701,7 +701,7 @@ def build_stages(args) -> typing.Iterable[hpccm.Stage]:
     if args.hipsycl is not None:
         os_packages += ['libboost-fiber-dev']
     building_blocks['extra_packages'] = []
-    if args.intel_compute_runtime is not None:
+    if args.intel_compute_runtime:
         building_blocks['extra_packages'] += hpccm.building_blocks.packages(
             apt_keys=['https://repositories.intel.com/graphics/intel-graphics.key'],
             apt_repositories=[f'deb [arch=amd64] https://repositories.intel.com/graphics/ubuntu focal main']

@@ -126,7 +126,7 @@ parser.add_argument('--hipsycl', type=str, nargs='?', default=None,
 parser.add_argument('--rocm', type=str, nargs='?', const='debian', default=None,
                     help='Select AMD compute engine version.')
 
-parser.add_argument('--intel-compute-runtime', type=str, nargs='?', default='latest',
+parser.add_argument('--intel-compute-runtime', action='store_true', default=False,
                     help='Include Intel Compute Runtime.')
 
 parser.add_argument('--clfft', type=str, nargs='?', const='master', default=None,
@@ -175,7 +175,7 @@ def image_name(configuration: argparse.Namespace) -> str:
             elements.append(gpusdk + '-' + version)
     if configuration.oneapi is not None:
         elements.append('oneapi-' + configuration.oneapi)
-    if configuration.intel_compute_runtime is not None:
+    if configuration.intel_compute_runtime:
         elements.append('intel-compute-runtime')
     if configuration.rocm is not None:
         if (configuration.rocm != 'debian'):
