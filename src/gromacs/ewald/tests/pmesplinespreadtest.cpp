@@ -37,6 +37,7 @@
  * Implements PME spline computation and charge spreading tests.
  *
  * \author Aleksei Iupinov <a.yupinov@gmail.com>
+ * \author Mark Abraham <mark.j.abraham@gmail.com>
  * \ingroup module_ewald
  */
 
@@ -83,11 +84,8 @@ const std::unordered_map<std::string, TestSystem> c_testSystems = {
     { "1 atom", { CoordinatesVector{ { 5.59F, 1.37F, 0.95F } }, ChargesVector{ 4.95F } } },
     { "2 atoms",
       { CoordinatesVector{
-                {
-                        16.0F,
-                        1.02F,
-                        0.22F // 2 box lengths in x
-                },
+                // 2 box lengths in x
+                { 16.0F, 1.02F, 0.22F },
                 { 0.034F, 1.65F, 0.22F },
         },
         ChargesVector{ {
@@ -99,39 +97,23 @@ const std::unordered_map<std::string, TestSystem> c_testSystems = {
                 { 0.33F, 0.92F, 1.56F },
                 { 1.16F, 0.75F, 0.39F },
                 { 0.5F, 1.63F, 1.14F },
-                {
-                        16.0001F,
-                        1.52F,
-                        1.19F // > 2 box lengths in x
-                },
-                {
-                        1.43F,
-                        1.1F,
-                        4.1F // > 2 box lengths in z
-                },
-                {
-                        -1.08F,
-                        1.19F,
-                        0.08F // negative x
-                },
+                // > 2 box lengths in x
+                { 16.0001F, 1.52F, 1.19F },
+                // > 2 box lengths in z
+                { 1.43F, 1.1F, 4.1F },
+                // negative x
+                { -1.08F, 1.19F, 0.08F },
                 { 1.6F, 0.93F, 0.53F },
-                {
-                        1.32F,
-                        -1.48F,
-                        0.16F // negative y
-                },
+                // negative y
+                { 1.32F, -1.48F, 0.16F },
                 { 0.87F, 0.0F, 0.33F },
-                {
-                        0.95F,
-                        7.7F,
-                        -0.48F // > 2 box lengths in y, negative z
-                },
+                // > 2 box lengths in y, negative z
+                { 0.95F, 7.7F, -0.48F },
                 { 1.23F, 0.91F, 0.68F },
                 { 0.19F, 1.45F, 0.94F },
                 { 1.28F, 0.46F, 0.38F },
-                { 1.21F, 0.23F, 1.0F },
         },
-        ChargesVector{ 1.08F, 2.09F, 1.1F, 4.13F, 3.31F, 2.8F, 5.83F, 5.09F, 6.1F, 2.86F, 0.24F, 5.76F, 5.19F, 0.72F } } },
+        ChargesVector{ 1.08F, 2.09F, 1.1F, 4.13F, 3.31F, 2.8F, 5.83F, 5.09F, 6.1F, 2.86F, 0.24F, 5.76F, 5.19F } } },
 };
 
 /* Valid input instances */

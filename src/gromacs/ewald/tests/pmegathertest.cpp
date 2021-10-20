@@ -37,6 +37,7 @@
  * Implements PME force gathering tests.
  *
  * \author Aleksei Iupinov <a.yupinov@gmail.com>
+ * \author Mark Abraham <mark.j.abraham@gmail.com>
  * \ingroup module_ewald
  */
 
