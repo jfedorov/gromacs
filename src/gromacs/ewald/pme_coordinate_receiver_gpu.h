@@ -129,9 +129,9 @@ public:
      *                                 consistent with pipelining
      * \param[in] pmeStream            The stream in which PME operates
      *
-     * \return The number of spread kernels to launch, where > 1
-     * indicates pipelining is active, so the calling code can loop
-     * appropriately. */
+     * \return A [begin,end) range of indices for the pipeline chunks
+     * (where the size of the range being > 1 indicates pipelining is
+     * active), so the calling code can loop appropriately. */
     std::pair<int, int> prepareForSpread(bool canPipelineReceives, const DeviceStream& pmeStream);
 
     /*! \brief When using pipelined spread kernel launches, wait for
