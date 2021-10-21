@@ -907,6 +907,7 @@ int Mdrunner::mdrunner()
                     hw_opt.nthreads_tmpi);
             useGpuForPme = decideWhetherToUseGpusForPmeWithThreadMpi(useGpuForNonbonded,
                                                                      pmeTarget,
+                                                                     pmeFftTarget,
                                                                      numAvailableDevices,
                                                                      userGpuTaskAssignment,
                                                                      *hwinfo_,
@@ -937,7 +938,7 @@ int Mdrunner::mdrunner()
         // master and spawned threads joins at the end of this block.
     }
 
-    GMX_RELEASE_ASSERT(ms || simulationCommunicator != MPI_COMM_NULL,
+    GMX_RELEASE_ASSERT(!GMX_MPI || ms || simulationCommunicator != MPI_COMM_NULL,
                        "Must have valid communicator unless running a multi-simulation");
     CommrecHandle crHandle = init_commrec(simulationCommunicator);
     t_commrec*    cr       = crHandle.get();
@@ -1012,6 +1013,7 @@ int Mdrunner::mdrunner()
                 gpusWereDetected);
         useGpuForPme    = decideWhetherToUseGpusForPme(useGpuForNonbonded,
                                                     pmeTarget,
+                                                    pmeFftTarget,
                                                     userGpuTaskAssignment,
                                                     *hwinfo_,
                                                     *inputrec,

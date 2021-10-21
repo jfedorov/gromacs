@@ -209,7 +209,13 @@ gmx_option_multichoice(
     "AUTO"
     AUTO None SSE2 SSE4.1 AVX_128_FMA AVX_256 AVX2_256 AVX2_128 AVX_512 AVX_512_KNL ARM_NEON_ASIMD ARM_SVE IBM_VSX Reference)
 
-set(GMX_FFT_LIBRARY_DEFAULT "fftw3")
+include(gmxTestIntelLLVM)
+
+if (GMX_INTEL_LLVM)
+    set(GMX_FFT_LIBRARY_DEFAULT "mkl")
+else()
+    set(GMX_FFT_LIBRARY_DEFAULT "fftw3")
+endif()
 
 gmx_option_multichoice(
     GMX_FFT_LIBRARY
@@ -295,7 +301,6 @@ include(gmxManageOpenMP)
 # These need to be done early (before further tests).
 #####################################################################
 
-include(gmxTestIntelLLVM)
 include(gmxCFlags)
 gmx_c_flags()
 
@@ -561,6 +566,18 @@ include(gmxManageLmfit)
 
 include(gmxManageMuparser)
 
+##################################################
+# Process SIMD instruction settings
+##################################################
+# This checks what flags to add in order to
+# support the SIMD instructions we need, it sets
+# correct defines for the SIMD instructions supported,
+# and adds advanced options to control accuracy
+# for SIMD math operations.
+include(gmxManageSimd)
+gmx_manage_simd()
+
+
 if(GMX_GPU)
 
     string(TOUPPER "${GMX_GPU}" _gmx_gpu_uppercase)
@@ -687,18 +704,6 @@ if(NOT GMX_SYSTEM_XDR OR CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(GMX_INTERNAL_XDR 1)
 endif()
 
-
-##################################################
-# Process SIMD instruction settings
-##################################################
-# This checks what flags to add in order to
-# support the SIMD instructions we need, it sets
-# correct defines for the SIMD instructions supported,
-# and adds advanced options to control accuracy
-# for SIMD math operations.
-include(gmxManageSimd)
-gmx_manage_simd()
-
 ##################################################
 # Process FFT library settings
 ##################################################
@@ -823,9 +828,9 @@ if (BUILD_TESTING)
     include(tests/CheckTarget.cmake)
 endif()
 
-# TODO: Determine control flow and defaults for package installation and testing use cases.
-# Ref: https://gitlab.com/gromacs/gromacs/-/issues/2896
-option(GMX_PYTHON_PACKAGE "Configure gmxapi Python package" OFF)
+option(GMX_PYTHON_PACKAGE
+       "Configure gmxapi Python package for use in build tree. Requires pybind11 installed for project Python interpreter."
+       OFF)
 mark_as_advanced(GMX_PYTHON_PACKAGE)
 
 find_package(ImageMagick QUIET COMPONENTS convert)
