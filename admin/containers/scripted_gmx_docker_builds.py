@@ -701,13 +701,6 @@ def build_stages(args) -> typing.Iterable[hpccm.Stage]:
     # copied to any build stage with the addition operator.
     building_blocks = collections.OrderedDict()
 
-    # Normally in hpccm the first call to baseimage sets the context
-    # for other packages, e.g. which distro version to use. We want to
-    # set that early on, so that hpccm can do the right thing to use
-    # the right llvm apt repo when we want to use versions of llvm
-    # that were never supported by the main apt repo.
-    hpccm.config.set_linux_distro(hpccm_distro_name(args))
-
     for i, cmake in enumerate(args.cmake):
         building_blocks['cmake' + str(i)] = hpccm.building_blocks.cmake(
             eula=True,
@@ -761,7 +754,7 @@ def build_stages(args) -> typing.Iterable[hpccm.Stage]:
     # Add Python environments to MPI images, only, so we don't have to worry
     # about whether to install mpi4py.
     if args.mpi is not None and len(args.venvs) > 0:
-        add_python_stages(building_blocks=building_blocks, input_args=args, output_stages=stages)
+        add_python_stages(base='build_base', input_args=args, output_stages=stages)
 
     # Create the stage from which the targeted image will be tagged.
     stages['main'] = hpccm.Stage()
@@ -806,6 +799,12 @@ if __name__ == '__main__':
 
     # Set container specification output format
     hpccm.config.set_container_format(args.format)
+    # Normally in hpccm the first call to baseimage sets the context
+    # for other packages, e.g. which distro version to use. We want to
+    # set that early on, so that hpccm can do the right thing to use
+    # the right llvm apt repo when we want to use versions of llvm
+    # that were never supported by the main apt repo.
+    hpccm.config.set_linux_distro(hpccm_distro_name(args))
 
     container_recipe = build_stages(args)
 
