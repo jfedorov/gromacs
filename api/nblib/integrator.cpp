@@ -60,12 +60,9 @@ LeapFrog::LeapFrog(const Topology& topology, const Box& box) : box_(box)
     }
 }
 
-LeapFrog::LeapFrog(gmx::ArrayRef<const real> inverseMasses, const Box& box) : box_(box)
+LeapFrog::LeapFrog(gmx::ArrayRef<const real> inverseMasses, const Box& box) :
+    inverseMasses_(inverseMasses.begin(), inverseMasses.end()), box_(box)
 {
-    for (const auto invMass : inverseMasses)
-    {
-        inverseMasses_.push_back(invMass);
-    }
 }
 
 void LeapFrog::integrate(const real dt, gmx::ArrayRef<Vec3> x, gmx::ArrayRef<Vec3> v, gmx::ArrayRef<const Vec3> f)
