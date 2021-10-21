@@ -313,7 +313,8 @@ DeviceBuffer<RVec> StatePropagatorDataGpu::Impl::getCoordinates()
 }
 
 void StatePropagatorDataGpu::Impl::copyCoordinatesToGpu(const gmx::ArrayRef<const gmx::RVec> h_x,
-                                                        AtomLocality atomLocality)
+                                                        AtomLocality atomLocality,
+                                                        bool         markEvent)
 {
     GMX_ASSERT(atomLocality < AtomLocality::All,
                formatString("Wrong atom locality. Only Local and NonLocal are allowed for "
@@ -334,7 +335,7 @@ void StatePropagatorDataGpu::Impl::copyCoordinatesToGpu(const gmx::ArrayRef<cons
     //   - it's not needed, copy is done in the same stream as the only consumer task (PME)
     //   - we don't consume the events in OpenCL which is not allowed by GpuEventSynchronizer (would leak memory).
     // TODO: remove this by adding an event-mark free flavor of this function
-    if (GMX_GPU_CUDA)
+    if (markEvent && !GMX_GPU_OPENCL)
     {
         xReadyOnDevice_[atomLocality].markEvent(*deviceStream);
     }
@@ -664,9 +665,10 @@ DeviceBuffer<RVec> StatePropagatorDataGpu::getCoordinates()
 }
 
 void StatePropagatorDataGpu::copyCoordinatesToGpu(const gmx::ArrayRef<const gmx::RVec> h_x,
-                                                  AtomLocality                         atomLocality)
+                                                  AtomLocality                         atomLocality,
+                                                  bool                                 markEvent)
 {
-    return impl_->copyCoordinatesToGpu(h_x, atomLocality);
+    return impl_->copyCoordinatesToGpu(h_x, atomLocality, markEvent);
 }
 
 GpuEventSynchronizer*

@@ -159,8 +159,9 @@ public:
      *
      *  \param[in] h_x           Positions in the host memory.
      *  \param[in] atomLocality  Locality of the particles to copy.
+     *  \param[in] markEvent     Shall we mark an event for later use with \ref getCoordinatesReadyOnDeviceEvent?
      */
-    void copyCoordinatesToGpu(gmx::ArrayRef<const gmx::RVec> h_x, AtomLocality atomLocality);
+    void copyCoordinatesToGpu(gmx::ArrayRef<const gmx::RVec> h_x, AtomLocality atomLocality, bool markEvent);
 
     /*! \brief Get the event synchronizer of the coordinates ready for the consumption on the device.
      *
