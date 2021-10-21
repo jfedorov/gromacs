@@ -39,12 +39,12 @@ if(GMX_CP2K)
     set(CP2K_LINKER_FLAGS "" CACHE STRING "List of flags and libraries required for linking libcp2k. Typically this should be combination of LDFLAGS and LIBS variables from ARCH file used to compile CP2K")
 
     # Check is CP2K_DIR present (this flags is required)
-    if (CP2K_DIR STREQUAL "")
+    if (NOT CP2K_DIR)
         message(FATAL_ERROR "To build GROMACS with CP2K Interface CP2K_DIR should be defined")
     endif()
 
     # if CP2K_LINKER_FLAGS defined then it should be used for linking instead pkg-config
-    if (NOT (CP2K_LINKER_FLAGS STREQUAL ""))
+    if (CP2K_LINKER_FLAGS)
         message(STATUS "CP2K_LINKER_FLAGS will be used to link libcp2k")
 
         # Add directory with libcp2k.h into system include directories
@@ -65,7 +65,7 @@ if(GMX_CP2K)
         endif()
 
         # Append PKG_CONFIG_PATH_PATH with ${CP2K_DIR}/pkgconfig which should contain libcp2k.pc
-        set(ENV{PKG_CONFIG_PATH} "ENV{PKG_CONFIG_PATH}:${CP2K_DIR}/pkgconfig")
+        set(ENV{PKG_CONFIG_PATH} "$ENV{PKG_CONFIG_PATH}:${CP2K_DIR}/pkgconfig")
  
         # Search for libcp2k
         pkg_check_modules(LIBCP2K QUIET libcp2k)
