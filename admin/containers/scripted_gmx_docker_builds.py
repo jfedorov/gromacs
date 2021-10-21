@@ -272,10 +272,10 @@ def get_compiler(args, compiler_build_stage: hpccm.Stage = None) -> bb_base:
                 raise RuntimeError('No TSAN compiler build stage!')
         # Build the default compiler if we don't need special support
         else:
-            # Currently the focal apt repositories do not contain
-            # llvm higher than 11, so we work around that. This will
-            # need further work when we start supporting ubuntu 22.04
-            compiler = hpccm.building_blocks.llvm(version=args.llvm, upstream=True if int(args.llvm) > 11 else False)
+            # Always use the "upstream" llvm repositories because the
+            # main ubuntu repositories stop adding support for new
+            # llvm versions after a few llvm releases.
+            compiler = hpccm.building_blocks.llvm(version=args.llvm, upstream=True)
 
     elif args.oneapi is not None:
         if compiler_build_stage is not None:
@@ -700,6 +700,13 @@ def build_stages(args) -> typing.Iterable[hpccm.Stage]:
     # Building blocks are chunks of container-builder instructions that can be
     # copied to any build stage with the addition operator.
     building_blocks = collections.OrderedDict()
+
+    # Normally in hpccm the first call to baseimage sets the context
+    # for other packages, e.g. which distro version to use. We want to
+    # set that early on, so that hpccm can do the right thing to use
+    # the right llvm apt repo when we want to use versions of llvm
+    # that were never supported by the main apt repo.
+    hpccm.config.set_linux_distro(hpccm_distro_name(args))
 
     for i, cmake in enumerate(args.cmake):
         building_blocks['cmake' + str(i)] = hpccm.building_blocks.cmake(
