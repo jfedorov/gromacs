@@ -1531,7 +1531,10 @@ void do_force(FILE*                               fplog,
         if (stepWork.useGpuXBufferOps)
         {
             GMX_ASSERT(stateGpu, "stateGpu should be valid when buffer ops are offloaded");
-            nbv->convertCoordinatesGpu(AtomLocality::Local, stateGpu->getCoordinates(), localXReadyOnDevice);
+            // Conversion is launched in the Local stream, so no need to wait for localXReadyOnDevice
+            // Waiting by itself is not that bad, but it overconsumes the event (Issue #3988).
+            GpuEventSynchronizer* dependencyEvent = nullptr;
+            nbv->convertCoordinatesGpu(AtomLocality::Local, stateGpu->getCoordinates(), dependencyEvent);
         }
         else
         {
