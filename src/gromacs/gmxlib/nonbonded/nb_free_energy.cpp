@@ -401,8 +401,8 @@ static void nb_free_energy_kernel(const t_nblist&                               
     const RealType            maxRInvSix(c_maxRInvSix);
     const RealType gmx_unused floatMin(GMX_FLOAT_MIN);
 
-    RealType dvdlCoul(zero);
-    RealType dvdlVdw(zero);
+    RealType dvdlCoul{zero};
+    RealType dvdlVdw{zero};
 
     /* Lambda factor for state A, 1-lambda*/
     real LFC[NSTATES], LFV[NSTATES];
@@ -621,10 +621,10 @@ static void nb_free_energy_kernel(const t_nblist&                               
                     preloadGapsysScaleLinpointVdW[s]  = 0;
                     preloadGapsysScaleLinpointCoul[s] = 0;
 
+                    typeIndices[STATE_A][s] = ntiA + typeA[jjnr[k]];
+                    typeIndices[STATE_B][s] = ntiB + typeB[jjnr[k]];
                     for (int i = 0; i < NSTATES; i++)
                     {
-                        typeIndices[STATE_A][s]      = ntiA + typeA[jjnr[k]];
-                        typeIndices[STATE_B][s]      = ntiB + typeB[jjnr[k]];
                         preloadLjPmeC6Grid[i][s]     = 0;
                         preloadQq[i][s]              = 0;
                         preloadSigma6[i][s]          = 0;
