@@ -1707,6 +1707,8 @@ void gmx::LegacySimulator::do_md()
                     // TODO: The special case of removing CM motion should be dealt more gracefully
                     if (useGpuForUpdate)
                     {
+                        // Issue #3988, #4106.
+                        stateGpu->resetCoordinatesCopiedToDeviceEvent(AtomLocality::Local);
                         stateGpu->copyCoordinatesToGpu(state->x, AtomLocality::Local);
                         // Here we block until the H2D copy completes because event sync with the
                         // force kernels that use the coordinates on the next steps is not implemented
@@ -1831,7 +1833,6 @@ void gmx::LegacySimulator::do_md()
                                                  md->tmass,
                                                  enerd,
                                                  ir->fepvals.get(),
-                                                 ir->expandedvals.get(),
                                                  lastbox,
                                                  PTCouplingArrays{ state->boxv,
                                                                    state->nosehoover_xi,
