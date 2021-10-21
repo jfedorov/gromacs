@@ -46,6 +46,7 @@
 #include "gromacs/mdtypes/inputrec.h"
 #include "gromacs/mdtypes/state.h"
 #include "gromacs/utility/futil.h"
+#include "gromacs/utility/stringutil.h"
 #include "gromacs/utility/textreader.h"
 #include "gromacs/utility/textwriter.h"
 #include "gromacs/topology/topology.h"
@@ -56,20 +57,56 @@
 #include "testutils/testfilemanager.h"
 #include "testutils/textblockmatchers.h"
 
+namespace gmx
+{
 namespace
 {
 
 using gmx::test::CommandLine;
 using gmx::test::TestFileManager;
 
-class GromppDirectiveTest : public ::testing::Test
+class GromppTest : public ::testing::Test
 {
 public:
-    GromppDirectiveTest() = default;
+    GromppTest() = default;
+
+    /*! \brief Run grompp from command line based on a set of inputs
+     *
+     * \param mdpContent The content of an MDP file as string
+     * \param tprFileName
+     * \param structureFile The .gro
+     * \param topologyFile The topology file name
+     *
+     * \return the exit code from the grompp command
+     * */
+    int runGrompp(const std::string mdpContent,
+                  const std::string tprFileName       = "directives.tpr",
+                  const std::string structureFileName = "directives.gro",
+                  const std::string topologyFileName  = "directives.top")
+    {
+        CommandLine cmdline;
+        cmdline.addOption("grompp");
+
+        const std::string mdpInputFileName = fileManager_.getTemporaryFilePath("input_grompp.mdp");
+        gmx::TextWriter::writeFileFromString(mdpInputFileName, mdpContent);
+        cmdline.addOption("-f", mdpInputFileName);
+
+
+        cmdline.addOption("-c", TestFileManager::getInputFilePath(structureFileName));
+        cmdline.addOption("-p", TestFileManager::getInputFilePath(topologyFileName));
+
+        std::string outTprFilename = fileManager_.getTemporaryFilePath(tprFileName);
+        cmdline.addOption("-o", outTprFilename);
+        return gmx_grompp(cmdline.argc(), cmdline.argv());
+    }
 
 protected:
     gmx::test::TestFileManager fileManager_;
-    std::string                mdpContentString_ =
+};
+
+TEST_F(GromppTest, DirectiveEdgeCaseAtomTypeNames)
+{
+    std::string mdpContentString_ =
             "title                   = Directive edge case test \n"
             "integrator              = md \n"
             "nsteps                  = 1 \n"
@@ -80,39 +117,53 @@ protected:
             "pcoupl                  = no \n"
             "pbc                     = xyz \n"
             "gen_vel                 = yes \n";
-};
+    std::string tprFileName = "directives.tpr";
+    int         exitCode    = runGrompp(mdpContentString_, tprFileName);
 
-TEST_F(GromppDirectiveTest, edgeCaseAtomTypeNames)
-{
-    CommandLine cmdline;
-    cmdline.addOption("grompp");
-
-    const std::string mdpInputFileName = fileManager_.getTemporaryFilePath("directives.mdp");
-    gmx::TextWriter::writeFileFromString(mdpInputFileName, mdpContentString_);
-    cmdline.addOption("-f", mdpInputFileName);
+    ASSERT_EQ(0, exitCode);
 
 
-    cmdline.addOption("-c", TestFileManager::getInputFilePath("directives.gro"));
-    cmdline.addOption("-p", TestFileManager::getInputFilePath("directives.top"));
+    std::string outTprFilename = fileManager_.getTemporaryFilePath(tprFileName);
+    gmx_mtop_t  top_after;
+    t_inputrec  ir_after;
+    t_state     state;
+    read_tpx_state(outTprFilename.c_str(), &ir_after, &state, &top_after);
 
-    std::string outTprFilename = fileManager_.getTemporaryFilePath("directives.tpr");
-    cmdline.addOption("-o", outTprFilename);
-
-    ASSERT_EQ(0, gmx_grompp(cmdline.argc(), cmdline.argv()));
-
-    {
-        gmx_mtop_t top_after;
-        t_inputrec ir_after;
-        t_state    state;
-        read_tpx_state(outTprFilename.c_str(), &ir_after, &state, &top_after);
-
-        // Check atomic numbers (or lack thereof coded as -1)
-        ASSERT_EQ(top_after.atomtypes.nr, 4);
-        EXPECT_EQ(top_after.atomtypes.atomnumber[0], -1);
-        EXPECT_EQ(top_after.atomtypes.atomnumber[1], 6);
-        EXPECT_EQ(top_after.atomtypes.atomnumber[2], 7);
-        EXPECT_EQ(top_after.atomtypes.atomnumber[3], -1);
-    }
+    // Check atomic numbers (or lack thereof coded as -1)
+    ASSERT_EQ(top_after.atomtypes.nr, 4);
+    EXPECT_EQ(top_after.atomtypes.atomnumber[0], -1);
+    EXPECT_EQ(top_after.atomtypes.atomnumber[1], 6);
+    EXPECT_EQ(top_after.atomtypes.atomnumber[2], 7);
+    EXPECT_EQ(top_after.atomtypes.atomnumber[3], -1);
 }
 
+#if HAVE_MUPARSER
+
+TEST_F(GromppTest, ValidTransformationCoord)
+{
+    const char* inputMdpFile[] = {
+        "pull = yes",
+        "pull-ncoords = 1",
+        "pull-group1-name = System",
+        "pull-coord1-geometry = transformation",
+        "pull-coord1-expression = 10",
+    };
+    ASSERT_EQ(0, runGrompp(joinStrings(inputMdpFile, "\n")));
+}
+
+TEST_F(GromppTest, InvalidTransformationCoord)
+{
+    const char* inputMdpFile[] = {
+        "pull = yes",
+        "pull-ncoords = 1",
+        "pull-group1-name = System",
+        "pull-coord1-geometry = transformation",
+        "pull-coord1-expression = x1", // invalid expression -> grompp should fail
+    };
+    ASSERT_NE(0, runGrompp(joinStrings(inputMdpFile, "\n")));
+}
+#endif // HAVE_MUPARSER
+
+
 } // namespace
+} // namespace gmx
