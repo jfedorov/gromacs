@@ -1723,7 +1723,7 @@ static void lincs_thread_setup(Lincs* li, int natoms)
             GMX_CATCH_ALL_AND_EXIT_WITH_FATAL_ERROR
         }
 
-        /* We need to copy all constraints which have not be assigned
+        /* We need to copy all constraints which have not been assigned
          * to a thread to a separate list which will be handled by one thread.
          */
         Task* li_m = &li->task[li->ntask];
