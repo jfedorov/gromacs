@@ -141,7 +141,8 @@ void StatePropagatorDataGpu::setXUpdatedOnDeviceEvent(GpuEventSynchronizer* /* x
 }
 
 void StatePropagatorDataGpu::copyCoordinatesToGpu(const gmx::ArrayRef<const gmx::RVec> /* h_x */,
-                                                  AtomLocality /* atomLocality */)
+                                                  AtomLocality /* atomLocality */,
+                                                  bool /* markEvent */)
 {
     GMX_ASSERT(!impl_,
                "A CPU stub method from GPU state propagator data was called instead of one from "
