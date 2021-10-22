@@ -95,6 +95,12 @@ target_sources(nblib
         virials.cpp
         )
 
+if (GMX_GPU_CUDA)
+    target_sources(nblib
+            PRIVATE
+            gmxcalculatorgpu.cpp)
+endif()
+
 gmx_target_compile_options(nblib)
 
 target_link_libraries(nblib PRIVATE libgromacs)
