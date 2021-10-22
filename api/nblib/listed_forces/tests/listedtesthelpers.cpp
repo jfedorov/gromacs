@@ -44,44 +44,54 @@
  * \author Sebastian Keller <keller@cscs.ch>
  */
 
-#ifndef NBLIB_LISTEDFORCES_LISTEDTESTHELPERS_H
-#define NBLIB_LISTEDFORCES_LISTEDTESTHELPERS_H
+#include "nblib/vector.h"
+#include "nblib/listed_forces/tests/gmxcalculator.h"
+#include "nblib/listed_forces/tests/listedtesthelpers.h"
 
-#include "nblib/listed_forces/definitions.h"
+#include "testutils/testasserts.h"
 
 namespace nblib
 {
-class Box;
 
-//! \brief Creates a default vector of indices for two-centered interactions
-template<class Interaction, std::enable_if_t<Contains<Interaction, SupportedTwoCenterTypes>{}>* = nullptr>
-std::vector<InteractionIndex<Interaction>> indexVector()
+void compareNblibAndGmxListedImplementations(const ListedInteractionData& interactionData,
+                                             const std::vector<Vec3>&     coordinates,
+                                             size_t                       numParticles,
+                                             int                          numThreads,
+                                             const Box&                   box,
+                                             real                         tolerance)
 {
-    return { { 0, 1, 0 } };
-}
+    ListedForceCalculator calculator(interactionData, numParticles, numThreads, box);
 
-//! \brief Creates a default vector of indices for three-centered interactions
-template<class Interaction, std::enable_if_t<Contains<Interaction, SupportedThreeCenterTypes>{}>* = nullptr>
-std::vector<InteractionIndex<Interaction>> indexVector()
-{
-    return { { 0, 1, 2, 0 } };
-}
+    std::vector<Vec3>                 forces(numParticles, Vec3{ 0, 0, 0 });
+    std::vector<Vec3>                 shiftForces(gmx::c_numShiftVectors, Vec3{ 0, 0, 0 });
+    ListedForceCalculator::EnergyType energies;
 
-//! \brief Creates a default vector of indices for four-centered interactions
-template<class Interaction, std::enable_if_t<Contains<Interaction, SupportedFourCenterTypes>{}>* = nullptr>
-std::vector<InteractionIndex<Interaction>> indexVector()
-{
-    return { { 0, 1, 2, 3, 0 } };
-}
+    calculator.compute(coordinates, forces, shiftForces, energies, true);
 
-//! \brief Sets up the calculation fixtures for both Nblib and GMX and compares the resultant forces
-void compareNblibAndGmxListedImplementations(const ListedInteractionData&  interactionData,
-                                             const std::vector<gmx::RVec>& coordinates,
-                                             size_t                        numParticles,
-                                             int                           numThreads,
-                                             const Box&                    box,
-                                             real                          tolerance);
+    ListedGmxCalculator gmxCalculator(interactionData, numParticles, numThreads, box);
+
+    std::vector<Vec3>                 gmxForces(numParticles, Vec3{ 0, 0, 0 });
+    std::vector<Vec3>                 gmxShiftForces(gmx::c_numShiftVectors, Vec3{ 0, 0, 0 });
+    ListedForceCalculator::EnergyType gmxEnergies;
+
+    gmxCalculator.compute(coordinates, gmxForces, gmxShiftForces, gmxEnergies, true);
+
+    gmx::test::FloatingPointTolerance tolSetting(tolerance, tolerance, 1.0e-5, 1.0e-8, 200, 100, false);
+
+    for (int i = 0; i < int(forces.size()); ++i)
+    {
+        for (int m = 0; m < 3; ++m)
+        {
+            EXPECT_REAL_EQ_TOL(forces[i][m], gmxForces[i][m], tolSetting);
+        }
+    }
+    for (int i = 0; i < gmx::c_numShiftVectors; ++i)
+    {
+        for (int m = 0; m < 3; ++m)
+        {
+            EXPECT_REAL_EQ_TOL(shiftForces[i][m], gmxShiftForces[i][m], tolSetting);
+        }
+    }
+}
 
 } // namespace nblib
-
-#endif // NBLIB_LISTEDFORCES_LISTEDTESTHELPERS_H
