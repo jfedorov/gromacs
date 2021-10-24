@@ -1,5 +1,8 @@
 gitlab-triage:
+  stage: pre-build
   image: ruby:2.7
+  variables:
+    API_TOKEN: $API_TOKEN  
   script:
     - gem install gitlab-triage
     - gitlab-triage --help
