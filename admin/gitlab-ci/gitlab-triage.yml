@@ -6,5 +6,5 @@ gitlab-triage:
     - gem install gitlab-triage
     - gitlab-triage --help
     - gitlab-triage --dry-run --token $API_TOKEN --source projects --source-id $CI_PROJECT_PATH
-  when: manual
+
 
