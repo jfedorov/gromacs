@@ -18,15 +18,15 @@
                 Unfortunately this issue has not had any updates for 90 days, either because developers have not been able to find the time or because it is unclear what is required, or simply that it has drowned in a sea of other issues. In some cases it might help making the required action clearer, or talking to a specific developer. Issues not updated in another 90 days will be closed automatically.
         - name: Auto-close issues marked as stale and still no update for another 90 days
           conditions:
-          state: opened
-          labels:
-            - Status::Stale
-          date:
-            attribute: updated_at
-            condition: older_than
-            interval_type: days
-            interval: 90
-          actions:
-            status: close
-            comment: |
-              Unfortunately this issue did not have any further updates 90 days after being marked as stale, and it has therefore been closed automatically.
+            state: opened
+            labels:
+              - Status::Stale
+            date:
+              attribute: updated_at
+              condition: older_than
+              interval_type: days
+              interval: 90
+            actions:
+              status: close
+              comment: |
+                Unfortunately this issue did not have any further updates 90 days after being marked as stale, and it has therefore been closed automatically.
