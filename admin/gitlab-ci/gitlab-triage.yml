@@ -1,6 +1,6 @@
 triage-issues:
   image: ruby:2.7
-  stage: triage
+  stage: triage-issues
   script:
     - gem install gitlab-triage
     - gitlab-triage --help
