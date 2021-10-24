@@ -1,4 +1,4 @@
-dry-run:triage-issues:
+triage-issues:
   image: ruby:2.7
   stage: triage
   script:
