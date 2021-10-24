@@ -3,6 +3,7 @@ gitlab-triage:
   image: ruby:2.7
   variables:
     API_TOKEN: "$API_TOKEN"
+    CI_PROJECT_PATH: "$CI_PROJECT_PATH"
   script:
     - gem install gitlab-triage
     - gitlab-triage --help
