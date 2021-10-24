@@ -36,6 +36,8 @@ stages:
   - release-prepare-deploy
   # Deploy stage for release builds
   - release-deploy
+  # Mark issues with no activity for 90 days as stale
+  - triage-issues
 
 include:
   # Mix-in helper job definitions of general utility.
@@ -56,3 +58,5 @@ include:
   - local: '/admin/gitlab-ci/documentation.gitlab-ci.yml'
   # Prepare release archives.
   - local: '/admin/gitlab-ci/archive.gitlab-ci.yml'
+  # Schedules for running gitlab-triage
+  - local: '/admin/gitlab-ci/gitlab-triage.yml'
