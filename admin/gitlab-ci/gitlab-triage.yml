@@ -1,6 +1,4 @@
 gitlab-triage:
-  extends:
-    - .rules:nightly-not-for-release
   image: ruby:2.7
   script:
     - gem install gitlab-triage
