@@ -2,5 +2,5 @@
     issues:
       rules:
         - name: find all open issues - any label (simple - should be lots)
-	  conditions:
+          conditions:
             state: opened

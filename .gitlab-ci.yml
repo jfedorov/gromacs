@@ -36,8 +36,6 @@ stages:
   - release-prepare-deploy
   # Deploy stage for release builds
   - release-deploy
-  # Mark issues with no activity for 90 days as stale
-  - triage-issues
 
 include:
   # Mix-in helper job definitions of general utility.
