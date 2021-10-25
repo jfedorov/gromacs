@@ -779,6 +779,10 @@ static void new_status(const char*                           topfile,
             opts->seed = static_cast<int>(gmx::makeRandomSeed());
             GMX_LOG(logger.info).asParagraph().appendTextFormatted("Setting gen_seed to %d", opts->seed);
         }
+        else
+        {
+            GMX_LOG(logger.info).asParagraph().appendTextFormatted("Value of gen_seed set to %d", opts->seed);
+        }
         state->flags |= enumValueToBitMask(StateEntry::V);
         maxwell_speed(opts->tempi, opts->seed, sys, state->v.rvec_array(), logger);
 
