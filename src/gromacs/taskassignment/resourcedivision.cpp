@@ -638,15 +638,10 @@ void check_resource_division_efficiency(const gmx_hw_info_t* hwinfo,
             }
             else
             {
-                /* This fatal error, and the one below, is nasty, but it's
-                 * probably the only way to ensure that all users don't waste
-                 * a lot of resources, since many users don't read logs/stderr.
-                 */
-                gmx_fatal(FARGS,
-                          "%s If you want to run with this setup, specify the -ntomp option. But "
+                sprintf(buf,
+                          "If you want to run with this setup, specify the -ntomp option. But "
                           "we suggest to "
                           "change the number of MPI ranks%s.",
-                          buf,
                           mpi_option);
             }
         }
