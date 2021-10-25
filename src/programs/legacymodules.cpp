@@ -108,7 +108,8 @@ private:
         std::fprintf(stderr,
                      "This tool is no longer present in GROMACS. Please see\n"
                      "  "
-                     "https://manual.gromacs.org/current/user-guide/cmdline.html#command-changes-between-versions\n"
+                     "https://manual.gromacs.org/current/user-guide/"
+                     "cmdline.html#command-changes-between-versions\n"
                      "for ideas how to perform the same tasks with the "
                      "new tools.\n");
     }
