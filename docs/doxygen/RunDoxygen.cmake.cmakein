@@ -62,12 +62,12 @@ if (DOXYGEN_WARNINGS)
     message("The following warnings were produced by Doxygen:")
     message("${STRIPPED_WARNINGS}")
     # Remove some useless/hard-to-suppress warnings from the file to avoid
-    # Jenkins complaining.
+    # CI complaining.
     string(REGEX REPLACE
            "warning:[^\n]*Consider increasing DOT_GRAPH_MAX_NODES.\n" ""
            DOXYGEN_WARNINGS "${DOXYGEN_WARNINGS}")
     # Add a note to the warnings that identify the documentation type that
-    # produces them.  This makes it easier to see in Jenkins if a warning type
+    # produces them.  This makes it easier to see in CI if a warning type
     # is produced only from some documentation types.
     string(REGEX REPLACE "\n" " (in doxygen-${DOCTYPE})\n"
            DOXYGEN_WARNINGS "${DOXYGEN_WARNINGS}")

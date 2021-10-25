@@ -44,7 +44,7 @@ target_include_directories(template SYSTEM PRIVATE ${PROJECT_SOURCE_DIR}/src/ext
 target_link_libraries(template libgromacs legacy_modules ${GMX_EXE_LINKER_FLAGS})
 
 set(DOCUMENTATION_HTTP_URL_BASE
-    http://jenkins.gromacs.org/job/Documentation_Nightly_master/javadoc)
+    https://manual.gromacs.org/nightly/index.html)
 if (SOURCE_IS_SOURCE_DISTRIBUTION)
     set(DOCUMENTATION_HTTP_URL_BASE
         http://manual.gromacs.org/documentation/${GMX_VERSION_STRING})
