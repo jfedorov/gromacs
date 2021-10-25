@@ -66,12 +66,12 @@
 
 #include "device_information.h"
 
-namespace gmx
-{
-
 void warnWhenDeviceNotTargeted(const gmx::MDLogger& /* mdlog */, const DeviceInformation& /* deviceInfo */)
 {
 }
+
+namespace gmx
+{
 
 /*! \brief Return true if executing on compatible OS for AMD OpenCL.
  *
