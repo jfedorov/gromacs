@@ -860,7 +860,8 @@ static void update_top(t_atoms*        atoms,
             auto errorMsg = gmx::formatString(
                     "Failed to rename %s to %s. You may need to clean these up manually\n",
                     temporary_filename,
-                    temporary_filename);
+                    topinout);
+            // gmx_fatal(FARGS, "%s", errorMsg.c_str());
             GMX_THROW(gmx::FileIOError(errorMsg));
         }
     }
