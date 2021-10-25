@@ -643,14 +643,30 @@ int gmx_do_dssp(int argc, char* argv[])
     dsspStrings.tmpfile = tmpfile;
     if (dsspVersion >= 2)
     {
-        if (dsspVersion > 2)
+        if (dsspVersion == 4)
+        {
+            std::string mkdsspCommandLine = dsspStrings.dptr;
+            mkdsspCommandLine += " --output-format dssp ";
+            mkdsspCommandLine += dsspStrings.pdbfile;
+
+#if not HAVE_PIPES && not GMX_NATIVE_WINDOWS
+            // Without pipe/popen, rely on temporary file for output
+            mkdsspCommandLine += " " + dsspStrings.tmpfile;
+#endif
+
+            GMX_RELEASE_ASSERT(mkdsspCommandLine.size() < 255, "DSSP v4 command line too long");
+            strcpy(dssp, mkdsspCommandLine.c_str());
+        }
+        else if (dsspVersion == 2)
+        {
+            printDsspResult(dssp, dsspStrings, redirectionString);
+        }
+        else
         {
             printf("\nWARNING: You use DSSP version %d, which is not explicitly\nsupported by "
                    "do_dssp. Assuming version 2 syntax.\n\n",
                    dsspVersion);
         }
-
-        printDsspResult(dssp, dsspStrings, redirectionString);
     }
     else
     {
@@ -713,7 +729,8 @@ int gmx_do_dssp(int argc, char* argv[])
         }
         gmx_rmpbc(gpbc, natoms, box, x);
         tapein = gmx_ffopen(pdbfile, "w");
-        write_pdbfile_indexed(tapein, nullptr, atoms, x, pbcType, box, ' ', -1, gnx, index, nullptr, FALSE);
+        write_pdbfile_indexed(
+                tapein, nullptr, atoms, x, pbcType, box, 'A', -1, gnx, index, nullptr, FALSE, true);
         gmx_ffclose(tapein);
         /* strip_dssp returns the number of lines found in the dssp file, i.e.
          * the number of residues plus the separator lines */
