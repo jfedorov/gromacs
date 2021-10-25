@@ -594,9 +594,10 @@ FILE* gmx_fopen_temporary(char* buf)
 
 int gmx_file_rename(const char* oldname, const char* newname)
 {
+    int ret;
 #if !GMX_NATIVE_WINDOWS
     /* under unix, rename() is atomic (at least, it should be). */
-    return rename(oldname, newname);
+    ret = rename(oldname, newname);
 #else
     if (MoveFileEx(oldname, newname, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
     {
@@ -604,13 +605,20 @@ int gmx_file_rename(const char* oldname, const char* newname)
         /* This just lets the F@H checksumming system know about the rename */
         fcRename(oldname, newname);
 #    endif
-        return 0;
+        ret = 0;
     }
     else
     {
-        return 1;
+        ret = 1;
     }
 #endif
+    if (ret != 0)
+    {
+        auto errorMsg = gmx::formatString(
+                "Failed to rename %s to %s. You may need to clean these up manually", oldname, newname);
+        GMX_THROW(gmx::FileIOError(errorMsg));
+    }
+    return ret;
 }
 
 int gmx_file_copy(const char* oldname, const char* newname, gmx_bool copy_if_empty)
@@ -720,7 +728,7 @@ void gmx_chdir(const char* directory)
 #if GMX_NATIVE_WINDOWS
     int rc = _chdir(directory);
 #else
-    int   rc   = chdir(directory);
+    int rc = chdir(directory);
 #endif
     if (rc != 0)
     {
