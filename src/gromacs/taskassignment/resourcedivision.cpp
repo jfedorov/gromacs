@@ -639,14 +639,14 @@ void check_resource_division_efficiency(const gmx_hw_info_t* hwinfo,
             else
             {
                 sprintf(buf,
-                          "If you want to run with this setup, specify the -ntomp option. But "
-                          "we suggest to "
-                          "change the number of MPI ranks%s.",
-                          mpi_option);
+                        "If you want to run with this setup, specify the -ntomp option. But "
+                        "we suggest to "
+                        "change the number of MPI ranks%s.",
+                        mpi_option);
             }
         }
     }
-#else  // !GMX_OPENMP || ! GMX_MPI
+#else // !GMX_OPENMP || ! GMX_MPI
     GMX_UNUSED_VALUE(bNtOmpOptionSet);
     GMX_UNUSED_VALUE(willUsePhysicalGpu);
     GMX_UNUSED_VALUE(cr);
