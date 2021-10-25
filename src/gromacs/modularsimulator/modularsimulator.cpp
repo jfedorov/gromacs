@@ -401,7 +401,7 @@ bool ModularSimulator::isInputCompatible(bool                             exitOn
             && conditionalAssert(!doRerun, "Rerun is not supported by the modular simulator.");
     isInputCompatible =
             isInputCompatible
-            && conditionalAssert(inputrec->cos_accel == 0.0,
+            && conditionalAssert(!inputrec->useConstantAcceleration,
                                  "Acceleration is not supported by the modular simulator.");
     isInputCompatible =
             isInputCompatible
