@@ -854,7 +854,15 @@ static void update_top(t_atoms*        atoms,
         }
         gmx_ffclose(fpout);
         make_backup(topinout);
-        gmx_file_rename(temporary_filename, topinout);
+        int ret = gmx_file_rename(temporary_filename, temporary_filename);
+        if (ret == 1)
+        {
+            auto errorMsg = gmx::formatString(
+                    "Failed to rename %s to %s. You may need to clean these up manually\n",
+                    temporary_filename,
+                    temporary_filename);
+            GMX_THROW(gmx::FileIOError(errorMsg));
+        }
     }
 }
 
