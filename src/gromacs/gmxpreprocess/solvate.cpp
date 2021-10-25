@@ -854,7 +854,7 @@ static void update_top(t_atoms*        atoms,
         }
         gmx_ffclose(fpout);
         make_backup(topinout);
-        int ret = gmx_file_rename(temporary_filename, temporary_filename);
+        int ret = gmx_file_rename(temporary_filename, topinout);
         if (ret != 0)
         {
             auto errorMsg = gmx::formatString(
