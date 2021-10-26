@@ -485,15 +485,15 @@ int gmx_do_dssp(int argc, char* argv[])
         "that the dssp executable is located in ",
         // NOLINTNEXTLINE(bugprone-suspicious-missing-comma)
         "[TT]" GMX_DSSP_PROGRAM_PATH "[tt]. If this is not the case, then you should",
-        "set an environment variable [TT]DSSP[tt] pointing to the dssp",
+        "set an environment variable [TT]DSSP[tt] pointing to the dssp ",
         "executable, e.g.: [PAR]",
         "[TT]setenv DSSP /opt/dssp/bin/dssp[tt][PAR]",
-        "Since version 2.0.0, dssp is invoked with a syntax that differs",
-        "from earlier versions. If you have an older version of dssp,",
-        "use the [TT]-ver[tt] option to direct do_dssp to use the older syntax.",
+        "The dssp program is invoked with a syntax that differs",
+        "depending on version. Version 1, 2 and 4 are supported, and the correct",
+        "invokation format can be selected using the [TT]-ver[tt] option.",
         "By default, do_dssp uses the syntax introduced with version 2.0.0.",
-        "Even newer versions (which at the time of writing are not yet released)",
-        "are assumed to have the same syntax as 2.0.0.[PAR]",
+        "Newer version might also have executable name [TT]mkdssp[tt] instead",
+        "of [TT]dssp[tt].[PAR]",
         "The structure assignment for each residue and time is written to an",
         "[REF].xpm[ref] matrix file. This file can be visualized with for instance",
         "[TT]xv[tt] and can be converted to postscript with [TT]xpm2ps[tt].",
@@ -523,7 +523,7 @@ int gmx_do_dssp(int argc, char* argv[])
           FALSE,
           etINT,
           { &dsspVersion },
-          "DSSP major version. Syntax changed with version 2" }
+          "DSSP major version. Syntax changed with version 2 and 4." }
     };
 
     t_trxstatus*      status;
