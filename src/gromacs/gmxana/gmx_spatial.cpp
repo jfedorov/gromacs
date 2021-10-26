@@ -457,7 +457,7 @@ int gmx_spatial(int argc, char* argv[])
             * (maxz - minz + 1 - (2 * iIGNOREOUTER));
     if (bCALCDIV)
     {
-        norm = static_cast<double>(numcu) * static_cast<double>(numfr) / tot;
+        norm = double(numcu) * numfr / tot;
         GMX_ASSERT(norm >= 0, "The norm should be non-negative.");
     }
     else
