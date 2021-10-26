@@ -534,7 +534,7 @@ enum class AccelerationType
  *                                  coupling should be applied at this step.
  * \param[in]     cTC               Temperature coupling group indices
  * \param[in]     cAcceleration     Acceleration group indices
- * \param[in]     accel             Acceleration per group.
+ * \param[in]     acceleration      Acceleration per group.
  * \param[in]     invMassPerDim     Inverse mass per dimension
  * \param[in]     ekind             Kinetic energy data.
  * \param[in]     box               The box dimensions.
