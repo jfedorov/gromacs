@@ -570,6 +570,11 @@ void set_pbc(t_pbc* pbc, PbcType pbcType, const matrix box)
     {
         pbcType = guessPbcType(box);
     }
+    if (box[XX][XX] == 0 && box[YY][YY] == 0 && box[ZZ][ZZ] == 0 && pbcType != PbcType::No)
+    {
+        gmx_fatal(FARGS, "Periodic box type %s specified, yet all box dimensions are zero",
+                  c_pbcTypeNames[pbcType].c_str());
+    }
 
     low_set_pbc(pbc, pbcType, nullptr, box);
 }
