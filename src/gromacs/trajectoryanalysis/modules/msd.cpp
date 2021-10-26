@@ -512,10 +512,10 @@ void Msd::initOptions(IOptionsContainer* options, TrajectoryAnalysisSettings* se
         "[TT]-trestart[TT] intervals, so the number of frames stored scales linearly with the",
         "number of frames processed. This can lead to long analysis times and out-of-memory errors",
         "for long/large trajectories, and often the data at higher time deltas lacks sufficient ",
-        "sampling ,often manifesting as a wobbly line on the MSD plot after a straighter region at",
+        "sampling, often manifesting as a wobbly line on the MSD plot after a straighter region at",
         "lower time deltas. The [TT]-maxtau[TT] option can be used to cap the maximum time delta",
         "for frame comparison, which may improve performance and can be used to avoid",
-        "memory issues.[PAR]"
+        "out-of-memory issues.[PAR]"
     };
     settings->setHelpText(desc);
 
