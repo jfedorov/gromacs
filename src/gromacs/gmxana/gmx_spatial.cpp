@@ -453,9 +453,8 @@ int gmx_spatial(int argc, char* argv[])
         }
     }
 
-    numcu = (maxx - minx + 1 - (2 * iIGNOREOUTER))
-                                * (maxy - miny + 1 - (2 * iIGNOREOUTER))
-                                * (maxz - minz + 1 - (2 * iIGNOREOUTER));
+    numcu = (maxx - minx + 1 - (2 * iIGNOREOUTER)) * (maxy - miny + 1 - (2 * iIGNOREOUTER))
+            * (maxz - minz + 1 - (2 * iIGNOREOUTER));
     if (bCALCDIV)
     {
         norm = static_cast<double>(numcu) * static_cast<double>(numfr) / tot;
