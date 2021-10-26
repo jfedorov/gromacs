@@ -453,12 +453,12 @@ int gmx_spatial(int argc, char* argv[])
         }
     }
 
-    numcu = static_cast<double>((maxx - minx + 1 - (2 * iIGNOREOUTER))
+    numcu = (maxx - minx + 1 - (2 * iIGNOREOUTER))
                                 * (maxy - miny + 1 - (2 * iIGNOREOUTER))
-                                * (maxz - minz + 1 - (2 * iIGNOREOUTER)));
+                                * (maxz - minz + 1 - (2 * iIGNOREOUTER));
     if (bCALCDIV)
     {
-        norm = (numcu * numfr) / tot;
+        norm = static_cast<double>(numcu) * static_cast<double>(numfr) / tot;
         GMX_ASSERT(norm >= 0, "The norm should be non-negative.");
     }
     else
