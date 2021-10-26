@@ -3,7 +3,7 @@
  *
  * Copyright (c) 2007,2008,2009,2010,2011 by the GROMACS development team.
  * Copyright (c) 2012,2013,2014,2015,2017 by the GROMACS development team.
- * Copyright (c) 2019,2020, by the GROMACS development team, led by
+ * Copyright (c) 2019,2020,2021, by the GROMACS development team, led by
  * Mark Abraham, David van der Spoel, Berk Hess, and Erik Lindahl,
  * and including many others, as listed in the AUTHORS file in the
  * top-level source directory and at http://www.gromacs.org.
@@ -52,6 +52,7 @@
 #include "gromacs/utility/arraysize.h"
 #include "gromacs/utility/cstringutil.h"
 #include "gromacs/utility/futil.h"
+#include "gromacs/utility/gmxassert.h"
 #include "gromacs/utility/smalloc.h"
 
 static const double bohr =
@@ -452,11 +453,13 @@ int gmx_spatial(int argc, char* argv[])
         }
     }
 
-    numcu = (maxx - minx + 1 - (2 * iIGNOREOUTER)) * (maxy - miny + 1 - (2 * iIGNOREOUTER))
-            * (maxz - minz + 1 - (2 * iIGNOREOUTER));
+    numcu = static_cast<double>((maxx - minx + 1 - (2 * iIGNOREOUTER))
+                                * (maxy - miny + 1 - (2 * iIGNOREOUTER))
+                                * (maxz - minz + 1 - (2 * iIGNOREOUTER)));
     if (bCALCDIV)
     {
-        norm = static_cast<double>(numcu * numfr) / tot;
+        norm = (numcu * numfr) / tot;
+        GMX_ASSERT(norm >= 0, "The norm should be non-negative.");
     }
     else
     {
