@@ -1147,36 +1147,32 @@ static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
     // register forces and add dependencies
     fr->gpuForceReduction[gmx::AtomLocality::Local]->registerNbnxmForce(Nbnxm::gpu_get_f(nbv->gpu_nbv));
 
-    if (runScheduleWork->simulationWork.useGpuPme
-        && (!runScheduleWork->simulationWork.haveSeparatePmeRank
-            || runScheduleWork->simulationWork.useGpuPmePpCommunication))
-    {
-        DeviceBuffer<gmx::RVec> forcePtr =
-                runScheduleWork->simulationWork.haveSeparatePmeRank
-                        ? fr->pmePpCommGpu->getGpuForceStagingPtr() // buffer received from other GPU
-                        : pme_gpu_get_device_f(fr->pmedata);        // PME force buffer on same GPU
-        fr->gpuForceReduction[gmx::AtomLocality::Local]->registerRvecForce(forcePtr);
+    DeviceBuffer<gmx::RVec> pmeForcePtr;
+    GpuEventSynchronizer*   pmeSynchronizer     = nullptr;
+    bool                    havePmeContribution = false;
 
-        if (runScheduleWork->simulationWork.haveSeparatePmeRank)
+    if (runScheduleWork->stepWork.haveGpuPmeOnThisRank)
+    {
+        pmeForcePtr         = pme_gpu_get_device_f(fr->pmedata);
+        pmeSynchronizer     = pme_gpu_get_f_ready_synchronizer(fr->pmedata);
+        havePmeContribution = true;
+    }
+
+    if (runScheduleWork->simulationWork.useGpuPmePpCommunication)
+    {
+        pmeForcePtr = fr->pmePpCommGpu->getGpuForceStagingPtr();
+        if (GMX_THREAD_MPI)
         {
-            // PME force buffer on remote GPU -
-            // event synchronizer received from other GPU only in case of thread-mpi
-            if (GMX_THREAD_MPI)
-            {
-                GpuEventSynchronizer* const pmeSynchronizer =
-                        fr->pmePpCommGpu->getForcesReadySynchronizer();
-                GMX_ASSERT(pmeSynchronizer != nullptr,
-                           "PME force ready cuda event should not be NULL");
-                fr->gpuForceReduction[gmx::AtomLocality::Local]->addDependency(pmeSynchronizer);
-            }
+            pmeSynchronizer = fr->pmePpCommGpu->getForcesReadySynchronizer();
         }
-        else
-        {
-            // PME force buffer on same GPU - add dependency on PME force computation
-            GpuEventSynchronizer* const pmeSynchronizer = pme_gpu_get_f_ready_synchronizer(fr->pmedata);
-            GMX_ASSERT(pmeSynchronizer != nullptr, "PME force ready cuda event should not be NULL");
-            fr->gpuForceReduction[gmx::AtomLocality::Local]->addDependency(pmeSynchronizer);
-        }
+        havePmeContribution = true;
+    }
+
+    if (havePmeContribution)
+    {
+        fr->gpuForceReduction[gmx::AtomLocality::Local]->registerRvecForce(pmeForcePtr);
+        GMX_ASSERT(pmeSynchronizer != nullptr, "PME force ready cuda event should not be NULL");
+        fr->gpuForceReduction[gmx::AtomLocality::Local]->addDependency(pmeSynchronizer);
     }
 
     if (runScheduleWork->domainWork.haveCpuLocalForceWork
