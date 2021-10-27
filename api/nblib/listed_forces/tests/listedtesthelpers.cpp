@@ -44,54 +44,43 @@
  * \author Sebastian Keller <keller@cscs.ch>
  */
 
-#include "nblib/vector.h"
+#include "gromacs/utility/arrayref.h"
 #include "nblib/listed_forces/tests/gmxcalculator.h"
 #include "nblib/listed_forces/tests/listedtesthelpers.h"
 
 #include "testutils/testasserts.h"
+#include "testutils/testmatchers.h"
 
 namespace nblib
 {
 
-void compareNblibAndGmxListedImplementations(const ListedInteractionData& interactionData,
-                                             const std::vector<Vec3>&     coordinates,
-                                             size_t                       numParticles,
-                                             int                          numThreads,
-                                             const Box&                   box,
-                                             real                         tolerance)
+void compareNblibAndGmxListedImplementations(const ListedInteractionData&  interactionData,
+                                             const std::vector<gmx::RVec>& coordinates,
+                                             size_t                        numParticles,
+                                             int                           numThreads,
+                                             const Box&                    box,
+                                             real                          tolerance)
 {
     ListedForceCalculator calculator(interactionData, numParticles, numThreads, box);
 
-    std::vector<Vec3>                 forces(numParticles, Vec3{ 0, 0, 0 });
-    std::vector<Vec3>                 shiftForces(gmx::c_numShiftVectors, Vec3{ 0, 0, 0 });
+    std::vector<gmx::RVec>            forces(numParticles, gmx::RVec{ 0, 0, 0 });
+    std::vector<gmx::RVec>            shiftForces(gmx::c_numShiftVectors, gmx::RVec{ 0, 0, 0 });
     ListedForceCalculator::EnergyType energies;
 
     calculator.compute(coordinates, forces, shiftForces, energies, true);
 
     ListedGmxCalculator gmxCalculator(interactionData, numParticles, numThreads, box);
 
-    std::vector<Vec3>                 gmxForces(numParticles, Vec3{ 0, 0, 0 });
-    std::vector<Vec3>                 gmxShiftForces(gmx::c_numShiftVectors, Vec3{ 0, 0, 0 });
+    std::vector<gmx::RVec>            gmxForces(numParticles, gmx::RVec{ 0, 0, 0 });
+    std::vector<gmx::RVec>            gmxShiftForces(gmx::c_numShiftVectors, gmx::RVec{ 0, 0, 0 });
     ListedForceCalculator::EnergyType gmxEnergies;
 
     gmxCalculator.compute(coordinates, gmxForces, gmxShiftForces, gmxEnergies, true);
 
     gmx::test::FloatingPointTolerance tolSetting(tolerance, tolerance, 1.0e-5, 1.0e-8, 200, 100, false);
 
-    for (int i = 0; i < int(forces.size()); ++i)
-    {
-        for (int m = 0; m < 3; ++m)
-        {
-            EXPECT_REAL_EQ_TOL(forces[i][m], gmxForces[i][m], tolSetting);
-        }
-    }
-    for (int i = 0; i < gmx::c_numShiftVectors; ++i)
-    {
-        for (int m = 0; m < 3; ++m)
-        {
-            EXPECT_REAL_EQ_TOL(shiftForces[i][m], gmxShiftForces[i][m], tolSetting);
-        }
-    }
+    EXPECT_THAT(forces, Pointwise(gmx::test::RVecEq(tolSetting), gmxForces));
+    EXPECT_THAT(shiftForces, Pointwise(gmx::test::RVecEq(tolSetting), gmxShiftForces));
 }
 
 } // namespace nblib

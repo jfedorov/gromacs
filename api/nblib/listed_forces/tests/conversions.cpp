@@ -240,11 +240,11 @@ TEST(NBlibTest, GmxToNblibConversionAllTypes)
             }
             else
             {
-                EXPECT_TRUE(original.parameters[0] == converted.parameters[0]);
+                EXPECT_TRUE(original.parameters == converted.parameters);
             }
 
             // compare indices
-            EXPECT_TRUE(original.indices[0] == converted.indices[0]);
+            EXPECT_TRUE(original.indices == converted.indices);
         }
     };
     for_each_tuple(compareParamsAndIndices, originalData);

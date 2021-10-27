@@ -128,7 +128,7 @@ void ListedGmxCalculator::compute(gmx::ArrayRef<const gmx::RVec>     x,
 
     // zero output data structure
     energies.fill(0);
-    std::fill(enerd.term.data(), enerd.term.data() + F_NRE, 0.0);
+    std::fill(std::begin(enerd.term), std::end(enerd.term), 0.0);
     std::fill(forceBuffer.begin(), forceBuffer.end(), gmx::RVec{ 0, 0, 0 });
     std::fill(shiftBuffer.begin(), shiftBuffer.end(), gmx::RVec{ 0, 0, 0 });
 

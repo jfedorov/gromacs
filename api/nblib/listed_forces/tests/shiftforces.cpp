@@ -100,11 +100,11 @@ static ListedInteractionData createInteractionData(int numCoordinates)
 static std::vector<gmx::RVec> createTestCoordinates(int numParticles)
 {
     std::vector<gmx::RVec> coordinates(numParticles);
-    for (auto& c : coordinates)
+    gmx::RVec              seed{ -0.5, -0.5, -0.5 };
+    for (int i = 0; i < numParticles; i++)
     {
-        c[0] = drand48();
-        c[1] = drand48();
-        c[2] = drand48();
+        coordinates[i] = seed;
+        seed += { 0.05, 0.05, 0.05 };
     }
 
     return coordinates;
@@ -118,7 +118,7 @@ TEST(NBlibTest, shiftForcesAreCorrect)
     Box  box(1.0);
     auto coordinates = createTestCoordinates(numParticles);
 
-    compareNblibAndGmxListedImplementations(interactionData, coordinates, numParticles, 1, box, 1e-2);
+    compareNblibAndGmxListedImplementations(interactionData, coordinates, numParticles, 1, box, 1e-3);
 }
 
 } // namespace nblib
