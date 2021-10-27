@@ -80,10 +80,14 @@ public:
         {
             return true;
         }
-        *listener->stream() << "  Actual value: " << value2 << std::endl
-                            << "Expected value: " << value1 << std::endl
-                            << "    Difference: " << diff.toString() << std::endl
-                            << "     Tolerance: " << tolerance_.toString(diff);
+        if (listener->stream())
+        {
+            *listener->stream() << "  Actual value: " << value2 << std::endl
+                                << "Expected value: " << value1 << std::endl
+                                << "    Difference: " << diff.toString() << std::endl
+                                << "     Tolerance: " << tolerance_.toString(diff);
+        }
+
         return false;
     }
     //! Describe to a human what matching means.
