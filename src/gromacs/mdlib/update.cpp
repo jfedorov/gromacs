@@ -1064,12 +1064,14 @@ Update::Impl::Impl(const t_inputrec& inputRecord, BoxDeformation* boxDeformation
 
 void Update::updateAfterPartition(int                                 numAtoms,
                                   gmx::ArrayRef<const unsigned short> cFREEZE,
-                                  gmx::ArrayRef<const unsigned short> cTC)
+                                  gmx::ArrayRef<const unsigned short> cTC,
+                                  gmx::ArrayRef<const unsigned short> cAcceleration)
 {
 
     impl_->xp()->resizeWithPadding(numAtoms);
-    impl_->cFREEZE_ = cFREEZE;
-    impl_->cTC_     = cTC;
+    impl_->cFREEZE_       = cFREEZE;
+    impl_->cTC_           = cTC;
+    impl_->cAcceleration_ = cAcceleration;
 }
 
 /*! \brief Sets the SD update type */
