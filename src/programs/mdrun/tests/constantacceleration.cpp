@@ -74,7 +74,7 @@ class AccelerationGroupTest :
 public:
     //! Check that the velocities are zero or accelerated
     static void checkVelocities(const std::string&            trajectoryName,
-                                const real                    acceleration,
+                                const RVec                    acceleration,
                                 const FloatingPointTolerance& tolerance)
     {
         const size_t c_groupSize = 3;
@@ -88,8 +88,8 @@ public:
             GMX_RELEASE_ASSERT(frame.v().size() == 2 * c_groupSize,
                                "Expect velocities for both atom groups");
 
-            const real              aVel = frame.time() * acceleration;
-            const std::vector<RVec> referenceVelocities(c_groupSize, RVec{ aVel, aVel, aVel });
+            const RVec              referenceVelocity = real(frame.time()) * acceleration;
+            const std::vector<RVec> referenceVelocities(c_groupSize, referenceVelocity);
 
             SCOPED_TRACE("Checking velocities of non-accelerated atoms");
             ArrayRef<const RVec> nonAcceleratedVelocities = frame.v().subArray(0, c_groupSize);
@@ -128,9 +128,9 @@ TEST_P(AccelerationGroupTest, WithinTolerances)
     mdpFieldValues["ref-t"]   = "0.001 0.001";
     // Coupling times are 0, so there is no actual coupling
     mdpFieldValues["tau-t"]      = "10.0 10.0";
-    const real c_acceleration    = 2;
+    const RVec c_acceleration    = { 2.0, 3.0, 1.5 };
     mdpFieldValues["acc-grps"]   = "secondWaterMolecule";
-    mdpFieldValues["accelerate"] = "2 2 2";
+    mdpFieldValues["accelerate"] = "2.0 3.0 1.5";
     // Set initial velocities to zero
     mdpFieldValues["gen-vel"]  = "yes";
     mdpFieldValues["gen-temp"] = "0";
