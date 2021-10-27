@@ -70,6 +70,7 @@ struct DevelopmentFeatureFlags;
  * \param[in] useGpuForUpdate    Whether coordinate update and constraint solving is performed on
  *                               GPU(s).
  * \param[in] useGpuDirectHalo   Whether halo exchange is performed directly between GPUs.
+ * \param[in] useGpuPmeDecomposition GPU based PME decomposition used.
  * \returns Simulation lifetime constant workload description.
  */
 SimulationWorkload createSimulationWorkload(const t_inputrec& inputrec,
@@ -81,7 +82,8 @@ SimulationWorkload createSimulationWorkload(const t_inputrec& inputrec,
                                             PmeRunMode pmeRunMode,
                                             bool       useGpuForBonded,
                                             bool       useGpuForUpdate,
-                                            bool       useGpuDirectHalo);
+                                            bool       useGpuDirectHalo,
+                                            bool       useGpuPmeDecomposition);
 
 } // namespace gmx
 

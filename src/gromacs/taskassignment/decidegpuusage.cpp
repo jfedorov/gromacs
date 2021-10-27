@@ -232,7 +232,7 @@ bool decideWhetherToUseGpusForPmeWithThreadMpi(const bool              useGpuFor
         // PME on GPUs is only supported in a single case
         if (pmeTarget == TaskTarget::Gpu)
         {
-            if (((numRanksPerSimulation > 1) && (numPmeRanksPerSimulation == 0))
+            if (((numRanksPerSimulation > 1) && (numPmeRanksPerSimulation <= 0))
                 || (numPmeRanksPerSimulation > 1))
             {
                 GMX_THROW(InconsistentInputError(
@@ -252,7 +252,7 @@ bool decideWhetherToUseGpusForPmeWithThreadMpi(const bool              useGpuFor
 
     if (pmeTarget == TaskTarget::Gpu)
     {
-        if (((numRanksPerSimulation > 1) && (numPmeRanksPerSimulation == 0))
+        if (((numRanksPerSimulation > 1) && (numPmeRanksPerSimulation <= 0))
             || (numPmeRanksPerSimulation > 1))
         {
             GMX_THROW(NotImplementedError(
@@ -376,7 +376,6 @@ bool decideWhetherToUseGpusForPme(const bool              useGpuForNonbonded,
                                   const gmx_hw_info_t&    hardwareInfo,
                                   const t_inputrec&       inputrec,
                                   const int               numRanksPerSimulation,
-                                  const int               numPmeRanksPerSimulation,
                                   const bool              gpusWereDetected)
 {
     std::string message;
@@ -420,14 +419,6 @@ bool decideWhetherToUseGpusForPme(const bool              useGpuForNonbonded,
 
     if (pmeTarget == TaskTarget::Gpu)
     {
-        if (((numRanksPerSimulation > 1) && (numPmeRanksPerSimulation == 0))
-            || (numPmeRanksPerSimulation > 1))
-        {
-            GMX_THROW(NotImplementedError(
-                    "PME tasks were required to run on GPUs, but that is not implemented with "
-                    "more than one PME rank. Use a single rank simulation, or a separate PME rank, "
-                    "or permit PME tasks to be assigned to the CPU."));
-        }
         return true;
     }
 
@@ -571,7 +562,7 @@ bool decideWhetherToUseGpuForUpdate(const bool                     isDomainDecom
     }
 
     const bool hasAnyConstraints = gmx_mtop_interaction_count(mtop, IF_CONSTRAINT) > 0;
-    const bool pmeUsesCpu = (pmeRunMode == PmeRunMode::CPU || pmeRunMode == PmeRunMode::Mixed);
+    const bool pmeUsesCpu        = (pmeRunMode == PmeRunMode::CPU);
 
     std::string errorMessage;
 
@@ -736,6 +727,51 @@ bool decideWhetherToUseGpuForHalo(const DevelopmentFeatureFlags& devFlags,
 {
     return havePPDomainDecomposition && devFlags.enableGpuHaloExchange && useGpuForNonbonded
            && !useModularSimulator && !doRerun && !haveEnergyMinimization;
+}
+
+bool decideWhetherToUseGpuPmeDecomposition(const DevelopmentFeatureFlags& devFlags,
+                                           const PmeRunMode               pmeRunMode,
+                                           const int                      numRanksPerSimulation,
+                                           const int                      numPmeRanksPerSimulation,
+                                           const gmx::MDLogger&           mdlog)
+{
+    // PME decomposition is supported only with CUDA-backend in mixed mode
+    // CUDA-backend also needs CUDA-aware MPI support for decomposition to work
+    const bool pmeDecompositionRequested = (numRanksPerSimulation > 1 && numPmeRanksPerSimulation <= 0)
+                                           || numPmeRanksPerSimulation > 1;
+    const bool pmeDecompositionSupported = (devFlags.usingCudaAwareMpi && pmeRunMode == PmeRunMode::Mixed);
+
+    if (pmeDecompositionSupported && pmeDecompositionRequested)
+    {
+        // PME decomposition is supported only when it is forced using GMX_GPU_PME_DECOMPOSITION
+        if (devFlags.enableGpuPmeDecomposition)
+        {
+            GMX_LOG(mdlog.warning)
+                    .asParagraph()
+                    .appendTextFormatted(
+                            "This run has requested the 'GPU PME decomposition' feature, enabled "
+                            "by the GMX_GPU_PME_DECOMPOSITION environment variable. "
+                            "PME decomposition with PP-PME on same rank lacks substatial testing "
+                            "and should be used with caution.");
+        }
+        else
+        {
+            gmx_fatal(FARGS,
+                      "Multiple PME tasks were required to run on GPUs with PP-PME on same rank, "
+                      "but that is not supported. "
+                      "Use GMX_GPU_PME_DECOMPOSITION environment variable to enable it.");
+        }
+    }
+
+    if (!pmeDecompositionSupported && pmeDecompositionRequested)
+    {
+        gmx_fatal(FARGS,
+                  "PME tasks were required to run on GPUs, but that is not implemented with "
+                  "more than one PME rank. Use a single rank simulation, or a separate PME rank, "
+                  "or permit PME tasks to be assigned to the CPU.");
+    }
+
+    return pmeDecompositionSupported;
 }
 
 } // namespace gmx

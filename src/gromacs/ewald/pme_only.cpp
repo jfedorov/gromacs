@@ -437,7 +437,7 @@ static int gmx_pme_recv_coeffs_coords(struct gmx_pme_t*            pme,
                 }
                 if (pme_pp->useGpuDirectComm)
                 {
-                    GMX_ASSERT(runMode == PmeRunMode::GPU,
+                    GMX_ASSERT((runMode == PmeRunMode::GPU || runMode == PmeRunMode::Mixed),
                                "GPU Direct PME-PP communication has been enabled, "
                                "but PME run mode is not PmeRunMode::GPU\n");
 

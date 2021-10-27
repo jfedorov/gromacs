@@ -208,15 +208,18 @@ static DevelopmentFeatureFlags manageDevelopmentFeatures(const gmx::MDLogger& md
     devFlags.enableGpuHaloExchange = GMX_MPI && GMX_GPU_CUDA && getenv("GMX_GPU_DD_COMMS") != nullptr;
     devFlags.forceGpuUpdateDefault = (getenv("GMX_FORCE_UPDATE_DEFAULT_GPU") != nullptr) || GMX_FAHCORE;
     devFlags.enableGpuPmePPComm = GMX_MPI && GMX_GPU_CUDA && getenv("GMX_GPU_PME_PP_COMMS") != nullptr;
+    const bool haveDetectedCudaAwareMpi =
+            GMX_GPU_CUDA && GMX_LIB_MPI && (checkMpiCudaAwareSupport() == CudaAwareMpiStatus::Supported);
+    const bool forceCudaAwareMpi = (getenv("GMX_FORCE_CUDA_AWARE_MPI") != nullptr);
+
+    devFlags.usingCudaAwareMpi = (haveDetectedCudaAwareMpi || forceCudaAwareMpi);
+
+    devFlags.enableGpuPmeDecomposition = getenv("GMX_GPU_PME_DECOMPOSITION") != nullptr;
 
     // Direct GPU comm path is being used with CUDA_AWARE_MPI
     // make sure underlying MPI implementation is CUDA-aware
     if (!GMX_THREAD_MPI && (devFlags.enableGpuPmePPComm || devFlags.enableGpuHaloExchange))
     {
-        const bool haveDetectedCudaAwareMpi =
-                (checkMpiCudaAwareSupport() == CudaAwareMpiStatus::Supported);
-        const bool forceCudaAwareMpi = (getenv("GMX_FORCE_CUDA_AWARE_MPI") != nullptr);
-
         if (!haveDetectedCudaAwareMpi && forceCudaAwareMpi)
         {
             // CUDA-aware support not detected in MPI library but, user has forced it's use
@@ -233,7 +236,6 @@ static DevelopmentFeatureFlags manageDevelopmentFeatures(const gmx::MDLogger& md
 
         if (haveDetectedCudaAwareMpi || forceCudaAwareMpi)
         {
-            devFlags.usingCudaAwareMpi = true;
             GMX_LOG(mdlog.warning)
                     .asParagraph()
                     .appendTextFormatted(
@@ -328,7 +330,7 @@ static DevelopmentFeatureFlags manageDevelopmentFeatures(const gmx::MDLogger& md
 
     if (devFlags.enableGpuPmePPComm)
     {
-        if (pmeRunMode == PmeRunMode::GPU)
+        if (pmeRunMode == PmeRunMode::GPU || pmeRunMode == PmeRunMode::Mixed)
         {
             if (!devFlags.enableGpuBufferOps)
             {
@@ -347,17 +349,7 @@ static DevelopmentFeatureFlags manageDevelopmentFeatures(const gmx::MDLogger& md
         }
         else
         {
-            std::string clarification;
-            if (pmeRunMode == PmeRunMode::Mixed)
-            {
-                clarification =
-                        "PME FFT and gather are not offloaded to the GPU (PME is running in mixed "
-                        "mode).";
-            }
-            else
-            {
-                clarification = "PME is not offloaded to the GPU.";
-            }
+            std::string clarification = "PME is not offloaded to the GPU.";
             GMX_LOG(mdlog.warning)
                     .asParagraph()
                     .appendText(
@@ -1018,7 +1010,6 @@ int Mdrunner::mdrunner()
                                                     *hwinfo_,
                                                     *inputrec,
                                                     cr->sizeOfDefaultCommunicator,
-                                                    domdecOptions.numPmeRanks,
                                                     gpusWereDetected);
         useGpuForBonded = decideWhetherToUseGpusForBonded(
                 useGpuForNonbonded, useGpuForPme, bondedTarget, *inputrec, mtop, domdecOptions.numPmeRanks, gpusWereDetected);
@@ -1031,6 +1022,13 @@ int Mdrunner::mdrunner()
     // and report those features that are enabled.
     const DevelopmentFeatureFlags devFlags =
             manageDevelopmentFeatures(mdlog, useGpuForNonbonded, pmeRunMode);
+
+    // PME decomposition is supported only with CPU or with CUDA-backend in mixed mode
+    // CUDA-backend also needs CUDA-aware MPI support for Mixed-mode decomposition to work
+    const bool gpuPmeDecompositionSupported =
+            useGpuForPme
+            && decideWhetherToUseGpuPmeDecomposition(
+                    devFlags, pmeRunMode, cr->sizeOfDefaultCommunicator, domdecOptions.numPmeRanks, mdlog);
 
     const bool useModularSimulator = checkUseModularSimulator(false,
                                                               inputrec.get(),
@@ -1371,7 +1369,8 @@ int Mdrunner::mdrunner()
                 positionsFromStatePointer(globalState.get()),
                 useGpuForNonbonded,
                 useGpuForPme,
-                directGpuCommUsedWithGpuUpdate);
+                directGpuCommUsedWithGpuUpdate,
+                gpuPmeDecompositionSupported);
     }
     else
     {
@@ -1487,6 +1486,11 @@ int Mdrunner::mdrunner()
                         "Disabling nonbonded calculations.");
     }
 
+    const NumPmeDomains numPmeDomains = getNumPmeDomains(cr->dd);
+
+    const bool useGpuPmeDecomposition =
+            numPmeDomains.x * numPmeDomains.y > 1 && useGpuForPme && gpuPmeDecompositionSupported;
+
     MdrunScheduleWorkload runScheduleWork;
 
     // Also populates the simulation constant workload description.
@@ -1503,7 +1507,8 @@ int Mdrunner::mdrunner()
                                                               pmeRunMode,
                                                               useGpuForBonded,
                                                               useGpuForUpdate,
-                                                              useGpuDirectHalo);
+                                                              useGpuDirectHalo,
+                                                              useGpuPmeDecomposition);
 
     std::unique_ptr<DeviceStreamManager> deviceStreamManager = nullptr;
 
@@ -1874,6 +1879,11 @@ int Mdrunner::mdrunner()
                         runScheduleWork.simulationWork.useGpuPme
                                  ? &deviceStreamManager->stream(DeviceStreamType::Pme)
                                  : nullptr;
+
+                if (numPmeDomains.x * numPmeDomains.y > 1 && useGpuForPme && !gpuPmeDecompositionSupported)
+                {
+                    GMX_THROW(gmx::NotImplementedError("PME GPU decomposition is not supported"));
+                }
 
                 const t_inputrec* ir = inputrec.get();
                 pmedata              = gmx_pme_init(

@@ -61,7 +61,8 @@ SimulationWorkload createSimulationWorkload(const t_inputrec& inputrec,
                                             PmeRunMode pmeRunMode,
                                             bool       useGpuForBonded,
                                             bool       useGpuForUpdate,
-                                            bool       useGpuDirectHalo)
+                                            bool       useGpuDirectHalo,
+                                            bool       useGpuPmeDecomposition)
 {
     SimulationWorkload simulationWorkload;
     simulationWorkload.computeNonbonded = !disableNonbondedCalculation;
@@ -73,7 +74,7 @@ SimulationWorkload createSimulationWorkload(const t_inputrec& inputrec,
     simulationWorkload.useGpuNonbonded = useGpuForNonbonded;
     simulationWorkload.useCpuPme       = (pmeRunMode == PmeRunMode::CPU);
     simulationWorkload.useGpuPme = (pmeRunMode == PmeRunMode::GPU || pmeRunMode == PmeRunMode::Mixed);
-    simulationWorkload.useGpuPmeFft    = (pmeRunMode == PmeRunMode::Mixed);
+    simulationWorkload.useGpuPmeFft    = (pmeRunMode == PmeRunMode::GPU);
     simulationWorkload.useGpuBonded    = useGpuForBonded;
     simulationWorkload.useGpuUpdate    = useGpuForUpdate;
     simulationWorkload.useGpuBufferOps = (devFlags.enableGpuBufferOps || useGpuForUpdate)
@@ -87,7 +88,8 @@ SimulationWorkload createSimulationWorkload(const t_inputrec& inputrec,
     }
     simulationWorkload.haveSeparatePmeRank = haveSeparatePmeRank;
     simulationWorkload.useGpuPmePpCommunication =
-            haveSeparatePmeRank && devFlags.enableGpuPmePPComm && (pmeRunMode == PmeRunMode::GPU);
+            haveSeparatePmeRank && devFlags.enableGpuPmePPComm
+            && (pmeRunMode == PmeRunMode::GPU || pmeRunMode == PmeRunMode::Mixed);
     simulationWorkload.useCpuPmePpCommunication =
             haveSeparatePmeRank && !simulationWorkload.useGpuPmePpCommunication;
     GMX_RELEASE_ASSERT(!(simulationWorkload.useGpuPmePpCommunication
@@ -95,6 +97,7 @@ SimulationWorkload createSimulationWorkload(const t_inputrec& inputrec,
                        "Cannot do PME-PP communication on both CPU and GPU");
     simulationWorkload.useGpuDirectCommunication =
             devFlags.enableGpuHaloExchange || devFlags.enableGpuPmePPComm;
+    simulationWorkload.useGpuPmeDecomposition       = useGpuPmeDecomposition;
     simulationWorkload.haveEwaldSurfaceContribution = haveEwaldSurfaceContribution(inputrec);
     simulationWorkload.useMts                       = inputrec.useMts;
 
