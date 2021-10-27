@@ -191,8 +191,9 @@ void define1dRankTopology(gmx_domdec_t* dd)
     int rank;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    dd->neighbor[0][0] = (rank + 1) % 4;
-    dd->neighbor[0][1] = (rank == 0) ? 3 : rank - 1;
+    const int numRanks = getNumberOfTestMpiRanks();
+    dd->neighbor[0][0] = (rank + 1) % numRanks;
+    dd->neighbor[0][1] = (rank == 0) ? (numRanks - 1) : rank - 1;
 }
 
 /*! \brief Define 2D rank topology with 4 MPI tasks
@@ -509,7 +510,7 @@ void checkResults2dHaloWith2PulsesInDim1(const RVec* x, const gmx_domdec_t* dd, 
 
 TEST(HaloExchangeTest, Coordinates1dHaloWith1Pulse)
 {
-    GMX_MPI_TEST(4);
+    GMX_MPI_TEST(RequireRankCount<4>);
 
     // Set up atom data
     const int        numHomeAtoms  = 10;
@@ -565,7 +566,7 @@ TEST(HaloExchangeTest, Coordinates1dHaloWith1Pulse)
 
 TEST(HaloExchangeTest, Coordinates1dHaloWith2Pulses)
 {
-    GMX_MPI_TEST(4);
+    GMX_MPI_TEST(RequireRankCount<4>);
 
     // Set up atom data
     const int        numHomeAtoms  = 10;
@@ -622,7 +623,7 @@ TEST(HaloExchangeTest, Coordinates1dHaloWith2Pulses)
 
 TEST(HaloExchangeTest, Coordinates2dHaloWith1PulseInEachDim)
 {
-    GMX_MPI_TEST(4);
+    GMX_MPI_TEST(RequireRankCount<4>);
 
     // Set up atom data
     const int        numHomeAtoms  = 10;
@@ -678,7 +679,7 @@ TEST(HaloExchangeTest, Coordinates2dHaloWith1PulseInEachDim)
 
 TEST(HaloExchangeTest, Coordinates2dHaloWith2PulsesInDim1)
 {
-    GMX_MPI_TEST(4);
+    GMX_MPI_TEST(RequireRankCount<4>);
 
     // Set up atom data
     const int        numHomeAtoms  = 10;
