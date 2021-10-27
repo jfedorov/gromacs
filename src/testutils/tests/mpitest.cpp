@@ -63,24 +63,22 @@ namespace
 class MpiSelfTest : public ::testing::Test
 {
 public:
-    //! Whether each rank participated
+    //! Whether each rank participated, relevant only on rank 0
     std::vector<int> reached_;
 };
 
 TEST_F(MpiSelfTest, Runs)
 {
     GMX_MPI_TEST(RequireMinimumRankCount<2>);
-    reached_.resize(getNumberOfTestMpiRanks(), 0);
-#if GMX_THREAD_MPI
-    reached_[gmx_node_rank()] = 1;
-    MPI_Barrier(MPI_COMM_WORLD);
-#else
-    int value = 1;
-    MPI_Gather(&value, 1, MPI_INT, reached_.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
-#endif
     if (gmx_node_rank() == 0)
     {
-        EXPECT_THAT(reached_, testing::Each(1));
+        reached_.resize(getNumberOfTestMpiRanks(), 0);
+    }
+    int value = 1;
+    MPI_Gather(&value, 1, MPI_INT, reached_.data(), 1, MPI_INT, 0, MPI_COMM_WORLD);
+    if (gmx_node_rank() == 0)
+    {
+        EXPECT_THAT(reached_, testing::Each(value));
     }
 }
 
