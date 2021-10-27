@@ -1128,6 +1128,8 @@ static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
                                     const t_commrec*            cr,
                                     t_forcerec*                 fr)
 {
+    GMX_ASSERT(!runScheduleWork->simulationWork.useMts,
+               "GPU force reduction is not compatible with MTS");
 
     nonbonded_verlet_t*          nbv      = fr->nbv.get();
     gmx::StatePropagatorDataGpu* stateGpu = fr->stateGpu;
@@ -1151,14 +1153,13 @@ static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
     GpuEventSynchronizer*   pmeSynchronizer     = nullptr;
     bool                    havePmeContribution = false;
 
-    if (runScheduleWork->stepWork.haveGpuPmeOnThisRank)
+    if (runScheduleWork->simulationWork.useGpuPme && !runScheduleWork->simulationWork.haveSeparatePmeRank)
     {
         pmeForcePtr         = pme_gpu_get_device_f(fr->pmedata);
         pmeSynchronizer     = pme_gpu_get_f_ready_synchronizer(fr->pmedata);
         havePmeContribution = true;
     }
-
-    if (runScheduleWork->simulationWork.useGpuPmePpCommunication)
+    else if (runScheduleWork->simulationWork.useGpuPmePpCommunication)
     {
         pmeForcePtr = fr->pmePpCommGpu->getGpuForceStagingPtr();
         if (GMX_THREAD_MPI)
@@ -1171,8 +1172,11 @@ static void setupGpuForceReductions(gmx::MdrunScheduleWorkload* runScheduleWork,
     if (havePmeContribution)
     {
         fr->gpuForceReduction[gmx::AtomLocality::Local]->registerRvecForce(pmeForcePtr);
-        GMX_ASSERT(pmeSynchronizer != nullptr, "PME force ready cuda event should not be NULL");
-        fr->gpuForceReduction[gmx::AtomLocality::Local]->addDependency(pmeSynchronizer);
+        if (!runScheduleWork->simulationWork.useGpuPmePpCommunication || GMX_THREAD_MPI)
+        {
+            GMX_ASSERT(pmeSynchronizer != nullptr, "PME force ready cuda event should not be NULL");
+            fr->gpuForceReduction[gmx::AtomLocality::Local]->addDependency(pmeSynchronizer);
+        }
     }
 
     if (runScheduleWork->domainWork.haveCpuLocalForceWork
