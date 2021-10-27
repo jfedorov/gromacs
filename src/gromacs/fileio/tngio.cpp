@@ -1063,7 +1063,12 @@ void gmx_prepare_tng_writing(const char*              filename,
         tng_molecule_system_copy(*input, *output);
 
         tng_time_per_frame_get(*input, &time);
-        tng_time_per_frame_set(*output, time);
+        /* Only write the time per frame if it was written (and valid). E.g., single
+         * frame files do not usually contain any time per frame information. */
+        if (time >= 0)
+        {
+            tng_time_per_frame_set(*output, time);
+        }
         // Since we have copied the value from the input TNG we should not change it again
         (*gmx_tng_output)->timePerFrameIsSet = true;
 
