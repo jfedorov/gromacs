@@ -58,6 +58,7 @@
 #include "gromacs/gpu_utils/clfftinitializer.h"
 #include "gromacs/gpu_utils/hostallocator.h"
 #include "gromacs/math/vectypes.h"
+#include "gromacs/utility/gmxmpi.h"
 
 #include "pme_gpu_settings.h"
 #include "pme_gpu_staging.h"
@@ -122,6 +123,33 @@ struct PmeShared
      * \todo Alternatively, when this structure is used by CPU PME code, make use of this field there as well.
      */
     matrix previousBox;
+
+    /*! \brief The The number of decomposition dimensions */
+    int ndecompdim;
+    /*! \brief MPI rank id in X-decomposition */
+    int nodeidMajor;
+    /*! \brief MPI rank id in Y-decomposition */
+    int nodeidMinor;
+    /*! \brief Number of MPI ranks in X-decomposition */
+    int nnodesMajor;
+    /*! \brief Number of MPI ranks in Y-decomposition */
+    int nnodesMinor;
+    /*! \brief MPI communicator for ranks in X-decomposition */
+    MPI_Comm mpiCommx;
+    /*! \brief MPI communicator for ranks in Y-decomposition */
+    MPI_Comm mpiCommy;
+    /*! \brief local interpolation grid start values in x-dimension*/
+    std::vector<int> s2g0x;
+    /*! \brief local interpolation grid end values in x-dimension*/
+    std::vector<int> s2g1x;
+    /*! \brief local interpolation grid start values in y-dimension*/
+    std::vector<int> s2g0y;
+    /*! \brief local interpolation grid end values in y-dimension*/
+    std::vector<int> s2g1y;
+    /*! \brief local grid size*/
+    std::array<int, DIM> pmegridNk;
+    /*! \brief Size of the grid halo region */
+    int gridHalo;
 };
 
 /*! \internal \brief
