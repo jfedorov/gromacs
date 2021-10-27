@@ -133,7 +133,10 @@ TprReader::TprReader(std::string filename)
     velocities_.assign(globalState.v.begin(), globalState.v.end());
 
     // Copy listed interactions data
-    if (gmx_mtop_interaction_count(molecularTopology, IF_BOND) != 0)
+    int listedInteractionCount = gmx_mtop_interaction_count(molecularTopology, IF_BOND)
+                                 + gmx_mtop_interaction_count(molecularTopology, IF_PAIR)
+                                 + gmx_mtop_interaction_count(molecularTopology, IF_DIHEDRAL);
+    if (listedInteractionCount != 0)
     {
         InteractionDefinitions interactionDefinitions = localtop.idef;
         listedInteractionData_ = convertToNblibInteractions(interactionDefinitions);
