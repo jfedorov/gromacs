@@ -63,7 +63,7 @@ public:
         return (numRanks > 2) && (numRanks % 2 == 0);
     }
     //! Text to echo when skipping a test that does not satisfy the requirement
-    inline static const char* s_skipReason = "an event rank count of at least four is required";
+    inline static const char* s_skipReason = "an even rank count of at least four is required";
 };
 
 TEST(ThreadAffinityMultiRankTest, PinsWholeNode)
