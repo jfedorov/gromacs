@@ -143,23 +143,25 @@ void printHelp(const Options& options)
 // Never releases ownership.
 std::unique_ptr<TestProgramContext> g_testContext;
 
-/*! \brief Makes success verbose
+/*! \brief Makes GoogleTest non-failures more verbose
  *
- * By default, GoogleTest does not echo messages appended to explicit
- * assertions of success, ie.
+ * By default, GoogleTest does not echo messages appended to skipping
+ * with e.g. GTEST_SKIP() or explicit assertions of success with
+ * SUCCEEDED() e.g.
  *
- *    SUCCEED() << "reason why";
+ *    GTEST_SKIP() << "reason why";
  *
  * produces no output. This test listener changes that behavior, so
  * that the message is echoed.
  *
  * When run with multiple ranks, only the master rank should use this
  * listener, else the output can be very noisy. */
-class SuccessListener : public testing::EmptyTestEventListener
+template<testing::TestPartResult::Type testPartResultType>
+class Listener : public testing::EmptyTestEventListener
 {
     void OnTestPartResult(const testing::TestPartResult& result) override
     {
-        if (result.type() == testing::TestPartResult::kSuccess)
+        if (result.type() == testPartResultType)
         {
             printf("%s\n", result.message());
         }
@@ -222,7 +224,7 @@ void initTestUtils(const char* dataPath,
 
         bool        bHelp = false;
         std::string sourceRoot;
-        bool        echoSuccess = false;
+        bool        echoReasons = false;
         Options     options;
         // TODO: A single option that accepts multiple names would be nicer.
         // Also, we recognize -help, but GTest doesn't, which leads to a bit
@@ -235,7 +237,7 @@ void initTestUtils(const char* dataPath,
         options.addOption(
                 StringOption("src-root").store(&sourceRoot).description("Override source tree location (for data files)"));
         options.addOption(
-                BooleanOption("echo-success").store(&echoSuccess).description("When skipping a test, echo the reason"));
+                BooleanOption("echo-reasons").store(&echoReasons).description("When succeeding or skipping a test, echo the reason"));
         // The potential MPI test event listener must be initialized first,
         // because it should appear in the start of the event listener list,
         // before other event listeners that may generate test failures
@@ -268,9 +270,12 @@ void initTestUtils(const char* dataPath,
             TestFileManager::setInputDataDirectory(Path::join(sourceRoot, dataPath));
         }
         // Echo success messages only from the master MPI rank
-        if (echoSuccess && (gmx_node_rank() == 0))
+        if (echoReasons && (gmx_node_rank() == 0))
         {
-            testing::UnitTest::GetInstance()->listeners().Append(new SuccessListener);
+            testing::UnitTest::GetInstance()->listeners().Append(
+                    new Listener<testing::TestPartResult::kSuccess>);
+            testing::UnitTest::GetInstance()->listeners().Append(
+                    new Listener<testing::TestPartResult::kSkip>);
         }
     }
     catch (const std::exception& ex)

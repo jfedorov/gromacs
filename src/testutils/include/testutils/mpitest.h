@@ -103,21 +103,21 @@ bool threadMpiTestRunner(std::function<void()> testBody);
  *
  * When you do the above, the following will happen:
  *  - The test will get compiled only if thread-MPI or real MPI is enabled.
- *  - The test will get executed on the number of ranks specified.
- *    If you are using real MPI, the whole test binary is run under MPI and
- *    test execution across the processes is synchronized (GMX_MPI_TEST()
- *    actually has no effect in this case, the synchronization is handled at a
- *    higher level).
- *    If you are using thread-MPI, GMX_MPI_TEST() is required and it
- *    initializes thread-MPI with the specified number of threads and runs the
- *    rest of the test on each of the threads.
+ *  - The test will get executed only when the specified condition on
+ *    the the number of ranks is satisfied.
+ *  - If you are using real MPI, the whole test binary is run under
+ *    MPI and test execution across the processes is synchronized
+ *    (GMX_MPI_TEST() actually has no effect in this case, the
+ *    synchronization is handled at a higher level).
+ *  - If you are using thread-MPI, GMX_MPI_TEST() is required and it
+ *    initializes thread-MPI with the specified number of threads and
+ *    runs the rest of the test on each of the threads.
  *
  * \param[in] RankRequirement Class that expresses the necessary
  *     conditions on the number of MPI ranks for the test to continue.
  *     If run with unsupported number of ranks, the remainder of the
- *     test body is skipped, and the GoogleTest SUCCEED() mechanism
- *     used to report the reason why the number of MPI ranks is
- *     unsuitable.
+ *     test body is skipped, and the GTEST_SKIP() mechanism used to
+ *     report the reason why the number of MPI ranks is unsuitable.
  *
  * The RankRequirement class must have two static members; a static
  * method \c bool conditionSatisfied(const int) that can be passed the
@@ -137,13 +137,13 @@ bool threadMpiTestRunner(std::function<void()> testBody);
  *
  * \ingroup module_testutils
  */
-#define GMX_MPI_TEST(RankRequirement)                                                      \
-    const int numRanks = ::gmx::test::getNumberOfTestMpiRanks();                           \
-    if (!RankRequirement::conditionSatisfied(numRanks))                                    \
-    {                                                                                      \
-        SUCCEED() << std::string("Test not run because ") + RankRequirement::s_skipReason; \
-        return;                                                                            \
-    }                                                                                      \
+#define GMX_MPI_TEST(RankRequirement)                                                         \
+    const int numRanks = ::gmx::test::getNumberOfTestMpiRanks();                              \
+    if (!RankRequirement::conditionSatisfied(numRanks))                                       \
+    {                                                                                         \
+        GTEST_SKIP() << std::string("Test skipped because ") + RankRequirement::s_skipReason; \
+        return;                                                                               \
+    }                                                                                         \
     GMX_MPI_TEST_INNER;
 
 //! Helper for GMX_MPI_TEST to permit any rank count
