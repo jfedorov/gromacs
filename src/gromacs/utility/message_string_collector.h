@@ -37,6 +37,7 @@
  * Declares ::gmx::MessageStringCollector.
  *
  * \author Teemu Murtola <teemu.murtola@gmail.com>
+ * \author Mark Abraham <mark.j.abraham@gmail.com>
  * \inlibraryapi
  * \ingroup module_utility
  */
@@ -65,6 +66,8 @@ class MessageStringCollector
 public:
     MessageStringCollector();
     ~MessageStringCollector();
+    MessageStringCollector(MessageStringCollector&& /*unused*/) noexcept;
+    MessageStringCollector& operator=(MessageStringCollector&& /*unused*/) noexcept;
 
     /*! \brief
      * Starts a context for messages.

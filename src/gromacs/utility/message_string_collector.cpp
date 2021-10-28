@@ -37,6 +37,7 @@
  * Implements gmx::MessageStringCollector.
  *
  * \author Teemu Murtola <teemu.murtola@gmail.com>
+ * \author Mark Abraham <mark.j.abraham@gmail.com>
  * \ingroup module_utility
  */
 #include "gmxpre.h"
@@ -62,7 +63,9 @@ public:
 
 MessageStringCollector::MessageStringCollector() : impl_(new Impl) {}
 
-MessageStringCollector::~MessageStringCollector() {}
+MessageStringCollector::~MessageStringCollector()                                 = default;
+MessageStringCollector::MessageStringCollector(MessageStringCollector&&) noexcept = default;
+MessageStringCollector& MessageStringCollector::operator=(MessageStringCollector&&) noexcept = default;
 
 void MessageStringCollector::startContext(const char* name)
 {
