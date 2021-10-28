@@ -144,7 +144,7 @@ enum class GroupCoverage
 {
     All,             //!< All particles have to be a member of a group
     AllGenerateRest, //<! A rest group with name is generated for particles not part of any group
-    Partial,         //<! As \p AllGenerateTest, but no name for the rest group is generated
+    Partial,         //<! As \p AllGenerateRest, but no name for the rest group is generated
     OneGroup //<! Merge all selected groups into one group, make a rest group for the remaining particles
 };
 
