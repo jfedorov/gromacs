@@ -28,9 +28,6 @@ gromacs:clang-13:release:configure:
     RELEASE_BUILD_DIR: release-builds-clang
     CMAKE_PRECISION_OPTIONS: "-DGMX_DOUBLE=ON"
     CMAKE_BUILD_TYPE_OPTIONS: "-DCMAKE_BUILD_TYPE=RelWithAssert"
-  dependencies:
-    - archive:package
-    - regressiontests:package
 
 gromacs:clang-13:release:build:
   extends:
