@@ -1,5 +1,25 @@
 # Packages, exported artifacts, and release engineering processes.
 
+# Special job to run cmake to output the version string and
+# regressiontest md5sum to a file
+
+prepare-release-version:
+  extends:
+    - .variables:default
+    - .rules:nightly-only-for-release
+  cache: {}
+  image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-20.04-llvm-7-docs
+  stage: configure-build
+  variables:
+    KUBERNETES_CPU_LIMIT: 1
+    KUBERNETES_CPU_REQUEST: 1
+    KUBERNETES_MEMORY_REQUEST: 2Gi
+  script:
+    - cmake .
+  artifacts:
+    paths:
+      - VersionInfo-partial.cmake.cmakein
+
 # Special job to package regressiontest files and have them available for testing
 # Runs during pre-build
 # Set up to only fetch the files and prepare everything for merge requests
@@ -58,8 +78,9 @@ regressiontests:package:
     KUBERNETES_CPU_LIMIT: 1
     KUBERNETES_CPU_REQUEST: 1
     KUBERNETES_MEMORY_REQUEST: 2Gi
+  needs:
+    - job: prepare-release-version
   script:
-    - cmake .
     - VERSION=`sed -n -e '/GMX_VERSION_STRING\b/ s/.*"\(.*\)")/\1/p' VersionInfo-partial.cmake.cmakein`
     - REGTESTNAME="regressiontests-"$VERSION
     - if [[ $GROMACS_RELEASE != "true" ]] ; then
@@ -227,6 +248,7 @@ checksum-verify:
   dependencies:
     - archive:package
     - regressiontests:package
+    - prepare-release-version
 
 version-verify:
   image: ${CI_REGISTRY}/gromacs/gromacs/ci-ubuntu-20.04-llvm-7-docs

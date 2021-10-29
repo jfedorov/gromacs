@@ -31,6 +31,7 @@ gromacs:gcc-11-cuda-11.4.1:release:configure:
   dependencies:
     - archive:package
     - regressiontests:package
+    - prepare-release-version
 
 gromacs:gcc-11-cuda-11.4.1:release:build:
   extends:
