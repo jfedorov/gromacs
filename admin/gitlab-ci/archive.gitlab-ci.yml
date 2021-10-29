@@ -59,6 +59,7 @@ regressiontests:package:
     KUBERNETES_CPU_REQUEST: 1
     KUBERNETES_MEMORY_REQUEST: 2Gi
   script:
+    - cmake .
     - VERSION=`sed -n -e '/GMX_VERSION_STRING\b/ s/.*"\(.*\)")/\1/p' VersionInfo-partial.cmake.cmakein`
     - REGTESTNAME="regressiontests-"$VERSION
     - if [[ $GROMACS_RELEASE != "true" ]] ; then
