@@ -55,8 +55,7 @@ namespace gmx
 namespace test
 {
 
-TerminationHelper::TerminationHelper(CommandLine*      mdrunCaller,
-                                     SimulationRunner* runner) :
+TerminationHelper::TerminationHelper(CommandLine* mdrunCaller, SimulationRunner* runner) :
     mdrunCaller_(mdrunCaller), runner_(runner)
 {
     runner_->useTopGroAndNdxFromDatabase("spc2");
