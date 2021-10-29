@@ -30,7 +30,6 @@ gromacs:gcc-11:release:configure:
   dependencies:
     - archive:package
     - regressiontests:package
-    - prepare-release-version
 
 gromacs:gcc-11:release:build:
   # Test using configuration: gromacs:gcc-11:release:configure

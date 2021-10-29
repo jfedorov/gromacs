@@ -31,7 +31,6 @@ gromacs:clang-13:release:configure:
   dependencies:
     - archive:package
     - regressiontests:package
-    - prepare-release-version
 
 gromacs:clang-13:release:build:
   extends:
