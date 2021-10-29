@@ -213,8 +213,6 @@ void PmeTest::SetUpTestSuite()
     }
 }
 
-/*! \brief If the mdrun command line can't run on this build or
- * hardware, we should mark it as skipped and describe why. */
 MessageStringCollector PmeTest::getSkipMessagesIfNecessary(const CommandLine& commandLine)
 {
     // Note that we can't call GTEST_SKIP() from within this method,

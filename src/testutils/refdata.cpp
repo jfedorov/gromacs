@@ -170,8 +170,8 @@ ReferenceDataMode getReferenceDataMode()
 TestReferenceDataImplPointer initReferenceDataInstance(std::optional<std::string> testNameOverride)
 {
     GMX_RELEASE_ASSERT(!g_referenceData, "Test cannot create multiple TestReferenceData instances");
-    g_referenceData.reset(
-            new internal::TestReferenceDataImpl(getReferenceDataMode(), false, testNameOverride));
+    g_referenceData.reset(new internal::TestReferenceDataImpl(
+            getReferenceDataMode(), false, std::move(testNameOverride)));
     return g_referenceData;
 }
 
