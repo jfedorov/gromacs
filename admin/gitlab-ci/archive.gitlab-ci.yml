@@ -86,6 +86,8 @@ regressiontests:package:
     - if [[ $GROMACS_RELEASE != "true" ]] ; then
       REGTESTNAME=$REGTESTNAME-dev ;
       fi
+    - echo $VERSION
+    - echo $REGTESTNAME
     - export REGTESTBRANCH=master
     - if [[ $CI_COMMIT_REF_NAME == "master" || $CI_COMMIT_REF_NAME == "release-20"[1-2][0-9] ]] ; then
       export REGTESTBRANCH=$CI_COMMIT_REF_NAME ;
@@ -106,6 +108,7 @@ regressiontests:package:
     - mv $REGTESTNAME.tar.gz gmx-regressiontests.tar.gz ..
     - echo "Build regressiontests for branch  $REGTESTBRANCH"
     - cd ..
+    - ls
   artifacts:
     paths:
       - regressiontests-*.tar.gz
