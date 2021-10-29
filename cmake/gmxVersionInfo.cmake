@@ -363,6 +363,9 @@ string(REPLACE ";" ":" DIRECTORIES_TO_CHECKSUM_STRING "${SET_OF_DIRECTORIES_TO_C
 #        - These are again custom commands that depend on the output from
 #          step 1, so they get regenerated only when the static version info
 #          changes.
+#
+# Note that VersionInfo-partial.cmake is also used to transfer version
+# information between GitLab CI jobs for release and documentation builds.
 
 # Check if we have all necessary python modules available
 if (Python3_Interpreter_FOUND)
