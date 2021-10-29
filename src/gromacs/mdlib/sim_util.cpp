@@ -1129,13 +1129,13 @@ static void combineMtsForces(const int      numAtoms,
  * \param [in] dd                  Domain decomposition object
  */
 static void setupGpuForceReductions(
-        gmx::MdrunScheduleWorkload*  runScheduleWork,
-        nonbonded_verlet_t*          nbv,
-        gmx::StatePropagatorDataGpu* stateGpu,
-        gmx::EnumerationArray<gmx::AtomLocality, std::unique_ptr<gmx::GpuForceReduction>>& gpuForceReduction,
-        gmx::PmePpCommGpu* pmePpCommGpu,
-        gmx_pme_t*         pmedata,
-        gmx_domdec_t*      dd)
+        const gmx::MdrunScheduleWorkload* runScheduleWork,
+        const nonbonded_verlet_t*         nbv,
+        gmx::StatePropagatorDataGpu*      stateGpu,
+        const gmx::EnumerationArray<gmx::AtomLocality, std::unique_ptr<gmx::GpuForceReduction>>& gpuForceReduction,
+        gmx::PmePpCommGpu*  pmePpCommGpu,
+        const gmx_pme_t*    pmedata,
+        const gmx_domdec_t* dd)
 {
     GMX_ASSERT(!runScheduleWork->simulationWork.useMts,
                "GPU force reduction is not compatible with MTS");
