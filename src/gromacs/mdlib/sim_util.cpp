@@ -1211,9 +1211,6 @@ static void setupNonLocalGpuForceReduction(const gmx::MdrunScheduleWorkload* run
                                            gmx::GpuForceReduction*           gpuForceReduction,
                                            const gmx_domdec_t*               dd)
 {
-    GMX_ASSERT(!runScheduleWork->simulationWork.useMts,
-               "GPU force reduction is not compatible with MTS");
-
     // (re-)initialize non-local GPU force reduction
     const bool accumulate = runScheduleWork->domainWork.haveCpuBondedWork
                             || runScheduleWork->domainWork.haveFreeEnergyWork;
