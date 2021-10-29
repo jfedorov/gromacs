@@ -73,7 +73,7 @@ class TerminationHelper
 {
 public:
     //! Constructor
-    TerminationHelper(TestFileManager* fileManager, CommandLine* mdrunCaller, SimulationRunner* runner);
+    TerminationHelper(CommandLine* mdrunCaller, SimulationRunner* runner);
     /*! \brief Do a short simulation, likely terminated by -maxh
      *
      * \param[in] expectedCptFileName The name of the checkpoint

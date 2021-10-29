@@ -276,8 +276,6 @@ TEST_F(DensityFittingTest, GromppErrorWhenEnergyEvaluationFrequencyMismatch)
 TEST_F(DensityFittingTest, CheckpointWorks)
 {
     runner_.useStringAsMdpFile(mdpMdDensfitYesUnsetValues + mdpSkipDensityfittingEveryOtherStep_);
-    runner_.cptFileName_ = fileManager_.getTemporaryFilePath(".cpt");
-    commandLineForMdrun_.addOption("-cpo", runner_.cptFileName_);
 
     ASSERT_EQ(0, runner_.callGrompp());
     ASSERT_EQ(0, runner_.callMdrun(commandLineForMdrun_));
@@ -285,7 +283,7 @@ TEST_F(DensityFittingTest, CheckpointWorks)
     // checkMdrun(expectedEnergyTermMagnitude);
 
     CommandLine commandLineForRestart;
-    commandLineForRestart.addOption("-cpi", runner_.cptFileName_);
+    commandLineForRestart.addOption("-cpi", runner_.cptOutputFileName_);
     commandLineForRestart.addOption("-noappend");
     runner_.nsteps_ = 4;
     ASSERT_EQ(0, runner_.callMdrun(commandLineForRestart));
