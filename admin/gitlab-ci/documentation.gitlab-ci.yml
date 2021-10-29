@@ -280,6 +280,7 @@ webpage:configure:
   dependencies:
     - archive:package
     - regressiontests:package
+    - prepare-release-version
   variables:
     CMAKE_EXTRA_OPTIONS: -DGMX_BUILD_HELP=on -DGMX_BUILD_MANUAL=on -DGMX_USE_SIMD_KERNELS=off
 

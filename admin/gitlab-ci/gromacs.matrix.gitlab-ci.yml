@@ -108,10 +108,6 @@
       - $RELEASE_BUILD_DIR
       - $RELEASE_REGRESSIONTESTS
       - $RELEASE_SOURCE
-  dependencies:
-    - archive:package
-    - regressiontests:package
-    - prepare-release-version
 
 .gromacs:base:build:
   stage: build
