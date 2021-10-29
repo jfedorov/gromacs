@@ -15,7 +15,7 @@ prepare-release-version:
     KUBERNETES_CPU_REQUEST: 1
     KUBERNETES_MEMORY_REQUEST: 2Gi
   script:
-    - cmake .
+    - cmake . -DGMX_BUILD_TARBALL=on
   artifacts:
     paths:
       - VersionInfo-partial.cmake.cmakein
