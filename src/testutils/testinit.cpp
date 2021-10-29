@@ -145,9 +145,8 @@ std::unique_ptr<TestProgramContext> g_testContext;
 
 /*! \brief Makes GoogleTest non-failures more verbose
  *
- * By default, GoogleTest does not echo messages appended to skipping
- * with e.g. GTEST_SKIP() or explicit assertions of success with
- * SUCCEEDED() e.g.
+ * By default, GoogleTest does not echo messages appended to explicit
+ * assertions of success with SUCCEEDED() e.g.
  *
  *    GTEST_SKIP() << "reason why";
  *
@@ -156,12 +155,11 @@ std::unique_ptr<TestProgramContext> g_testContext;
  *
  * When run with multiple ranks, only the master rank should use this
  * listener, else the output can be very noisy. */
-template<testing::TestPartResult::Type testPartResultType>
-class Listener : public testing::EmptyTestEventListener
+class SuccessListener : public testing::EmptyTestEventListener
 {
     void OnTestPartResult(const testing::TestPartResult& result) override
     {
-        if (result.type() == testPartResultType)
+        if (result.type() == testing::TestPartResult::kSuccess)
         {
             printf("%s\n", result.message());
         }
@@ -272,10 +270,7 @@ void initTestUtils(const char* dataPath,
         // Echo success messages only from the master MPI rank
         if (echoReasons && (gmx_node_rank() == 0))
         {
-            testing::UnitTest::GetInstance()->listeners().Append(
-                    new Listener<testing::TestPartResult::kSuccess>);
-            testing::UnitTest::GetInstance()->listeners().Append(
-                    new Listener<testing::TestPartResult::kSkip>);
+            testing::UnitTest::GetInstance()->listeners().Append(new SuccessListener);
         }
     }
     catch (const std::exception& ex)
