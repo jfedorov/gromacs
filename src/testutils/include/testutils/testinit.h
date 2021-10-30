@@ -89,6 +89,19 @@ void initTestUtils(const char* dataPath,
 void finalizeTestUtils();
 //! \endcond
 
+/*! \brief Declaration of function used to dynamically register
+ * GoogleTest tests.
+ *
+ * When a test binary uses gmx_add_gtest_executable(exename
+ * DYNAMIC_REGISTRATION ...) it must provide an implementation of this
+ * method. The method is called before RUN_ALL_TESTS() and is expected
+ * to call ::testing::RegisterTest to register tests dynamically. This
+ * approach might be necessary to run the tests in a stable way over
+ * whichever hardware is detected at run time.
+ *
+ * Normal test binaries do not need to implement this function. */
+void registerTestsDynamically();
+
 } // namespace test
 } // namespace gmx
 

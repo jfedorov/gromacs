@@ -62,6 +62,7 @@
 #include "gromacs/fft/parallel_3dfft.h"
 #include "gromacs/gpu_utils/gpu_utils.h"
 #include "gromacs/hardware/device_management.h"
+#include "gromacs/hardware/hw_info.h"
 #include "gromacs/math/invertmatrix.h"
 #include "gromacs/mdtypes/commrec.h"
 #include "gromacs/pbcutil/pbc.h"
@@ -74,6 +75,7 @@
 
 #include "testutils/test_hardware_environment.h"
 #include "testutils/testasserts.h"
+#include "testutils/testinit.h"
 
 class DeviceContext;
 
@@ -91,21 +93,28 @@ const std::map<std::string, Matrix3x3> c_inputBoxes = {
 //! Valid PME orders for testing
 std::vector<int> c_inputPmeOrders{ 3, 4, 5 };
 
-bool pmeSupportsInputForMode(const gmx_hw_info_t& hwinfo, const t_inputrec* inputRec, CodePath mode)
+MessageStringCollector getSkipMessagesIfNecessary(const gmx_hw_info_t& hwinfo, const t_inputrec& inputRec, const CodePath codePath)
 {
-    bool implemented;
-    switch (mode)
+    // Note that we can't call GTEST_SKIP() from within this method,
+    // because it only returns from the current function. So we
+    // collect all the reasons why the test cannot run, return them
+    // and skip in a higher stack frame.
+
+    MessageStringCollector messages;
+    messages.startContext("Test is being skipped because:");
+
+    if (codePath == CodePath::CPU)
     {
-        case CodePath::CPU: implemented = true; break;
-
-        case CodePath::GPU:
-            implemented = (pme_gpu_supports_build(nullptr) && pme_gpu_supports_hardware(hwinfo, nullptr)
-                           && pme_gpu_supports_input(*inputRec, nullptr));
-            break;
-
-        default: GMX_THROW(InternalError("Test not implemented for this mode"));
+        // Everything is implemented, no reason to skip
+        return messages;
     }
-    return implemented;
+    
+    std::string errorMessage;
+    messages.appendIf(!pme_gpu_supports_build(&errorMessage), errorMessage);
+    messages.appendIf(!pme_gpu_supports_hardware(hwinfo, &errorMessage), errorMessage);
+    messages.appendIf(!pme_gpu_supports_input(inputRec, &errorMessage),
+                      errorMessage);
+    return messages;
 }
 
 uint64_t getSplineModuliDoublePrecisionUlps(int splineOrder)
@@ -931,6 +940,9 @@ PmeTestHardwareContext::PmeTestHardwareContext(TestDevice* testDevice) :
     setActiveDevice(testDevice_->deviceInfo());
     pmeGpuProgram_ = buildPmeGpuProgram(testDevice_->deviceContext());
 }
+PmeTestHardwareContext::~PmeTestHardwareContext()                                 = default;
+PmeTestHardwareContext::PmeTestHardwareContext(PmeTestHardwareContext&&) noexcept = default;
+PmeTestHardwareContext& PmeTestHardwareContext::operator=(PmeTestHardwareContext&&) noexcept = default;
 
 //! Returns a human-readable context description line
 std::string PmeTestHardwareContext::description() const
@@ -951,18 +963,39 @@ void PmeTestHardwareContext::activate() const
     }
 }
 
-std::vector<std::unique_ptr<PmeTestHardwareContext>> createPmeTestHardwareContextList()
+static std::vector<PmeTestHardwareContext> s_pmeTestHardwareContexts;
+static std::unique_ptr<TestHardwareEnvironment> s_pmeTestHardwareEnvironment;
+
+TestHardwareEnvironment *getPmeTestHardwareEnvironment()
 {
-    std::vector<std::unique_ptr<PmeTestHardwareContext>> pmeTestHardwareContextList;
-    // Add CPU
-    pmeTestHardwareContextList.emplace_back(std::make_unique<PmeTestHardwareContext>());
-    // Add GPU devices
-    const auto& testDeviceList = getTestHardwareEnvironment()->getTestDeviceList();
-    for (const auto& testDevice : testDeviceList)
+    if (!s_pmeTestHardwareEnvironment)
     {
-        pmeTestHardwareContextList.emplace_back(std::make_unique<PmeTestHardwareContext>(testDevice.get()));
+        s_pmeTestHardwareEnvironment = std::make_unique<TestHardwareEnvironment>();
     }
-    return pmeTestHardwareContextList;
+    return s_pmeTestHardwareEnvironment.get();
+}
+
+ArrayRef<const PmeTestHardwareContext> getPmeTestHardwareContexts()
+{
+    if (s_pmeTestHardwareContexts.empty())
+    {
+        // Add CPU
+        s_pmeTestHardwareContexts.emplace_back(PmeTestHardwareContext());
+        // Add GPU devices
+        const auto& testDeviceList = getPmeTestHardwareEnvironment()->getTestDeviceList();
+        for (const auto& testDevice : testDeviceList)
+        {
+            s_pmeTestHardwareContexts.emplace_back(PmeTestHardwareContext(testDevice.get()));
+        }
+    }
+    return s_pmeTestHardwareContexts;
+}
+
+void registerTestsDynamically()
+{
+    auto contexts = getPmeTestHardwareContexts();
+    Range<int> contextIndexRange(0, contexts.size());
+    registerDynamicalPmeSplineSpreadTests(contextIndexRange);
 }
 
 } // namespace test

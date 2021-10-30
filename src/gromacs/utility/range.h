@@ -43,6 +43,7 @@
 #ifndef GMX_UTILITY_RANGE_H
 #define GMX_UTILITY_RANGE_H
 
+#include <iterator>
 #include <type_traits>
 
 #include "gromacs/utility/basedefinitions.h"
@@ -70,9 +71,11 @@ class Range
     // Note: This class has as invariant: begin_ <= end_
 
 public:
+    using value_type = T;
     //! An iterator that loops over a range of integers
     struct iterator
     {
+        using value_type = T;
         //! Constructor
         iterator(T value) : value_(value) {}
         //! Value
@@ -131,5 +134,24 @@ private:
 };
 
 } // namespace gmx
+
+namespace std
+{
+/*! \brief Specialize the iterator_traits template so that
+ * Range<int>::iterator can be used as the type upon which code is
+ * templated.
+ *
+ * For example, this makes ::testing::ValuesIn(someIntRange) work. */
+template <>
+struct iterator_traits<typename gmx::Range<int>::iterator>
+{
+    using difference_type = ptrdiff_t;
+    using value_type = typename gmx::Range<int>::iterator::value_type;
+    using pointer = value_type*;
+    using reference = value_type&;
+    using iterator_categotry = random_access_iterator_tag;
+};
+
+} // namespace std
 
 #endif

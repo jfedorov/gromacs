@@ -50,6 +50,8 @@
 #include "gromacs/ewald/pme_gpu_internal.h"
 #include "gromacs/math/gmxcomplex.h"
 #include "gromacs/mdtypes/state_propagator_data_gpu.h"
+#include "gromacs/utility/message_string_collector.h"
+#include "gromacs/utility/range.h"
 #include "gromacs/utility/unique_cptr.h"
 
 #include "testutils/test_device.h"
@@ -62,6 +64,8 @@ class ArrayRef;
 
 namespace test
 {
+
+class TestHardwareEnvironment;
 
 //! Hardware code path being tested
 enum class CodePath : int
@@ -122,8 +126,10 @@ enum class PmeSolveAlgorithm : int
 
 // Misc.
 
-//! Tells if this generally valid PME input is supported for this mode
-bool pmeSupportsInputForMode(const gmx_hw_info_t& hwinfo, const t_inputrec* inputRec, CodePath mode);
+/*! \brief Returns message describing why PME in this \c mode is not
+ * supported for this \c inputRec on this \c hwinfo, or empty of
+ * messages when PME is supported. */
+MessageStringCollector getSkipMessagesIfNecessary(const gmx_hw_info_t& hwinfo, const t_inputrec& inputRec, CodePath mode);
 
 //! Spline moduli are computed in double precision, so they're very good in single precision
 constexpr int64_t c_splineModuliSinglePrecisionUlps = 1;
@@ -211,13 +217,19 @@ struct PmeTestHardwareContext
     //! Returns a human-readable context description line
     std::string description() const;
     //! Pointer to the global test hardware device (if on GPU)
-    TestDevice* testDevice_ = nullptr;
+        TestDevice* testDevice_ = nullptr; // TODO destructor?
     //! PME GPU program if needed
-    PmeGpuProgramStorage pmeGpuProgram_ = nullptr;
-    // Constructor for CPU context
+        PmeGpuProgramStorage pmeGpuProgram_ = nullptr; // TODO moveable?
+    //! Constructor for CPU context
     PmeTestHardwareContext();
-    // Constructor for GPU context
+    //! Constructor for GPU context
     explicit PmeTestHardwareContext(TestDevice* testDevice);
+        //! Destructor   
+    ~PmeTestHardwareContext();
+        //! Move constructor
+    PmeTestHardwareContext(PmeTestHardwareContext&& /*unused*/) noexcept;
+        //! Move-assignment operator
+    PmeTestHardwareContext& operator=(PmeTestHardwareContext&& /*unused*/) noexcept;
 
     //! Get the code path
     CodePath codePath() const { return codePath_; }
@@ -241,7 +253,11 @@ struct PmeTestHardwareContext
     void activate() const;
 };
 
+TestHardwareEnvironment *getPmeTestHardwareEnvironment();
 std::vector<std::unique_ptr<PmeTestHardwareContext>> createPmeTestHardwareContextList();
+
+ArrayRef<const PmeTestHardwareContext> getPmeTestHardwareContexts();
+void registerDynamicalPmeSplineSpreadTests(Range<int> contextIndexRange);
 
 //! A couple of valid inputs for boxes.
 extern const std::map<std::string, Matrix3x3> c_inputBoxes;

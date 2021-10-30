@@ -120,10 +120,10 @@ const std::unordered_map<std::string, TestSystem> c_testSystems = {
 /* Valid input instances */
 
 /*! \brief Convenience typedef of input parameters - unit cell box, PME interpolation order, grid
- * dimensions, particle coordinates, particle charges
+ * dimensions, particle coordinates, particle charges, PME hardware context
  * TODO: consider inclusion of local grid offsets/sizes or PME nodes counts to test the PME DD
  */
-typedef std::tuple<std::string, int, IVec, std::string> SplineAndSpreadInputParameters;
+typedef std::tuple<std::string, int, IVec, std::string, int> SplineAndSpreadInputParameters;
 
 //! Help GoogleTest name our test cases
 std::string nameOfTest(const testing::TestParamInfo<SplineAndSpreadInputParameters>& info)
@@ -172,7 +172,6 @@ public:
 
     static void SetUpTestSuite()
     {
-        s_pmeTestHardwareContexts    = createPmeTestHardwareContextList();
         g_allowPmeWithSyclForTesting = true; // We support PmeSplineAndSpread with SYCL
     }
 
@@ -181,198 +180,197 @@ public:
         // Revert the value back.
         g_allowPmeWithSyclForTesting = false;
     }
+};
+
+class WorksWith : public SplineAndSpreadTest
+{
+public:
+    // todo move semantics?
+    explicit WorksWith(const SplineAndSpreadInputParameters& params) : params_(params) {}
+
+    SplineAndSpreadInputParameters params_;
 
     //! The test
-    static void runTest()
+    void TestBody() override;
+};
+
+void WorksWith::TestBody()
+{
+    //    EXPECT_NO_THROW_GMX(runTest()); todo
+    /* Getting the input */
+    int         pmeOrder;
+    IVec        gridSize;
+    std::string boxName, testSystemName;
+    int         contextIndex;
+
+    std::tie(boxName, pmeOrder, gridSize, testSystemName, contextIndex) = params_;
+    Matrix3x3                box                                        = c_inputBoxes.at(boxName);
+    const CoordinatesVector& coordinates = c_testSystems.at(testSystemName).coordinates;
+    const ChargesVector&     charges     = c_testSystems.at(testSystemName).charges;
+    const size_t             atomCount   = coordinates.size();
+
+    /* Storing the input where it's needed */
+    t_inputrec inputRec;
+    inputRec.nkx         = gridSize[XX];
+    inputRec.nky         = gridSize[YY];
+    inputRec.nkz         = gridSize[ZZ];
+    inputRec.pme_order   = pmeOrder;
+    inputRec.coulombtype = CoulombInteractionType::Pme;
+    inputRec.epsilon_r   = 1.0;
+
+    // There is a subtle problem with multiple comparisons against same reference data:
+    // The subsequent (GPU) spreading runs at one point didn't actually copy the output grid
+    // into the proper buffer, but the reference data was already marked as checked
+    // (hasBeenChecked_) by the CPU run, so nothing failed. For now we will manually track that
+    // the count of the grid entries is the same on each run. This is just a hack for a single
+    // specific output though. What would be much better TODO is to split different codepaths
+    // into separate tests, while making them use the same reference files.
+    bool   gridValuesSizeAssigned = false;
+    size_t previousGridValuesSize;
+
+    TestReferenceData             refData;
+    const PmeTestHardwareContext& pmeTestHardwareContext = getPmeTestHardwareContexts()[contextIndex];
     {
-        /* Getting the input */
-        int         pmeOrder;
-        IVec        gridSize;
-        std::string boxName, testSystemName;
-
-        std::tie(boxName, pmeOrder, gridSize, testSystemName) = GetParam();
-        Matrix3x3                box                          = c_inputBoxes.at(boxName);
-        const CoordinatesVector& coordinates = c_testSystems.at(testSystemName).coordinates;
-        const ChargesVector&     charges     = c_testSystems.at(testSystemName).charges;
-        const size_t             atomCount   = coordinates.size();
-
-        /* Storing the input where it's needed */
-        t_inputrec inputRec;
-        inputRec.nkx         = gridSize[XX];
-        inputRec.nky         = gridSize[YY];
-        inputRec.nkz         = gridSize[ZZ];
-        inputRec.pme_order   = pmeOrder;
-        inputRec.coulombtype = CoulombInteractionType::Pme;
-        inputRec.epsilon_r   = 1.0;
-
-        // There is a subtle problem with multiple comparisons against same reference data:
-        // The subsequent (GPU) spreading runs at one point didn't actually copy the output grid
-        // into the proper buffer, but the reference data was already marked as checked
-        // (hasBeenChecked_) by the CPU run, so nothing failed. For now we will manually track that
-        // the count of the grid entries is the same on each run. This is just a hack for a single
-        // specific output though. What would be much better TODO is to split different codepaths
-        // into separate tests, while making them use the same reference files.
-        bool   gridValuesSizeAssigned = false;
-        size_t previousGridValuesSize;
-
-        TestReferenceData refData;
-        for (const auto& pmeTestHardwareContext : s_pmeTestHardwareContexts)
+        pmeTestHardwareContext.activate();
+        CodePath               codePath = pmeTestHardwareContext.codePath();
+        MessageStringCollector messages =
+                getSkipMessagesIfNecessary(*getTestHardwareEnvironment()->hwinfo(), inputRec, codePath);
+        if (!messages.isEmpty())
         {
-            pmeTestHardwareContext->activate();
-            CodePath   codePath       = pmeTestHardwareContext->codePath();
-            const bool supportedInput = pmeSupportsInputForMode(
-                    *getTestHardwareEnvironment()->hwinfo(), &inputRec, codePath);
-            if (!supportedInput)
+            GTEST_SKIP() << messages.toString();
+        }
+
+        for (SplineAndSpreadOptions option : EnumerationWrapper<SplineAndSpreadOptions>())
+        {
+            /* Describing the test uniquely in case it fails */
+
+            SCOPED_TRACE(
+                    formatString("Testing %s on %s for PME grid size %d %d %d"
+                                 ", order %d, %zu atoms",
+                                 enumValueToString(option),
+                                 pmeTestHardwareContext.description().c_str(),
+                                 gridSize[XX],
+                                 gridSize[YY],
+                                 gridSize[ZZ],
+                                 pmeOrder,
+                                 atomCount));
+
+            /* Running the test */
+
+            PmeSafePointer                          pmeSafe = pmeInitWrapper(&inputRec,
+                                                    codePath,
+                                                    pmeTestHardwareContext.deviceContext(),
+                                                    pmeTestHardwareContext.deviceStream(),
+                                                    pmeTestHardwareContext.pmeGpuProgram(),
+                                                    box);
+            std::unique_ptr<StatePropagatorDataGpu> stateGpu =
+                    (codePath == CodePath::GPU)
+                            ? makeStatePropagatorDataGpu(*pmeSafe.get(),
+                                                         pmeTestHardwareContext.deviceContext(),
+                                                         pmeTestHardwareContext.deviceStream())
+                            : nullptr;
+
+            pmeInitAtoms(pmeSafe.get(), stateGpu.get(), codePath, coordinates, charges);
+
+            const bool computeSplines = (option == SplineAndSpreadOptions::SplineOnly)
+                                        || (option == SplineAndSpreadOptions::SplineAndSpreadUnified);
+            const bool spreadCharges = (option == SplineAndSpreadOptions::SpreadOnly)
+                                       || (option == SplineAndSpreadOptions::SplineAndSpreadUnified);
+
+            if (!computeSplines)
             {
-                /* Testing the failure for the unsupported input */
-                EXPECT_THROW_GMX(pmeInitWrapper(&inputRec, codePath, nullptr, nullptr, nullptr, box),
-                                 NotImplementedError);
-                continue;
+                // Here we should set up the results of the spline computation so that the spread can run.
+                // What is lazy and works is running the separate spline so that it will set it up for us:
+                pmePerformSplineAndSpread(pmeSafe.get(), codePath, true, false);
+                // We know that it is tested in another iteration.
+                // TODO: Clean alternative: read and set the reference gridline indices, spline params
             }
 
-            for (SplineAndSpreadOptions option : EnumerationWrapper<SplineAndSpreadOptions>())
+            pmePerformSplineAndSpread(pmeSafe.get(), codePath, computeSplines, spreadCharges);
+            pmeFinalizeTest(pmeSafe.get(), codePath);
+
+            /* Outputs correctness check */
+            /* All tolerances were picked empirically for single precision on CPU */
+
+            TestReferenceChecker rootChecker(refData.rootChecker());
+
+            const auto maxGridSize = std::max(std::max(gridSize[XX], gridSize[YY]), gridSize[ZZ]);
+            const auto ulpToleranceSplineValues = 4 * (pmeOrder - 2) * maxGridSize;
+            /* 4 is a modest estimate for amount of operations; (pmeOrder - 2) is a number of iterations;
+             * maxGridSize is inverse of the smallest positive fractional coordinate (which are interpolated by the splines).
+             */
+
+            if (computeSplines)
             {
-                /* Describing the test uniquely in case it fails */
+                const char* dimString[] = { "X", "Y", "Z" };
 
-                SCOPED_TRACE(
-                        formatString("Testing %s on %s for PME grid size %d %d %d"
-                                     ", order %d, %zu atoms",
-                                     enumValueToString(option),
-                                     pmeTestHardwareContext->description().c_str(),
-                                     gridSize[XX],
-                                     gridSize[YY],
-                                     gridSize[ZZ],
-                                     pmeOrder,
-                                     atomCount));
-
-                /* Running the test */
-
-                PmeSafePointer                          pmeSafe = pmeInitWrapper(&inputRec,
-                                                        codePath,
-                                                        pmeTestHardwareContext->deviceContext(),
-                                                        pmeTestHardwareContext->deviceStream(),
-                                                        pmeTestHardwareContext->pmeGpuProgram(),
-                                                        box);
-                std::unique_ptr<StatePropagatorDataGpu> stateGpu =
-                        (codePath == CodePath::GPU)
-                                ? makeStatePropagatorDataGpu(*pmeSafe.get(),
-                                                             pmeTestHardwareContext->deviceContext(),
-                                                             pmeTestHardwareContext->deviceStream())
-                                : nullptr;
-
-                pmeInitAtoms(pmeSafe.get(), stateGpu.get(), codePath, coordinates, charges);
-
-                const bool computeSplines = (option == SplineAndSpreadOptions::SplineOnly)
-                                            || (option == SplineAndSpreadOptions::SplineAndSpreadUnified);
-                const bool spreadCharges = (option == SplineAndSpreadOptions::SpreadOnly)
-                                           || (option == SplineAndSpreadOptions::SplineAndSpreadUnified);
-
-                if (!computeSplines)
+                /* Spline values */
+                SCOPED_TRACE(formatString("Testing spline values with tolerance of %d",
+                                          ulpToleranceSplineValues));
+                TestReferenceChecker splineValuesChecker(
+                        rootChecker.checkCompound("Splines", "Values"));
+                splineValuesChecker.setDefaultTolerance(
+                        relativeToleranceAsUlp(1.0, ulpToleranceSplineValues));
+                for (int i = 0; i < DIM; i++)
                 {
-                    // Here we should set up the results of the spline computation so that the spread can run.
-                    // What is lazy and works is running the separate spline so that it will set it up for us:
-                    pmePerformSplineAndSpread(pmeSafe.get(), codePath, true, false);
-                    // We know that it is tested in another iteration.
-                    // TODO: Clean alternative: read and set the reference gridline indices, spline params
+                    auto splineValuesDim =
+                            pmeGetSplineData(pmeSafe.get(), codePath, PmeSplineDataType::Values, i);
+                    splineValuesChecker.checkSequence(
+                            splineValuesDim.begin(), splineValuesDim.end(), dimString[i]);
                 }
 
-                pmePerformSplineAndSpread(pmeSafe.get(), codePath, computeSplines, spreadCharges);
-                pmeFinalizeTest(pmeSafe.get(), codePath);
-
-                /* Outputs correctness check */
-                /* All tolerances were picked empirically for single precision on CPU */
-
-                TestReferenceChecker rootChecker(refData.rootChecker());
-
-                const auto maxGridSize = std::max(std::max(gridSize[XX], gridSize[YY]), gridSize[ZZ]);
-                const auto ulpToleranceSplineValues = 4 * (pmeOrder - 2) * maxGridSize;
-                /* 4 is a modest estimate for amount of operations; (pmeOrder - 2) is a number of iterations;
-                 * maxGridSize is inverse of the smallest positive fractional coordinate (which are interpolated by the splines).
-                 */
-
-                if (computeSplines)
+                /* Spline derivatives */
+                const auto ulpToleranceSplineDerivatives = 4 * ulpToleranceSplineValues;
+                /* 4 is just a wild guess since the derivatives are deltas of neighbor spline values which could differ greatly */
+                SCOPED_TRACE(formatString("Testing spline derivatives with tolerance of %d",
+                                          ulpToleranceSplineDerivatives));
+                TestReferenceChecker splineDerivativesChecker(
+                        rootChecker.checkCompound("Splines", "Derivatives"));
+                splineDerivativesChecker.setDefaultTolerance(
+                        relativeToleranceAsUlp(1.0, ulpToleranceSplineDerivatives));
+                for (int i = 0; i < DIM; i++)
                 {
-                    const char* dimString[] = { "X", "Y", "Z" };
-
-                    /* Spline values */
-                    SCOPED_TRACE(formatString("Testing spline values with tolerance of %d",
-                                              ulpToleranceSplineValues));
-                    TestReferenceChecker splineValuesChecker(
-                            rootChecker.checkCompound("Splines", "Values"));
-                    splineValuesChecker.setDefaultTolerance(
-                            relativeToleranceAsUlp(1.0, ulpToleranceSplineValues));
-                    for (int i = 0; i < DIM; i++)
-                    {
-                        auto splineValuesDim =
-                                pmeGetSplineData(pmeSafe.get(), codePath, PmeSplineDataType::Values, i);
-                        splineValuesChecker.checkSequence(
-                                splineValuesDim.begin(), splineValuesDim.end(), dimString[i]);
-                    }
-
-                    /* Spline derivatives */
-                    const auto ulpToleranceSplineDerivatives = 4 * ulpToleranceSplineValues;
-                    /* 4 is just a wild guess since the derivatives are deltas of neighbor spline values which could differ greatly */
-                    SCOPED_TRACE(formatString("Testing spline derivatives with tolerance of %d",
-                                              ulpToleranceSplineDerivatives));
-                    TestReferenceChecker splineDerivativesChecker(
-                            rootChecker.checkCompound("Splines", "Derivatives"));
-                    splineDerivativesChecker.setDefaultTolerance(
-                            relativeToleranceAsUlp(1.0, ulpToleranceSplineDerivatives));
-                    for (int i = 0; i < DIM; i++)
-                    {
-                        auto splineDerivativesDim = pmeGetSplineData(
-                                pmeSafe.get(), codePath, PmeSplineDataType::Derivatives, i);
-                        splineDerivativesChecker.checkSequence(
-                                splineDerivativesDim.begin(), splineDerivativesDim.end(), dimString[i]);
-                    }
-
-                    /* Particle gridline indices */
-                    auto gridLineIndices = pmeGetGridlineIndices(pmeSafe.get(), codePath);
-                    rootChecker.checkSequence(
-                            gridLineIndices.begin(), gridLineIndices.end(), "Gridline indices");
+                    auto splineDerivativesDim = pmeGetSplineData(
+                            pmeSafe.get(), codePath, PmeSplineDataType::Derivatives, i);
+                    splineDerivativesChecker.checkSequence(
+                            splineDerivativesDim.begin(), splineDerivativesDim.end(), dimString[i]);
                 }
 
-                if (spreadCharges)
-                {
-                    /* The wrapped grid */
-                    SparseRealGridValuesOutput nonZeroGridValues = pmeGetRealGrid(pmeSafe.get(), codePath);
-                    TestReferenceChecker gridValuesChecker(
-                            rootChecker.checkCompound("NonZeroGridValues", "RealSpaceGrid"));
-                    const auto ulpToleranceGrid =
-                            2 * ulpToleranceSplineValues
-                            * static_cast<int>(ceil(sqrt(static_cast<real>(atomCount))));
-                    /* 2 is empiric; sqrt(atomCount) assumes all the input charges may spread onto the same cell */
-                    SCOPED_TRACE(formatString("Testing grid values with tolerance of %d", ulpToleranceGrid));
-                    if (!gridValuesSizeAssigned)
-                    {
-                        previousGridValuesSize = nonZeroGridValues.size();
-                        gridValuesSizeAssigned = true;
-                    }
-                    else
-                    {
-                        EXPECT_EQ(previousGridValuesSize, nonZeroGridValues.size());
-                    }
+                /* Particle gridline indices */
+                auto gridLineIndices = pmeGetGridlineIndices(pmeSafe.get(), codePath);
+                rootChecker.checkSequence(
+                        gridLineIndices.begin(), gridLineIndices.end(), "Gridline indices");
+            }
 
-                    gridValuesChecker.setDefaultTolerance(relativeToleranceAsUlp(1.0, ulpToleranceGrid));
-                    for (const auto& point : nonZeroGridValues)
-                    {
-                        gridValuesChecker.checkReal(point.second, point.first.c_str());
-                    }
+            if (spreadCharges)
+            {
+                /* The wrapped grid */
+                SparseRealGridValuesOutput nonZeroGridValues = pmeGetRealGrid(pmeSafe.get(), codePath);
+                TestReferenceChecker       gridValuesChecker(
+                        rootChecker.checkCompound("NonZeroGridValues", "RealSpaceGrid"));
+                const auto ulpToleranceGrid =
+                        2 * ulpToleranceSplineValues
+                        * static_cast<int>(ceil(sqrt(static_cast<real>(atomCount))));
+                /* 2 is empiric; sqrt(atomCount) assumes all the input charges may spread onto the same cell */
+                SCOPED_TRACE(formatString("Testing grid values with tolerance of %d", ulpToleranceGrid));
+                if (!gridValuesSizeAssigned)
+                {
+                    previousGridValuesSize = nonZeroGridValues.size();
+                    gridValuesSizeAssigned = true;
+                }
+                else
+                {
+                    EXPECT_EQ(previousGridValuesSize, nonZeroGridValues.size());
+                }
+
+                gridValuesChecker.setDefaultTolerance(relativeToleranceAsUlp(1.0, ulpToleranceGrid));
+                for (const auto& point : nonZeroGridValues)
+                {
+                    gridValuesChecker.checkReal(point.second, point.first.c_str());
                 }
             }
         }
     }
-
-    static std::vector<std::unique_ptr<PmeTestHardwareContext>> s_pmeTestHardwareContexts;
-};
-
-std::vector<std::unique_ptr<PmeTestHardwareContext>> SplineAndSpreadTest::s_pmeTestHardwareContexts;
-
-
-/*! \brief Test for spline parameter computation and charge spreading. */
-TEST_P(SplineAndSpreadTest, WorksWith)
-{
-    EXPECT_NO_THROW_GMX(runTest());
 }
 
 //! Moved out from instantiations for readability
@@ -382,14 +380,39 @@ const auto c_inputGridNames = ::testing::Values("first", "second");
 //! Moved out from instantiations for readability
 const auto c_inputTestSystemNames = ::testing::Values("1 atom", "2 atoms", "13 atoms");
 
-INSTANTIATE_TEST_SUITE_P(Pme,
-                         SplineAndSpreadTest,
-                         ::testing::Combine(c_inputBoxNames,
-                                            ::testing::ValuesIn(c_inputPmeOrders),
-                                            ::testing::ValuesIn(c_inputGridSizes),
-                                            c_inputTestSystemNames),
-                         nameOfTest);
-
 } // namespace
+
+void registerDynamicalPmeSplineSpreadTests(const Range<int> contextIndexRange)
+{
+    // It is not good to use GoogleTest's internal type here. Normally
+    // its use is hidden behind INSTANTIATE_TEST_SUITE_P. If they do
+    // change things such that this breaks, it may be simple to fix
+    // it. Or if not, we can always manually enumerate the Cartesian
+    // product of values that it generates and use that in the loop
+    // below.
+    auto testParamGenerator = ::testing::internal::ParamGenerator<SplineAndSpreadTest::ParamType>(
+            ::testing::Combine(c_inputBoxNames,
+                               ::testing::ValuesIn(c_inputPmeOrders),
+                               ::testing::ValuesIn(c_inputGridSizes),
+                               c_inputTestSystemNames,
+                               ::testing::ValuesIn(contextIndexRange)));
+    fprintf(stderr, "size %zu\n", testParamGenerator.size());
+    for (const auto& params : testParamGenerator)
+    {
+        const auto& contextIndex = std::get<4>(params);
+        std::string description = "Test" + getPmeTestHardwareContexts()[contextIndex].description();
+        ::testing::TestParamInfo<SplineAndSpreadTest::ParamType> testParamInfo(params, 0);
+        ::testing::RegisterTest("SplineAndSpreadTest",
+                              ("WorksWith" + description).c_str(),
+                              nullptr,
+                              nameOfTest(testParamInfo).c_str(),
+                              __FILE__,
+                              __LINE__,
+                              // Important to use the fixture type as the return type here.
+                              [=]() -> SplineAndSpreadTest* { return new WorksWith(params); });
+    }
+}
+
+
 } // namespace test
 } // namespace gmx

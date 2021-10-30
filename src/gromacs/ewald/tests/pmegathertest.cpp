@@ -310,14 +310,10 @@ public:
         {
             pmeTestHardwareContext->activate();
             CodePath   codePath       = pmeTestHardwareContext->codePath();
-            const bool supportedInput = pmeSupportsInputForMode(
-                    *getTestHardwareEnvironment()->hwinfo(), &inputRec, codePath);
-            if (!supportedInput)
+            MessageStringCollector messages = getSkipMessagesIfNecessary(*getTestHardwareEnvironment()->hwinfo(), inputRec, codePath);
+            if (!messages.isEmpty())
             {
-                /* Testing the failure for the unsupported input */
-                EXPECT_THROW_GMX(pmeInitWrapper(&inputRec, codePath, nullptr, nullptr, nullptr, box),
-                                 NotImplementedError);
-                continue;
+                GTEST_SKIP() << messages.toString();
             }
 
             /* Describing the test uniquely */

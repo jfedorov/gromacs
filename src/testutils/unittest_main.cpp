@@ -74,6 +74,9 @@ int main(int argc, char* argv[])
     // Calls ::testing::InitGoogleMock()
     ::gmx::test::initTestUtils(
             TEST_DATA_PATH, TEST_TEMP_PATH, TEST_USES_MPI, TEST_USES_HARDWARE_DETECTION, &argc, &argv);
+#if TEST_USES_DYNAMIC_REGISTRATION
+    ::gmx::test::registerTestsDynamically();
+#endif
     int errcode = RUN_ALL_TESTS();
     ::gmx::test::finalizeTestUtils();
     return errcode;

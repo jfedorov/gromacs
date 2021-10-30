@@ -190,15 +190,10 @@ public:
         {
             pmeTestHardwareContext->activate();
             CodePath   codePath       = pmeTestHardwareContext->codePath();
-            const bool supportedInput = pmeSupportsInputForMode(
-                    *getTestHardwareEnvironment()->hwinfo(), &inputRec, codePath);
-            if (!supportedInput)
+            MessageStringCollector messages = getSkipMessagesIfNecessary(*getTestHardwareEnvironment()->hwinfo(), inputRec, codePath);
+            if (!messages.isEmpty())
             {
-                /* Testing the failure for the unsupported input */
-                EXPECT_THROW_GMX(
-                        pmeInitWrapper(&inputRec, codePath, nullptr, nullptr, nullptr, box, ewaldCoeff_q, ewaldCoeff_lj),
-                        NotImplementedError);
-                continue;
+                GTEST_SKIP() << messages.toString();
             }
 
             std::map<GridOrdering, std::string> gridOrderingsToTest = { { GridOrdering::YZX,
