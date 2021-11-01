@@ -985,7 +985,7 @@ static StepWorkload setupStepWorkload(const int                     legacyFlags,
         GMX_ASSERT(simulationWork.useGpuNonbonded,
                    "Can only offload buffer ops if nonbonded computation is also offloaded");
     }
-    flags.useGpuXBufferOps = simulationWork.useGpuBufferOps;
+    flags.useGpuXBufferOps = simulationWork.useGpuBufferOps && !flags.doNeighborSearch;
     // on virial steps the CPU reduction path is taken
     flags.useGpuFBufferOps       = simulationWork.useGpuBufferOps && !flags.computeVirial;
     const bool rankHasGpuPmeTask = simulationWork.useGpuPme && !simulationWork.haveSeparatePmeRank;
@@ -1338,7 +1338,7 @@ void do_force(FILE*                               fplog,
     const bool reinitGpuPmePpComms =
             simulationWork.useGpuPmePpCommunication && (stepWork.doNeighborSearch);
 
-    auto* localXReadyOnDevice = (stepWork.haveGpuPmeOnThisRank || simulationWork.useGpuBufferOps)
+    auto* localXReadyOnDevice = (stepWork.haveGpuPmeOnThisRank || stepWork.useGpuXBufferOps)
                                         ? stateGpu->getCoordinatesReadyOnDeviceEvent(
                                                 AtomLocality::Local, simulationWork, stepWork)
                                         : nullptr;
@@ -1579,7 +1579,7 @@ void do_force(FILE*                               fplog,
         wallcycle_start(wcycle, WallCycleCounter::LaunchGpu);
         wallcycle_sub_start(wcycle, WallCycleSubCounter::LaunchGpuNonBonded);
         Nbnxm::gpu_upload_shiftvec(nbv->gpu_nbv, nbv->nbat.get());
-        if (stepWork.doNeighborSearch || !stepWork.useGpuXBufferOps)
+        if (!stepWork.useGpuXBufferOps)
         {
             Nbnxm::gpu_copy_xq_to_gpu(nbv->gpu_nbv, nbv->nbat.get(), AtomLocality::Local);
         }
@@ -1686,7 +1686,7 @@ void do_force(FILE*                               fplog,
         if (simulationWork.useGpuNonbonded)
         {
 
-            if (stepWork.doNeighborSearch || !stepWork.useGpuXBufferOps)
+            if (!stepWork.useGpuXBufferOps)
             {
                 wallcycle_start(wcycle, WallCycleCounter::LaunchGpu);
                 wallcycle_sub_start(wcycle, WallCycleSubCounter::LaunchGpuNonBonded);
