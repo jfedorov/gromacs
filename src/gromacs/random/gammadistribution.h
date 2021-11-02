@@ -163,9 +163,10 @@ public:
             alpha_(alpha),
             gamma_(gamma)
         {
-            if(alpha <= 0 || gamma <=0)
+            if (alpha <= 0 || gamma <= 0)
             {
-                GMX_THROW(InvalidInputError("Both parameters in the gamma distribution must be >0."));
+                GMX_THROW(
+                        InvalidInputError("Both parameters in the gamma distribution must be >0."));
             }
         }
 
@@ -236,35 +237,34 @@ public:
         result_type                          alpha = param.alpha();
         UniformRealDistribution<result_type> uniformDist(std::numeric_limits<result_type>::min(), 1);
 
-        if(alpha == result_type(1))
+        if (alpha == result_type(1))
         {
             // Special case; when alpha is unity, it is a plain exponential distribution,
             // which we can calculate faster by just using an exponential distribution.
             ExponentialDistribution<result_type> expDist;
             return expDist(g) * param.gamma();
         }
-        else if(alpha > result_type(1))
+        else if (alpha > result_type(1))
         {
-            NormalDistribution<result_type>      normDist;
+            NormalDistribution<result_type> normDist;
 
-            for(;;)
+            for (;;)
             {
                 result_type d = alpha - result_type(1) / result_type(3);
                 result_type c = result_type(1) / result_type(3) * invsqrt(d);
-                result_type x,v;
+                result_type x, v;
 
                 do
                 {
                     x = normDist(g);
                     v = result_type(1) + c * x;
-                }
-                while (v <= result_type(0));
-                v = v * v * v;
+                } while (v <= result_type(0));
+                v             = v * v * v;
                 result_type u = uniformDist(g);
                 result_type y = x * x;
 
                 // Sieve; we first check a computationally cheaper expression that catches the majority of cases
-                if(u < result_type(1) - result_type(0.0331) * y * y)
+                if (u < result_type(1) - result_type(0.0331) * y * y)
                 {
                     return (d * v * param.gamma());
                 }
@@ -277,8 +277,8 @@ public:
         }
         else // alpha < 1
         {
-            result_type x = this->operator()(g,param_type(alpha+result_type(1),param.gamma()));
-            return x * std::pow(uniformDist(g),result_type(1)/alpha);
+            result_type x = this->operator()(g, param_type(alpha + result_type(1), param.gamma()));
+            return x * std::pow(uniformDist(g), result_type(1) / alpha);
         }
     }
 
