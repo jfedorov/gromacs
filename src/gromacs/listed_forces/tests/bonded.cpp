@@ -451,10 +451,9 @@ public:
      * \param[in] a      Thole factor
      * \param[in] alpha1 Polarizability 1 (nm^3)
      * \param[in] alpha2 Polarizability 2 (nm^3)
-     * \param[in] rfac   Distance factor
      * \return The structure itself.
      */
-    iListInput setTholePolarization(real a, real alpha1, real alpha2, real rfac)
+    iListInput setTholePolarization(real a, real alpha1, real alpha2)
     {
         ftype                = F_THOLE_POL;
         fep                  = false;
@@ -707,7 +706,7 @@ std::vector<iListInput> c_InputDihs = {
 std::vector<iListInput> c_InputPols = {
     { iListInput(2e-5, 1e-8).setPolarization(0.12) },
     { iListInput(2e-3, 1e-8).setAnharmPolarization(0.0013, 0.02, 1235.6) },
-    { iListInput(1.4e-3, 1e-8).setTholePolarization(0.26, 0.07, 0.09, 1.6) },
+    { iListInput(1.4e-3, 1e-8).setTholePolarization(0.26, 0.07, 0.09) },
     { iListInput(2e-3, 1e-8).setWaterPolarization(0.001, 0.0012, 0.0016, 0.095, 0.15, 0.02) },
 };
 
