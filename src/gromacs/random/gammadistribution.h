@@ -117,16 +117,17 @@ namespace gmx
  * e^{-\frac{x}{\theta}}, x\geq 0 , \alpha>0, \gamma>0
  * \f]
  *
- * In this definition, the parameter $\alpha$ is the so-called shape, while $\theta$ is
- * so-called scale. This distribution will have the expectation value $\alpha\theta$, and
- *  the variance $\alpha\theta^2$.
+ * In this definition, the parameter &alpha; is the so-called shape, while &theta; is
+ * so-called scale. This distribution will have the expectation value &alpha;&theta;, and
+ *  the variance &alpha;&theta;&theta;.
  *
  * \note The gamma distribution is sometimes defined in terms of a parameter
- *  $\beta=1/\theta$ (i.e., a rate rather than scale), while in other cases the parameter in the
- *  definition above is simply called $\beta$. We can't do a lot about these different
+ *  &beta; that is the inverse of &theta; (i.e., a rate rather than scale),
+ *  while in other cases the parameter in the
+ *  definition above is simply called &beta;. We can't do a lot about these different
  *  definitions, so make sure you look at the expectation value and variance unless
  *  you are certain you are using e.g. scale or rate for the second parameter - do not
- *  trust that it e.g. rate just because it is called $\beta$ in your equations.
+ *  trust that it e.g. rate just because it is called &beta; in your equations.
  *
  *  \note For now, we generate the gamma distribution using the algorithm from
  *  Marsaglia G, Tsang WW (2000). ACM Trans. Math. Softw. 26(3), 363-372. DOI:10.1145/358407.358414
