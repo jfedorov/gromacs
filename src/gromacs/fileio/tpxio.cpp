@@ -1899,7 +1899,6 @@ static void do_iparams(gmx::ISerializer* serializer, t_functype ftype, t_iparams
             serializer->doReal(&iparams->thole.a);
             serializer->doReal(&iparams->thole.alpha1);
             serializer->doReal(&iparams->thole.alpha2);
-            serializer->doReal(&iparams->thole.rfac);
             break;
         case F_LJ:
             serializer->doReal(&iparams->lj.c6);

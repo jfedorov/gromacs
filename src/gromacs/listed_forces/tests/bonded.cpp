@@ -461,7 +461,6 @@ public:
         iparams.thole.a      = a;
         iparams.thole.alpha1 = alpha1;
         iparams.thole.alpha2 = alpha2;
-        iparams.thole.rfac   = rfac;
         return *this;
     }
     /*! \brief Set parameters for Water Polarization
