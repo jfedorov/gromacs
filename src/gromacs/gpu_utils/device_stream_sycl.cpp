@@ -46,6 +46,32 @@
 #include "gromacs/gpu_utils/device_context.h"
 #include "gromacs/gpu_utils/device_stream.h"
 
+static cl::sycl::property_list makeQueuePropertyList(bool inOrder, bool enableProfiling)
+{
+    if (enableProfiling)
+    {
+        if (inOrder)
+        {
+            return { cl::sycl::property::queue::in_order(), cl::sycl::property::queue::enable_profiling() };
+        }
+        else
+        {
+            return { cl::sycl::property::queue::enable_profiling() };
+        }
+    }
+    else
+    {
+        if (inOrder)
+        {
+            return { cl::sycl::property::queue::in_order() };
+        }
+        else
+        {
+            return {};
+        }
+    }
+}
+
 DeviceStream::DeviceStream(const DeviceContext& deviceContext,
                            DeviceStreamPriority /* priority */,
                            const bool useTiming)
@@ -54,21 +80,15 @@ DeviceStream::DeviceStream(const DeviceContext& deviceContext,
     // The context is constructed to have exactly one device
     const cl::sycl::device device = devicesInContext[0];
 
-    cl::sycl::property_list propertyList = {};
+    bool enableProfiling = false;
     if (useTiming)
     {
         const bool deviceSupportsTiming = device.get_info<cl::sycl::info::device::queue_profiling>();
-        if (deviceSupportsTiming)
-        {
-#if (!GMX_SYCL_HIPSYCL)
-            /* Support for profiling and even the `::enable_profile` property is added in
-             * https://github.com/illuhad/hipSYCL/pull/428, which is not merged at the
-             * time of writing */
-            propertyList = cl::sycl::property::queue::enable_profiling();
-#endif
-        }
+        enableProfiling                 = deviceSupportsTiming;
     }
-    stream_ = cl::sycl::queue(deviceContext.context(), device, propertyList);
+    const bool inOrder = (GMX_SYCL_USE_USM != 0);
+    stream_            = cl::sycl::queue(
+            deviceContext.context(), device, makeQueuePropertyList(inOrder, enableProfiling));
 }
 
 DeviceStream::~DeviceStream() = default;

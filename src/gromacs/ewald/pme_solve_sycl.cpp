@@ -438,8 +438,13 @@ cl::sycl::event PmeSolveKernel<gridOrdering, computeEnergyAndVirial, gridIndex, 
 
     cl::sycl::queue q = deviceStream.stream();
 
+#if GMX_SYCL_USE_USM
+    auto* d_solveKernelParams = cl::sycl::malloc_device<SolveKernelParams>(1, q);
+#else
     cl::sycl::buffer<SolveKernelParams, 1> d_solveKernelParams(&solveKernelParams_, 1);
-    cl::sycl::event                        e = q.submit([&](cl::sycl::handler& cgh) {
+#endif
+
+    cl::sycl::event e = q.submit([&](cl::sycl::handler& cgh) {
         auto kernel = makeSolveKernel<gridOrdering, computeEnergyAndVirial, subGroupSize>(
                 cgh,
                 gridParams_->d_splineModuli[gridIndex],
@@ -448,6 +453,10 @@ cl::sycl::event PmeSolveKernel<gridOrdering, computeEnergyAndVirial, gridIndex, 
                 gridParams_->d_fourierGrid[gridIndex]);
         cgh.parallel_for<KernelNameType>(range, kernel);
     });
+
+#if GMX_SYCL_USE_USM
+    cl::sycl::free(d_solveKernelParams, q);
+#endif
 
     // Delete set args, so we don't forget to set them before the next launch.
     reset();
