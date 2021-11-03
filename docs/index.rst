@@ -36,7 +36,7 @@ Welcome to the |Gromacs| documentation!
 
 .. only:: latex
 
-      The release notes can be found online at http://manual.gromacs.org/current/release-notes/index.html
+        The release notes can be found online at http://manual.gromacs.org/current/release-notes/index.html
 
         .. toctree::
            :maxdepth: 1
@@ -50,9 +50,7 @@ Welcome to the |Gromacs| documentation!
 	   nblib/index
            dev-manual/index
 
-        ==================
         Indices and tables
-        ==================
 
         * :ref:`genindex`
 
