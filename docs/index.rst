@@ -50,6 +50,12 @@ Welcome to the |Gromacs| documentation!
 	    nblib/index
             dev-manual/index
 
+        ==================
+        Indices and tables
+        ==================
+
+        * :ref:`genindex`
+
 
 .. _printable PDF here: `gmx-manual`_
 
