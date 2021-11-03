@@ -114,7 +114,7 @@ namespace gmx
  *
  * \f[
  *     p(x|\alpha,\theta) = \frac{1}{\Gamma(\alpha)\theta^{alpha}} x^{\alpha - 1}
- * e^{-\frac{x}{\theta}}, x\geq 0 , \alpha>0, \gamma>0
+ * e^{-\frac{x}{\theta}}, x\geq 0 , \alpha>0, \theta>0
  * \f]
  *
  * In this definition, the parameter &alpha; is the so-called shape, while &theta; is
@@ -147,7 +147,7 @@ public:
         /*! \brief Shape parameter of gamma distribution */
         result_type alpha_;
         /*! \brief Scale parameter of gamma distribution */
-        result_type gamma_;
+        result_type theta_;
 
     public:
         /*! \brief Reference back to the distribution class */
@@ -156,15 +156,15 @@ public:
         /*! \brief Construct parameter block
          *
          * \param alpha  Shape parameter of gamma distribution
-         * \param gamma  Scale parameter of gamma distribution
+         * \param theta  Scale parameter of gamma distribution
          *
          *  \throws InvalidInputError if either parameter is negative or zero.
          */
-        explicit param_type(result_type alpha = 1.0, result_type gamma = 1.0) :
+        explicit param_type(result_type alpha = 1.0, result_type theta= 1.0) :
             alpha_(alpha),
-            gamma_(gamma)
+            theta_(theta)
         {
-            if (alpha <= 0 || gamma <= 0)
+            if (alpha <= 0 || theta <= 0)
             {
                 GMX_THROW(
                         InvalidInputError("Both parameters in the gamma distribution must be >0."));
@@ -174,7 +174,7 @@ public:
         /*! \brief Return shape parameter */
         result_type alpha() const { return alpha_; }
         /*! \brief Return scale parameter */
-        result_type gamma() const { return gamma_; }
+        result_type theta() const { return theta_; }
 
         /*! \brief True if two parameter sets will return the same distribution.
          *
@@ -182,7 +182,7 @@ public:
          */
         bool operator==(const param_type& x) const
         {
-            return alpha_ == x.alpha_ && gamma_ == x.gamma_;
+            return alpha_ == x.alpha_ && theta_ == x.theta_;
         }
 
         /*! \brief True if two parameter sets will return different distributions
@@ -195,12 +195,12 @@ public:
     /*! \brief Construct new distribution with given floating-point parameters.
      *
      * \param alpha  Shape parameter of gamma distribution
-     * \param gamma  Scale parameter of gamma distribution
+     * \param theta  Scale parameter of gamma distribution
      *
      *  \throws InvalidInputError if either parameter is negative or zero.
      */
-    explicit GammaDistribution(result_type alpha = 1.0, result_type gamma = 1.0) :
-        param_(param_type(alpha, gamma))
+    explicit GammaDistribution(result_type alpha = 1.0, result_type theta = 1.0) :
+        param_(param_type(alpha, theta))
     {
     }
 
@@ -243,7 +243,7 @@ public:
             // Special case; when alpha is unity, it is a plain exponential distribution,
             // which we can calculate faster by just using an exponential distribution.
             ExponentialDistribution<result_type> expDist;
-            return expDist(g) * param.gamma();
+            return expDist(g) * param.theta();
         }
         else if (alpha > result_type(1))
         {
@@ -267,18 +267,18 @@ public:
                 // Sieve; we first check a computationally cheaper expression that catches the majority of cases
                 if (u < result_type(1) - result_type(0.0331) * y * y)
                 {
-                    return (d * v * param.gamma());
+                    return (d * v * param.theta());
                 }
                 // If we got here, we need to evaluate the two log functions to compare with the exact expression
                 if (std::log(u) < result_type(0.5) * y + d * (result_type(1) - v + std::log(v)))
                 {
-                    return (d * v * param.gamma());
+                    return (d * v * param.theta());
                 }
             }
         }
         else // alpha < 1
         {
-            result_type x = this->operator()(g, param_type(alpha + result_type(1), param.gamma()));
+            result_type x = this->operator()(g, param_type(alpha + result_type(1), param.theta()));
             return x * std::pow(uniformDist(g), result_type(1) / alpha);
         }
     }
@@ -287,7 +287,7 @@ public:
     result_type alpha() const { return param_.alpha(); }
 
     /*! \brief Return the scale parameter of gamma distribution */
-    result_type gamma() const { return param_.gamma(); }
+    result_type theta() const { return param_.theta(); }
 
     /*! \brief Return the full parameter class of gamma distribution */
     param_type param() const { return param_; }
