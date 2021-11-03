@@ -2972,11 +2972,13 @@ DomainDecompositionBuilder::Impl::Impl(const MDLogger&                   mdlog,
     // automated setup than the one in systemInfo_. The latter is used
     // in set_dd_limits() to configure DLB, for example.
     const real gridSetupCellsizeLimit =
-            getDDGridSetupCellSizeLimit(mdlog_,
-                                        !isDlbDisabled(ddSettings_.initialDlbState),
-                                        options_.dlbScaling,
-                                        ir_,
-                                        systemInfo_.cellsizeLimit);
+            (numRanksRequested == 1)
+                    ? systemInfo_.cellsizeLimit
+                    : getDDGridSetupCellSizeLimit(mdlog_,
+                                                  !isDlbDisabled(ddSettings_.initialDlbState),
+                                                  options_.dlbScaling,
+                                                  ir_,
+                                                  systemInfo_.cellsizeLimit);
     ddGridSetup_ = getDDGridSetup(mdlog_,
                                   MASTER(cr_) ? DDRole::Master : DDRole::Agent,
                                   cr->mpiDefaultCommunicator,
