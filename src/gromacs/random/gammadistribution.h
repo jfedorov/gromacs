@@ -160,7 +160,7 @@ public:
          *
          *  \throws InvalidInputError if either parameter is negative or zero.
          */
-        explicit param_type(result_type alpha = 1.0, result_type theta= 1.0) :
+        explicit param_type(result_type alpha = 1.0, result_type theta = 1.0) :
             alpha_(alpha),
             theta_(theta)
         {
