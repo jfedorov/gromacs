@@ -1403,21 +1403,7 @@ int Mdrunner::mdrunner()
     int                deviceId   = -1;
     DeviceInformation* deviceInfo = gpuTaskAssignments.initDevice(&deviceId);
 
-    // timing enabling - TODO put this in gpu_utils (even though generally this is just option handling?)
-    bool useTiming = true;
-
-    if (GMX_GPU_CUDA)
-    {
-        /* WARNING: CUDA timings are incorrect with multiple streams.
-         *          This is the main reason why they are disabled by default.
-         */
-        // TODO: Consider turning on by default when we can detect nr of streams.
-        useTiming = (getenv("GMX_ENABLE_GPU_TIMING") != nullptr);
-    }
-    else if (GMX_GPU_OPENCL)
-    {
-        useTiming = (getenv("GMX_DISABLE_GPU_TIMING") == nullptr);
-    }
+    const bool useTiming = decideGpuTimingsUsage();
 
     // TODO Currently this is always built, yet DD partition code
     // checks if it is built before using it. Probably it should
