@@ -51,6 +51,16 @@
 #include "gromacs/utility/basedefinitions.h"
 #include "gromacs/utility/enumerationhelpers.h"
 
+
+#ifdef ITT_INSTRUMENT 
+
+#include <assert.h>
+#include <string>
+#include <unordered_map>
+#include <ittnotify.h>
+
+#endif 
+
 #ifndef DEBUG_WCYCLE
 /*! \brief Enables consistency checking for the counters.
  *
@@ -196,6 +206,11 @@ struct gmx_wallcycle
     int64_t                                              reset_counters;
     const t_commrec*                                     cr;
     gmx::EnumerationArray<WallCycleSubCounter, wallcc_t> wcsc;
+#ifdef ITT_INSTRUMENT
+     __itt_pt_region pt_region;
+    std::unordered_map<std::string, __itt_pt_region> pt_region_map;
+    unsigned long invoke_idx;
+#endif    
 };
 
 //! Returns if cycle counting is supported
@@ -224,15 +239,86 @@ inline void wallcycle_all_stop(gmx_wallcycle* wc, WallCycleCounter ewc, gmx_cycl
     wc->wcc_all[prev * sc_numWallCycleCounters + current].c += cycle - wc->cycle_prev;
 }
 
-//! Starts the cycle counter (and increases the call count)
-inline void wallcycle_start(gmx_wallcycle* wc, WallCycleCounter ewc)
+#ifdef ITT_INSTRUMENT
+
+#ifndef ITT_START_FRAME
+#define ITT_START_FRAME 102
+#endif 
+
+
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+
+#define wallcycle_start(p0, p1)          _wallcycle_start(p0, p1,  __FILE__ ":" TOSTRING(__LINE__))
+#define wallcycle_start_nocount(p0, p1)  _wallcycle_start_nocount(p0, p1,  __FILE__ ":" TOSTRING(__LINE__))
+
+inline void get_pt_region(gmx_wallcycle* wc, const char* location)
 {
+    //printf("--------------- at: %s, from: %s\n", __FUNCTION__, location);
+    std::string key(location);
+    std::string key_generic("LaunchGpu Other");
+
+    auto search = wc->pt_region_map.find(key);
+    if (search == wc->pt_region_map.end() ) { 
+        if ( wc->pt_region_map.size() < 7 ) {
+            printf("=========> Making pt_region for location: %s, size: %lu\n", 
+                    location, wc->pt_region_map.size());
+            wc->pt_region = __itt_pt_region_create(key.c_str());
+            wc->pt_region_map.insert({key, wc->pt_region});
+        } else if ( wc->pt_region_map.size() == 7 ) {
+            printf("=========> Making pt_region for generic location: %s, size: %lu, real location: %s\n", 
+                    key_generic.c_str(), wc->pt_region_map.size(), location);
+            wc->pt_region = __itt_pt_region_create(key_generic.c_str());
+            wc->pt_region_map.insert({key_generic, wc->pt_region});
+        } else {
+            printf("=========> Taking pt_region of generic location: %s, size: %lu, real location: %s\n", 
+                    key_generic.c_str(), wc->pt_region_map.size(), location);
+            auto _search = wc->pt_region_map.find(key_generic);
+            assert( _search != wc->pt_region_map.end() );
+            wc->pt_region = _search->second;
+        } 
+    } else {
+        printf("=========> Found pt_region for location: %s, size: %lu\n", 
+            location, wc->pt_region_map.size());
+        wc->pt_region = search->second;
+    }
+}
+#endif
+
+//! Starts the cycle counter (and increases the call count)
+#ifdef ITT_INSTRUMENT
+inline void _wallcycle_start(gmx_wallcycle* wc, WallCycleCounter ewc, const char* location)
+#else 
+inline void wallcycle_start(gmx_wallcycle* wc, WallCycleCounter ewc)
+#endif
+{
+    //printf("--------------- at: %s, from: %s\n", __FUNCTION__, location);
     if (wc == nullptr)
     {
         return;
     }
 
     wallcycleBarrier(wc);
+#ifdef ITT_INSTRUMENT
+
+    if ( WallCycleCounter::LaunchGpu == ewc ) {
+        if ( wc->invoke_idx == ITT_START_FRAME ) {
+            __itt_resume();
+            printf("=========> Resuming VTune collection at frame: %d\n", ITT_START_FRAME);
+        }
+
+        if ( wc->invoke_idx >= ITT_START_FRAME ) {
+#ifdef ITT_GENERAL
+            __itt_frame_begin_v3(domain, nullptr);
+#else            
+            get_pt_region(wc, location);
+            printf(" <<<<  pt region Begin:  %lu\n" , wc->invoke_idx );
+            __itt_mark_pt_region_begin(wc->pt_region);
+#endif            
+        }
+    }
+#endif
+
 
 #if DEBUG_WCYCLE
     debug_start_check(wc, ewc);
@@ -254,13 +340,21 @@ inline void wallcycle_start(gmx_wallcycle* wc, WallCycleCounter ewc)
 }
 
 //! Starts the cycle counter without increasing the call count
+#ifdef ITT_INSTRUMENT
+inline void _wallcycle_start_nocount(gmx_wallcycle* wc, WallCycleCounter ewc, const char* location)
+#else
 inline void wallcycle_start_nocount(gmx_wallcycle* wc, WallCycleCounter ewc)
+#endif    
 {
     if (wc == nullptr)
     {
         return;
     }
+#ifdef ITT_INSTRUMENT
+    _wallcycle_start(wc, ewc, location);
+#else    
     wallcycle_start(wc, ewc);
+#endif    
     wc->wcc[ewc].n--;
 }
 
@@ -275,6 +369,19 @@ inline double wallcycle_stop(gmx_wallcycle* wc, WallCycleCounter ewc)
     }
 
     wallcycleBarrier(wc);
+#ifdef ITT_INSTRUMENT
+    if ( WallCycleCounter::LaunchGpu == ewc ) {
+        if ( wc->invoke_idx >= ITT_START_FRAME ) {
+#ifdef ITT_GENERAL
+           __itt_frame_end_v3(domain, nullptr);
+#else 
+            //printf(" >>>>  pt region End:  %lu\n" , wc->invoke_idx );
+           __itt_mark_pt_region_end(wc->pt_region);
+#endif            
+        }
+        (wc->invoke_idx)++;
+    }
+#endif    
 
 #if DEBUG_WCYCLE
     debug_stop_check(wc, ewc);

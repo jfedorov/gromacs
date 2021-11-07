@@ -282,6 +282,16 @@ option(GMX_PHYSICAL_VALIDATION
        OFF)
 mark_as_advanced(GMX_PHYSICAL_VALIDATION)
 
+##################################################################################
+# Intel VTune ITT instrumentation to mark as frames/regions LaunchGpu and others 
+##################################################################################
+option(GMX_ITT 
+        "Enable VTune ITT instrumentation" 
+        OFF)
+if (GMX_ITT)
+  include(gmxManageITT)
+endif()  
+
 ######################################################################
 # Detect OpenMP support
 ######################################################################
@@ -562,6 +572,7 @@ include(gmxManageLmfit)
 include(gmxManageMuparser)
 
 if(GMX_GPU)
+    set(GMX_SIMD_ACTIVE ${GMX_SIMD})
 
     string(TOUPPER "${GMX_GPU}" _gmx_gpu_uppercase)
     if(${_gmx_gpu_uppercase} STREQUAL "CUDA")
