@@ -289,6 +289,7 @@ option(GMX_ITT
         "Enable VTune ITT instrumentation" 
         OFF)
 if (GMX_ITT)
+  message (status "Enabling ITT inststrumentation")              
   include(gmxManageITT)
 endif()  
 

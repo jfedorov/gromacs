@@ -242,7 +242,8 @@ inline void wallcycle_all_stop(gmx_wallcycle* wc, WallCycleCounter ewc, gmx_cycl
 #ifdef ITT_INSTRUMENT
 
 #ifndef ITT_START_FRAME
-#define ITT_START_FRAME 102
+#define ITT_START_FRAME       102
+#define ITT_MAX_PT_REGION_IDS 16
 #endif 
 
 
@@ -260,26 +261,34 @@ inline void get_pt_region(gmx_wallcycle* wc, const char* location)
 
     auto search = wc->pt_region_map.find(key);
     if (search == wc->pt_region_map.end() ) { 
-        if ( wc->pt_region_map.size() < 7 ) {
+        if ( wc->pt_region_map.size() < (ITT_MAX_PT_REGION_IDS-1) ) {
+#ifdef ITT_INSTRUMENT_DEBUG
             printf("=========> Making pt_region for location: %s, size: %lu\n", 
                     location, wc->pt_region_map.size());
+#endif            
             wc->pt_region = __itt_pt_region_create(key.c_str());
             wc->pt_region_map.insert({key, wc->pt_region});
-        } else if ( wc->pt_region_map.size() == 7 ) {
+        } else if ( wc->pt_region_map.size() == ITT_MAX_PT_REGION_IDS  ) {
+#ifdef ITT_INSTRUMENT_DEBUG
             printf("=========> Making pt_region for generic location: %s, size: %lu, real location: %s\n", 
                     key_generic.c_str(), wc->pt_region_map.size(), location);
+#endif            
             wc->pt_region = __itt_pt_region_create(key_generic.c_str());
             wc->pt_region_map.insert({key_generic, wc->pt_region});
         } else {
+#ifdef ITT_INSTRUMENT_DEBUG
             printf("=========> Taking pt_region of generic location: %s, size: %lu, real location: %s\n", 
                     key_generic.c_str(), wc->pt_region_map.size(), location);
+#endif            
             auto _search = wc->pt_region_map.find(key_generic);
             assert( _search != wc->pt_region_map.end() );
             wc->pt_region = _search->second;
         } 
     } else {
+#ifdef ITT_INSTRUMENT_DEBUG
         printf("=========> Found pt_region for location: %s, size: %lu\n", 
             location, wc->pt_region_map.size());
+#endif            
         wc->pt_region = search->second;
     }
 }
@@ -304,7 +313,9 @@ inline void wallcycle_start(gmx_wallcycle* wc, WallCycleCounter ewc)
     if ( WallCycleCounter::LaunchGpu == ewc ) {
         if ( wc->invoke_idx == ITT_START_FRAME ) {
             __itt_resume();
+#ifdef ITT_INSTRUMENT_DEBUG
             printf("=========> Resuming VTune collection at frame: %d\n", ITT_START_FRAME);
+#endif            
         }
 
         if ( wc->invoke_idx >= ITT_START_FRAME ) {
@@ -312,7 +323,7 @@ inline void wallcycle_start(gmx_wallcycle* wc, WallCycleCounter ewc)
             __itt_frame_begin_v3(domain, nullptr);
 #else            
             get_pt_region(wc, location);
-            printf(" <<<<  pt region Begin:  %lu\n" , wc->invoke_idx );
+            //printf(" <<<<  pt region Begin:  %lu\n" , wc->invoke_idx );
             __itt_mark_pt_region_begin(wc->pt_region);
 #endif            
         }
