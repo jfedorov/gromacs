@@ -209,7 +209,14 @@ struct gmx_wallcycle
 #ifdef ITT_INSTRUMENT
      __itt_pt_region pt_region;
     std::unordered_map<std::string, __itt_pt_region> pt_region_map;
-    unsigned long invoke_idx;
+    
+    unsigned long                                    invoke_idx;
+
+    __itt_domain*                                    task_domain;
+    __itt_string_handle*                             task_string_handle;
+
+    std::unordered_map<std::string, __itt_string_handle*> task_map;
+
 #endif    
 };
 
@@ -241,8 +248,10 @@ inline void wallcycle_all_stop(gmx_wallcycle* wc, WallCycleCounter ewc, gmx_cycl
 
 #ifdef ITT_INSTRUMENT
 
+//#define ITT_GENERAL
+
 #ifndef ITT_START_FRAME
-#define ITT_START_FRAME       102
+#define ITT_START_FRAME       (102+(4000*5))
 #define ITT_MAX_PT_REGION_IDS 16
 #endif 
 
@@ -263,21 +272,21 @@ inline void get_pt_region(gmx_wallcycle* wc, const char* location)
     if (search == wc->pt_region_map.end() ) { 
         if ( wc->pt_region_map.size() < (ITT_MAX_PT_REGION_IDS-1) ) {
 #ifdef ITT_INSTRUMENT_DEBUG
-            printf("=========> Making pt_region for location: %s, size: %lu\n", 
+            printf("=========> Making Pt_region for location: %s, size: %lu\n", 
                     location, wc->pt_region_map.size());
 #endif            
             wc->pt_region = __itt_pt_region_create(key.c_str());
             wc->pt_region_map.insert({key, wc->pt_region});
         } else if ( wc->pt_region_map.size() == ITT_MAX_PT_REGION_IDS  ) {
 #ifdef ITT_INSTRUMENT_DEBUG
-            printf("=========> Making pt_region for generic location: %s, size: %lu, real location: %s\n", 
+            printf("=========> Making Pt_region for generic location: %s, size: %lu, real location: %s\n", 
                     key_generic.c_str(), wc->pt_region_map.size(), location);
 #endif            
             wc->pt_region = __itt_pt_region_create(key_generic.c_str());
             wc->pt_region_map.insert({key_generic, wc->pt_region});
         } else {
 #ifdef ITT_INSTRUMENT_DEBUG
-            printf("=========> Taking pt_region of generic location: %s, size: %lu, real location: %s\n", 
+            printf("=========> Taking Pt_region of generic location: %s, size: %lu, real location: %s\n", 
                     key_generic.c_str(), wc->pt_region_map.size(), location);
 #endif            
             auto _search = wc->pt_region_map.find(key_generic);
@@ -286,13 +295,35 @@ inline void get_pt_region(gmx_wallcycle* wc, const char* location)
         } 
     } else {
 #ifdef ITT_INSTRUMENT_DEBUG
-        printf("=========> Found pt_region for location: %s, size: %lu\n", 
+        printf("=========> Found Pt_region for location: %s, size: %lu\n", 
             location, wc->pt_region_map.size());
 #endif            
         wc->pt_region = search->second;
     }
 }
-#endif
+
+inline void get_task_string_handle(gmx_wallcycle* wc, const char* location)
+{
+    std::string key(location);
+
+    auto search = wc->task_map.find(key);
+    if (search == wc->task_map.end() ) { 
+#ifdef ITT_INSTRUMENT_DEBUG
+        printf("=========> Making Task for location: %s, size: %lu\n", 
+                  location, wc->task_map.size());
+#endif            
+        wc->task_string_handle = __itt_string_handle_create(key.c_str());
+        wc->task_map.insert({key, wc->task_string_handle});
+    } else {
+#ifdef ITT_INSTRUMENT_DEBUG
+        printf("=========> Found Task for location: %s, size: %lu\n", 
+            location, wc->task_map.size());
+#endif            
+        wc->task_string_handle = search->second;
+    }
+}
+
+#endif // ITT_INSTRUMENT
 
 //! Starts the cycle counter (and increases the call count)
 #ifdef ITT_INSTRUMENT
@@ -313,19 +344,21 @@ inline void wallcycle_start(gmx_wallcycle* wc, WallCycleCounter ewc)
     if ( WallCycleCounter::LaunchGpu == ewc ) {
         if ( wc->invoke_idx == ITT_START_FRAME ) {
             __itt_resume();
+            wc->task_domain = __itt_domain_create("Intra-step tasks");
 #ifdef ITT_INSTRUMENT_DEBUG
             printf("=========> Resuming VTune collection at frame: %d\n", ITT_START_FRAME);
 #endif            
         }
 
         if ( wc->invoke_idx >= ITT_START_FRAME ) {
-#ifdef ITT_GENERAL
-            __itt_frame_begin_v3(domain, nullptr);
-#else            
+//#ifdef ITT_GENERAL
+            get_task_string_handle(wc, location);
+            __itt_task_begin(wc->task_domain, __itt_null, __itt_null, wc->task_string_handle );
+//#else            
             get_pt_region(wc, location);
             //printf(" <<<<  pt region Begin:  %lu\n" , wc->invoke_idx );
             __itt_mark_pt_region_begin(wc->pt_region);
-#endif            
+//#endif            
         }
     }
 #endif
@@ -383,12 +416,12 @@ inline double wallcycle_stop(gmx_wallcycle* wc, WallCycleCounter ewc)
 #ifdef ITT_INSTRUMENT
     if ( WallCycleCounter::LaunchGpu == ewc ) {
         if ( wc->invoke_idx >= ITT_START_FRAME ) {
-#ifdef ITT_GENERAL
-           __itt_frame_end_v3(domain, nullptr);
-#else 
+//#ifdef ITT_GENERAL
+           __itt_task_end(wc->task_domain);
+//#else 
             //printf(" >>>>  pt region End:  %lu\n" , wc->invoke_idx );
            __itt_mark_pt_region_end(wc->pt_region);
-#endif            
+//#endif            
         }
         (wc->invoke_idx)++;
     }
