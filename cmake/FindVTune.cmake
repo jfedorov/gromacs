@@ -1,0 +1,22 @@
+message( STATUS "Looking for VTune..")  
+  if( ${CMAKE_SYSTEM_NAME} MATCHES "Linux" )
+    if( CMAKE_VTUNE_HOME )
+      set( VTUNE_HOME ${CMAKE_VTUNE_HOME} )
+    elseif( DEFINED ENV{CMAKE_VTUNE_HOME} )
+      set( VTUNE_HOME $ENV{CMAKE_VTUNE_HOME} )
+    else()
+      set( VTUNE_HOME /opt/intel/oneapi/vtune/latest/ )
+    endif()
+
+    find_path( VTUNE_INCLUDE ittnotify.h PATHS ${VTUNE_HOME}/sdk/include )
+    find_library( VTUNE_LIBRARY libittnotify.a PATHS ${VTUNE_HOME}/lib64/ )
+
+    if( NOT VTUNE_INCLUDE MATCHES NOTFOUND )
+      if( NOT VTUNE_LIBRARY MATCHES NOTFOUND )
+        set( VTUNE_FOUND TRUE )
+      endif()
+    endif()
+
+  else()
+    message( STATUS "ITT tracing  is supported only for linux!" )
+  endif()

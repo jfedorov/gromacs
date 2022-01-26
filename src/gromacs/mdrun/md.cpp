@@ -156,6 +156,10 @@
 #include "replicaexchange.h"
 #include "shellfc.h"
 
+#ifdef ITT_INSTRUMENT
+#include <ittnotify.h>
+#endif
+ 
 using gmx::SimulationSignaller;
 
 void gmx::LegacySimulator::do_md()
@@ -843,8 +847,20 @@ void gmx::LegacySimulator::do_md()
 
     /* and stop now if we should */
     bLastStep = (bLastStep || (ir->nsteps >= 0 && step_rel > ir->nsteps));
+
+#ifdef ITT_INSTRUMENT
+    __itt_domain* itt_task_step      = __itt_domain_create("TimeStep in md.cpp" );
+    __itt_string_handle* itt_handle  = __itt_string_handle_create("Step");
+#endif
+    
     while (!bLastStep)
     {
+#ifdef ITT_INSTRUMENT
+#ifdef ITT_INSTRUMENT_DEBUG
+        printf(" =====================> ITT task Begin of Global Step: %" PRIu64 "\n", step_rel );
+#endif
+        __itt_task_begin(itt_task_step, __itt_null, __itt_null, itt_handle);
+#endif
 
         /* Determine if this is a neighbor search step */
         bNStList = (ir->nstlist > 0 && step % ir->nstlist == 0);
@@ -2030,6 +2046,14 @@ void gmx::LegacySimulator::do_md()
 
         /* If bIMD is TRUE, the master updates the IMD energy record and sends positions to VMD client */
         imdSession->updateEnergyRecordAndSendPositionsAndEnergies(bInteractiveMDstep, step, bCalcEner);
+
+#ifdef ITT_INSTRUMENT
+#ifdef ITT_INSTRUMENT_DEBUG
+        printf(" =====================> ITT task Begin of Global Step: %" PRIu64 "\n", step_rel );
+#endif
+        __itt_task_begin(itt_task_step, __itt_null, __itt_null, itt_handle);
+#endif
+
     }
     /* End of main MD loop */
 
