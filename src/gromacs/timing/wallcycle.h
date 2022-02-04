@@ -250,6 +250,8 @@ inline void wallcycle_all_stop(gmx_wallcycle* wc, WallCycleCounter ewc, gmx_cycl
 
 //#define ITT_GENERAL
 
+const static std::string s_lookup_pattern("1");
+
 #ifndef ITT_START_FRAME
 //#define ITT_START_FRAME       (102+(4000*5))
 #define ITT_START_FRAME       (102)
@@ -262,6 +264,8 @@ inline void wallcycle_all_stop(gmx_wallcycle* wc, WallCycleCounter ewc, gmx_cycl
 
 #define wallcycle_start(p0, p1)          _wallcycle_start(p0, p1,  __FILE__ ":" TOSTRING(__LINE__))
 #define wallcycle_start_nocount(p0, p1)  _wallcycle_start_nocount(p0, p1,  __FILE__ ":" TOSTRING(__LINE__))
+
+#define wallcycle_stop(p0, p1)           _wallcycle_stop(p0, p1, __FILE__ ":" TOSTRING(__LINE__))
 
 inline void get_pt_region(gmx_wallcycle* wc, const char* location)
 {
@@ -342,7 +346,9 @@ inline void wallcycle_start(gmx_wallcycle* wc, WallCycleCounter ewc)
     wallcycleBarrier(wc);
 #ifdef ITT_INSTRUMENT
 
-    if ( WallCycleCounter::LaunchGpu == ewc ) {
+    std::string loc(location);
+
+    if ( WallCycleCounter::LaunchGpu == ewc && ( loc.find(s_lookup_pattern, 3 ) != std::string::npos))  {
         if ( wc->invoke_idx == ITT_START_FRAME ) {
             __itt_resume();
             wc->task_domain = __itt_domain_create("Intra-step tasks");
@@ -404,7 +410,11 @@ inline void wallcycle_start_nocount(gmx_wallcycle* wc, WallCycleCounter ewc)
 }
 
 //! Stop the cycle count for ewc , returns the last cycle count
+#ifdef ITT_INSTRUMENT
+inline double _wallcycle_stop(gmx_wallcycle* wc, WallCycleCounter ewc, const char* location)
+#else
 inline double wallcycle_stop(gmx_wallcycle* wc, WallCycleCounter ewc)
+#endif    
 {
     gmx_cycles_t cycle, last;
 
@@ -415,7 +425,10 @@ inline double wallcycle_stop(gmx_wallcycle* wc, WallCycleCounter ewc)
 
     wallcycleBarrier(wc);
 #ifdef ITT_INSTRUMENT
-    if ( WallCycleCounter::LaunchGpu == ewc ) {
+
+    std::string loc(location);
+
+    if ( WallCycleCounter::LaunchGpu == ewc && ( loc.find(s_lookup_pattern, 3 ) != std::string::npos))  {
         if ( wc->invoke_idx >= ITT_START_FRAME ) {
 //#ifdef ITT_GENERAL
            __itt_task_end(wc->task_domain);
