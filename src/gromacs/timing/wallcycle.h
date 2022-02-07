@@ -208,6 +208,7 @@ struct gmx_wallcycle
     gmx::EnumerationArray<WallCycleSubCounter, wallcc_t> wcsc;
 #ifdef ITT_INSTRUMENT
      __itt_pt_region pt_region;
+     bool            in_pt_region;
     std::unordered_map<std::string, __itt_pt_region> pt_region_map;
     
     unsigned long                                    invoke_idx;
@@ -250,11 +251,11 @@ inline void wallcycle_all_stop(gmx_wallcycle* wc, WallCycleCounter ewc, gmx_cycl
 
 //#define ITT_GENERAL
 
-const static std::string s_lookup_pattern("1");
+const static std::string s_lookup_pattern("1652");
 
 #ifndef ITT_START_FRAME
-//#define ITT_START_FRAME       (102+(4000*5))
-#define ITT_START_FRAME       (102)
+#define ITT_START_FRAME       (102+(4000*5))
+//#define ITT_START_FRAME       (102)
 #define ITT_MAX_PT_REGION_IDS 16
 #endif 
 
@@ -265,9 +266,7 @@ const static std::string s_lookup_pattern("1");
 #define wallcycle_start(p0, p1)          _wallcycle_start(p0, p1,  __FILE__ ":" TOSTRING(__LINE__))
 #define wallcycle_start_nocount(p0, p1)  _wallcycle_start_nocount(p0, p1,  __FILE__ ":" TOSTRING(__LINE__))
 
-#define wallcycle_stop(p0, p1)           _wallcycle_stop(p0, p1, __FILE__ ":" TOSTRING(__LINE__))
-
-inline void get_pt_region(gmx_wallcycle* wc, const char* location)
+static inline void get_pt_region(gmx_wallcycle* wc, const char* location)
 {
     //printf("--------------- at: %s, from: %s\n", __FUNCTION__, location);
     std::string key(location);
@@ -307,7 +306,7 @@ inline void get_pt_region(gmx_wallcycle* wc, const char* location)
     }
 }
 
-inline void get_task_string_handle(gmx_wallcycle* wc, const char* location)
+static inline void get_task_string_handle(gmx_wallcycle* wc, const char* location)
 {
     std::string key(location);
 
@@ -328,6 +327,16 @@ inline void get_task_string_handle(gmx_wallcycle* wc, const char* location)
     }
 }
 
+static inline bool is_filtered_location(const std::string& loc) {
+    if ( loc.find(s_lookup_pattern, 3 ) != std::string::npos) {
+#ifdef ITT_INSTRUMENT_DEBUG
+        printf("=========> Filtered location: %s\n", loc.c_str());
+#endif        
+        return true;
+    }
+    return false;
+}
+
 #endif // ITT_INSTRUMENT
 
 //! Starts the cycle counter (and increases the call count)
@@ -345,10 +354,10 @@ inline void wallcycle_start(gmx_wallcycle* wc, WallCycleCounter ewc)
 
     wallcycleBarrier(wc);
 #ifdef ITT_INSTRUMENT
-
+    wc->in_pt_region = false;
     std::string loc(location);
 
-    if ( WallCycleCounter::LaunchGpu == ewc && ( loc.find(s_lookup_pattern, 3 ) != std::string::npos))  {
+    if ( WallCycleCounter::LaunchGpu == ewc )  {
         if ( wc->invoke_idx == ITT_START_FRAME ) {
             __itt_resume();
             wc->task_domain = __itt_domain_create("Intra-step tasks");
@@ -357,15 +366,15 @@ inline void wallcycle_start(gmx_wallcycle* wc, WallCycleCounter ewc)
 #endif            
         }
 
-        if ( wc->invoke_idx >= ITT_START_FRAME ) {
-//#ifdef ITT_GENERAL
+        if ( (wc->invoke_idx >= ITT_START_FRAME) && is_filtered_location(loc) ) {
             get_task_string_handle(wc, location);
             __itt_task_begin(wc->task_domain, __itt_null, __itt_null, wc->task_string_handle );
-//#else            
             get_pt_region(wc, location);
-            //printf(" <<<<  pt region Begin:  %lu\n" , wc->invoke_idx );
+            wc->in_pt_region = true;
+#ifdef ITT_INSTRUMENT_DEBUG
+            printf("=========> Region Start at frame: %lu\n", (wc->invoke_idx));
+#endif            
             __itt_mark_pt_region_begin(wc->pt_region);
-//#endif            
         }
     }
 #endif
@@ -410,11 +419,7 @@ inline void wallcycle_start_nocount(gmx_wallcycle* wc, WallCycleCounter ewc)
 }
 
 //! Stop the cycle count for ewc , returns the last cycle count
-#ifdef ITT_INSTRUMENT
-inline double _wallcycle_stop(gmx_wallcycle* wc, WallCycleCounter ewc, const char* location)
-#else
 inline double wallcycle_stop(gmx_wallcycle* wc, WallCycleCounter ewc)
-#endif    
 {
     gmx_cycles_t cycle, last;
 
@@ -426,16 +431,15 @@ inline double wallcycle_stop(gmx_wallcycle* wc, WallCycleCounter ewc)
     wallcycleBarrier(wc);
 #ifdef ITT_INSTRUMENT
 
-    std::string loc(location);
-
-    if ( WallCycleCounter::LaunchGpu == ewc && ( loc.find(s_lookup_pattern, 3 ) != std::string::npos))  {
-        if ( wc->invoke_idx >= ITT_START_FRAME ) {
-//#ifdef ITT_GENERAL
+    if ( WallCycleCounter::LaunchGpu == ewc )  {
+//            printf("=========>At function %s location  %s at frame: %lu\n", __FUNCTION__, loc.c_str(), (wc->invoke_idx));
+        if ( (wc->invoke_idx >= ITT_START_FRAME) && wc->in_pt_region ){
            __itt_task_end(wc->task_domain);
-//#else 
-            //printf(" >>>>  pt region End:  %lu\n" , wc->invoke_idx );
            __itt_mark_pt_region_end(wc->pt_region);
-//#endif            
+#ifdef ITT_INSTRUMENT_DEBUG
+            printf("=========> Region End at frame: %lu\n", (wc->invoke_idx));
+#endif            
+           wc->in_pt_region = false;
         }
         (wc->invoke_idx)++;
     }

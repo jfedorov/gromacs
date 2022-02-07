@@ -2049,9 +2049,9 @@ void gmx::LegacySimulator::do_md()
 
 #ifdef ITT_INSTRUMENT
 #ifdef ITT_INSTRUMENT_DEBUG
-        printf(" =====================> ITT task Begin of Global Step: %" PRIu64 "\n", step_rel );
+        printf(" =====================> ITT task End of Global Step: %" PRIu64 "\n", step_rel );
 #endif
-        __itt_task_begin(itt_task_step, __itt_null, __itt_null, itt_handle);
+        __itt_task_end(itt_task_step);
 #endif
 
     }
